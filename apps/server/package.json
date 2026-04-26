@@ -1,0 +1,24 @@
+{
+  "name": "@packbreaker/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "test": "echo \"no tests in M1.1 — server is empty stub\" && exit 0"
+  },
+  "dependencies": {
+    "@packbreaker/content": "workspace:*",
+    "@packbreaker/shared": "workspace:*",
+    "@packbreaker/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@packbreaker/eslint-config": "workspace:*",
+    "@packbreaker/tsconfig": "workspace:*",
+    "@types/node": "^20.17.0",
+    "typescript": "^5.6.3"
+  }
+}

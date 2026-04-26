@@ -1,6 +1,7 @@
 node_modules
 dist
 .vite
+.turbo
 *.log
 *.tsbuildinfo
 .DS_Store

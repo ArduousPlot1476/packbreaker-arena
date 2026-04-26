@@ -19,7 +19,7 @@ import {
   type Recipe,
   type RunState,
   type ShopSlot,
-} from './data';
+} from './data.local';
 
 const RARITY_RANK: Record<RarityKey, number> = {
   common: 0,
