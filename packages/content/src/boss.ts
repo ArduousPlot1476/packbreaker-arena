@@ -1,6 +1,5 @@
 // @packbreaker/content/boss — Forge Tyrant scripted ghost per balance-bible.md § 15.
 
-import type { GhostBuild } from './ghost';
 import {
   ClassId,
   GhostId,
@@ -9,6 +8,7 @@ import {
   PlacementId,
   SimSeed,
   type BagPlacement,
+  type GhostBuild,
 } from './schemas';
 
 const placement = (

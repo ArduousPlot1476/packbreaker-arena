@@ -12,7 +12,9 @@ import {
   RARITY_DEFAULT_COST,
   RECIPES,
   RELICS,
+  type Effect,
   type ItemTag,
+  type Trigger,
 } from '../src/index';
 
 const VALID_TAGS = new Set<ItemTag>([
@@ -203,6 +205,41 @@ describe('Forge Tyrant boss', () => {
       }
     }
   });
+});
+
+describe('schema v0.2 — bonusGoldOnWin (M1.1.1)', () => {
+  it("Conqueror's Crown carries bonusGoldOnWin: 3", () => {
+    const crown = RELICS['conquerors-crown'];
+    expect(crown).toBeDefined();
+    expect(crown!.modifiers.bonusGoldOnWin).toBe(3);
+    expect(crown!.modifiers.bonusBaseDamage).toBe(4);
+  });
+});
+
+describe('schema v0.2 — buff_adjacent matchTags (M1.1.1)', () => {
+  // Items whose host on_adjacent_trigger filters by tag — the buff_adjacent
+  // effect must carry the same filter explicitly per the M1.1.1 patch.
+  const HOST_FILTERED: ReadonlyArray<{ id: string; tags: ReadonlyArray<string> }> = [
+    { id: 'whetstone',             tags: ['weapon'] },
+    { id: 'forge-anvil',           tags: ['weapon'] },
+    { id: 'rune-pedestal',         tags: ['gem', 'consumable'] },
+    { id: 'master-alchemists-kit', tags: ['consumable', 'gem'] },
+  ];
+
+  for (const { id, tags } of HOST_FILTERED) {
+    it(`${id}: buff_adjacent effect inherits matchTags from on_adjacent_trigger`, () => {
+      const item = ITEMS[id];
+      expect(item, `${id} missing from ITEMS`).toBeDefined();
+      const trigger = item!.triggers.find((t: Trigger) => t.type === 'on_adjacent_trigger');
+      expect(trigger, `${id} has no on_adjacent_trigger`).toBeDefined();
+      if (trigger?.type !== 'on_adjacent_trigger') return;
+      expect(trigger.matchTags).toEqual(tags);
+      const buff = trigger.effects.find((e: Effect) => e.type === 'buff_adjacent');
+      expect(buff, `${id} on_adjacent_trigger has no buff_adjacent effect`).toBeDefined();
+      if (buff?.type !== 'buff_adjacent') return;
+      expect(buff.matchTags).toEqual(tags);
+    });
+  }
 });
 
 describe('aggregates', () => {

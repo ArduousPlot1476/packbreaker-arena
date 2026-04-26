@@ -18,6 +18,18 @@
  *  - telemetry-plan.md — full event taxonomy
  *
  * Changelog
+ *  v0.2 (2026-04-26) — M1.1.1 patch.
+ *   - Added matchTags to Effect.buff_adjacent (§ 3) so the adjacency filter
+ *     decouples from the host trigger's filter. Preserves existing
+ *     matchTags-omitted behavior (apply to all adjacents).
+ *   - Added bonusGoldOnWin to RelicModifiers (§ 6). Conqueror's Crown
+ *     ships +3g per round won (balance-bible.md § 13); additive on top of
+ *     the class passive's bonusGoldOnWin so Marauder + Crown = +5g/win.
+ *   - Updated § 0 allocation comment to document the realized M1.1
+ *     architecture (shared ← content, GhostBuild lives in content).
+ *   - Added IsoTimestamp and IsoDate value constructors (§ 17) for
+ *     symmetry with the other branded ID constructors. Cleanup, not a
+ *     spec change.
  *  v0.1 (2026-04-27)
  *   - Added PassiveStats (§ 3) for non-sim modifiers (max HP, gold per round, base damage).
  *     Run controller folds these in before calling simulateCombat. Sim contract unaffected.
@@ -45,7 +57,10 @@
 // is for the run controller only. Lint rule: `no-restricted-syntax` blocks `passiveStats`
 // access inside `packages/sim/**`.
 //
-// `content` imports nothing. `shared` imports nothing.
+// `shared` imports branded types and structural primitives from `content` (ItemId, RunId,
+// RoundNumber, BagState, RunState, CellCoord, Rotation). `content` imports nothing.
+// Direction is unidirectional (shared ← content). `GhostBuild` lives in `packages/content`;
+// `packages/shared/src/ghost.ts` re-exports it for ergonomics. Lint rules enforce the direction.
 // `client` and `server` import from all three.
 
 
@@ -181,6 +196,12 @@ export type Effect =
       readonly stat: BuffableStat
       readonly amount: number
       readonly durationTicks?: number // omit for full-combat duration
+      /** Optional adjacency filter. If omitted or empty, applies to all adjacent items.
+       *  When present, only adjacent items carrying at least one of these tags receive
+       *  the buff. Decoupled from the host trigger's matchTags so a non-on_adjacent_trigger
+       *  trigger can still target a tag-filtered subset. (Sim: read effect.matchTags ?? []
+       *  and treat empty as "all adjacents".) */
+      readonly matchTags?: ReadonlyArray<ItemTag>
     }
   | {
       readonly type: 'summon_temp_item'
@@ -327,6 +348,7 @@ export interface RelicModifiers {
   readonly bonusStartingGold?: number
   readonly extraShopSlots?: number
   readonly bonusHearts?: number
+  readonly bonusGoldOnWin?: number  // additive on top of class passive bonusGoldOnWin (e.g. Marauder +2 + Conqueror's Crown +3 = +5)
 }
 
 export interface Relic {
@@ -879,12 +901,14 @@ export const isCombatTerminal = (e: CombatEvent): e is Extract<CombatEvent, { ty
   e.type === 'combat_end'
 
 /** Constructors for branded IDs. Centralized — never call `as ItemId` ad-hoc. */
-export const ItemId      = (s: string): ItemId      => s as ItemId
-export const RecipeId    = (s: string): RecipeId    => s as RecipeId
-export const RelicId     = (s: string): RelicId     => s as RelicId
-export const ContractId  = (s: string): ContractId  => s as ContractId
-export const ClassId     = (s: string): ClassId     => s as ClassId
-export const GhostId     = (s: string): GhostId     => s as GhostId
-export const RunId       = (s: string): RunId       => s as RunId
-export const PlacementId = (s: string): PlacementId => s as PlacementId
-export const SimSeed     = (n: number): SimSeed     => n as SimSeed
+export const ItemId       = (s: string): ItemId       => s as ItemId
+export const RecipeId     = (s: string): RecipeId     => s as RecipeId
+export const RelicId      = (s: string): RelicId      => s as RelicId
+export const ContractId   = (s: string): ContractId   => s as ContractId
+export const ClassId      = (s: string): ClassId      => s as ClassId
+export const GhostId      = (s: string): GhostId      => s as GhostId
+export const RunId        = (s: string): RunId        => s as RunId
+export const PlacementId  = (s: string): PlacementId  => s as PlacementId
+export const SimSeed      = (n: number): SimSeed      => n as SimSeed
+export const IsoTimestamp = (s: string): IsoTimestamp => s as IsoTimestamp
+export const IsoDate      = (s: string): IsoDate      => s as IsoDate

@@ -270,7 +270,7 @@ const WHETSTONE = defineItem('whetstone', {
     {
       type: 'on_adjacent_trigger',
       matchTags: ['weapon'],
-      effects: [{ type: 'buff_adjacent', stat: 'damage', amount: 1 }],
+      effects: [{ type: 'buff_adjacent', stat: 'damage', amount: 1, matchTags: ['weapon'] }],
     },
   ],
 });
@@ -536,7 +536,7 @@ const FORGE_ANVIL = defineItem('forge-anvil', {
     {
       type: 'on_adjacent_trigger',
       matchTags: ['weapon'],
-      effects: [{ type: 'buff_adjacent', stat: 'damage', amount: 2 }],
+      effects: [{ type: 'buff_adjacent', stat: 'damage', amount: 2, matchTags: ['weapon'] }],
     },
   ],
 });
@@ -551,7 +551,7 @@ const RUNE_PEDESTAL = defineItem('rune-pedestal', {
     {
       type: 'on_adjacent_trigger',
       matchTags: ['gem', 'consumable'],
-      effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 20 }],
+      effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 20, matchTags: ['gem', 'consumable'] }],
     },
   ],
 });
@@ -629,7 +629,7 @@ const MASTER_ALCHEMISTS_KIT = defineItem('master-alchemists-kit', {
     {
       type: 'on_adjacent_trigger',
       matchTags: ['consumable', 'gem'],
-      effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 30 }],
+      effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 30, matchTags: ['consumable', 'gem'] }],
     },
   ],
 });

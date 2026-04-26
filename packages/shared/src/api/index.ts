@@ -1,10 +1,8 @@
 // @packbreaker/shared/api — server request/response DTOs.
 //
-// M1.5: API DTOs go here.
-// Currently empty placeholder. Populated when apps/server gets its two M1
-// endpoints per tech-architecture.md § 6.1:
-//   GET  /v1/contract/daily   → DailyContractResponse
-//   POST /v1/telemetry/batch  → 204 (TelemetryBatchRequest body)
-//
-// Export form preserves the import surface for downstream consumers.
-export {};
+// Canonical definitions live in @packbreaker/content (schemas.ts § 14).
+// Re-exported here so client/server can keep importing them from
+// @packbreaker/shared. apps/server populates real handlers in M1.5
+// (per tech-architecture.md § 6.1).
+
+export type { DailyContractResponse, TelemetryBatchRequest } from '@packbreaker/content';

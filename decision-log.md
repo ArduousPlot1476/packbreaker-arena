@@ -4,6 +4,25 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-26
+
+- M1.1 (Scaffold + content) closed. Branch m1.1-scaffold; main holds M0 baseline.
+- All 24 content cross-reference tests pass plus 5 new data-adapter regression tests added during M1.1.1-bugfix. Bundle delta +7.5% raw / +5.0% gzip vs. M0 (within ±10% tolerance). Tree-shaking deferred to M1.3.
+- Lint trip demo confirmed: no-restricted-syntax fires on Math.random() in packages/sim with custom error message. Boundary enforcement is real.
+- Earlier "recipe detection regression" surfaced during verification was a stale Vite dev-server cache, not a code bug. Confirmed via fresh dev-server restart + hard browser refresh: Iron Sword + Iron Dagger → Steel Sword fires correctly, COMBINE button renders. Healing Salve and Fire Oil recipes also confirmed via regression suite.
+- Bonus M1.1.1-bugfix outcomes: detectRecipes extracted from App.tsx to apps/client/src/run/recipes.ts (free pre-payment toward M1.3 split), 5 vitest cases added in apps/client covering all 3 M1 recipes plus 2 negative cases.
+- Ratified four schema interpretations during content authoring: on_low_health threshold = 50% across all five panic-heal triggers; maxTriggersPerCombat = 1 on all on_low_health triggers; classAffinity tagged conservatively (8 Tinker, 5 Marauder, 32 neutral); buff_adjacent matchTags inherited from host trigger (interim — schema patch in M1.1.1).
+- Ratified architectural deviation: shared imports branded types and structural primitives from content. Direction is unidirectional (shared ← content). GhostBuild lives in packages/content, re-exports from packages/shared. Update content-schemas.ts § 0 allocation comment to match in M1.1.1.
+- Ratified Forge Tyrant boss bag: Apple shifted from (3,2) to (4,2) per balance-bible.md § 6 iron-mace 2×1 H footprint. Geometry is authoritative.
+- Schema patch (M1.1.1) required before M1.2 begins:
+  - § 6 RelicModifiers: add bonusGoldOnWin?: number (Conqueror's Crown +3g per bible § 13).
+  - § 3 Effect.buff_adjacent: add matchTags?: ReadonlyArray<ItemTag> (decouples adjacency filter from host trigger).
+  - § 0 allocation comment: update for shared ← content direction.
+- Operational learnings logged for M1.2+: Vite + pnpm workspaces HMR is finicky; add `pnpm clean` script and a CONTRIBUTING.md cache-bust ritual to M1.1.1 to prevent future false-positive regressions.
+- M1.2+ deferred items: ITEMS map tree-shaking (M1.3); passiveStats.bonusBaseDamage kept reserved with no current consumers; passiveStats lint rule may need narrowing if non-Item symbols ever conflict.
+
+---
+
 ## 2026-04-26 — M1.1 Scaffold + content (closed)
 
 - Migrated single-Vite-app prototype into pnpm 9 + Turborepo 2.9 monorepo per `tech-architecture.md` § 3. Layout matches spec: `apps/{client,server}`, `packages/{sim,content,shared,ui-kit}`, `tooling/{eslint-config,tsconfig}`. Workspace symlinks resolve via `workspace:*`; turbo orchestrates `build / lint / typecheck / test` with `dependsOn: ["^build"]`. M0 prototype now runs from `apps/client` consuming `@packbreaker/content` for items + recipes (4 of 12 bible recipes survive the seed-set filter — steel-sword, healing-salve, fire-oil, ember-brand; the rest reference items not in the prototype's 12-slug seed shop+bag).

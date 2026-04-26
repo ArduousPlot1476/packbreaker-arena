@@ -14,7 +14,9 @@ export { CLASSES } from './classes';
 export { RELICS } from './relics';
 export { CONTRACTS } from './contracts';
 export { FORGE_TYRANT } from './boss';
-export type { GhostBuild } from './ghost';
+// GhostBuild, LocalSaveV1, LocalSave, TelemetryEvent, TelemetryEventName,
+// DailyContractResponse, and TelemetryBatchRequest all flow from schemas.ts (§§ 12–15)
+// via the `export * from './schemas'` above. shared/* re-exports them for ergonomics.
 
 // ─── Convenience aggregates ──────────────────────────────────────────
 

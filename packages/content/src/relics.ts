@@ -107,14 +107,10 @@ const ALL_RELICS: ReadonlyArray<Relic> = [
   }),
   defineRelic('conquerors-crown', {
     name: "Conqueror's Crown",
-    description: '+4 base damage on every damage effect.',
+    description: '+4 base damage on every damage effect; +3g per round won.',
     classAffinity: MARAUDER,
     slot: 'boss',
-    // NOTE: balance-bible.md § 13 also lists `bonusGoldOnWin: 3` for this relic,
-    // but RelicModifiers doesn't define that field (only ClassPassive does).
-    // Dropped for M1.1 per the schema-is-authoritative rule. See open questions
-    // in the M1.1 report — schema gap to ratify before M1.2 sim work.
-    modifiers: { bonusBaseDamage: 4 },
+    modifiers: { bonusBaseDamage: 4, bonusGoldOnWin: 3 },
   }),
 ];
 
