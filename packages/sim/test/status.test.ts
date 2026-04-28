@@ -108,24 +108,24 @@ describe('tickStatusDamage — burn', () => {
   it('returns burnDamage = burn count every 10 ticks (1 sec)', () => {
     const s = createStatusState();
     applyStatus(s, 'burn', 5);
-    expect(tickStatusDamage(s, 'player', 10).burnDamage).toBe(5);
-    expect(tickStatusDamage(s, 'player', 20).burnDamage).toBe(5);
-    expect(tickStatusDamage(s, 'player', 30).burnDamage).toBe(5);
+    expect(tickStatusDamage(s, 10).burnDamage).toBe(5);
+    expect(tickStatusDamage(s, 20).burnDamage).toBe(5);
+    expect(tickStatusDamage(s, 30).burnDamage).toBe(5);
   });
 
   it('returns 0 between integer-second boundaries', () => {
     const s = createStatusState();
     applyStatus(s, 'burn', 5);
-    expect(tickStatusDamage(s, 'player', 1).burnDamage).toBe(0);
-    expect(tickStatusDamage(s, 'player', 7).burnDamage).toBe(0);
-    expect(tickStatusDamage(s, 'player', 15).burnDamage).toBe(0);
-    expect(tickStatusDamage(s, 'player', 99).burnDamage).toBe(0);
+    expect(tickStatusDamage(s, 1).burnDamage).toBe(0);
+    expect(tickStatusDamage(s, 7).burnDamage).toBe(0);
+    expect(tickStatusDamage(s, 15).burnDamage).toBe(0);
+    expect(tickStatusDamage(s, 99).burnDamage).toBe(0);
   });
 
   it('returns 0 at tick 0 (no damage on the very first tick of combat)', () => {
     const s = createStatusState();
     applyStatus(s, 'burn', 5);
-    expect(tickStatusDamage(s, 'player', 0).burnDamage).toBe(0);
+    expect(tickStatusDamage(s, 0).burnDamage).toBe(0);
   });
 });
 
@@ -133,15 +133,15 @@ describe('tickStatusDamage — poison', () => {
   it('returns poisonDamage = poison count every 10 ticks', () => {
     const s = createStatusState();
     applyStatus(s, 'poison', 4);
-    expect(tickStatusDamage(s, 'ghost', 10).poisonDamage).toBe(4);
-    expect(tickStatusDamage(s, 'ghost', 100).poisonDamage).toBe(4);
+    expect(tickStatusDamage(s, 10).poisonDamage).toBe(4);
+    expect(tickStatusDamage(s, 100).poisonDamage).toBe(4);
   });
 
   it('returns burn AND poison together when both are present', () => {
     const s = createStatusState();
     applyStatus(s, 'burn', 3);
     applyStatus(s, 'poison', 2);
-    const r = tickStatusDamage(s, 'player', 50);
+    const r = tickStatusDamage(s, 50);
     expect(r.burnDamage).toBe(3);
     expect(r.poisonDamage).toBe(2);
   });

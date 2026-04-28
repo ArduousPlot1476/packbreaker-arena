@@ -27,7 +27,7 @@
 //     CombatEvent.
 //   - Calling cleanupStatus once per tick at the end of the cleanup phase.
 
-import { STATUS_STACK_CAPS, type StatusType, type EntityRef } from '@packbreaker/content';
+import { STATUS_STACK_CAPS, type StatusType } from '@packbreaker/content';
 
 /** Mutable per-side status state during a single combat. The resolver owns
  *  one of these per combatant; this module exposes the verbs that mutate it. */
@@ -53,6 +53,10 @@ export function createStatusState(): StatusState {
   };
 }
 
+// Re-application semantics: adds stacks; does NOT reset burnRemainingTicks.
+// Burn at t=5 (5 stacks) followed by burn at t=15 (3 stacks) → burn=8 with
+// the decay clock still ticking from the first application. Game-feel
+// choice: re-application can't extend lifespan.
 /** Applies `stacks` of `type` to `state`. Caps silently at STATUS_STACK_CAPS[type].
  *  No event emitted — the caller (effect resolver) emits the status_apply event.
  *  - Burn / poison: stacks add to current count, capped.
@@ -79,11 +83,11 @@ export function applyStatus(state: StatusState, type: StatusType, stacks: number
 /** Returns the per-tick burn / poison damage for `state` at `currentTick`.
  *  Damage fires only at integer-second boundaries (every 10 ticks, excluding
  *  tick 0). Status.ts does not apply damage to HP — the resolver does that
- *  with the returned numbers and emits the status_tick CombatEvents. */
+ *  with the returned numbers and emits the status_tick CombatEvents.
+ *  The resolver attributes damage by which StatusState it passes in (one per
+ *  combatant), so no side parameter is needed here. */
 export function tickStatusDamage(
   state: StatusState,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _side: EntityRef,
   currentTick: number,
 ): { burnDamage: number; poisonDamage: number } {
   const isStatusTickSecond = currentTick > 0 && currentTick % 10 === 0;

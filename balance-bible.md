@@ -104,7 +104,7 @@ Class-affinity items appear in their owner's pool at **+50% pool weight** (multi
 | Poison | 1 dmg per stack per second (every 10 ticks) | Stacks add | None — persists full combat | 10 stacks | Same damage as burn but persists. Ignores armor heals. |
 | Stun | Skip next `on_cooldown` trigger | Boolean (not stacked) | Single-use; consumed when next cooldown would fire | n/a | One stun = one missed cooldown. |
 
-Burn vs poison balance: burn front-loads damage and decays, poison back-loads and persists. A single 5-stack of burn deals 5+5+4+4+3+... = ~25 damage over its lifetime. A 5-stack of poison deals 5/sec for the rest of combat — at 10 seconds remaining = 50 damage. Poison is stronger in long combats; burn is stronger in burst openers.
+Burn vs poison balance: burn front-loads damage and decays, poison back-loads and persists. A single 5-stack of burn deals 5,4,4,3,3,2,2,1,1 ≈ 25 damage over its lifetime (per-second damage with the spec-pinned tick order: status_ticks at phase 4 fires before cleanup at phase 6, so the first decay lands at the 20th cleanup post-application). A 5-stack of poison deals 5/sec for the rest of combat — at 10 seconds remaining = 50 damage. Poison is stronger in long combats; burn is stronger in burst openers.
 
 ---
 
