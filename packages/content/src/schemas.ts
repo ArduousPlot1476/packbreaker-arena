@@ -18,7 +18,7 @@
  *  - telemetry-plan.md — full event taxonomy
  *
  * Changelog
- *  v0.2 (2026-04-26) — M1.1.1 patch.
+ *  v0.2 (2026-04-26) — M1.1.1 + M1.2.2 patches.
  *   - Added matchTags to Effect.buff_adjacent (§ 3) so the adjacency filter
  *     decouples from the host trigger's filter. Preserves existing
  *     matchTags-omitted behavior (apply to all adjacents).
@@ -30,6 +30,9 @@
  *   - Added IsoTimestamp and IsoDate value constructors (§ 17) for
  *     symmetry with the other branded ID constructors. Cleanup, not a
  *     spec change.
+ *   - M1.2.2: Added 'stun_consumed' variant to CombatEvent (§ 11) for the
+ *     per-side pendingStun-consumed-at-cooldown event the sim emits when
+ *     a stun cancels a cooldown trigger.
  *  v0.1 (2026-04-27)
  *   - Added PassiveStats (§ 3) for non-sim modifiers (max HP, gold per round, base damage).
  *     Run controller folds these in before calling simulateCombat. Sim contract unaffected.
@@ -579,6 +582,12 @@ export type CombatEvent =
       readonly status: StatusType
       readonly damage: number
       readonly remainingHp: number
+    }
+  | {
+      readonly tick: number
+      readonly type: 'stun_consumed'
+      readonly source: ItemRef       // the item whose cooldown was skipped
+      readonly target: EntityRef      // the side whose pendingStun was consumed
     }
   | {
       readonly tick: number

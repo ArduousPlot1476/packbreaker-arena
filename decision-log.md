@@ -4,6 +4,72 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-28 — M1.2.2 review flags + bible amendment (ratified)
+
+- M1.2.2 ratified for merge. Three follow-up items deferred from
+  the review pass; tracked here so they don't go missing.
+- **Flag 1 — `_side` parameter cleanup in `tickStatusDamage`.** The
+  current API takes a `side: EntityRef` parameter the function never
+  reads, named `_side` with a paired eslint-disable. The resolver
+  attributes damage by which `StatusState` it passes in, not by a
+  side label. Drop the parameter and the disable in M1.2.3 when the
+  resolver becomes the first consumer. `cleanupStatus`'s `_currentTick`
+  is kept — cleanup is conceptually time-aware and adding it back
+  later would touch every call site.
+- **Flag 2 — `balance-bible.md` § 4 burn-prose amendment.** The
+  bible's sample sequence "5+5+4+4+3+..." is internally inconsistent
+  (sums to 30, not the stated ~25). With the spec-pinned tick order
+  (status_ticks at phase 4, cleanup at phase 6), a 5-stack burn
+  produces 5,4,4,3,3,2,2,1,1,0 = 25. The "~25 total" is the
+  load-bearing number; the sequence text is the writeup error.
+  Amend § 4 prose to "5,4,4,3,3,2,2,1,1 ≈ 25 over its lifetime" or
+  drop the sequence and keep "~25 damage over its lifetime." Folded
+  into the M1.2.3 prompt as a docs-side task.
+- **Flag 3 — burn re-application doc note in `status.ts`.** Current
+  impl: `applyStatus` adds stacks but does NOT reset
+  `burnRemainingTicks`. Burn at t=5 (5 stacks) followed by burn at
+  t=15 (3 stacks) gives burn=8 with the decay clock still ticking
+  from the first application. This is the right call for game feel
+  (re-application doesn't extend lifespan), but undocumented. Add a
+  one-liner to `status.ts` doc block in M1.2.3: "Re-application
+  adds stacks; decay timer is not reset."
+- M1.2.3 (combat resolver) locked answers, recorded here for the
+  prompt:
+  - Reaction firing order: single reaction round per top-level damage
+    event, canonical placement order on each side. No cascade.
+  - `buff_remove` event: add now as additive schema patch.
+    Replay-log legibility for mid-combat buff expiry.
+  - Damage cascade discipline: single-round, no cascade. Bloodmoon
+    Plate's retaliation does NOT trigger Vampire Fang's `on_hit` on
+    the boss side. Cascading is an M3 lever if a future item wants it.
+  - Trigger state ownership: `TriggerState` struct, same shape as
+    `StatusState`. Per-side mutable. Keys: (placementId, triggerIndex).
+    Holds cooldownAccumulator, firedCount (gated by
+    maxTriggersPerCombat), lowHealthFired boolean.
+  - Damage cap / negative HP: floor inline at 0. CombatEvent.damage.amount
+    = actual HP reduction (capped at current HP).
+    remainingHp = max(0, hp − rawAmount).
+
+---
+
+## 2026-04-28 — M1.2.2 Status effects + status engine (closed)
+
+- Branch hygiene reset: `m1.1-scaffold` merged to `main` as a `--no-ff` merge commit (`c9f555f`) carrying M1.1 + M1.1.1 + M1.2.1. New work branched as `m1.2.2-status-effects` from the merge commit. Per-milestone commits preserved underneath the merge. Going forward, each M1.x phase branches off `main` per CONTRIBUTING.md.
+- Status engine landed in `packages/sim/src/status.ts`: `createStatusState`, `applyStatus`, `tickStatusDamage`, `cleanupStatus`, `consumeStunIfPending`. Pure-verb API mutating a single per-side `StatusState`; combat resolver (M1.2.3) owns one per combatant.
+- Resolved four open questions from M1.2.1's report:
+  - **Q1 (tick ordering)**: codified as `TICK_PHASES` const-asserted tuple in `iteration.ts` — `round_start`, `cooldowns`, `damage_resolution`, `status_ticks`, `low_health`, `cleanup`. Within `status_ticks`, player side resolves before ghost side. Within any phase, items iterate in `canonicalPlacements` order. Doc block added at the top of `iteration.ts`.
+  - **Q2 (stack-cap overflow)**: silent cap at `STATUS_STACK_CAPS[type]`. No event for the overflow. `applyStatus(state, 'burn', 8)` on `burn=5` sets `burn=10`, drops the excess 3 stacks.
+  - **Q3 (stun timing)**: per-side. `pendingStun` boolean on each combatant; `consumeStunIfPending` is the read-and-clear verb the resolver calls before any cooldown trigger fires on that side. When it returns true, the trigger's effects are skipped and a `stun_consumed` `CombatEvent` is emitted.
+  - **Q4 (random target selection)**: `rng.next()` consumes at the moment of effect application via `resolveTarget`, never earlier. Empty filtered list returns null with zero rng consumption — the caller treats null as a no-op (no event).
+- Schema patch (additive, M1.2.2): added `stun_consumed` variant to `CombatEvent` (§ 11) in both `content-schemas.ts` and `packages/content/src/schemas.ts`. Carries `tick`, `source: ItemRef` (the cooldown-skipped item), and `target: EntityRef` (the side whose `pendingStun` was consumed). `check-schemas-sync` confirms files remain byte-identical.
+- Test count: 89 (was 55 at M1.2.1). New: 23 status cases + 7 `resolveTarget` cases + 2 `TICK_PHASES` cases + small extras. Coverage: 100% statements / 98.87% branches across the sim package; `status.ts` and `iteration.ts` both at 100% line coverage.
+- Bundle delta vs. M1.2.1: zero (sim still not imported by client). Bundle stays at 194.83 KB JS / 9.46 KB CSS.
+- Burn-decay timing fixed at "−1 stack per 20 cleanup ticks", first decay at the 20th cleanup post-application. This produces the bible's stated "~25 total damage from a 5-stack burn" total: the per-tick damage sequence becomes 5,4,4,3,3,2,2,1,1,0 (sum 25). The bible's sample sequence "5+5+4+4+3+..." appears to be a casual writeup; the spec-pinned tick order (status_ticks at step 4 BEFORE cleanup at step 6) makes 25 the correct total. Flagged as a deviation in the M1.2.2 report.
+- Lint trip note: the spec asked for a demo of `apply_status` bypassing `STATUS_STACK_CAPS` via a literal 10. Skipped — the cap test in `status.test.ts` ("caps silently at STATUS_STACK_CAPS.burn (= 10)") catches the regression at the test level, which is more reliable than a syntax lint for a content-driven constant.
+- Open questions for M1.2.3 (combat resolver): (1) on_hit / on_taken_damage reaction firing order when multiple items react to the same damage event; (2) buff_apply event lifecycle (when does an expired buff emit a removal event, if any); (3) whether the resolver flushes `damage_resolution` reactions to a fixed point (cascade allowed?) or strictly a single round of reactions per damage event; (4) heap state for `lastFiredAt` per cooldown trigger — owned by resolver or by a sim-internal "TriggerState" struct.
+
+---
+
 ## 2026-04-27 — M1.2.1 Sim package skeleton + RNG (closed)
 
 - `packages/sim` populated with the canonical mulberry32 PRNG, deterministic-iteration helpers (canonicalPlacements / canonicalCells / stableSort), integer-math utilities (applyPct / applyBp / clamp / sumInts), and an `invariant()` assertion stub. No combat code, no status effects, no run-state machine — those land in M1.2.2 through M1.2.4.
@@ -22,38 +88,33 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ## 2026-04-26
 
-- M1.1 (Scaffold + content) closed. Branch m1.1-scaffold; main holds M0 baseline.
-- All 24 content cross-reference tests pass plus 5 new data-adapter regression tests added during M1.1.1-bugfix. Bundle delta +7.5% raw / +5.0% gzip vs. M0 (within ±10% tolerance). Tree-shaking deferred to M1.3.
-- Lint trip demo confirmed: no-restricted-syntax fires on Math.random() in packages/sim with custom error message. Boundary enforcement is real.
-- Earlier "recipe detection regression" surfaced during verification was a stale Vite dev-server cache, not a code bug. Confirmed via fresh dev-server restart + hard browser refresh: Iron Sword + Iron Dagger → Steel Sword fires correctly, COMBINE button renders. Healing Salve and Fire Oil recipes also confirmed via regression suite.
-- Bonus M1.1.1-bugfix outcomes: detectRecipes extracted from App.tsx to apps/client/src/run/recipes.ts (free pre-payment toward M1.3 split), 5 vitest cases added in apps/client covering all 3 M1 recipes plus 2 negative cases.
-- Ratified four schema interpretations during content authoring: on_low_health threshold = 50% across all five panic-heal triggers; maxTriggersPerCombat = 1 on all on_low_health triggers; classAffinity tagged conservatively (8 Tinker, 5 Marauder, 32 neutral); buff_adjacent matchTags inherited from host trigger (interim — schema patch in M1.1.1).
-- Ratified architectural deviation: shared imports branded types and structural primitives from content. Direction is unidirectional (shared ← content). GhostBuild lives in packages/content, re-exports from packages/shared. Update content-schemas.ts § 0 allocation comment to match in M1.1.1.
-- Ratified Forge Tyrant boss bag: Apple shifted from (3,2) to (4,2) per balance-bible.md § 6 iron-mace 2×1 H footprint. Geometry is authoritative.
-- Schema patch (M1.1.1) required before M1.2 begins:
-  - § 6 RelicModifiers: add bonusGoldOnWin?: number (Conqueror's Crown +3g per bible § 13).
-  - § 3 Effect.buff_adjacent: add matchTags?: ReadonlyArray<ItemTag> (decouples adjacency filter from host trigger).
-  - § 0 allocation comment: update for shared ← content direction.
-- Operational learnings logged for M1.2+: Vite + pnpm workspaces HMR is finicky; add `pnpm clean` script and a CONTRIBUTING.md cache-bust ritual to M1.1.1 to prevent future false-positive regressions.
-- M1.2+ deferred items: ITEMS map tree-shaking (M1.3); passiveStats.bonusBaseDamage kept reserved with no current consumers; passiveStats lint rule may need narrowing if non-Item symbols ever conflict.
+- M1.1 closed (Scaffold + content). Branch m1.1-scaffold; main = M0 baseline. Bundle 194.69 KB JS / 9.46 KB CSS / 35→43 modules (+7.5% raw / +5.0% gzip vs M0 — within tolerance, ITEMS map tree-shaking deferred to M1.3).
+- M1.1.1 closed (schema patch + ops prep). Three additive schema changes (§ 0 wording for shared ← content direction, § 3 buff_adjacent.matchTags optional, § 6 RelicModifiers.bonusGoldOnWin optional). Six content updates downstream (Conqueror's Crown +3 win-gold; Whetstone, Forge Anvil, Rune Pedestal, Master Alchemist's Kit explicit matchTags on buff_adjacent). 29 content tests pass (24 existing + 5 new, parameterized matchTags inheritance check across 4 items for granular failure messages). Bundle delta +0.14 KB / +0.07% vs M1.1.
+- Schema consolidation side-effect of M1.1.1: §§ 12–15 (GhostBuild, LocalSaveV1, server DTOs, TelemetryEvent) lifted into the canonical schemas.ts. packages/shared/{save,telemetry,api,ghost} now re-export from @packbreaker/content. Public API surface preserved. content-schemas.ts and packages/content/src/schemas.ts are byte-identical post-patch.
+- IsoTimestamp + IsoDate value constructors added to § 17 (cleanup — was inconsistent with the other 9 of 11 branded ID types in v0.1).
+- Earlier "recipe detection regression" was a stale Vite dev-server cache, not a code bug. Confirmed via fresh dev-server restart + hard browser refresh: Iron Sword + Iron Dagger → Steel Sword fires, COMBINE button renders. 5 vitest cases added in apps/client during M1.1.1-bugfix as permanent regression coverage. detectRecipes extracted from App.tsx to apps/client/src/run/recipes.ts (free pre-payment toward M1.3 split).
+- Operational additions for M1.2+: pnpm clean script (rimraf-based, portable); CONTRIBUTING.md with cache-bust ritual, test commands, branch hygiene. Prevents future false-positive regression reports.
+- Schema interpretations ratified during M1.1: on_low_health threshold = 50% across all five panic-heal triggers; maxTriggersPerCombat = 1 on all on_low_health triggers; classAffinity tagged conservatively (8 Tinker, 5 Marauder, 32 neutral); Forge Tyrant Apple shifted from (3,2) to (4,2) per balance-bible.md § 6 iron-mace 2×1 H footprint.
+- Architectural deviation ratified: shared imports branded types and structural primitives from content. Direction is unidirectional (shared ← content). Lint rules enforce.
+- Long-tail items deferred: ITEMS map tree-shaking (M1.3); passiveStats.bonusBaseDamage kept reserved with no current consumers; passiveStats lint rule may need narrowing if non-Item symbols ever conflict.
 
----
+## 2026-04-26
 
-## 2026-04-26 — M1.1 Scaffold + content (closed)
+- Resolved tech-architecture.md § 13 open decisions, M1 scope:
+  - **Auth provider (M2):** Discord OAuth. Audience-fit (16-34 roguelite players), creator-loop fit (replay sharing in Discord servers), 2-hour implementation vs. 2-day magic-link build. Email magic-link deferred to M3 as a second option if M2 telemetry shows >15% drop-off at auth.
+  - **Hosting (M2):** Vercel (client) + Fly.io (server) + Neon (Postgres) + Upstash (Redis). Fastify is not Workers-shaped; Postgres with jsonb fits the GhostBuild schema natively; all three providers are reversible. Cloudflare stack revisit if M3 sustained DAU > 10k.
+  - **PostHog (M1+M2):** cloud, not self-hosted. M2 demo-gate event volume (~6k/month) sits 3 orders of magnitude under the free tier. Privacy posture is clean regardless. Revisit at M3 if events exceed 500k/month or compliance changes.
+  - **Aseprite (M1+M2):** Trey-owned single seat. Source files belong to the repo, not the license. Revisit when art headcount > 1.
+- All four decisions are reversible. Each has a named revisit trigger.
+- M1 graybox to be executed in 5 phased sub-milestones (M1.1 scaffold + content / M1.2 sim / M1.3 bag UI rewrite + dnd-kit / M1.4 combat integration + Phaser / M1.5 tutorial + daily contract + telemetry + boss). Phased rather than mega-prompt to catch determinism contract drift before bag UI is built on top of it, dnd-kit integration shape before combat overlay assumes it, etc. Total ~20 working days at peer-review pace, slightly under the 4–6 week roadmap window.
 
-- Migrated single-Vite-app prototype into pnpm 9 + Turborepo 2.9 monorepo per `tech-architecture.md` § 3. Layout matches spec: `apps/{client,server}`, `packages/{sim,content,shared,ui-kit}`, `tooling/{eslint-config,tsconfig}`. Workspace symlinks resolve via `workspace:*`; turbo orchestrates `build / lint / typecheck / test` with `dependsOn: ["^build"]`. M0 prototype now runs from `apps/client` consuming `@packbreaker/content` for items + recipes (4 of 12 bible recipes survive the seed-set filter — steel-sword, healing-salve, fire-oil, ember-brand; the rest reference items not in the prototype's 12-slug seed shop+bag).
-- **Content authored**: 45/45 items (20 Common + 12 Uncommon + 8 Rare + 4 Epic + 1 Legendary), 12/12 recipes, 12/12 relics (6 Tinker + 6 Marauder), 2/2 classes, 3/3 contracts (`neutral`, `forge-tyrant-boss`, `daily-placeholder`), Forge Tyrant `GhostBuild`. Cross-reference test suite (`packages/content/test/items.test.ts`) validates uniqueness, cost-vs-rarity, recipe I/O references, relic affinities, class-relic-pool integrity, and boss bag fits without overlap.
-- **Schema gap surfaced**: balance-bible.md § 13 lists `bonusGoldOnWin: 3` on the Conqueror's Crown relic, but `RelicModifiers` (content-schemas.ts § 6) doesn't declare that field — only `ClassPassive` does. Field dropped from the relic for M1.1 with a code comment; ratify before M1.2 sim work either adds `bonusGoldOnWin?: number` to `RelicModifiers` (additive, low risk) or removes it from the bible (one less relic lever).
-- **Spec deviation — `GhostBuild` allocation**: content-schemas.ts § 0 / § 12 and spec phase 5 step 8 put `GhostBuild` in `@packbreaker/shared` and have `boss.ts` import it from there. Combined with shared importing branded ID + struct types from content (for `TelemetryEvent` § 15 and `LocalSaveV1` § 13 — itself a deviation, see next bullet), this creates a true cyclic workspace dependency that turbo refuses to build. Resolved by moving the `GhostBuild` interface to `packages/content/src/ghost.ts` and having `packages/shared/src/ghost.ts` re-export it. Single-direction dep restored: `shared → content` only.
-- **Spec deviation — shared imports content types**: lint rule says `packages/shared/** cannot import outside its own package`, but `TelemetryEvent`, `LocalSaveV1`, and `GhostBuild` all reference branded IDs and content schema types (`ItemId`, `RunId`, `BagState`, `RunState`, etc.). Strict isolation would force ~80 lines of duplicated type aliases. Chose the smaller evil: shared imports content for these types. Lint rule narrowed to forbid sim/ui-kit/runtime deps from shared, but allow content. Direction is `shared ← content` only, preserving the principle's spirit (shared types still don't reference *runtime* content code).
-- **Spec deviation — `data.local.ts` retained as adapter**: spec phase 5 step 11 says delete the file. Could not — its non-content exports (UI styling `RARITY`, run-state seed `INITIAL`, demo `SEED_BAG` / `SEED_SHOP`, prototype's terser `ItemDef` / `BagItem` / `Cell` / `RunState` shapes, `cellsOf` / `dimsOf` helpers operating on prototype's BagItem) genuinely don't belong in `@packbreaker/content`. The file was rewritten to import `ITEMS` and `RECIPES` from the package and adapt them to the prototype's expected shape — the data SOURCE is now the package, satisfying the spec's intent. File retires when M1.3 splits App.tsx and the run controller starts consuming content directly.
-- **Spec deviation — Forge Tyrant bag layout**: balance-bible.md § 15 lists `(2,2) 1×1 iron-mace` but § 6 declares iron-mace as 2×1 H — internal bible inconsistency. Items.ts is authoritative for shapes (45-item content port), so iron-mace stays 2×1 H. Apple's bag position shifted from (3,2) to (4,2) to clear iron-mace's footprint at (2,2)–(3,2). Boss-bag fit verified by the items.test.ts suite (no overlaps, all within 6×4). Ratify the layout edit, or amend bible § 15 / § 6 to agree.
-- **`no-inner-declarations` ESLint rule disabled** in shared config. Strict-mode ESM TypeScript with let/const block scoping makes the pre-ES6 hoisting concern redundant, and the prototype's `detectRecipes` (App.tsx, deferred to M1.3 split) legitimately declares a `function*` generator inside a for-of loop that the rule would otherwise forbid.
-- **Bundle delta**: M0 baseline 35 modules / 181.14 KB JS / 9.46 KB CSS → M1.1 final 43 modules / 194.69 KB JS / 9.46 KB CSS. +8 modules, +13.55 KB JS (+7.5%), CSS unchanged. Within the spec's ±10% tolerance. The delta is the unused tail of `@packbreaker/content`'s 45-item registry — Vite's prod minifier doesn't tree-shake `Object.fromEntries(...)`-built tables when consumers iterate the values, so all 33 currently-unused items ship in the bundle. Acceptable for M1.1; revisit at M1.3 when App.tsx splits and the run controller can `import { ITEMS_BY_RARITY }` for narrower payloads.
-- **Lint enforcement verified**: dropped a temp `Math.random()` call into `packages/sim/src/rng-trip.ts`, ran `pnpm --filter @packbreaker/sim lint`, got the configured `no-restricted-syntax` error ("Sim must use the seeded mulberry32 RNG, not Math.random") — file deleted, lint back to green. The boundary is wired.
-- **Decisions deferred** (tracked here so M1.2 doesn't re-discover them): (1) ratify or reject `RelicModifiers.bonusGoldOnWin` schema addition; (2) ratify or reject the `GhostBuild` allocation flip (content vs shared); (3) ratify or reject `shared → content` import direction; (4) ratify the Forge Tyrant apple shift (or amend the bible); (5) decide whether `data.local.ts` retires at M1.3 split or earlier; (6) confirm `bonusBaseDamage` on `PassiveStats` (declared per v0.1 changelog but reserved for future use — currently no item uses it).
+## 2026-04-26
 
----
+- Closed Run Screen prototype. Final verification pass complete.
+- Verification A (rarity-keyed glow color): code-trace confirmed end-to-end. detectRecipes → glowCells rarity Map → inline `stroke: RARITY[rarity].color` at App.tsx:431, beating the CSS class default via specificity. Build clean with temp recipe; src/data.ts reverted. Screenshot skipped — trace is deterministic.
+- Verification B (glow legibility at cluster edges): root cause was not grid-line clipping (my hypothesis) but items' own rarity-frame borders painting after the glow in DOM order, occluding outward-facing cell edges. Claude Code's audit caught it. Fix applied: `zIndex: 5` on the recipe-glow SVG (App.tsx:424-428). Two-line diff, build clean (+20 bytes). Combine buttons remain above at zIndex: 10; items drop below glow.
+- Aesthetic caveat noted: dashed outline now paints over item rarity-frame borders on participating cells. Acceptable for prototype. If "busy" rather than "halo" in M1 graybox, replace per-cell rect rendering with a single perimeter `<path>` stroked once (~30 lines of edge-traversal geometry). Deferred to M1.
+- M1 deferred items list: (1) combine-button anchor algorithm — four-direction first-fit replacing upper-right-with-top-fallback, surfaces when bags get dense; (2) recipe-glow perimeter-path approach if needed; (3) App.tsx (717 lines) split into apps/client/src/{screens,bag,shop,hud} per tech-architecture.md § 5.1; (4) @dnd-kit migration replacing raw pointer events; (5) real Phaser combat overlay replacing canned 4s sequence in src/combat.tsx.
 
 ## 2026-04-26
 
