@@ -1,6 +1,8 @@
 node_modules
 dist
+coverage
 .vite
+.turbo
 *.log
 *.tsbuildinfo
 .DS_Store

@@ -9,17 +9,15 @@ import {
   INITIAL,
   ITEMS,
   RARITY,
-  RECIPES,
   SEED_BAG,
   SEED_SHOP,
   type BagItem,
   type Cell,
   type ItemId,
   type RarityKey,
-  type Recipe,
   type RunState,
   type ShopSlot,
-} from './data';
+} from './data.local';
 
 const RARITY_RANK: Record<RarityKey, number> = {
   common: 0,
@@ -31,6 +29,7 @@ const RARITY_RANK: Record<RarityKey, number> = {
 import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS, RelicLoop, TinkerGlyph } from './icons';
 import { ItemIcon, RarityFrame, ShopCard, cellPx } from './parts';
 import { CombatOverlay } from './combat';
+import { detectRecipes, type RecipeMatch } from './run/recipes';
 
 const CELL = cellPx;
 
@@ -44,11 +43,6 @@ interface DragState {
   fromBagUid?: string;
   fromShopUid?: string;
   cost?: number;
-}
-
-interface RecipeMatch {
-  recipe: Recipe;
-  uids: string[];
 }
 
 function footprint(itemId: ItemId, col: number, row: number, rot: number): { cells: Cell[]; w: number; h: number } {
@@ -78,76 +72,6 @@ function placementValid(
     cellsOf(b).forEach(([x, y]) => occupied.set(`${x},${y}`, b.uid));
   });
   return cells.every(([x, y]) => !occupied.has(`${x},${y}`));
-}
-
-function detectRecipes(bag: BagItem[]): RecipeMatch[] {
-  const matches: RecipeMatch[] = [];
-  const cellOwner = new Map<string, string>();
-  bag.forEach((b) => cellsOf(b).forEach(([x, y]) => cellOwner.set(`${x},${y}`, b.uid)));
-
-  function neighborsOf(b: BagItem): Set<string> {
-    const ns = new Set<string>();
-    cellsOf(b).forEach(([x, y]) => {
-      [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ].forEach(([dx, dy]) => {
-        const k = `${x + dx},${y + dy}`;
-        const u = cellOwner.get(k);
-        if (u && u !== b.uid) ns.add(u);
-      });
-    });
-    return ns;
-  }
-
-  const byUid = Object.fromEntries(bag.map((b) => [b.uid, b])) as Record<string, BagItem>;
-
-  for (const recipe of RECIPES) {
-    const need = [...recipe.inputs].sort();
-    const sz = need.length;
-    const items = bag.slice();
-
-    function* combos(start: number, picked: BagItem[]): Generator<BagItem[]> {
-      if (picked.length === sz) {
-        yield picked.slice();
-        return;
-      }
-      for (let i = start; i < items.length; i++) {
-        picked.push(items[i]);
-        yield* combos(i + 1, picked);
-        picked.pop();
-      }
-    }
-
-    for (const group of combos(0, [])) {
-      const ids = group.map((g) => g.itemId).sort();
-      if (ids.join('|') !== need.join('|')) continue;
-      const set = new Set(group.map((g) => g.uid));
-      const seen = new Set<string>([group[0].uid]);
-      const queue: BagItem[] = [group[0]];
-      while (queue.length) {
-        const cur = queue.shift()!;
-        for (const n of neighborsOf(cur)) {
-          if (set.has(n) && !seen.has(n)) {
-            seen.add(n);
-            queue.push(byUid[n]);
-          }
-        }
-      }
-      if (seen.size === sz) {
-        matches.push({ recipe, uids: group.map((g) => g.uid) });
-      }
-    }
-  }
-  const seen = new Set<string>();
-  return matches.filter((m) => {
-    const k = m.recipe.id + ':' + [...m.uids].sort().join(',');
-    if (seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
 }
 
 function TopBar({ state }: { state: RunState }) {

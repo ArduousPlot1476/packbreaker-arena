@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "!dist/**/*.map"]
+    },
+    "lint": {
+      "dependsOn": ["//#check-schemas-sync"]
+    },
+    "//#check-schemas-sync": {
+      "inputs": [
+        "content-schemas.ts",
+        "packages/content/src/schemas.ts",
+        "tooling/scripts/check-schemas-sync.cjs"
+      ],
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

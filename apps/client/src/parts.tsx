@@ -2,7 +2,7 @@
 // Body color rule: never use a different rarity's frame color for the body.
 
 import type { ReactNode } from 'react';
-import { ITEMS, RARITY, type ItemId, type RarityKey, type ShopSlot } from './data';
+import { ITEMS, RARITY, type ItemId, type RarityKey, type ShopSlot } from './data.local';
 import { CoinGlyph, ICONS } from './icons';
 
 export const cellPx = 88; // bag cell size — gives a 6*88 = 528 wide, 4*88 = 352 tall content area
