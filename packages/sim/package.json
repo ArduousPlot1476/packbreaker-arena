@@ -9,7 +9,8 @@
     "lint": "eslint src --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
-    "test": "echo \"no tests in M1.1 — sim is empty stub\" && exit 0"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@packbreaker/content": "workspace:*"
@@ -17,6 +18,8 @@
   "devDependencies": {
     "@packbreaker/eslint-config": "workspace:*",
     "@packbreaker/tsconfig": "workspace:*",
-    "typescript": "^5.6.3"
+    "@vitest/coverage-v8": "^2.1.8",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
   }
 }

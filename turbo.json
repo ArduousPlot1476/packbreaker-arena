@@ -6,7 +6,15 @@
       "outputs": ["dist/**", "!dist/**/*.map"]
     },
     "lint": {
-      "dependsOn": []
+      "dependsOn": ["//#check-schemas-sync"]
+    },
+    "//#check-schemas-sync": {
+      "inputs": [
+        "content-schemas.ts",
+        "packages/content/src/schemas.ts",
+        "tooling/scripts/check-schemas-sync.cjs"
+      ],
+      "outputs": []
     },
     "typecheck": {
       "dependsOn": ["^build"]

@@ -4,6 +4,22 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-27 — M1.2.1 Sim package skeleton + RNG (closed)
+
+- `packages/sim` populated with the canonical mulberry32 PRNG, deterministic-iteration helpers (canonicalPlacements / canonicalCells / stableSort), integer-math utilities (applyPct / applyBp / clamp / sumInts), and an `invariant()` assertion stub. No combat code, no status effects, no run-state machine — those land in M1.2.2 through M1.2.4.
+- Mulberry32 implementation matches the locked tech-architecture.md § 4.1 reference (Math.imul + `>>> 0` normalizer + `t | 1` / `t | 61` chain + `/4294967296` division). Single 32-bit state, `seed | 0` coercion at construction. Class is private; `createRng(seed)` is the only public constructor. Surface: `next()`, `nextInt(min, max)`, `clone()`, read-only `state` getter.
+- 55 tests pass: 16 RNG (determinism + distribution + cross-platform fixture), 12 iteration, 23 math, 3 invariant, 1 barrel smoke. Coverage 100% statements / 98.11% branches across all sim files.
+- Cross-platform fixture lives at `packages/sim/test/fixtures/rng-sequences.json`: 5 seeds × first 32 `next()` values each, captured on Node v18.20.5 from a byte-equivalent reference impl. Future Node updates / browser ports must match this fixture exactly — divergence is a bug, not a regeneration trigger.
+- All tech-architecture.md § 4.1 determinism rules enforced or honored: no `Math.random` (lint trip demonstrated and reverted), no `Date.now` / `new Date()`, no DOM globals, no Node built-ins, no `@packbreaker/shared`, no read of `Item.passiveStats` (existing M1.1 lint rules cover all of these). Math utilities reject float input with NaN to prevent silent rounding errors.
+- Housekeeping (M1.2 preamble items from M1.1.1 closure):
+  - content-schemas.ts § 0 allocation table updated to describe realized M1.1 architecture: §§ 12–15 are canonical in `packages/content`, with `packages/shared` re-exporting for ergonomics. Mirrored to `packages/content/src/schemas.ts` (still byte-identical).
+  - New CI diff guard `tooling/scripts/check-schemas-sync.cjs` wired into turbo as a root-level `//#check-schemas-sync` task, on which `lint` depends. `pnpm turbo lint` now runs the diff first and fails fast if the canonical and in-package schemas drift. Drift demo: appended a comment to one file, ran `pnpm check-schemas-sync`, got a useful `first diff at line N` error message; reverted; OK again.
+- Bundle delta vs. M1.1.1: zero (sim not yet imported by client). Bundle stays at 194.83 KB JS / 9.46 KB CSS.
+- Branch hygiene note: M1.2.1 was authored on `m1.1-scaffold` rather than a fresh `m1.2.1-sim-rng` branch off `main` (per CONTRIBUTING.md branch convention). `m1.1-scaffold` accumulates M1.1 + M1.1.1 + M1.2.1; main still holds M0 baseline. Trey's call whether to merge `m1.1-scaffold` to main and reopen a clean M1.2.x branch, or keep accumulating until M1.2 closes.
+- M1.2.2 deferred items: status effect tick logic + `STATUS_STACK_CAPS` enforcement; `invariants.ts` will pick up real assertions there (combat module is the first sim consumer with shape-contract obligations beyond what types capture); coverage target on `iteration.ts` branches stays at 95.45% — the uncovered branch is the rotation 90/270 swap inside `boundingBox` which has a guard test, but exhaustive 4-rotation coverage across all 4 shape sizes is M1.2.3 work when the combat module exercises rotated bag layouts.
+
+---
+
 ## 2026-04-26
 
 - M1.1 (Scaffold + content) closed. Branch m1.1-scaffold; main holds M0 baseline.

@@ -48,10 +48,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // In the monorepo (tech-architecture.md § 3), this file's contents distribute as:
 //
-//   packages/content        → §§ 1–8  (item, recipe, class, relic, contract, status,
-//                                       passive stats — content-authored, sim never reads passiveStats)
-//   packages/sim            → §§ 9–11 (bag state, run state, combat)
-//   packages/shared         → §§ 12–15 (ghost, save, API DTOs, telemetry events)
+//   packages/content        → §§ 1–8   (item, recipe, class, relic, contract, status,
+//                                        passive stats — content-authored, sim never reads passiveStats)
+//                          → §§ 12–15  (canonical: ghost, save, API DTOs, telemetry events)
+//   packages/sim            → §§ 9–11  (bag state, run state, combat)
+//   packages/shared         → §§ 12–15 (re-exports for ergonomics; consumers
+//                                        import shared/{ghost,save,telemetry/events,api})
 //
 // `sim` may import from `content` BUT must not read `Item.passiveStats` — that field
 // is for the run controller only. Lint rule: `no-restricted-syntax` blocks `passiveStats`
