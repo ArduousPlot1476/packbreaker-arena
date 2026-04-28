@@ -4,6 +4,54 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-28 — M1.2.2 review flags + bible amendment (ratified)
+
+- M1.2.2 ratified for merge. Three follow-up items deferred from
+  the review pass; tracked here so they don't go missing.
+- **Flag 1 — `_side` parameter cleanup in `tickStatusDamage`.** The
+  current API takes a `side: EntityRef` parameter the function never
+  reads, named `_side` with a paired eslint-disable. The resolver
+  attributes damage by which `StatusState` it passes in, not by a
+  side label. Drop the parameter and the disable in M1.2.3 when the
+  resolver becomes the first consumer. `cleanupStatus`'s `_currentTick`
+  is kept — cleanup is conceptually time-aware and adding it back
+  later would touch every call site.
+- **Flag 2 — `balance-bible.md` § 4 burn-prose amendment.** The
+  bible's sample sequence "5+5+4+4+3+..." is internally inconsistent
+  (sums to 30, not the stated ~25). With the spec-pinned tick order
+  (status_ticks at phase 4, cleanup at phase 6), a 5-stack burn
+  produces 5,4,4,3,3,2,2,1,1,0 = 25. The "~25 total" is the
+  load-bearing number; the sequence text is the writeup error.
+  Amend § 4 prose to "5,4,4,3,3,2,2,1,1 ≈ 25 over its lifetime" or
+  drop the sequence and keep "~25 damage over its lifetime." Folded
+  into the M1.2.3 prompt as a docs-side task.
+- **Flag 3 — burn re-application doc note in `status.ts`.** Current
+  impl: `applyStatus` adds stacks but does NOT reset
+  `burnRemainingTicks`. Burn at t=5 (5 stacks) followed by burn at
+  t=15 (3 stacks) gives burn=8 with the decay clock still ticking
+  from the first application. This is the right call for game feel
+  (re-application doesn't extend lifespan), but undocumented. Add a
+  one-liner to `status.ts` doc block in M1.2.3: "Re-application
+  adds stacks; decay timer is not reset."
+- M1.2.3 (combat resolver) locked answers, recorded here for the
+  prompt:
+  - Reaction firing order: single reaction round per top-level damage
+    event, canonical placement order on each side. No cascade.
+  - `buff_remove` event: add now as additive schema patch.
+    Replay-log legibility for mid-combat buff expiry.
+  - Damage cascade discipline: single-round, no cascade. Bloodmoon
+    Plate's retaliation does NOT trigger Vampire Fang's `on_hit` on
+    the boss side. Cascading is an M3 lever if a future item wants it.
+  - Trigger state ownership: `TriggerState` struct, same shape as
+    `StatusState`. Per-side mutable. Keys: (placementId, triggerIndex).
+    Holds cooldownAccumulator, firedCount (gated by
+    maxTriggersPerCombat), lowHealthFired boolean.
+  - Damage cap / negative HP: floor inline at 0. CombatEvent.damage.amount
+    = actual HP reduction (capped at current HP).
+    remainingHp = max(0, hp − rawAmount).
+
+---
+
 ## 2026-04-28 — M1.2.2 Status effects + status engine (closed)
 
 - Branch hygiene reset: `m1.1-scaffold` merged to `main` as a `--no-ff` merge commit (`c9f555f`) carrying M1.1 + M1.1.1 + M1.2.1. New work branched as `m1.2.2-status-effects` from the merge commit. Per-milestone commits preserved underneath the merge. Going forward, each M1.x phase branches off `main` per CONTRIBUTING.md.
