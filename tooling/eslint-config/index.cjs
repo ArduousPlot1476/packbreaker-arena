@@ -105,6 +105,39 @@ module.exports = {
     },
 
     // ───────────────────────────────────────────────────────────────
+    // packages/sim/src/run — the run controller IS the legitimate
+    // boundary that reads Item.passiveStats (content-schemas.ts § 0:
+    // "run-controller-only"). Inherits all other sim restrictions
+    // (no Math.random / Date.now / DOM / Node built-ins / shared imports)
+    // by virtue of the broader packages/sim/** override above; this
+    // narrower override only relaxes the passiveStats restriction by
+    // re-listing the no-restricted-syntax entries minus that one.
+    // ───────────────────────────────────────────────────────────────
+    {
+      files: ['packages/sim/src/run/**/*.ts'],
+      rules: {
+        'no-restricted-syntax': [
+          'error',
+          {
+            selector: "MemberExpression[object.name='Math'][property.name='random']",
+            message: 'Sim must use the seeded mulberry32 RNG, not Math.random.',
+          },
+          {
+            selector: "MemberExpression[object.name='Date'][property.name='now']",
+            message: 'Sim must be deterministic — Date.now() is forbidden. Use ticks.',
+          },
+          {
+            selector: "NewExpression[callee.name='Date']",
+            message: 'Sim must be deterministic — `new Date()` is forbidden. Use ticks.',
+          },
+          // passiveStats restriction intentionally omitted — run controller
+          // composes Combatant.startingHp from Item.passiveStats.maxHpBonus
+          // before invoking simulateCombat (M1.2.4).
+        ],
+      },
+    },
+
+    // ───────────────────────────────────────────────────────────────
     // packages/content — pure data + types, no outside imports
     // ───────────────────────────────────────────────────────────────
     {

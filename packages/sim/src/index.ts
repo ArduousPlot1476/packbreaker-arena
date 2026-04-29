@@ -1,6 +1,6 @@
 // @packbreaker/sim — pure-TS deterministic combat simulator.
 //
-// Surface (M1.2.1 + M1.2.2 + M1.2.3a + M1.2.3b):
+// Surface (M1.2.1 + M1.2.2 + M1.2.3a + M1.2.3b + M1.2.4):
 //   - rng:         canonical mulberry32 PRNG behind a Rng interface
 //   - iteration:   canonicalPlacements / canonicalCells / stableSort,
 //                  TICK_PHASES tuple + TickPhase type,
@@ -11,10 +11,11 @@
 //   - triggers:    createTriggerState / accumulateCooldown / shouldFire /
 //                  recordFire / isFiringCapped (M1.2.3a)
 //   - combat:      simulateCombat(input, options?) → CombatResult (M1.2.3b)
+//   - run:         createRun(input) → RunController; replayCombat;
+//                  composeRuleset; generateShop; detectRecipes (M1.2.4)
 //   - invariants:  shared invariant() assertion
 //
-// Run-state machine (M1.2.4) and the 200-fixture determinism suite (M1.2.5)
-// are still ahead.
+// The 200-fixture determinism suite (M1.2.5) is still ahead.
 
 export type { Rng } from './rng';
 export { createRng } from './rng';
@@ -62,3 +63,23 @@ export {
 
 export type { SimulateCombatOptions } from './combat';
 export { simulateCombat } from './combat';
+
+export type {
+  CreateRunInput,
+  RunController,
+  RunPhase,
+  RecipeMatch,
+  ComposedRuleset,
+  DerivedModifiers,
+} from './run';
+export {
+  createRun,
+  replayCombat,
+  detectRecipes,
+  composeRuleset,
+  baseIncomeForRound,
+  generateShop,
+  computeRerollCost,
+  effectiveItemCost,
+  sellValueOf,
+} from './run';
