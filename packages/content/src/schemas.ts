@@ -18,6 +18,13 @@
  *  - telemetry-plan.md — full event taxonomy
  *
  * Changelog
+ *  v0.3 (2026-04-28) — M1.2.3a schema patch.
+ *   - Added 'buff_remove' variant to CombatEvent (§ 11) for replay-log
+ *     legibility when a buff_apply's durationTicks elapses (e.g., a
+ *     buff_adjacent expiring mid-combat). Carries the same target /
+ *     stat / amount as the matching buff_apply so replay readers can
+ *     pair apply / remove without lookup tables. Locked per
+ *     decision-log.md entry e48bac9 (M1.2.3 ratified answers).
  *  v0.2 (2026-04-26) — M1.1.1 + M1.2.2 patches.
  *   - Added matchTags to Effect.buff_adjacent (§ 3) so the adjacency filter
  *     decouples from the host trigger's filter. Preserves existing
@@ -596,6 +603,13 @@ export type CombatEvent =
       readonly target: ItemRef
       readonly stat: BuffableStat
       readonly amount: number
+    }
+  | {
+      readonly tick: number
+      readonly type: 'buff_remove'
+      readonly target: ItemRef       // the item whose buff expired
+      readonly stat: BuffableStat    // which buff stat is being removed
+      readonly amount: number        // the amount being removed (matches the original buff_apply)
     }
   | {
       readonly tick: number

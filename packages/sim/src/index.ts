@@ -1,6 +1,6 @@
 // @packbreaker/sim — pure-TS deterministic combat simulator.
 //
-// Surface (M1.2.1 + M1.2.2):
+// Surface (M1.2.1 + M1.2.2 + M1.2.3a):
 //   - rng:         canonical mulberry32 PRNG behind a Rng interface
 //   - iteration:   canonicalPlacements / canonicalCells / stableSort,
 //                  TICK_PHASES tuple + TickPhase type,
@@ -8,9 +8,11 @@
 //   - math:        applyPct / applyBp / clamp / sumInts (integer-only, NaN on float)
 //   - status:      createStatusState / applyStatus / tickStatusDamage /
 //                  cleanupStatus / consumeStunIfPending (M1.2.2)
+//   - triggers:    createTriggerState / accumulateCooldown / shouldFire /
+//                  recordFire / isFiringCapped (M1.2.3a — for the resolver in 3b)
 //   - invariants:  shared invariant() assertion
 //
-// Combat resolution (M1.2.3), run-state machine (M1.2.4), and the 200-fixture
+// Combat resolution (M1.2.3b), run-state machine (M1.2.4), and the 200-fixture
 // determinism suite (M1.2.5) are still ahead.
 
 export type { Rng } from './rng';
@@ -42,3 +44,17 @@ export {
   cleanupStatus,
   consumeStunIfPending,
 } from './status';
+
+export type {
+  TriggerKey,
+  TriggerEntry,
+  TriggerState,
+  TriggerType,
+} from './triggers';
+export {
+  createTriggerState,
+  accumulateCooldown,
+  shouldFire,
+  recordFire,
+  isFiringCapped,
+} from './triggers';

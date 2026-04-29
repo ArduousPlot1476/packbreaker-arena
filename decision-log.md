@@ -4,6 +4,23 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-28 — M1.2.3a Combat resolver prep (closed)
+
+- M1.2.3 split into 3a (this) and 3b (resolver core, separate prompt later) per CONTRIBUTING.md branch-hygiene preference. 3a lands additive schema work + M1.2.2 follow-ups + the TriggerState module so the resolver in 3b consumes settled foundations.
+- Schema patch (additive, M1.2.3a, v0.3): added `buff_remove` variant to `CombatEvent` (§ 11) in both `content-schemas.ts` and `packages/content/src/schemas.ts`. Carries `tick`, `target: ItemRef` (the buffed item), `stat: BuffableStat`, `amount` — pairs with the matching `buff_apply` for replay-log readers without a lookup table. `pnpm check-schemas-sync` confirms files remain byte-identical. Locked per `e48bac9`.
+- Three M1.2.2 follow-ups applied:
+  - **`_side` parameter dropped** from `tickStatusDamage` in `packages/sim/src/status.ts`. `EntityRef` import removed. Six test call sites in `status.test.ts` updated. The resolver attributes damage by which `StatusState` instance it passes in.
+  - **`status.ts` re-application doc note** added above `applyStatus`: "Re-application adds stacks; does NOT reset `burnRemainingTicks`." Game-feel rationale: re-application can't extend lifespan.
+  - **`balance-bible.md` § 4 burn-prose amended** — sequence "5+5+4+4+3+..." replaced with "5,4,4,3,3,2,2,1,1" matching the spec-pinned tick order (status_ticks at phase 4 BEFORE cleanup at phase 6) which produces 25 total. Bible's "≈ 25 over its lifetime" was load-bearing; the sequence text was the writeup error.
+- TriggerState module landed in `packages/sim/src/triggers.ts`. Surface mirrors `status.ts` exactly: pure verbs over a mutable struct, no classes, no environment access. Surface: `createTriggerState`, `accumulateCooldown` (no-op when entries empty), `shouldFire`, `recordFire`, `isFiringCapped`. Lazy entry creation on first access in the keyed verbs (`shouldFire` / `recordFire` / `isFiringCapped`) — `accumulateCooldown` only increments existing entries. A trigger that "becomes eligible" mid-combat (future `summon_temp_item`) starts at `cooldownAccumulator = 0` and accumulates only ticks observed AFTER its first access. Documented in module doc-block: the alternative (a global tick counter consulted on lazy-init) makes a trigger's eligibility a function of resolver call order, not resolver state, breaking determinism.
+- Test count: 112 (was 89 at M1.2.2, +23 on triggers). Coverage: 100% statements / 99.1% branches across the sim package; `triggers.ts` at 100% all four metrics. The remaining branch shortfall is the same `iteration.ts:151` rotation-270 path deferred from M1.2.1, scheduled for M1.2.3b when fixture suite exercises rotated bag layouts.
+- Bundle delta vs. M1.2.2: zero. Sim still not imported by client. Bundle stays at 194.83 KB JS / 9.46 KB CSS.
+- Deviation ratified: `triggers.ts` `accumulateCooldown` uses bare `Array.prototype.sort()` (ECMA262 default ToString + UTF-16 code-unit compare) over an internal `compareStrings` helper. Entry keys are unique by construction, so the helper's 3-way `a === b` branch would have been unreachable and blocked 100% branch coverage. Bare sort produces the same canonical order without the unreachable branch. `iteration.ts` retains its own `compareStrings` because it's a tiebreaker over potentially-equal placementIds in equal cells, where the unreachable branch is a real but unreached edge case worth keeping flagged.
+- Branch hygiene: m1.2.3a-resolver-prep branched off main (b52d311), two commits (69b903f schema/follow-ups, 0a37034 triggers module). Ready for `--no-ff` merge to main.
+- M1.2.3b (combat resolver core + hand-authored fixture suite) prompt drafts after this merge lands.
+
+---
+
 ## 2026-04-28 — M1.2.2 review flags + bible amendment (ratified)
 
 - M1.2.2 ratified for merge. Three follow-up items deferred from
