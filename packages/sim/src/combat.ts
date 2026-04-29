@@ -104,6 +104,13 @@ interface CombatantRuntime {
 interface SideStats {
   bonusBaseDamage: number;
   lifestealPct: number;
+  /** Locked answer 15 (M1.2.4 ratification): class.passive.recipeBonusPct
+   *  plus summed RelicModifiers.recipeBonusPct. Applied multiplicatively to
+   *  damage / heal / apply_status effects from placements listed in
+   *  Combatant.recipeBornPlacementIds — BEFORE flat additions (buffs,
+   *  bonusBaseDamage). Tinker's class passive (10) + Pocket Forge (15) +
+   *  Catalyst (30) stacks to 55% recipe bonus per balance-bible.md § 12. */
+  recipeBonusPct: number;
 }
 
 interface ActiveBuff {
@@ -584,7 +591,12 @@ function resolveEffect(
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
       const buffSum = sumActiveBuffs(state.activeBuffs, source, 'damage');
-      const finalAmount = effect.amount + buffSum + state.sideStats[sourceSide].bonusBaseDamage;
+      // Locked answer 15: recipeBonusPct applies multiplicatively to recipe-born
+      // sources BEFORE flat additions (buffs, bonusBaseDamage).
+      const baseAmount = isRecipeBornSource(state, source)
+        ? applyPct(effect.amount, state.sideStats[sourceSide].recipeBonusPct)
+        : effect.amount;
+      const finalAmount = baseAmount + buffSum + state.sideStats[sourceSide].bonusBaseDamage;
       const pd: PendingDamage = {
         source,
         sourceSide,
@@ -609,8 +621,12 @@ function resolveEffect(
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
       const target = targetSide === 'player' ? state.player : state.ghost;
+      // Locked answer 15: recipeBonusPct applies before the heal cap.
+      const healAmount = isRecipeBornSource(state, source)
+        ? applyPct(effect.amount, state.sideStats[sourceSide].recipeBonusPct)
+        : effect.amount;
       const beforeHp = target.hp;
-      const newHp = Math.min(target.startingHp, beforeHp + effect.amount);
+      const newHp = Math.min(target.startingHp, beforeHp + healAmount);
       const actualGain = newHp - beforeHp;
       // Locked answer 11: suppress zero-gain heals entirely.
       if (actualGain <= 0) return;
@@ -630,15 +646,24 @@ function resolveEffect(
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
       const targetStatus = targetSide === 'player' ? state.playerStatus : state.ghostStatus;
-      applyStatus(targetStatus, effect.status, effect.stacks);
-      // Locked (M1.2.2): event reflects INPUT stacks per silent-cap ratification.
+      // Locked answer 15: recipeBonusPct applies to status stacks BEFORE the
+      // silent cap from STATUS_STACK_CAPS. Stun (boolean) ignores stacks per
+      // status.ts semantics, so the bonus is a no-op there but harmless to
+      // compute.
+      const stacks = isRecipeBornSource(state, source)
+        ? applyPct(effect.stacks, state.sideStats[sourceSide].recipeBonusPct)
+        : effect.stacks;
+      applyStatus(targetStatus, effect.status, stacks);
+      // Locked (M1.2.2): event reflects POST-recipe-bonus, PRE-cap stacks per
+      // silent-cap ratification. status_apply emits what the resolver tried to
+      // apply, regardless of how much the cap silently absorbed.
       state.events.push({
         tick: state.tick,
         type: 'status_apply',
         source,
         target: targetSide,
         status: effect.status,
-        stacks: effect.stacks,
+        stacks,
       });
       return;
     }
@@ -735,6 +760,7 @@ function deriveSideStats(classId: ClassId, relics: RelicSlots): SideStats {
   const cls = CLASSES[classId];
   let bonusBaseDamage = cls?.passive.bonusBaseDamage ?? 0;
   let lifestealPct = 0;
+  let recipeBonusPct = cls?.passive.recipeBonusPct ?? 0;
 
   for (const slot of [relics.starter, relics.mid, relics.boss]) {
     if (slot === null) continue;
@@ -742,9 +768,10 @@ function deriveSideStats(classId: ClassId, relics: RelicSlots): SideStats {
     if (!relic) continue;
     bonusBaseDamage += relic.modifiers.bonusBaseDamage ?? 0;
     lifestealPct += relic.modifiers.lifestealPct ?? 0;
+    recipeBonusPct += relic.modifiers.recipeBonusPct ?? 0;
   }
 
-  return { bonusBaseDamage, lifestealPct };
+  return { bonusBaseDamage, lifestealPct, recipeBonusPct };
 }
 
 function precomputeAdjacency(
@@ -790,6 +817,21 @@ function computeAdjacents(
     if (adj) out.push(other);
   }
   return out;
+}
+
+/** Locked answer 15: returns true if `source.placementId` is in the source
+ *  side's `recipeBornPlacementIds` (set by the run controller after a
+ *  combineRecipe call). Returns false otherwise — including when the field is
+ *  undefined (omitted by all M1.2.3b fixtures). */
+function isRecipeBornSource(state: CombatState, source: ItemRef): boolean {
+  const ids = source.side === 'player'
+    ? state.input.player.recipeBornPlacementIds
+    : state.input.ghost.recipeBornPlacementIds;
+  if (!ids) return false;
+  for (const id of ids) {
+    if (id === source.placementId) return true;
+  }
+  return false;
 }
 
 function sumActiveBuffs(

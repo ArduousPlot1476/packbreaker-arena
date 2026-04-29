@@ -18,6 +18,17 @@
  *  - telemetry-plan.md — full event taxonomy
  *
  * Changelog
+ *  v0.4 (2026-04-29) — M1.2.4 recipeBonusPct routing.
+ *   - Added optional `recipeBornPlacementIds` to Combatant (§ 11) — the run
+ *     controller materializes this list at combat start from placements that
+ *     originated via combineRecipe(). Sim reads it in resolveEffect to apply
+ *     the source side's recipeBonusPct (class.passive + summed
+ *     RelicModifiers.recipeBonusPct) multiplicatively before flat additions
+ *     (buffs, bonusBaseDamage). Damage / heal / apply_status all honor it.
+ *     Locked per decision-log.md entry (M1.2.4 pre-flight, ratified locked
+ *     answer 15). Fixture impact: zero — all M1.2.3b fixtures have undefined
+ *     recipeBornPlacementIds (deserializes to empty), no bonus applied,
+ *     events byte-identical.
  *  v0.3 (2026-04-28) — M1.2.3a schema patch.
  *   - Added 'buff_remove' variant to CombatEvent (§ 11) for replay-log
  *     legibility when a buff_apply's durationTicks elapses (e.g., a
@@ -536,6 +547,15 @@ export interface Combatant {
   readonly relics: RelicSlots
   readonly classId: ClassId
   readonly startingHp: number
+  /**
+   * Placements whose item originated via combineRecipe() in the run controller.
+   * The sim reads this set in resolveEffect to apply the source side's
+   * recipeBonusPct (class.passive.recipeBonusPct + summed
+   * RelicModifiers.recipeBonusPct) to damage / heal / apply_status effects
+   * coming from those placements. Multiplied BEFORE flat additions (buffs,
+   * bonusBaseDamage). Undefined / empty = no recipe bonus on any placement.
+   */
+  readonly recipeBornPlacementIds?: ReadonlyArray<PlacementId>
 }
 
 export interface CombatInput {
