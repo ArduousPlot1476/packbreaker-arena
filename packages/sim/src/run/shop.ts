@@ -37,7 +37,9 @@ function buildPool(
   classId: ClassId,
   items: Readonly<Record<ItemId, Item>>,
 ): ReadonlyArray<PoolEntry> {
-  const maxRarityName = RARITY_GATE_BY_ROUND[round - 1] ?? 'legendary';
+  // RARITY_GATE_BY_ROUND covers M1's 11-round contract. Out-of-bounds round
+  // indices (extended-maxRounds contracts) are an M2/M3 concern.
+  const maxRarityName = RARITY_GATE_BY_ROUND[round - 1]!;
   const maxRarityIdx = RARITY_ORDER.indexOf(maxRarityName);
 
   const pool: PoolEntry[] = [];
@@ -71,20 +73,16 @@ function buildPool(
 function weightedSelect(pool: ReadonlyArray<PoolEntry>, rng: Rng): ItemId {
   let total = 0;
   for (const e of pool) total += e.weight;
-  if (total <= 0) {
-    // Defensive: pool emptied (shouldn't happen with M1 content). Return the
-    // first id in canonical order. Documented unreachable in M1.
-    return pool[0]!.itemId;
-  }
   const roll = rng.nextInt(0, total - 1);
   let acc = 0;
   for (const e of pool) {
     acc += e.weight;
     if (roll < acc) return e.itemId;
   }
-  // Defensive fallback (would only reach if rounding made acc < roll, which
-  // can't happen with integer arithmetic). Return last entry.
-  return pool[pool.length - 1]!.itemId;
+  // Unreachable under M1 content registry: pool is always non-empty with
+  // positive total weight, and integer arithmetic guarantees the loop returns.
+  // Future contrived registries hard-crash here rather than silently return.
+  throw new Error('weightedSelect: empty pool or zero total weight');
 }
 
 /** Generates a fresh ShopState for a given round. Items can repeat across

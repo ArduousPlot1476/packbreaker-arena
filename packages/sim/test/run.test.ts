@@ -733,4 +733,117 @@ describe('bag operations', () => {
       ctrl.placeItem(ItemId('iron-dagger'), { col: 0, row: 0 }, 0),
     ).toThrow(/invalid placement/);
   });
+
+  it('placeItem rejects row-axis out-of-bounds anchors', () => {
+    // Existing OOB test covers col-axis (col=99). This trips the row-axis
+    // branch by anchoring at row=4 in a 6×4 bag.
+    const ctrl = createRun(baseInput());
+    ctrl.buyItem(0);
+    const itemId = ctrl.getState().shop.slots[0]!;
+    expect(() => ctrl.placeItem(itemId, { col: 0, row: 4 }, 0)).toThrow(/invalid placement/);
+  });
+
+  it('moveItem to overlap with another placement throws', () => {
+    const items = { [ItemId('iron-dagger')]: cheapItem('iron-dagger') };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0);
+    ctrl.buyItem(1);
+    const pid1 = ctrl.placeItem(ItemId('iron-dagger'), { col: 0, row: 0 }, 0);
+    ctrl.placeItem(ItemId('iron-dagger'), { col: 1, row: 0 }, 0);
+    expect(() => ctrl.moveItem(pid1, { col: 1, row: 0 }, 0)).toThrow(/invalid placement/);
+  });
+
+  it('rotateItem to a rotation that goes off-grid throws', () => {
+    const items = { [ItemId('iron-sword')]: cheapItem('iron-sword') };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0);
+    // 1×2V at (col=5, row=0): cells (5,0), (5,1) — within 6×4 bag. Rotated 90 →
+    // 2×1H at same anchor: cells (5,0), (6,0). col=6 ≥ w=6 → off-grid.
+    const swordPid = ctrl.placeItem(ItemId('iron-sword'), { col: 5, row: 0 }, 0);
+    expect(() => ctrl.rotateItem(swordPid, 90)).toThrow(/invalid layout/);
+  });
+});
+
+// ─── passiveStats + status_tick damage stats ──────────────────────
+
+describe('passiveStats.maxHpBonus', () => {
+  it('Buckler (+5 maxHpBonus) raises player startingHp from 30 to 35', () => {
+    // 30-damage ghost vs player with Buckler: damage event reports remainingHp=5,
+    // proving startingHp was 35. Without Buckler the player would die at 0 HP.
+    const ghostBomb = defineTestItem(
+      'test-30dmg',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] }],
+      { tags: ['weapon'], rarity: 'legendary' }, // legendary keeps it out of round 1 shop pool
+    );
+    const items = {
+      [ItemId('buckler')]: ITEMS[ItemId('buckler')]!,
+      [ghostBomb.id]: ghostBomb,
+    };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0); // Round 1 Common-only → only Buckler in pool.
+    ctrl.placeItem(ItemId('buckler'), { col: 0, row: 0 }, 0);
+    const ghost: Combatant = {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ghostBomb.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+      relics: NO_RELICS,
+      classId: TINKER,
+      startingHp: 100,
+    };
+    const result = ctrl.startCombat(ghost);
+    const playerDmg = result.events.find((e) => e.type === 'damage' && e.target === 'player');
+    expect(playerDmg).toBeDefined();
+    if (playerDmg?.type === 'damage') {
+      expect(playerDmg.amount).toBe(30);
+      expect(playerDmg.remainingHp).toBe(5);
+    }
+  });
+});
+
+describe('status_tick damage stats', () => {
+  it('player-applied burn produces status_tick events that count toward damageDealt', () => {
+    // Player applies burn to ghost → ghost takes status_tick damage on cleanup
+    // ticks. computeDamageStats sums status_tick.damage where target='ghost'.
+    const burner = defineTestItem(
+      'test-burner',
+      [{ type: 'on_round_start', effects: [{ type: 'apply_status', status: 'burn', stacks: 5, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [burner.id]: burner };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0);
+    ctrl.placeItem(burner.id, { col: 0, row: 0 }, 0);
+    ctrl.startCombat(emptyGhost(100));
+    const entry = ctrl.getState().history[0]!;
+    expect(entry.damageDealt).toBeGreaterThan(0);
+  });
+
+  it('ghost-applied burn produces status_tick events that count toward damageTaken', () => {
+    // Ghost applies burn to player → player takes status_tick damage on cleanup
+    // ticks. computeDamageStats sums status_tick.damage where target='player'.
+    const burner = defineTestItem(
+      'test-burner',
+      [{ type: 'on_round_start', effects: [{ type: 'apply_status', status: 'burn', stacks: 5, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [burner.id]: burner };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    const ghost: Combatant = {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: burner.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+      relics: NO_RELICS,
+      classId: TINKER,
+      startingHp: 100,
+    };
+    ctrl.startCombat(ghost);
+    const entry = ctrl.getState().history[0]!;
+    expect(entry.damageTaken).toBeGreaterThan(0);
+  });
 });

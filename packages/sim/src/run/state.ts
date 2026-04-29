@@ -155,7 +155,6 @@ class RunControllerImpl implements RunController {
   private readonly bornFromRecipe: Set<PlacementId> = new Set();
   private nextPlacementCounter = 0;
   private lastCombatResult: CombatResult | null = null;
-  private lastCombatRound = 0;
 
   constructor(input: CreateRunInput) {
     const contract = CONTRACTS[input.contractId];
@@ -282,8 +281,7 @@ class RunControllerImpl implements RunController {
       throw new Error(`buyItem: slot ${slotIndex} already purchased this round`);
     }
     const itemId = this.shop.slots[slotIndex]!;
-    const item = this.items[itemId];
-    if (!item) throw new Error(`buyItem: unknown itemId ${String(itemId)}`);
+    const item = this.items[itemId]!;
     const cost = effectiveItemCost(
       item,
       this.derived.itemCostDelta,
@@ -311,8 +309,7 @@ class RunControllerImpl implements RunController {
     const idx = this.bag.placements.findIndex((p) => p.placementId === placementId);
     if (idx < 0) throw new Error(`sellItem: placement ${String(placementId)} not in bag`);
     const placement = this.bag.placements[idx]!;
-    const item = this.items[placement.itemId];
-    if (!item) throw new Error(`sellItem: unknown itemId ${String(placement.itemId)}`);
+    const item = this.items[placement.itemId]!;
     const recovered = sellValueOf(
       item,
       this.derived.itemCostDelta,
@@ -374,7 +371,7 @@ class RunControllerImpl implements RunController {
       anchor,
       rotation,
     };
-    if (!this.isValidPlacement(candidate, placementId)) {
+    if (!this.isValidPlacement(candidate, new Set([placementId]))) {
       throw new Error(
         `moveItem: invalid placement at (${anchor.col},${anchor.row}) rot ${rotation}`,
       );
@@ -401,7 +398,7 @@ class RunControllerImpl implements RunController {
       anchor: existing.anchor,
       rotation,
     };
-    if (!this.isValidPlacement(candidate, placementId)) {
+    if (!this.isValidPlacement(candidate, new Set([placementId]))) {
       throw new Error(`rotateItem: rotation ${rotation} produces invalid layout`);
     }
     this.bag.placements[idx] = candidate;
@@ -465,32 +462,25 @@ class RunControllerImpl implements RunController {
     const match = matches.find((m) => m.recipeId === recipeId);
     if (!match) throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
 
-    const recipe = this.recipes.find((r) => r.id === recipeId);
-    if (!recipe) throw new Error(`combineRecipe: unknown recipeId ${String(recipeId)}`);
+    const recipe = this.recipes.find((r) => r.id === recipeId)!;
+    const inputIds = new Set(match.inputPlacementIds);
 
-    // Compute top-left of input footprint = min row, then min col across all
-    // input cells. Anchor = (minCol, minRow), rotation = 0. If invalid after
-    // freeing inputs, try rotations 90 / 180 / 270; throw if all fail.
-    const inputPlacements = match.inputPlacementIds.map(
-      (id) => this.bag.placements.find((p) => p.placementId === id)!,
-    );
+    // Compute top-left of input footprint: min row, then min col across all
+    // input cells. Anchor = (minCol, minRow); rotations 0 / 90 / 180 / 270.
     let minRow = Infinity;
     let minCol = Infinity;
-    for (const p of inputPlacements) {
+    for (const id of match.inputPlacementIds) {
+      const p = this.bag.placements.find((q) => q.placementId === id)!;
       for (const cell of canonicalCells(p, this.items)) {
         if (cell.row < minRow) minRow = cell.row;
         if (cell.col < minCol) minCol = cell.col;
       }
     }
-    if (!Number.isFinite(minRow) || !Number.isFinite(minCol)) {
-      throw new Error('combineRecipe: input footprint computation failed');
-    }
 
-    // Remove inputs first so validity checks see the freed cells.
-    const inputIds = new Set(match.inputPlacementIds);
-    this.bag.placements = this.bag.placements.filter((p) => !inputIds.has(p.placementId));
-    for (const id of inputIds) this.bornFromRecipe.delete(id);
-
+    // Try-then-commit: find a valid output placement with input cells excluded
+    // from the occupancy check, then atomically remove inputs and add output.
+    // M1 invariant: every recipe's output fits in at least one rotation; M3
+    // content protection (registry-time validation) is deferred.
     const outputPlacementId = this.nextPlacementId();
     const anchor: CellCoord = { col: minCol, row: minRow };
     const rotations: Rotation[] = [0, 90, 180, 270];
@@ -502,19 +492,15 @@ class RunControllerImpl implements RunController {
         anchor,
         rotation: rot,
       };
-      if (this.isValidPlacement(candidate)) {
+      if (this.isValidPlacement(candidate, inputIds)) {
         placed = candidate;
         break;
       }
     }
-    if (!placed) {
-      // Roll back input removal so the bag isn't left in a half-state.
-      this.bag.placements.push(...inputPlacements);
-      throw new Error(
-        `combineRecipe: cannot place output ${String(recipe.output)} at (${minCol},${minRow}) — no rotation fits`,
-      );
-    }
-    this.bag.placements.push(placed);
+
+    this.bag.placements = this.bag.placements.filter((p) => !inputIds.has(p.placementId));
+    for (const id of inputIds) this.bornFromRecipe.delete(id);
+    this.bag.placements.push(placed!);
     // Tinker's class.passive.recipeBonusPct + relic-driven recipe bonuses
     // apply to this placement at combat-start time. Track here; combat.ts
     // reads recipeBornPlacementIds via Combatant (locked answer 15).
@@ -591,7 +577,6 @@ class RunControllerImpl implements RunController {
       goldEarnedThisRound,
       opponentGhostId: null,
     });
-    this.lastCombatRound = this.currentRound;
 
     this.phase = 'resolution';
 
@@ -641,7 +626,7 @@ class RunControllerImpl implements RunController {
 
   private isValidPlacement(
     candidate: BagPlacement,
-    excludeId?: PlacementId,
+    excludeIds?: ReadonlySet<PlacementId>,
   ): boolean {
     const cells = canonicalCells(candidate, this.items);
     const w = this.bag.dimensions.width;
@@ -652,7 +637,7 @@ class RunControllerImpl implements RunController {
     }
     const occupied = new Set<string>();
     for (const p of this.bag.placements) {
-      if (p.placementId === excludeId) continue;
+      if (excludeIds?.has(p.placementId)) continue;
       for (const cell of canonicalCells(p, this.items)) {
         occupied.add(`${cell.row}:${cell.col}`);
       }
@@ -681,20 +666,19 @@ class RunControllerImpl implements RunController {
   private computePlayerStartingHp(): number {
     let hp = 30; // BASE_COMBATANT_HP — content-schemas.ts § 16.
     for (const p of this.bag.placements) {
-      const item = this.items[p.itemId];
+      const item = this.items[p.itemId]!;
       // Run controller IS the legitimate consumer of Item.passiveStats per
       // content-schemas.ts § 0 ("run-controller-only"). The sim-wide lint
       // rule against passiveStats access is relaxed for packages/sim/src/run/**
       // in tooling/eslint-config/index.cjs.
-      const bonus = item?.passiveStats?.maxHpBonus;
+      const bonus = item.passiveStats?.maxHpBonus;
       if (bonus) hp += bonus;
     }
     return hp;
   }
 
-  private lastCombatOutcomeForRound(): RoundOutcome | null {
-    const last = this.history[this.history.length - 1];
-    return last?.round === this.lastCombatRound ? last.outcome : null;
+  private lastCombatOutcomeForRound(): RoundOutcome {
+    return this.history[this.history.length - 1]!.outcome;
   }
 
   private shouldEndRun(lastOutcome: RoundOutcome | null): boolean {
@@ -752,12 +736,10 @@ class RunControllerImpl implements RunController {
   }
 
   private dateFromTimestamp(ts: IsoTimestamp): IsoDate {
-    // ISO 8601 timestamp's date prefix (YYYY-MM-DD). Sim has no calendar; this
-    // is best-effort for the daily contract telemetry shape. M1.5 client
-    // overrides with the real date.
-    const s = String(ts);
-    const datePart = s.length >= 10 ? s.slice(0, 10) : '2025-01-01';
-    return datePart as IsoDate;
+    // ISO 8601 timestamp's date prefix (YYYY-MM-DD). Sim has no calendar;
+    // M1.5 client overrides with the real date. IsoTimestamp brand contract
+    // guarantees the string is at least 10 chars long.
+    return String(ts).slice(0, 10) as IsoDate;
   }
 }
 

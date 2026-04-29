@@ -70,13 +70,11 @@ export function detectRecipes(
     placements.map((p) => [p.placementId, p]),
   );
 
-  // Sort recipes by ID for canonical iteration order.
-  const sortedRecipes = [...recipes].sort((a, b) =>
-    a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
-  );
+  // Sort recipes by ID for canonical iteration order. Recipe IDs are unique
+  // per registry contract, so the comparator never returns 0.
+  const sortedRecipes = [...recipes].sort((a, b) => (a.id < b.id ? -1 : 1));
 
   const matches: RecipeMatch[] = [];
-  const seenKeys = new Set<string>();
 
   for (const recipe of sortedRecipes) {
     const need = recipe.inputs.map((i) => i.itemId).sort();
@@ -118,8 +116,7 @@ export function detectRecipes(
       const queue: PlacementId[] = [group[0]!.placementId];
       while (queue.length > 0) {
         const cur = queue.shift()!;
-        const adj = adjacency.get(cur);
-        if (!adj) continue;
+        const adj = adjacency.get(cur)!;
         for (const n of adj) {
           if (groupIds.has(n) && !seen.has(n)) {
             seen.add(n);
@@ -129,13 +126,11 @@ export function detectRecipes(
       }
       if (seen.size !== sz) continue;
 
-      // Dedupe key: recipeId + sorted placement ids.
+      // recurse(0, []) generates each combination exactly once and recipe IDs
+      // are unique, so no dedup is needed.
       const sortedPlacementIds = group
         .map((g) => g.placementId)
         .sort();
-      const key = `${recipe.id}|${sortedPlacementIds.join(',')}`;
-      if (seenKeys.has(key)) continue;
-      seenKeys.add(key);
 
       matches.push({
         recipeId: recipe.id,

@@ -4,6 +4,37 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-29 — M1.2.4 coverage cleanup pass (closed)
+
+- Closes the "Punted to M1.2.5 fixture authoring or a future cleanup pass" deviation flagged in the M1.2.4 closing entry below. 20 uncovered branches in `packages/sim/src/run/*` resolved on the same `m1.2.4-run-state` branch before merging to main.
+- **6 real-path tests** added in `run.test.ts`:
+  - `moveItem` to overlap with another placement throws (state.ts:377).
+  - `rotateItem` to a rotation that goes off-grid throws (state.ts:404 — 1×2V at right edge column rotated 90 → 2×1H spills into col=6 of a 6-wide bag).
+  - `placeItem` rejects row-axis OOB anchors (state.ts:651, paired with the existing col-axis test).
+  - Buckler (+5 maxHpBonus) raises player startingHp from 30 to 35 (state.ts:690 — real-path smoke for `passiveStats.maxHpBonus` via 30-damage ghost vs 35-HP player landing remainingHp=5).
+  - player-applied burn → status_tick events count toward damageDealt (state.ts:776 ghost branch in `computeDamageStats`).
+  - ghost-applied burn → status_tick events count toward damageTaken (state.ts:776 player branch).
+- **10 defensive guards deleted** as unreachable under type/registry/history contracts:
+  - state.ts:286/315/469 — unknown-itemId / unknown-recipeId throws; registry contract guarantees lookups succeed when called from validated buyItem / sellItem / detectRecipes flows. Replaced with non-null assertions.
+  - state.ts:485 — `Number.isFinite(minRow/minCol)` after the input-footprint loop; `match.inputPlacementIds` is non-empty per recipe contract so the loop body always runs.
+  - state.ts:689 — `item?.passiveStats?.maxHpBonus`; bag.placements always have valid itemIds, narrowed to `item.passiveStats?`.
+  - state.ts:697 — `last?.round === lastCombatRound ? last.outcome : null` history-tracking guard in `lastCombatOutcomeForRound`; function only called from advancePhase in resolution phase, so `history[history.length - 1]` is always defined and round-matched. The now-write-only `lastCombatRound` field removed.
+  - shop.ts:84 — `weightedSelect` integer-arithmetic fallback; replaced with a documented `throw` so future contrived registries hard-crash rather than silently return a wrong item (folds in the surfaced :74 case below).
+  - recipes.ts:75 — sort-comparator's `: 0` branch; recipe IDs are unique per registry contract so the comparator never returns 0. Simplified to `a.id < b.id ? -1 : 1`.
+  - recipes.ts:122 — `if (!adj) continue` in BFS over the adjacency map; the map is populated for every placement in the same scope (line 53–67), so `adj` is always defined.
+  - recipes.ts:137 — `seenKeys` dedup; `recurse(0, [])` generates each combination exactly once and recipe IDs are unique, so the dedup never fires. Both the `seenKeys` `Set` declaration and the `if (seenKeys.has(key)) continue` line removed.
+- **4 surfaced cases ratified as deletes** (Trey's call on each, recorded here for posterity):
+  - state.ts:510 combineRecipe rollback — function uses try-then-commit ordering, no rollback needed; M3 content protection deferred to that milestone. Function restructured: validate the output placement against an `excludeIds: ReadonlySet<PlacementId>` (replaces the prior single-id `excludeId` parameter on `isValidPlacement`; moveItem and rotateItem callers updated to wrap their excluded id in a fresh Set) BEFORE removing inputs, then commit atomically (filter inputs out, push output in).
+  - state.ts:759 dateFromTimestamp short-string fallback — IsoTimestamp brand contract covers (timestamps are always ≥ 10 chars); replaced with bare `String(ts).slice(0, 10) as IsoDate`.
+  - shop.ts:40 `RARITY_GATE_BY_ROUND[round - 1] ?? 'legendary'` — M1 ships only neutral contract (11 rounds = 11 gate entries), extended-maxRounds defense is M2/M3 problem. Replaced with non-null assertion.
+  - shop.ts:74 weightedSelect zero-total — unreachable under M1 content registry; hard crash is correct failure mode for future contrived registries. Both the zero-total `if` block AND the integer-arithmetic fallback (the `:84` case) collapsed into a single documented `throw new Error('weightedSelect: empty pool or zero total weight')` at end of function.
+- **Final run/* coverage: 99.49% line / 98.95% branch** (target ≥98% line / ≥97% branch). Per-file: state.ts 99.63/100 (uncovered: `getEvents()` body — public method, no test), shop.ts 97.7/95.23 (uncovered: the documented hard-crash throw + the `weight > 0` push branch which never gates under M1 content), recipes.ts 100/97.43 (uncovered: empty-recipe-inputs guard which the M1 registry never produces), replay/index/ruleset 100/100. combat.ts unchanged at 100% statements / 97.44% branches.
+- **Test count: 207** (+6 from this pass; the closing entry's "192" understated — actual at `f4ef21f` was 201).
+- **Bundle delta: zero**. Sim still not imported by client.
+- Branch hygiene: cleanup commit on `m1.2.4-run-state`, then `--no-ff` merge to `main`. M1.2.4 closes for real; M1.2.5 (200-fixture determinism suite) opens next.
+
+---
+
 ## 2026-04-29 — M1.2.4 Run-state machine + replayCombat (closed)
 
 - Run controller landed at `packages/sim/src/run/`. Module split: `state.ts` (RunController class + phase machine), `ruleset.ts` (composeRuleset + baseIncomeForRound), `shop.ts` (generateShop + computeRerollCost + effectiveItemCost + sellValueOf), `recipes.ts` (sim-side detectRecipes mirroring the M0 BFS), `replay.ts` (replayCombat thin generator), `index.ts` (barrel). Public surface exported via `packages/sim/src/index.ts`.
