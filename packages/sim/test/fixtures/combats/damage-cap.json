@@ -1,0 +1,93 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "damage-cap",
+  "description": "Ghost startingHp=2. Player Throwing Knife (8 dmg on_round_start). Damage event amount=2 (capped at currentHp), remainingHp=0. The 6 over-damage units are dropped at the cap.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "throwing-knife",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": []
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 2
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 2
+    },
+    {
+      "tick": 0,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_round_start"
+    },
+    {
+      "tick": 0,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 0,
+      "type": "combat_end",
+      "outcome": "player_win",
+      "finalHp": {
+        "player": 30,
+        "ghost": 0
+      }
+    }
+  ],
+  "expectedOutcome": "player_win",
+  "expectedFinalHp": {
+    "player": 30,
+    "ghost": 0
+  },
+  "expectedEndedAtTick": 0
+}

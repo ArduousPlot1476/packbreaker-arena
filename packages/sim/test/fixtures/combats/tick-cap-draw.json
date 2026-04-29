@@ -1,0 +1,83 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "tick-cap-draw",
+  "description": "Both sides have only Buckler (no triggers, sim ignores passiveStats). No damage source on either side → combat reaches MAX_COMBAT_TICKS=600. Outcome=draw, endedAtTick=600.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "buckler",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "g1",
+            "itemId": "buckler",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 30
+    },
+    {
+      "tick": 600,
+      "type": "combat_end",
+      "outcome": "draw",
+      "finalHp": {
+        "player": 30,
+        "ghost": 30
+      }
+    }
+  ],
+  "expectedOutcome": "draw",
+  "expectedFinalHp": {
+    "player": 30,
+    "ghost": 30
+  },
+  "expectedEndedAtTick": 600
+}

@@ -1,0 +1,403 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "on-taken-damage-wooden-shield",
+  "description": "Player Wooden Shield. Ghost Crossbow (slow heavy hits, fires 8 times in 600 ticks). Each damage event triggers Wooden Shield heal. Heal cap eventually stalls combat at hp=2 → tick-cap draw.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "wooden-shield",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "g1",
+            "itemId": "crossbow",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 30
+    },
+    {
+      "tick": 70,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 70,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 8,
+      "remainingHp": 22
+    },
+    {
+      "tick": 70,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 70,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 24
+    },
+    {
+      "tick": 140,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 140,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 8,
+      "remainingHp": 16
+    },
+    {
+      "tick": 140,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 140,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 18
+    },
+    {
+      "tick": 210,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 210,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 8,
+      "remainingHp": 10
+    },
+    {
+      "tick": 210,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 210,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 12
+    },
+    {
+      "tick": 280,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 280,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 8,
+      "remainingHp": 4
+    },
+    {
+      "tick": 280,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 280,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 6
+    },
+    {
+      "tick": 350,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 350,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 6,
+      "remainingHp": 0
+    },
+    {
+      "tick": 350,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 350,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 2
+    },
+    {
+      "tick": 420,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 420,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 420,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 420,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 2
+    },
+    {
+      "tick": 490,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 490,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 490,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 490,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 2
+    },
+    {
+      "tick": 560,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 560,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 560,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_taken_damage"
+    },
+    {
+      "tick": 560,
+      "type": "heal",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "player",
+      "amount": 2,
+      "newHp": 2
+    },
+    {
+      "tick": 600,
+      "type": "combat_end",
+      "outcome": "draw",
+      "finalHp": {
+        "player": 2,
+        "ghost": 30
+      }
+    }
+  ],
+  "expectedOutcome": "draw",
+  "expectedFinalHp": {
+    "player": 2,
+    "ghost": 30
+  },
+  "expectedEndedAtTick": 600
+}

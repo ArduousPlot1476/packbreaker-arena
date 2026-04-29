@@ -266,8 +266,9 @@ function runTriggerPhase(state: CombatState, type: 'on_round_start' | 'on_low_he
   for (const side of ['player', 'ghost'] as const) {
     const bag = side === 'player' ? state.input.player.bag : state.input.ghost.bag;
     for (const placement of canonicalPlacements(bag)) {
-      const item = state.items[placement.itemId];
-      if (!item) continue;
+      // canonicalCells in precomputeAdjacency setup throws on unknown itemId,
+      // so reaching here implies items[placement.itemId] is defined.
+      const item = state.items[placement.itemId]!;
       for (let i = 0; i < item.triggers.length; i++) {
         const trigger = item.triggers[i]!;
         if (trigger.type !== type) continue;
@@ -301,8 +302,8 @@ function runCooldownPhase(state: CombatState): void {
     const status = side === 'player' ? state.playerStatus : state.ghostStatus;
 
     for (const placement of canonicalPlacements(bag)) {
-      const item = state.items[placement.itemId];
-      if (!item) continue;
+      // canonicalCells in precomputeAdjacency setup throws on unknown itemId.
+      const item = state.items[placement.itemId]!;
       for (let i = 0; i < item.triggers.length; i++) {
         const trigger = item.triggers[i]!;
         if (trigger.type !== 'on_cooldown') continue;
@@ -422,8 +423,8 @@ function fireDamageReactions(
   const triggerState = side === 'player' ? state.playerTriggers : state.ghostTriggers;
 
   for (const placement of canonicalPlacements(bag)) {
-    const item = state.items[placement.itemId];
-    if (!item) continue;
+    // canonicalCells in precomputeAdjacency setup throws on unknown itemId.
+    const item = state.items[placement.itemId]!;
     for (let i = 0; i < item.triggers.length; i++) {
       const trigger = item.triggers[i]!;
       if (trigger.type !== type) continue;
@@ -541,17 +542,16 @@ function fireAdjacentReactions(
   side: EntityRef,
   sourcePlacement: BagPlacement,
 ): void {
-  const sourceItem = state.items[sourcePlacement.itemId];
-  if (!sourceItem) return;
-
+  // canonicalCells in precomputeAdjacency setup throws on unknown itemId, so
+  // reaching here implies items[*.itemId] is defined for every placement.
+  const sourceItem = state.items[sourcePlacement.itemId]!;
   const adjacencyMap = side === 'player' ? state.playerAdjacency : state.ghostAdjacency;
-  const adjacents = adjacencyMap.get(sourcePlacement.placementId) ?? [];
+  const adjacents = adjacencyMap.get(sourcePlacement.placementId)!;
   const triggerState = side === 'player' ? state.playerTriggers : state.ghostTriggers;
 
   // Adjacents are already in canonical order from precomputeAdjacency.
   for (const adj of adjacents) {
-    const adjItem = state.items[adj.itemId];
-    if (!adjItem) continue;
+    const adjItem = state.items[adj.itemId]!;
     for (let i = 0; i < adjItem.triggers.length; i++) {
       const t = adjItem.triggers[i]!;
       if (t.type !== 'on_adjacent_trigger') continue;
@@ -649,10 +649,9 @@ function resolveEffect(
 
     case 'buff_adjacent': {
       const adjacencyMap = sourceSide === 'player' ? state.playerAdjacency : state.ghostAdjacency;
-      const adjacents = adjacencyMap.get(source.placementId) ?? [];
+      const adjacents = adjacencyMap.get(source.placementId)!;
       for (const adj of adjacents) {
-        const adjItem = state.items[adj.itemId];
-        if (!adjItem) continue;
+        const adjItem = state.items[adj.itemId]!;
         if (effect.matchTags && effect.matchTags.length > 0) {
           const matched = effect.matchTags.some((tag) => adjItem.tags.includes(tag));
           if (!matched) continue;
@@ -767,16 +766,14 @@ function computeAdjacents(
   allPlacements: ReadonlyArray<BagPlacement>,
   items: Readonly<Record<ItemId, Item>>,
 ): ReadonlyArray<BagPlacement> {
-  const sourceItem = items[source.itemId];
-  if (!sourceItem) return [];
+  // canonicalCells throws on unknown itemId — that's the canonical error path
+  // for malformed input. No defensive items[itemId] check here.
   const sourceCells = canonicalCells(source, items);
   const sourceKeys = new Set(sourceCells.map((c) => `${c.row}:${c.col}`));
 
   const out: BagPlacement[] = [];
   for (const other of allPlacements) {
     if (other.placementId === source.placementId) continue;
-    const otherItem = items[other.itemId];
-    if (!otherItem) continue;
     const otherCells = canonicalCells(other, items);
     let adj = false;
     for (const oc of otherCells) {

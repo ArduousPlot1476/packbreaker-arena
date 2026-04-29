@@ -420,6 +420,210 @@ describe('buff de-dupe', () => {
   });
 });
 
+// ─── Simultaneous death → draw outcome ─────────────────────────────
+
+describe('simultaneous death', () => {
+  it("both sides reaching HP=0 in the same tick yields outcome='draw'", () => {
+    const lethalBurst = defineTestItem('test-lethal', [
+      { type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] },
+    ], ['weapon']);
+    const customItems = { ...ITEMS, [lethalBurst.id]: lethalBurst };
+
+    const player = combatant(bag(placement('test-lethal', 'p1', 0, 0)), 30);
+    const ghost = combatant(bag(placement('test-lethal', 'g1', 0, 0)), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    expect(res.outcome).toBe('draw');
+    expect(res.finalHp).toEqual({ player: 0, ghost: 0 });
+  });
+});
+
+// ─── No-op effects ─────────────────────────────────────────────────
+
+describe('no-op effects (M1.2.3b deferrals)', () => {
+  it('add_gold effect is a sim-side no-op (run controller handles in M1.2.4)', () => {
+    // Lucky Penny has on_round_start: add_gold(2). Sim ignores; no error,
+    // no event beyond the item_trigger itself.
+    const player = combatant(bag(placement('lucky-penny', 'p1', 0, 0)), 30);
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost));
+
+    // item_trigger emits, but no add_gold event in the schema (and no other
+    // side effect either).
+    const trigger = res.events.find((e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('p1'));
+    expect(trigger).toBeDefined();
+    // Expected events at tick 0: combat_start + item_trigger only (plus the
+    // tick-cap combat_end at 600).
+    expect(res.events.filter((e) => e.tick === 0).length).toBe(2);
+  });
+
+  it('summon_temp_item effect is a sim-side no-op (deferred to a future content lever)', () => {
+    const summoner = defineTestItem('test-summoner', [
+      {
+        type: 'on_round_start',
+        effects: [{ type: 'summon_temp_item', itemId: ItemId('iron-sword'), durationTicks: 100 }],
+      },
+    ]);
+    const customItems = { ...ITEMS, [summoner.id]: summoner };
+
+    const player = combatant(bag(placement('test-summoner', 'p1', 0, 0)), 30);
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    // Combat has no damage source, so it times out at draw.
+    expect(res.outcome).toBe('draw');
+    // Only item_trigger emits at tick 0; no synthesized placement / damage.
+    expect(res.events.filter((e) => e.type === 'damage')).toHaveLength(0);
+  });
+});
+
+// ─── Random target selectors ───────────────────────────────────────
+
+describe('random target selectors', () => {
+  it('opp_random_item returns null on empty bag — no event, no rng cost', () => {
+    const randDamager = defineTestItem('test-rand', [
+      {
+        type: 'on_round_start',
+        effects: [{ type: 'damage', amount: 5, target: 'opp_random_item' }],
+      },
+    ], ['weapon']);
+    const customItems = { ...ITEMS, [randDamager.id]: randDamager };
+
+    const player = combatant(bag(placement('test-rand', 'p1', 0, 0)), 30);
+    const ghost = combatant(bag(), 30); // empty
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    // No damage event — empty bag returned null from resolveTarget.
+    expect(res.events.filter((e) => e.type === 'damage')).toHaveLength(0);
+  });
+
+  it('opp_random_item on a non-empty bag picks one item and applies damage to its side', () => {
+    const randDamager = defineTestItem('test-rand', [
+      {
+        type: 'on_round_start',
+        effects: [{ type: 'damage', amount: 5, target: 'opp_random_item' }],
+      },
+    ], ['weapon']);
+    const customItems = { ...ITEMS, [randDamager.id]: randDamager };
+
+    const player = combatant(bag(placement('test-rand', 'p1', 0, 0)), 30);
+    // Non-empty ghost bag — random_item resolveTarget returns an ItemRef,
+    // resolveTargetSideForDamage collapses to 'ghost' side.
+    const ghost = combatant(bag(placement('buckler', 'g1', 0, 0)), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    const dmg = res.events.find((e) => e.type === 'damage');
+    expect(dmg).toBeDefined();
+    if (dmg?.type === 'damage') {
+      expect(dmg.target).toBe('ghost');
+      expect(dmg.amount).toBe(5);
+    }
+  });
+});
+
+// ─── on_adjacent_trigger matchTags filtering ────────────────────────
+
+describe('on_adjacent_trigger filtering', () => {
+  it('non-matching matchTags suppresses the reaction', () => {
+    // Apple (food, consumable) on_round_start fires at tick 0. Whetstone
+    // adjacent has on_adjacent_trigger matchTags=[weapon] — Apple is NOT a
+    // weapon, so Whetstone must NOT fire reactively.
+    const player = combatant(
+      bag(placement('apple', 'p1', 0, 0), placement('whetstone', 'p2', 1, 0)),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost));
+
+    const whetstoneFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('p2'),
+    );
+    expect(whetstoneFires).toHaveLength(0);
+  });
+
+  it('on_adjacent_trigger respects maxTriggersPerCombat cap', () => {
+    // Whetstone with synthetic cap=1 fires once and never again.
+    const cappedWhetstone = defineTestItem('test-cap-ws', [
+      {
+        type: 'on_adjacent_trigger',
+        matchTags: ['weapon'],
+        maxTriggersPerCombat: 1,
+        effects: [{ type: 'buff_adjacent', stat: 'damage', amount: 1, matchTags: ['weapon'] }],
+      },
+    ], ['tool', 'metal']);
+    const customItems = { ...ITEMS, [cappedWhetstone.id]: cappedWhetstone };
+
+    const player = combatant(
+      bag(
+        placement('iron-sword', 'sword', 0, 0),
+        placement('test-cap-ws', 'ws', 1, 0),
+      ),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    // Iron Sword fires 8+ times. Whetstone should fire exactly once (cap=1).
+    const wsFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('ws'),
+    );
+    expect(wsFires).toHaveLength(1);
+  });
+});
+
+// ─── trigger_chance_pct buff no-op ─────────────────────────────────
+
+describe('trigger_chance_pct buff no-op', () => {
+  it('Rune Pedestal next to a gem item produces no buff_apply or buff state', () => {
+    // Rune Pedestal: on_adjacent_trigger matchTags=[gem,consumable] →
+    // buff_adjacent stat=trigger_chance_pct +20. M1.2.3b: trigger_chance_pct
+    // is a no-op (deferred). No buff_apply event should emit.
+    //
+    // Frost Shard (gem, ice) has on_cooldown(60) apply_status(stun) — fires
+    // reactively triggering Rune Pedestal.
+    const player = combatant(
+      bag(
+        placement('rune-pedestal', 'rp', 0, 0),
+        placement('frost-shard', 'fs', 1, 0),
+      ),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost));
+
+    // Rune Pedestal's on_adjacent_trigger DOES fire (item_trigger emits).
+    const rpFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('rp'),
+    );
+    expect(rpFires.length).toBeGreaterThan(0);
+
+    // But its buff_adjacent effect is no-op'd — zero buff_apply events for
+    // trigger_chance_pct.
+    const buffApplies = res.events.filter(
+      (e) => e.type === 'buff_apply' && e.stat === 'trigger_chance_pct',
+    );
+    expect(buffApplies).toHaveLength(0);
+  });
+});
+
+// ─── Bread maxTriggersPerCombat cap ────────────────────────────────
+
+describe('on_taken_damage maxTriggersPerCombat cap', () => {
+  it('Bread (cap=5) heals exactly 5 times then is capped', () => {
+    // Player has Bread. Ghost has Crossbow firing every 70 ticks. Bread heals
+    // 1 per damage event but caps at 5 fires. After 5 heals, shouldFire
+    // returns false — line 431 in combat.ts (no recordFire path).
+    const player = combatant(bag(placement('bread', 'p1', 0, 0)), 30);
+    const ghost = combatant(bag(placement('crossbow', 'g1', 0, 0)), 30);
+    const res = simulateCombat(input(player, ghost));
+
+    const breadFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('p1'),
+    );
+    expect(breadFires).toHaveLength(5);
+  });
+});
+
 // ─── cooldown_pct math ─────────────────────────────────────────────
 
 describe('cooldown_pct buff math', () => {

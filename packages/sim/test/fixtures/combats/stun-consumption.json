@@ -1,0 +1,743 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "stun-consumption",
+  "description": "Player Iron Mace (stun on hit) vs ghost Iron Dagger. stun_consumed event fires when ghost dagger first attempts cooldown post-stun; ghost cooldown does NOT reset (consumeStunIfPending bypasses recordFire).",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "iron-mace",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "g1",
+            "itemId": "iron-dagger",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 30
+    },
+    {
+      "tick": 30,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 30,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 28
+    },
+    {
+      "tick": 50,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 50,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 50,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 28
+    },
+    {
+      "tick": 60,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 61,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 61,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 26
+    },
+    {
+      "tick": 91,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 91,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 24
+    },
+    {
+      "tick": 100,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 100,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 100,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 26
+    },
+    {
+      "tick": 121,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 122,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 122,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 22
+    },
+    {
+      "tick": 150,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 150,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 150,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 24
+    },
+    {
+      "tick": 152,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 153,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 153,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 20
+    },
+    {
+      "tick": 183,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 183,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 18
+    },
+    {
+      "tick": 200,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 200,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 200,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 22
+    },
+    {
+      "tick": 213,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 214,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 214,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 16
+    },
+    {
+      "tick": 244,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 244,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 14
+    },
+    {
+      "tick": 250,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 250,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 250,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 20
+    },
+    {
+      "tick": 274,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 275,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 275,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 12
+    },
+    {
+      "tick": 300,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 300,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 300,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 18
+    },
+    {
+      "tick": 305,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 306,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 306,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 10
+    },
+    {
+      "tick": 336,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 336,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 8
+    },
+    {
+      "tick": 350,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 350,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 350,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 16
+    },
+    {
+      "tick": 366,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 367,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 367,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 6
+    },
+    {
+      "tick": 397,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 397,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 4
+    },
+    {
+      "tick": 400,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 400,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 400,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 14
+    },
+    {
+      "tick": 427,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 428,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 428,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 2
+    },
+    {
+      "tick": 450,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 450,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "stun",
+      "stacks": 1
+    },
+    {
+      "tick": 450,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 12
+    },
+    {
+      "tick": 458,
+      "type": "stun_consumed",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "ghost"
+    },
+    {
+      "tick": 459,
+      "type": "item_trigger",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 459,
+      "type": "damage",
+      "source": {
+        "side": "ghost",
+        "placementId": "g1"
+      },
+      "target": "player",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 459,
+      "type": "combat_end",
+      "outcome": "ghost_win",
+      "finalHp": {
+        "player": 0,
+        "ghost": 12
+      }
+    }
+  ],
+  "expectedOutcome": "ghost_win",
+  "expectedFinalHp": {
+    "player": 0,
+    "ghost": 12
+  },
+  "expectedEndedAtTick": 459
+}
