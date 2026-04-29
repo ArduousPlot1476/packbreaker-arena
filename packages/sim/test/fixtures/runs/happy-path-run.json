@@ -1,0 +1,380 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.4 byte-comparable run-controller snapshots. Future runs of createRun + the same action stream must produce identical final states + telemetry; drift = bug. To regenerate intentionally, recreate _bootstrap-run-fixtures.test.ts and re-run.",
+  "name": "happy-path-run",
+  "description": "3-round Tinker happy path: buy iron sword, place, win round 1; advance, win round 2; advance, win round 3. Ends in arranging phase at round 4 with 3 hearts and a populated history. Single-item shop pool keeps the action stream deterministic.",
+  "input": {
+    "seed": 7,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "startingRelicId": "apprentices-loop",
+    "customItems": {
+      "iron-sword": {
+        "name": "Iron Sword",
+        "rarity": "common",
+        "classAffinity": null,
+        "shape": [
+          {
+            "col": 0,
+            "row": 0
+          },
+          {
+            "col": 0,
+            "row": 1
+          }
+        ],
+        "tags": [
+          "weapon",
+          "metal"
+        ],
+        "triggers": [
+          {
+            "type": "on_cooldown",
+            "cooldownTicks": 50,
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 4,
+                "target": "opponent"
+              }
+            ]
+          }
+        ],
+        "id": "iron-sword",
+        "cost": 1,
+        "artId": "iron-sword"
+      }
+    }
+  },
+  "actions": [
+    {
+      "type": "buyItem",
+      "slotIndex": 0
+    },
+    {
+      "type": "placeItem",
+      "itemId": "iron-sword",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    }
+  ],
+  "expectedFinalPhase": "arranging",
+  "expectedFinalState": {
+    "runId": "run-7",
+    "seed": 7,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "ruleset": {
+      "bagDimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "maxRounds": 11,
+      "bossRound": 11,
+      "startingHearts": 3,
+      "shopSize": 5,
+      "baseGoldPerRound": 4,
+      "goldStepRounds": 3,
+      "goldStepAmount": 1,
+      "rerollCostStart": 1,
+      "rerollCostIncrement": 1,
+      "itemCostMultiplierBp": 10000,
+      "winBonusGold": 1,
+      "sellRecoveryBp": 5000,
+      "mutators": []
+    },
+    "startedAt": "2025-01-01T00:00:00.000Z",
+    "hearts": 3,
+    "gold": 19,
+    "currentRound": 4,
+    "bag": {
+      "dimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "placements": [
+        {
+          "placementId": "p-0",
+          "itemId": "iron-sword",
+          "anchor": {
+            "col": 0,
+            "row": 0
+          },
+          "rotation": 0
+        }
+      ]
+    },
+    "relics": {
+      "starter": "apprentices-loop",
+      "mid": null,
+      "boss": null
+    },
+    "shop": {
+      "slots": [
+        "iron-sword",
+        "iron-sword",
+        "iron-sword",
+        "iron-sword",
+        "iron-sword"
+      ],
+      "purchased": [],
+      "rerollsThisRound": 0
+    },
+    "trophiesAtStart": 0,
+    "history": [
+      {
+        "round": 1,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 2,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 3,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      }
+    ],
+    "outcome": "in_progress"
+  },
+  "expectedTelemetryEvents": [
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "run_start",
+      "runId": "run-7",
+      "classId": "tinker",
+      "contractId": "neutral",
+      "seed": 7
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-7",
+      "round": 1,
+      "hearts": 3,
+      "gold": 4,
+      "itemsInBag": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "shop_purchase",
+      "runId": "run-7",
+      "round": 1,
+      "itemId": "iron-sword",
+      "cost": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "item_placed",
+      "runId": "run-7",
+      "itemId": "iron-sword",
+      "placementId": "p-0",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-7",
+      "round": 1,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-7",
+      "round": 1,
+      "outcome": "player_win",
+      "endedAtTick": 50,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-7",
+      "round": 1,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-7",
+      "round": 2,
+      "hearts": 3,
+      "gold": 8,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-7",
+      "round": 2,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-7",
+      "round": 2,
+      "outcome": "player_win",
+      "endedAtTick": 50,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-7",
+      "round": 2,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-7",
+      "round": 3,
+      "hearts": 3,
+      "gold": 13,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-7",
+      "round": 3,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-7",
+      "round": 3,
+      "outcome": "player_win",
+      "endedAtTick": 50,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-7",
+      "round": 3,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-7",
+      "round": 4,
+      "hearts": 3,
+      "gold": 19,
+      "itemsInBag": 1
+    }
+  ]
+}
