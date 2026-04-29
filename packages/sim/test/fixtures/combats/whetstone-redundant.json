@@ -1,0 +1,183 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "whetstone-redundant",
+  "description": "Player Iron Sword adjacent to Whetstone. Iron Sword fires 3 times. Whetstone reactively fires each time; only the FIRST fire produces buff_apply (de-dupe by source/target/stat). All 3 Iron Sword damage events are 5 (base 4 + Whetstone +1) — Order B reactions-before-effects means even the first fire is buffed. Ghost startingHp=15 → 3 hits × 5 = 15, exact lethal.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "iron-sword",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          },
+          {
+            "placementId": "p2",
+            "itemId": "whetstone",
+            "anchor": {
+              "col": 1,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": []
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 15
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 15
+    },
+    {
+      "tick": 50,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 50,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_adjacent_trigger"
+    },
+    {
+      "tick": 50,
+      "type": "buff_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "stat": "damage",
+      "amount": 1
+    },
+    {
+      "tick": 50,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 5,
+      "remainingHp": 10
+    },
+    {
+      "tick": 100,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 100,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_adjacent_trigger"
+    },
+    {
+      "tick": 100,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 5,
+      "remainingHp": 5
+    },
+    {
+      "tick": 150,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 150,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_adjacent_trigger"
+    },
+    {
+      "tick": 150,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "amount": 5,
+      "remainingHp": 0
+    },
+    {
+      "tick": 150,
+      "type": "combat_end",
+      "outcome": "player_win",
+      "finalHp": {
+        "player": 30,
+        "ghost": 0
+      }
+    }
+  ],
+  "expectedOutcome": "player_win",
+  "expectedFinalHp": {
+    "player": 30,
+    "ghost": 0
+  },
+  "expectedEndedAtTick": 150
+}

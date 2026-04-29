@@ -1,0 +1,305 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "buff-duration-expiry",
+  "description": "Player has synthetic test-buff-20 (on_round_start: buff_adjacent damage +1 with durationTicks=20) adjacent to Iron Sword. buff_apply fires at tick 0; buff_remove fires in cleanup at tick 19 (durationTicks transitions 1 → 0). Iron Sword first fire at tick 50 — long after buff expired.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "test-buff-20",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          },
+          {
+            "placementId": "p2",
+            "itemId": "iron-sword",
+            "anchor": {
+              "col": 1,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": []
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    }
+  },
+  "customItems": {
+    "test-buff-20": {
+      "id": "test-buff-20",
+      "name": "test-buff-20",
+      "rarity": "common",
+      "classAffinity": null,
+      "shape": [
+        {
+          "col": 0,
+          "row": 0
+        }
+      ],
+      "tags": [],
+      "cost": 3,
+      "triggers": [
+        {
+          "type": "on_round_start",
+          "effects": [
+            {
+              "type": "buff_adjacent",
+              "stat": "damage",
+              "amount": 1,
+              "durationTicks": 20
+            }
+          ]
+        }
+      ],
+      "artId": "test-buff-20"
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 30
+    },
+    {
+      "tick": 0,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_round_start"
+    },
+    {
+      "tick": 0,
+      "type": "buff_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "stat": "damage",
+      "amount": 1
+    },
+    {
+      "tick": 19,
+      "type": "buff_remove",
+      "target": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "stat": "damage",
+      "amount": 1
+    },
+    {
+      "tick": 50,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 50,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 26
+    },
+    {
+      "tick": 100,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 100,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 22
+    },
+    {
+      "tick": 150,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 150,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 18
+    },
+    {
+      "tick": 200,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 200,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 14
+    },
+    {
+      "tick": 250,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 250,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 10
+    },
+    {
+      "tick": 300,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 300,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 6
+    },
+    {
+      "tick": 350,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 350,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 4,
+      "remainingHp": 2
+    },
+    {
+      "tick": 400,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 400,
+      "type": "damage",
+      "source": {
+        "side": "player",
+        "placementId": "p2"
+      },
+      "target": "ghost",
+      "amount": 2,
+      "remainingHp": 0
+    },
+    {
+      "tick": 400,
+      "type": "combat_end",
+      "outcome": "player_win",
+      "finalHp": {
+        "player": 30,
+        "ghost": 0
+      }
+    }
+  ],
+  "expectedOutcome": "player_win",
+  "expectedFinalHp": {
+    "player": 30,
+    "ghost": 0
+  },
+  "expectedEndedAtTick": 400
+}

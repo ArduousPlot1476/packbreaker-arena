@@ -1,0 +1,253 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.3b byte-comparable replay snapshots. Future runs of simulateCombat must produce identical events; drift = bug. To regenerate intentionally, recreate _bootstrap-fixtures.test.ts and re-run.",
+  "name": "poison-persistence",
+  "description": "Player Poison Vial (apply 1 stack poison every 50 ticks). Poison does not decay. Player wins purely on poison ticks.",
+  "input": {
+    "seed": 1,
+    "player": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": [
+          {
+            "placementId": "p1",
+            "itemId": "poison-vial",
+            "anchor": {
+              "col": 0,
+              "row": 0
+            },
+            "rotation": 0
+          }
+        ]
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    },
+    "ghost": {
+      "bag": {
+        "dimensions": {
+          "width": 6,
+          "height": 4
+        },
+        "placements": []
+      },
+      "relics": {
+        "starter": null,
+        "mid": null,
+        "boss": null
+      },
+      "classId": "tinker",
+      "startingHp": 30
+    }
+  },
+  "expectedEvents": [
+    {
+      "tick": 0,
+      "type": "combat_start",
+      "playerHp": 30,
+      "ghostHp": 30
+    },
+    {
+      "tick": 50,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 50,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "poison",
+      "stacks": 1
+    },
+    {
+      "tick": 50,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 1,
+      "remainingHp": 29
+    },
+    {
+      "tick": 60,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 1,
+      "remainingHp": 28
+    },
+    {
+      "tick": 70,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 1,
+      "remainingHp": 27
+    },
+    {
+      "tick": 80,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 1,
+      "remainingHp": 26
+    },
+    {
+      "tick": 90,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 1,
+      "remainingHp": 25
+    },
+    {
+      "tick": 100,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 100,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "poison",
+      "stacks": 1
+    },
+    {
+      "tick": 100,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 2,
+      "remainingHp": 23
+    },
+    {
+      "tick": 110,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 2,
+      "remainingHp": 21
+    },
+    {
+      "tick": 120,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 2,
+      "remainingHp": 19
+    },
+    {
+      "tick": 130,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 2,
+      "remainingHp": 17
+    },
+    {
+      "tick": 140,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 2,
+      "remainingHp": 15
+    },
+    {
+      "tick": 150,
+      "type": "item_trigger",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "trigger": "on_cooldown"
+    },
+    {
+      "tick": 150,
+      "type": "status_apply",
+      "source": {
+        "side": "player",
+        "placementId": "p1"
+      },
+      "target": "ghost",
+      "status": "poison",
+      "stacks": 1
+    },
+    {
+      "tick": 150,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 3,
+      "remainingHp": 12
+    },
+    {
+      "tick": 160,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 3,
+      "remainingHp": 9
+    },
+    {
+      "tick": 170,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 3,
+      "remainingHp": 6
+    },
+    {
+      "tick": 180,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 3,
+      "remainingHp": 3
+    },
+    {
+      "tick": 190,
+      "type": "status_tick",
+      "target": "ghost",
+      "status": "poison",
+      "damage": 3,
+      "remainingHp": 0
+    },
+    {
+      "tick": 190,
+      "type": "combat_end",
+      "outcome": "player_win",
+      "finalHp": {
+        "player": 30,
+        "ghost": 0
+      }
+    }
+  ],
+  "expectedOutcome": "player_win",
+  "expectedFinalHp": {
+    "player": 30,
+    "ghost": 0
+  },
+  "expectedEndedAtTick": 190
+}
