@@ -1,0 +1,89 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.4 byte-comparable run-controller snapshots. Future runs of createRun + the same action stream must produce identical final states + telemetry; drift = bug. To regenerate intentionally, recreate _bootstrap-run-fixtures.test.ts and re-run.",
+  "name": "affinity-weighting",
+  "description": "Affinity weighting smoke fixture: Tinker run shop slot 0 with seed 23 differs from Marauder shop slot 0 with the same seed. Different affinity weights consume the run-rng differently per-slot.",
+  "input": {
+    "seed": 23,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "startingRelicId": "apprentices-loop"
+  },
+  "actions": [],
+  "expectedFinalPhase": "arranging",
+  "expectedFinalState": {
+    "runId": "run-23",
+    "seed": 23,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "ruleset": {
+      "bagDimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "maxRounds": 11,
+      "bossRound": 11,
+      "startingHearts": 3,
+      "shopSize": 5,
+      "baseGoldPerRound": 4,
+      "goldStepRounds": 3,
+      "goldStepAmount": 1,
+      "rerollCostStart": 1,
+      "rerollCostIncrement": 1,
+      "itemCostMultiplierBp": 10000,
+      "winBonusGold": 1,
+      "sellRecoveryBp": 5000,
+      "mutators": []
+    },
+    "startedAt": "2025-01-01T00:00:00.000Z",
+    "hearts": 3,
+    "gold": 4,
+    "currentRound": 1,
+    "bag": {
+      "dimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "placements": []
+    },
+    "relics": {
+      "starter": "apprentices-loop",
+      "mid": null,
+      "boss": null
+    },
+    "shop": {
+      "slots": [
+        "bandage",
+        "bandage",
+        "leather-vest",
+        "hand-axe",
+        "hand-axe"
+      ],
+      "purchased": [],
+      "rerollsThisRound": 0
+    },
+    "trophiesAtStart": 0,
+    "history": [],
+    "outcome": "in_progress"
+  },
+  "expectedTelemetryEvents": [
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "run_start",
+      "runId": "run-23",
+      "classId": "tinker",
+      "contractId": "neutral",
+      "seed": 23
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-23",
+      "round": 1,
+      "hearts": 3,
+      "gold": 4,
+      "itemsInBag": 0
+    }
+  ]
+}

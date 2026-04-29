@@ -624,6 +624,63 @@ describe('on_taken_damage maxTriggersPerCombat cap', () => {
   });
 });
 
+// ─── recipeBonusPct heal + apply_status branches (M1.2.4) ──────────
+
+describe('recipeBonusPct branches (heal, apply_status)', () => {
+  it('recipe-born heal effect gets +25% recipeBonusPct (Tinker 10 + Pocket Forge 15)', () => {
+    // Synthetic on_taken_damage healer: heal(10) per damage event. Player
+    // takes a hit, then the heal fires reactively. With recipeBornPlacementIds
+    // including this placement, recipeBonusPct=25 lifts amount to floor(10 *
+    // 1.25) = 12, capped at startingHp - currentHp.
+    const healer = defineTestItem('test-healer', [
+      { type: 'on_taken_damage', effects: [{ type: 'heal', amount: 10, target: 'self' }] },
+    ]);
+    const customItems = { ...ITEMS, [healer.id]: healer };
+    const player: Combatant = {
+      bag: { dimensions: { width: 6, height: 4 }, placements: [placement('test-healer', 'p1', 0, 0)] },
+      relics: { starter: RelicId('pocket-forge'), mid: null, boss: null },
+      classId: TINKER,
+      startingHp: 30,
+      recipeBornPlacementIds: [PlacementId('p1')],
+    };
+    // Ghost has Throwing Knife (8 dmg on round_start). Player drops to 22 →
+    // healer fires reactively → heal 12 (post-bonus) → newHp=30 (capped at
+    // startingHp), actualGain=8 (room).
+    const ghost = combatant(bag(placement('throwing-knife', 'g1', 0, 0)), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+    const heal = res.events.find(
+      (e) => e.type === 'heal' && e.source.placementId === PlacementId('p1'),
+    );
+    expect(heal).toBeDefined();
+    if (heal?.type === 'heal') {
+      // floor(10 * 1.25) = 12, gain capped at 8 (30 - 22).
+      expect(heal.amount).toBe(8);
+    }
+  });
+
+  it('recipe-born apply_status stacks get +25% recipeBonusPct (event reflects post-bonus, pre-cap value)', () => {
+    const burner = defineTestItem('test-burner', [
+      { type: 'on_round_start', effects: [{ type: 'apply_status', status: 'burn', stacks: 4, target: 'opponent' }] },
+    ]);
+    const customItems = { ...ITEMS, [burner.id]: burner };
+    const player: Combatant = {
+      bag: { dimensions: { width: 6, height: 4 }, placements: [placement('test-burner', 'p1', 0, 0)] },
+      relics: { starter: RelicId('pocket-forge'), mid: null, boss: null },
+      classId: TINKER,
+      startingHp: 30,
+      recipeBornPlacementIds: [PlacementId('p1')],
+    };
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+    const apply = res.events.find((e) => e.type === 'status_apply');
+    expect(apply).toBeDefined();
+    if (apply?.type === 'status_apply') {
+      // floor(4 * 1.25) = 5. Below cap (10) — event emits 5.
+      expect(apply.stacks).toBe(5);
+    }
+  });
+});
+
 // ─── cooldown_pct math ─────────────────────────────────────────────
 
 describe('cooldown_pct buff math', () => {

@@ -1,0 +1,260 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.4 byte-comparable run-controller snapshots. Future runs of createRun + the same action stream must produce identical final states + telemetry; drift = bug. To regenerate intentionally, recreate _bootstrap-run-fixtures.test.ts and re-run.",
+  "name": "recipe-combine-bonus",
+  "description": "Tinker w/ Pocket Forge (10+15=25% recipe bonus): combine 2× Healing Herb → Healing Salve. Output placement is recipe-born; combat / heal verification of the +25% bonus lives in combat.test.ts unit tests. This fixture verifies combineRecipe end-to-end and that the resulting bag carries the salve at the canonical top-left of the input footprint.",
+  "input": {
+    "seed": 19,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "startingRelicId": "pocket-forge",
+    "customItems": {
+      "healing-herb": {
+        "name": "Healing Herb",
+        "rarity": "common",
+        "classAffinity": null,
+        "shape": [
+          {
+            "col": 0,
+            "row": 0
+          }
+        ],
+        "tags": [
+          "plant",
+          "consumable"
+        ],
+        "triggers": [
+          {
+            "type": "on_cooldown",
+            "cooldownTicks": 80,
+            "effects": [
+              {
+                "type": "heal",
+                "amount": 3,
+                "target": "self"
+              }
+            ]
+          }
+        ],
+        "id": "healing-herb",
+        "cost": 1,
+        "artId": "healing-herb"
+      },
+      "healing-salve": {
+        "name": "Healing Salve",
+        "rarity": "uncommon",
+        "classAffinity": null,
+        "shape": [
+          {
+            "col": 0,
+            "row": 0
+          }
+        ],
+        "tags": [
+          "plant",
+          "consumable"
+        ],
+        "triggers": [
+          {
+            "type": "on_taken_damage",
+            "effects": [
+              {
+                "type": "heal",
+                "amount": 3,
+                "target": "self"
+              }
+            ]
+          },
+          {
+            "type": "on_low_health",
+            "thresholdPct": 50,
+            "maxTriggersPerCombat": 1,
+            "effects": [
+              {
+                "type": "heal",
+                "amount": 8,
+                "target": "self"
+              }
+            ]
+          }
+        ],
+        "id": "healing-salve",
+        "cost": 1,
+        "artId": "healing-salve"
+      }
+    }
+  },
+  "actions": [
+    {
+      "type": "buyItem",
+      "slotIndex": 0
+    },
+    {
+      "type": "buyItem",
+      "slotIndex": 1
+    },
+    {
+      "type": "placeItem",
+      "itemId": "healing-herb",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "type": "placeItem",
+      "itemId": "healing-herb",
+      "anchor": {
+        "col": 1,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "type": "combineRecipe",
+      "recipeId": "r-healing-salve"
+    }
+  ],
+  "expectedFinalPhase": "arranging",
+  "expectedFinalState": {
+    "runId": "run-19",
+    "seed": 19,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "ruleset": {
+      "bagDimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "maxRounds": 11,
+      "bossRound": 11,
+      "startingHearts": 3,
+      "shopSize": 5,
+      "baseGoldPerRound": 4,
+      "goldStepRounds": 3,
+      "goldStepAmount": 1,
+      "rerollCostStart": 1,
+      "rerollCostIncrement": 1,
+      "itemCostMultiplierBp": 10000,
+      "winBonusGold": 1,
+      "sellRecoveryBp": 5000,
+      "mutators": []
+    },
+    "startedAt": "2025-01-01T00:00:00.000Z",
+    "hearts": 3,
+    "gold": 2,
+    "currentRound": 1,
+    "bag": {
+      "dimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "placements": [
+        {
+          "placementId": "p-2",
+          "itemId": "healing-salve",
+          "anchor": {
+            "col": 0,
+            "row": 0
+          },
+          "rotation": 0
+        }
+      ]
+    },
+    "relics": {
+      "starter": "pocket-forge",
+      "mid": null,
+      "boss": null
+    },
+    "shop": {
+      "slots": [
+        "healing-herb",
+        "healing-herb",
+        "healing-herb",
+        "healing-herb",
+        "healing-herb"
+      ],
+      "purchased": [
+        0,
+        1
+      ],
+      "rerollsThisRound": 0
+    },
+    "trophiesAtStart": 0,
+    "history": [],
+    "outcome": "in_progress"
+  },
+  "expectedTelemetryEvents": [
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "run_start",
+      "runId": "run-19",
+      "classId": "tinker",
+      "contractId": "neutral",
+      "seed": 19
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-19",
+      "round": 1,
+      "hearts": 3,
+      "gold": 4,
+      "itemsInBag": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "shop_purchase",
+      "runId": "run-19",
+      "round": 1,
+      "itemId": "healing-herb",
+      "cost": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "shop_purchase",
+      "runId": "run-19",
+      "round": 1,
+      "itemId": "healing-herb",
+      "cost": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "item_placed",
+      "runId": "run-19",
+      "itemId": "healing-herb",
+      "placementId": "p-0",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "item_placed",
+      "runId": "run-19",
+      "itemId": "healing-herb",
+      "placementId": "p-1",
+      "anchor": {
+        "col": 1,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "recipe_completed",
+      "runId": "run-19",
+      "recipeId": "r-healing-salve",
+      "round": 1
+    }
+  ]
+}

@@ -1,0 +1,925 @@
+{
+  "$comment": "DO NOT regenerate. M1.2.4 byte-comparable run-controller snapshots. Future runs of createRun + the same action stream must produce identical final states + telemetry; drift = bug. To regenerate intentionally, recreate _bootstrap-run-fixtures.test.ts and re-run.",
+  "name": "boss-fight-victory",
+  "description": "Tinker run with a 100-dmg test knife: drives through 10 rounds of trivial wins, then beats a 50-HP boss-mutator-applied ghost at round 11 → outcome 'won'.",
+  "input": {
+    "seed": 13,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "startingRelicId": "apprentices-loop",
+    "customItems": {
+      "test-knife": {
+        "id": "test-knife",
+        "name": "test-knife",
+        "rarity": "common",
+        "classAffinity": null,
+        "shape": [
+          {
+            "col": 0,
+            "row": 0
+          }
+        ],
+        "tags": [
+          "weapon"
+        ],
+        "cost": 1,
+        "triggers": [
+          {
+            "type": "on_round_start",
+            "effects": [
+              {
+                "type": "damage",
+                "amount": 100,
+                "target": "opponent"
+              }
+            ]
+          }
+        ],
+        "artId": "test-knife"
+      }
+    }
+  },
+  "actions": [
+    {
+      "type": "buyItem",
+      "slotIndex": 0
+    },
+    {
+      "type": "placeItem",
+      "itemId": "test-knife",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "tinker",
+        "startingHp": 1
+      }
+    },
+    {
+      "type": "advancePhase"
+    },
+    {
+      "type": "startCombat",
+      "ghost": {
+        "bag": {
+          "dimensions": {
+            "width": 6,
+            "height": 4
+          },
+          "placements": []
+        },
+        "relics": {
+          "starter": null,
+          "mid": null,
+          "boss": null
+        },
+        "classId": "marauder",
+        "startingHp": 50
+      }
+    },
+    {
+      "type": "advancePhase"
+    }
+  ],
+  "expectedFinalPhase": "ended",
+  "expectedFinalState": {
+    "runId": "run-13",
+    "seed": 13,
+    "classId": "tinker",
+    "contractId": "neutral",
+    "ruleset": {
+      "bagDimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "maxRounds": 11,
+      "bossRound": 11,
+      "startingHearts": 3,
+      "shopSize": 5,
+      "baseGoldPerRound": 4,
+      "goldStepRounds": 3,
+      "goldStepAmount": 1,
+      "rerollCostStart": 1,
+      "rerollCostIncrement": 1,
+      "itemCostMultiplierBp": 10000,
+      "winBonusGold": 1,
+      "sellRecoveryBp": 5000,
+      "mutators": []
+    },
+    "startedAt": "2025-01-01T00:00:00.000Z",
+    "hearts": 3,
+    "gold": 69,
+    "currentRound": 11,
+    "bag": {
+      "dimensions": {
+        "width": 6,
+        "height": 4
+      },
+      "placements": [
+        {
+          "placementId": "p-0",
+          "itemId": "test-knife",
+          "anchor": {
+            "col": 0,
+            "row": 0
+          },
+          "rotation": 0
+        }
+      ]
+    },
+    "relics": {
+      "starter": "apprentices-loop",
+      "mid": null,
+      "boss": null
+    },
+    "shop": {
+      "slots": [
+        "test-knife",
+        "test-knife",
+        "test-knife",
+        "test-knife",
+        "test-knife"
+      ],
+      "purchased": [],
+      "rerollsThisRound": 0
+    },
+    "trophiesAtStart": 0,
+    "history": [
+      {
+        "round": 1,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 2,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 3,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 4,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 5,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 6,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 7,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 8,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 9,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 10,
+        "outcome": "win",
+        "damageDealt": 1,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      },
+      {
+        "round": 11,
+        "outcome": "win",
+        "damageDealt": 50,
+        "damageTaken": 0,
+        "goldEarnedThisRound": 1,
+        "opponentGhostId": null
+      }
+    ],
+    "outcome": "won"
+  },
+  "expectedTelemetryEvents": [
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "run_start",
+      "runId": "run-13",
+      "classId": "tinker",
+      "contractId": "neutral",
+      "seed": 13
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 1,
+      "hearts": 3,
+      "gold": 4,
+      "itemsInBag": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "shop_purchase",
+      "runId": "run-13",
+      "round": 1,
+      "itemId": "test-knife",
+      "cost": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "item_placed",
+      "runId": "run-13",
+      "itemId": "test-knife",
+      "placementId": "p-0",
+      "anchor": {
+        "col": 0,
+        "row": 0
+      },
+      "rotation": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 1,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 1,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 1,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 2,
+      "hearts": 3,
+      "gold": 8,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 2,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 2,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 2,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 3,
+      "hearts": 3,
+      "gold": 13,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 3,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 3,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 3,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 4,
+      "hearts": 3,
+      "gold": 19,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 4,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 4,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 4,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 5,
+      "hearts": 3,
+      "gold": 25,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 5,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 5,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 5,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 6,
+      "hearts": 3,
+      "gold": 31,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 6,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 6,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 6,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 7,
+      "hearts": 3,
+      "gold": 38,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 7,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 7,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 7,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 8,
+      "hearts": 3,
+      "gold": 45,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 8,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 8,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 8,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 9,
+      "hearts": 3,
+      "gold": 52,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 9,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 9,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 9,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 10,
+      "hearts": 3,
+      "gold": 60,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 10,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 10,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 10,
+      "outcome": "win",
+      "damageDealt": 1,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_start",
+      "runId": "run-13",
+      "round": 11,
+      "hearts": 3,
+      "gold": 68,
+      "itemsInBag": 1
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_start",
+      "runId": "run-13",
+      "round": 11,
+      "opponentGhostId": null
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "combat_end",
+      "runId": "run-13",
+      "round": 11,
+      "outcome": "player_win",
+      "endedAtTick": 0,
+      "damageDealt": 50,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "round_end",
+      "runId": "run-13",
+      "round": 11,
+      "outcome": "win",
+      "damageDealt": 50,
+      "damageTaken": 0
+    },
+    {
+      "tsClient": "2025-01-01T00:00:00.000Z",
+      "sessionId": "",
+      "name": "run_end",
+      "runId": "run-13",
+      "outcome": "won",
+      "roundReached": 11,
+      "heartsRemaining": 3
+    }
+  ]
+}
