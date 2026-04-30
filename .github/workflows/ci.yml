@@ -1,0 +1,62 @@
+# .github/workflows/ci.yml — per tech-architecture.md § 8.2.
+#
+# Five-stage CI pipeline gating every PR to main and every push to main:
+#   1. install (pnpm --frozen-lockfile)
+#   2. lint
+#   3. typecheck
+#   4. test  (the 200-fixture determinism suite runs here automatically —
+#            packages/sim's harness.test.ts matches the default vitest
+#            pattern, so `pnpm turbo test` covers it)
+#   5. build
+#
+# Any deviation from this sequence requires a decision-log entry.
+#
+# Spec deviation: tech-architecture.md § 8.2 lists determinism as a separate
+# stage 5 of a six-stage pipeline. M1.2.5.1 folds it into stage 4 (test) so
+# the determinism suite is non-skippable by the same mechanism that protects
+# unit tests, rather than by a parallel "don't skip me" convention. See the
+# M1.2.5.1 closing decision-log entry for the rationale.
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: install / lint / typecheck / test / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        # Version is read from package.json's `packageManager` field
+        # (currently pnpm@9.15.0) — keeping the CI pnpm pinned to the
+        # repo's declared version rather than floating to latest 9.x.
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm turbo lint
+
+      - name: Typecheck
+        run: pnpm turbo typecheck
+
+      - name: Test
+        run: pnpm turbo test
+
+      - name: Build
+        run: pnpm turbo build

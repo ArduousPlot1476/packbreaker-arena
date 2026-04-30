@@ -4,6 +4,16 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-30 — M1.2.5.1 closed (CI workflow wiring)
+
+- `.github/workflows/ci.yml` implements tech-architecture.md § 8.2's five-stage pipeline (install / lint / typecheck / test / build) on `ubuntu-latest` with Node 20.x and pnpm 9.x (pinned via `package.json`'s `packageManager: pnpm@9.15.0` field, auto-detected by `pnpm/action-setup@v4`). Triggers on `pull_request` and `push` to `main`. The 200-fixture determinism suite runs as part of stage 4 via the existing non-skippable `pnpm turbo test` path — no separate stage, same protection as unit tests.
+- **Spec deviation flagged in the workflow header comment**: tech-architecture.md § 8.2 lists "sim determinism suite" as a separate stage 5 of a six-stage pipeline. M1.2.5.1 folds it into stage 4 (test) so the determinism suite is non-skippable by the same mechanism that protects unit tests, rather than by a parallel "don't skip me" convention. Folding is structurally tighter — there is no way to run `pnpm turbo test` and skip the determinism harness, since `harness.test.ts` matches the default vitest pattern.
+- **First green run on PR #1** validated portability of the M1.2.5 fixture suite across CI runners — all 200 .jsonl fixtures replay byte-stable on `ubuntu-latest` with no byte-divergence between local and CI replays. Total pipeline runtime: **39s wall time**, well under the 5-minute halt-and-surface threshold. Closes the local-only-CI deviation that had accumulated since M1.2.1.
+- **Branch protection rules to be configured by Trey via GitHub UI** after this workflow lands and produces consistent green runs. Out of M1.2.5.1 scope (workflow file only; repo settings are configured separately).
+- M1.2.5.1 is the deferred sub-task flagged in M1.2.5's closing entry — landing it before M1.2.6 ensures the appended `grantRelic` fixtures gate-validate against a working pipeline from their first PR.
+
+---
+
 ## 2026-04-30 — M1.2.5 closed (200-fixture determinism suite + boss mutator)
 
 - M1.2.5 closed. 200 JSONL action-stream fixtures across 5 strategies (40/100/40/10/10 split — greedy/hoarder/recipe-chaser/reroll-burner/random-legal) under `packages/sim/test/fixtures/runs/`. Harness (`packages/sim/test/determinism/harness.test.ts`) re-runs each fixture and byte-compares per-round CombatEvent arrays. All 200 replay byte-stable. Sim test count: 232 → 432 (+200 fixture replays + 24 unit tests across 6 commits).
