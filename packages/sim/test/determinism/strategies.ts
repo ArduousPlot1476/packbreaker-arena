@@ -21,6 +21,7 @@ import {
   type CellCoord,
   type Item,
   type ItemId,
+  type RelicId,
   type Rotation,
   type RunState,
 } from '@packbreaker/content';
@@ -41,7 +42,15 @@ export type StrategyName =
   | 'hoarder'
   | 'recipe-chaser'
   | 'reroll-burner'
-  | 'random-legal';
+  | 'random-legal'
+  | 'relic-collector';
+
+export interface StrategyHint {
+  /** Set by the M1.2.6 fixture orchestrator for relic-collector fixtures.
+   *  The strategy drives the run to the target slot's grant window and
+   *  emits `grant_relic` to populate that slot. */
+  readonly relicTarget?: { readonly slot: 'mid' | 'boss'; readonly relicId: RelicId };
+}
 
 export interface StrategyContext {
   readonly ctrl: RunController;
@@ -50,6 +59,10 @@ export interface StrategyContext {
    *  pendingItems list — tracked externally by the orchestrator since the
    *  field isn't exposed in RunState. */
   readonly pending: ReadonlyArray<ItemId>;
+  /** Optional per-fixture configuration. Most strategies ignore this; the
+   *  M1.2.6 relic-collector reads `relicTarget` to know which (slot, relic)
+   *  pair to drive toward. */
+  readonly hint?: StrategyHint;
 }
 
 export type Strategy = (ctx: StrategyContext) => RunControllerAction | null;
@@ -60,6 +73,7 @@ export const STRATEGIES: Readonly<Record<StrategyName, Strategy>> = {
   'recipe-chaser': recipeChaserStrategy,
   'reroll-burner': rerollBurnerStrategy,
   'random-legal': randomLegalStrategy,
+  'relic-collector': relicCollectorStrategy,
 };
 
 // ─── Shared helpers ──────────────────────────────────────────────────
@@ -763,4 +777,99 @@ function randomLegalStrategy(ctx: StrategyContext): RunControllerAction | null {
   candidates.push(nextProceduralGhost(state, ctx.rng));
 
   return candidates[ctx.rng.nextInt(0, candidates.length - 1)]!;
+}
+
+// ─── relic-collector ────────────────────────────────────────────────
+
+/** M1.2.6 strategy. Reads `ctx.hint?.relicTarget` and drives the run to the
+ *  appropriate grantRelic window:
+ *    - `mid`  → reach round 6 arranging, then `grant_relic` is the first action.
+ *    - `boss` → win round 11, then `grant_relic` is the first action of
+ *               resolution before advancePhase ends the run.
+ *  Outside the grant window: WEAPON-first damage focus, opportunistic
+ *  combine-chaining toward Mid recipes (steel-sword / greatsword), aggressive
+ *  rerolls (up to 4/round). Boss targets ALSO buy armor when affordable
+ *  alongside weapons — round 11's FORGE_TYRANT under neutral contract (67 HP)
+ *  is winnable but punishes glass-cannon builds. Used ONLY for the M1.2.6
+ *  appended fixtures (200–223), not retrofitted into the M1.2.5 200. If no
+ *  hint is supplied, falls back to greedy. */
+function relicCollectorStrategy(ctx: StrategyContext): RunControllerAction | null {
+  const target = ctx.hint?.relicTarget;
+  if (!target) return greedyStrategy(ctx);
+
+  const phase = ctx.ctrl.getPhase();
+  if (phase === 'ended') return null;
+
+  const state = ctx.ctrl.getState();
+
+  if (phase === 'resolution') {
+    // Boss-relic grant window: round 11, last outcome 'win', boss slot empty.
+    if (target.slot === 'boss' && state.currentRound === 11 && state.relics.boss === null) {
+      const last = state.history[state.history.length - 1];
+      if (last?.outcome === 'win') {
+        return { type: 'grant_relic', slot: 'boss', relicId: target.relicId };
+      }
+    }
+    return { type: 'advance_phase' };
+  }
+
+  // arranging phase
+  // Mid-relic grant window: any arranging phase from round 6 onward, mid slot empty.
+  if (target.slot === 'mid' && state.currentRound >= 6 && state.relics.mid === null) {
+    return { type: 'grant_relic', slot: 'mid', relicId: target.relicId };
+  }
+
+  // Pending placement first (corner-prefer for boss targets so capstone-style
+  // 2x2 outputs from chained recipes have room).
+  if (ctx.pending.length > 0) {
+    const itemId = ctx.pending[0]!;
+    const slot =
+      target.slot === 'boss'
+        ? findCornerPlacement(state.bag, itemId, 'top-left') ??
+          findFirstValidPlacement(state.bag, itemId)
+        : findFirstValidPlacement(state.bag, itemId);
+    if (slot) {
+      return { type: 'place_item', itemId, anchor: slot.anchor, rotation: slot.rotation };
+    }
+    if (state.bag.placements.length > 0) {
+      return { type: 'sell_item', placementId: state.bag.placements[0]!.placementId };
+    }
+    return nextProceduralGhost(state, ctx.rng);
+  }
+
+  // Opportunistic combines (only if known to fit).
+  const fittingMatch = firstFittingMatch(ctx.ctrl);
+  if (fittingMatch) {
+    return { type: 'combine_recipe', recipeId: fittingMatch.recipeId };
+  }
+
+  // Buy: weapons first (damage to survive procedural ghosts + win round 11),
+  // then armor (HP cushion), then anything fitting.
+  const tagPriority: ReadonlyArray<string> = ['weapon', 'armor'];
+  for (const tag of tagPriority) {
+    for (let i = 0; i < state.shop.slots.length; i++) {
+      if (state.shop.purchased.includes(i)) continue;
+      if (state.gold < slotCost(state, i)) continue;
+      const itemId = state.shop.slots[i]!;
+      const item = ITEMS[itemId];
+      if (!item) continue;
+      if (!item.tags.some((t) => t === tag)) continue;
+      if (findFirstValidPlacement(state.bag, itemId, [0]) === null) continue;
+      return { type: 'buy_item', slotIndex: i };
+    }
+  }
+  for (let i = 0; i < state.shop.slots.length; i++) {
+    if (state.shop.purchased.includes(i)) continue;
+    if (state.gold < slotCost(state, i)) continue;
+    const itemId = state.shop.slots[i]!;
+    if (findFirstValidPlacement(state.bag, itemId, [0]) === null) continue;
+    return { type: 'buy_item', slotIndex: i };
+  }
+
+  // Reroll up to 4/round to surface weapons in early rounds (boss survivability).
+  if (state.shop.rerollsThisRound < 4 && canAffordReroll(state)) {
+    return { type: 'reroll_shop' };
+  }
+
+  return nextProceduralGhost(state, ctx.rng);
 }
