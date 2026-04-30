@@ -18,6 +18,7 @@ import {
   type Combatant,
   type GhostBuild,
   type Item,
+  type Recipe,
   type RelicSlots,
   type TelemetryEvent,
   type Trigger,
@@ -804,6 +805,114 @@ describe('passiveStats.maxHpBonus', () => {
       expect(playerDmg.amount).toBe(30);
       expect(playerDmg.remainingHp).toBe(5);
     }
+  });
+});
+
+// ─── combineRecipe fit validation (M1.2.5) ─────────────────────────
+
+describe('combineRecipe fit validation', () => {
+  it('throws when output cannot fit at the inputs anchor; bag is unchanged', () => {
+    // Custom recipe: tiny-a + tiny-b -> 2x2 legendary output. Inputs at (0,0)
+    // and (1,0); blocker at (0,1) means the 2x2 output cannot place (any
+    // rotation of a 2x2 is the same 2x2 footprint). combineRecipe must throw
+    // before any state mutation.
+    const tinyA = defineTestItem('tiny-a', [], { tags: ['weapon'], cost: 1 });
+    const tinyB = defineTestItem('tiny-b', [], { tags: ['weapon'], cost: 1 });
+    const blocker = defineTestItem('blocker', [], { tags: ['armor'], cost: 1 });
+    const big = defineTestItem('big-2x2', [], {
+      rarity: 'legendary',
+      tags: ['weapon'],
+      shape: [
+        { col: 0, row: 0 },
+        { col: 1, row: 0 },
+        { col: 0, row: 1 },
+        { col: 1, row: 1 },
+      ],
+    });
+    const customRecipe: Recipe = {
+      id: RecipeId('r-test-big'),
+      name: 'Test Big',
+      inputs: [
+        { itemId: tinyA.id, relativeCol: 0, relativeRow: 0 },
+        { itemId: tinyB.id, relativeCol: 1, relativeRow: 0 },
+      ],
+      output: big.id,
+      rotationLocked: false,
+    };
+    const items = {
+      [tinyA.id]: tinyA,
+      [tinyB.id]: tinyB,
+      [blocker.id]: blocker,
+      [big.id]: big,
+    };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, recipesRegistry: [customRecipe], seed: SimSeed(7) }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const slotA = slots.findIndex((s) => s === tinyA.id);
+    const slotB = slots.findIndex((s) => s === tinyB.id);
+    const slotBlock = slots.findIndex((s) => s === blocker.id);
+    expect(slotA).toBeGreaterThanOrEqual(0);
+    expect(slotB).toBeGreaterThanOrEqual(0);
+    expect(slotBlock).toBeGreaterThanOrEqual(0);
+    expect(new Set([slotA, slotB, slotBlock]).size).toBe(3);
+    ctrl.buyItem(slotA);
+    ctrl.placeItem(tinyA.id, { col: 0, row: 0 }, 0);
+    ctrl.buyItem(slotB);
+    ctrl.placeItem(tinyB.id, { col: 1, row: 0 }, 0);
+    ctrl.buyItem(slotBlock);
+    ctrl.placeItem(blocker.id, { col: 0, row: 1 }, 0);
+
+    const matches = ctrl.detectRecipes();
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.recipeId).toBe(RecipeId('r-test-big'));
+    expect(ctrl.findCombineRotation(matches[0]!)).toBeNull();
+
+    const placementsBefore = ctrl.getState().bag.placements.slice();
+    expect(() => ctrl.combineRecipe(RecipeId('r-test-big'))).toThrow(/no rotation fits/);
+    expect(ctrl.getState().bag.placements).toEqual(placementsBefore);
+  });
+
+  it('findCombineRotation returns the first fitting rotation; combineRecipe uses it', () => {
+    // Iron Sword (1×2V) rotated 90 → cells (0,0),(1,0). Iron Dagger 1×1 at (2,0).
+    // Inputs are edge-adjacent → r-steel-sword matches. Min anchor = (0,0).
+    // Steel Sword 1×2V output:
+    //   rotation 0   → cells (0,0),(0,1) — collides with blocker at (0,1).
+    //   rotation 90  → cells (0,0),(1,0) — both freed input cells. Fits.
+    const blocker = defineTestItem('blocker', [], { tags: ['armor'], cost: 1 });
+    const items = {
+      [ItemId('iron-sword')]: cheapItem('iron-sword'),
+      [ItemId('iron-dagger')]: cheapItem('iron-dagger'),
+      [ItemId('steel-sword')]: ITEMS[ItemId('steel-sword')]!,
+      [blocker.id]: blocker,
+    };
+    const ctrl = createRun(baseInput({ itemsRegistry: items, seed: SimSeed(7) }));
+    const slots = ctrl.getState().shop.slots;
+    const swordSlot = slots.findIndex((s) => s === 'iron-sword');
+    const daggerSlot = slots.findIndex((s) => s === 'iron-dagger');
+    const blockerSlot = slots.findIndex((s) => s === blocker.id);
+    expect(swordSlot).toBeGreaterThanOrEqual(0);
+    expect(daggerSlot).toBeGreaterThanOrEqual(0);
+    expect(blockerSlot).toBeGreaterThanOrEqual(0);
+    expect(new Set([swordSlot, daggerSlot, blockerSlot]).size).toBe(3);
+    ctrl.buyItem(swordSlot);
+    ctrl.placeItem(ItemId('iron-sword'), { col: 0, row: 0 }, 90);
+    ctrl.buyItem(daggerSlot);
+    ctrl.placeItem(ItemId('iron-dagger'), { col: 2, row: 0 }, 0);
+    ctrl.buyItem(blockerSlot);
+    ctrl.placeItem(blocker.id, { col: 0, row: 1 }, 0);
+
+    const matches = ctrl.detectRecipes();
+    expect(matches).toHaveLength(1);
+    const fit = ctrl.findCombineRotation(matches[0]!);
+    expect(fit).not.toBeNull();
+    expect(fit!.rotation).toBe(90);
+    expect(fit!.anchor).toEqual({ col: 0, row: 0 });
+    ctrl.combineRecipe(matches[0]!.recipeId);
+    const sword = ctrl.getState().bag.placements.find((p) => p.itemId === 'steel-sword');
+    expect(sword).toBeDefined();
+    expect(sword!.rotation).toBe(90);
+    expect(sword!.anchor).toEqual({ col: 0, row: 0 });
   });
 });
 

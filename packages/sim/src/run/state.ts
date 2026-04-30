@@ -109,6 +109,13 @@ export interface RunController {
   rotateItem(placementId: PlacementId, rotation: Rotation): void;
   rerollShop(): void;
   detectRecipes(): ReadonlyArray<RecipeMatch>;
+  /** Returns the anchor + first-fitting rotation for a recipe match's output,
+   *  or null if no rotation fits at the inputs' top-left footprint with input
+   *  cells treated as freed. Single source of truth for "would this combine
+   *  succeed" — `combineRecipe` calls this before any mutation, and external
+   *  callers (test harnesses, future UI gating) should call it to predict
+   *  combine viability without attempting + catching. */
+  findCombineRotation(match: RecipeMatch): { rotation: Rotation; anchor: CellCoord } | null;
   combineRecipe(recipeId: RecipeId): void;
   startCombat(ghost: Combatant): CombatResult;
   /** Runs combat against a `GhostBuild` from `@packbreaker/content`. The
@@ -466,6 +473,45 @@ class RunControllerImpl implements RunController {
     );
   }
 
+  findCombineRotation(
+    match: RecipeMatch,
+  ): { rotation: Rotation; anchor: CellCoord } | null {
+    const recipe = this.recipes.find((r) => r.id === match.recipeId);
+    if (!recipe) return null;
+
+    // Compute top-left of input footprint (min row, min col across all input
+    // cells). Returns null if any input is missing from the bag (stale match).
+    let minRow = Infinity;
+    let minCol = Infinity;
+    for (const id of match.inputPlacementIds) {
+      const p = this.bag.placements.find((q) => q.placementId === id);
+      if (!p) return null;
+      for (const cell of canonicalCells(p, this.items)) {
+        if (cell.row < minRow) minRow = cell.row;
+        if (cell.col < minCol) minCol = cell.col;
+      }
+    }
+    if (!Number.isFinite(minRow) || !Number.isFinite(minCol)) return null;
+    const anchor: CellCoord = { col: minCol, row: minRow };
+
+    const inputIds = new Set(match.inputPlacementIds);
+    const rotations: Rotation[] = [0, 90, 180, 270];
+    for (const rotation of rotations) {
+      const candidate: BagPlacement = {
+        // placementId here is a placeholder used only by isValidPlacement's
+        // exclusion logic; the real id is assigned in combineRecipe.
+        placementId: 'cand-fit-check' as PlacementId,
+        itemId: recipe.output,
+        anchor,
+        rotation,
+      };
+      if (this.isValidPlacement(candidate, inputIds)) {
+        return { rotation, anchor };
+      }
+    }
+    return null;
+  }
+
   combineRecipe(recipeId: RecipeId): void {
     // Locked answer 13: combines arranging-only.
     this.requirePhase('arranging', 'combineRecipe');
@@ -474,44 +520,27 @@ class RunControllerImpl implements RunController {
     if (!match) throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
 
     const recipe = this.recipes.find((r) => r.id === recipeId)!;
+    // Try-then-commit: validate output placement BEFORE any mutation. The
+    // throw fires in the validation phase; nothing is rolled back because
+    // nothing is committed unless validation passes.
+    const fit = this.findCombineRotation(match);
+    if (fit === null) {
+      throw new Error(
+        `combineRecipe: cannot place output ${String(recipe.output)} — no rotation fits the freed footprint`,
+      );
+    }
+
+    // Commit phase.
     const inputIds = new Set(match.inputPlacementIds);
-
-    // Compute top-left of input footprint: min row, then min col across all
-    // input cells. Anchor = (minCol, minRow); rotations 0 / 90 / 180 / 270.
-    let minRow = Infinity;
-    let minCol = Infinity;
-    for (const id of match.inputPlacementIds) {
-      const p = this.bag.placements.find((q) => q.placementId === id)!;
-      for (const cell of canonicalCells(p, this.items)) {
-        if (cell.row < minRow) minRow = cell.row;
-        if (cell.col < minCol) minCol = cell.col;
-      }
-    }
-
-    // Try-then-commit: find a valid output placement with input cells excluded
-    // from the occupancy check, then atomically remove inputs and add output.
-    // M1 invariant: every recipe's output fits in at least one rotation; M3
-    // content protection (registry-time validation) is deferred.
-    const outputPlacementId = this.nextPlacementId();
-    const anchor: CellCoord = { col: minCol, row: minRow };
-    const rotations: Rotation[] = [0, 90, 180, 270];
-    let placed: BagPlacement | null = null;
-    for (const rot of rotations) {
-      const candidate: BagPlacement = {
-        placementId: outputPlacementId,
-        itemId: recipe.output,
-        anchor,
-        rotation: rot,
-      };
-      if (this.isValidPlacement(candidate, inputIds)) {
-        placed = candidate;
-        break;
-      }
-    }
-
     this.bag.placements = this.bag.placements.filter((p) => !inputIds.has(p.placementId));
     for (const id of inputIds) this.bornFromRecipe.delete(id);
-    this.bag.placements.push(placed!);
+    const outputPlacementId = this.nextPlacementId();
+    this.bag.placements.push({
+      placementId: outputPlacementId,
+      itemId: recipe.output,
+      anchor: fit.anchor,
+      rotation: fit.rotation,
+    });
     // Tinker's class.passive.recipeBonusPct + relic-driven recipe bonuses
     // apply to this placement at combat-start time. Track here; combat.ts
     // reads recipeBornPlacementIds via Combatant (locked answer 15).
