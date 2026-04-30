@@ -18,6 +18,7 @@
 // shipping to PostHog.
 
 import {
+  BASE_COMBATANT_HP,
   CONTRACTS,
   ITEMS,
   IsoTimestamp,
@@ -26,6 +27,7 @@ import {
   RELICS,
   RunId,
   type BagPlacement,
+  type BagState,
   type CellCoord,
   type ClassId,
   type CombatEvent,
@@ -34,6 +36,8 @@ import {
   type Combatant,
   type Contract,
   type ContractId,
+  type ContractMutator,
+  type GhostBuild,
   type Item,
   type ItemId,
   type PlacementId,
@@ -105,8 +109,22 @@ export interface RunController {
   rotateItem(placementId: PlacementId, rotation: Rotation): void;
   rerollShop(): void;
   detectRecipes(): ReadonlyArray<RecipeMatch>;
+  /** Returns the anchor + first-fitting rotation for a recipe match's output,
+   *  or null if no rotation fits at the inputs' top-left footprint with input
+   *  cells treated as freed. Single source of truth for "would this combine
+   *  succeed" — `combineRecipe` calls this before any mutation, and external
+   *  callers (test harnesses, future UI gating) should call it to predict
+   *  combine viability without attempting + catching. */
+  findCombineRotation(match: RecipeMatch): { rotation: Rotation; anchor: CellCoord } | null;
   combineRecipe(recipeId: RecipeId): void;
   startCombat(ghost: Combatant): CombatResult;
+  /** Runs combat against a `GhostBuild` from `@packbreaker/content`. The
+   *  controller derives the ghost's `Combatant` (passiveStats-summed startingHp,
+   *  pass-through relics + classId + bag) and applies any `boss_only` contract
+   *  mutator on this run's contract: `hpOverride` REPLACES startingHp;
+   *  `damageBonus` and `lifestealPctBonus` flow through `simulateCombat`'s
+   *  options.mutators to the ghost's `SideStats`. Player side is unaffected. */
+  startCombatFromGhostBuild(ghost: GhostBuild): CombatResult;
   getEvents(): ReadonlyArray<CombatEvent>;
 }
 
@@ -455,52 +473,89 @@ class RunControllerImpl implements RunController {
     );
   }
 
-  combineRecipe(recipeId: RecipeId): void {
-    // Locked answer 13: combines arranging-only.
-    this.requirePhase('arranging', 'combineRecipe');
-    const matches = this.detectRecipes();
-    const match = matches.find((m) => m.recipeId === recipeId);
-    if (!match) throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
+  findCombineRotation(
+    match: RecipeMatch,
+  ): { rotation: Rotation; anchor: CellCoord } | null {
+    const recipe = this.recipes.find((r) => r.id === match.recipeId);
+    if (!recipe) return null;
 
-    const recipe = this.recipes.find((r) => r.id === recipeId)!;
-    const inputIds = new Set(match.inputPlacementIds);
-
-    // Compute top-left of input footprint: min row, then min col across all
-    // input cells. Anchor = (minCol, minRow); rotations 0 / 90 / 180 / 270.
+    // Compute top-left of input footprint (min row, min col across all input
+    // cells). Returns null if any input is missing from the bag (stale match).
     let minRow = Infinity;
     let minCol = Infinity;
     for (const id of match.inputPlacementIds) {
-      const p = this.bag.placements.find((q) => q.placementId === id)!;
+      const p = this.bag.placements.find((q) => q.placementId === id);
+      if (!p) return null;
       for (const cell of canonicalCells(p, this.items)) {
         if (cell.row < minRow) minRow = cell.row;
         if (cell.col < minCol) minCol = cell.col;
       }
     }
-
-    // Try-then-commit: find a valid output placement with input cells excluded
-    // from the occupancy check, then atomically remove inputs and add output.
-    // M1 invariant: every recipe's output fits in at least one rotation; M3
-    // content protection (registry-time validation) is deferred.
-    const outputPlacementId = this.nextPlacementId();
+    if (!Number.isFinite(minRow) || !Number.isFinite(minCol)) return null;
     const anchor: CellCoord = { col: minCol, row: minRow };
+
+    const inputIds = new Set(match.inputPlacementIds);
     const rotations: Rotation[] = [0, 90, 180, 270];
-    let placed: BagPlacement | null = null;
-    for (const rot of rotations) {
+    for (const rotation of rotations) {
       const candidate: BagPlacement = {
-        placementId: outputPlacementId,
+        // placementId here is a placeholder used only by isValidPlacement's
+        // exclusion logic; the real id is assigned in combineRecipe.
+        placementId: 'cand-fit-check' as PlacementId,
         itemId: recipe.output,
         anchor,
-        rotation: rot,
+        rotation,
       };
       if (this.isValidPlacement(candidate, inputIds)) {
-        placed = candidate;
+        return { rotation, anchor };
+      }
+    }
+    return null;
+  }
+
+  combineRecipe(recipeId: RecipeId): void {
+    // Locked answer 13: combines arranging-only.
+    this.requirePhase('arranging', 'combineRecipe');
+    const candidates = this.detectRecipes().filter((m) => m.recipeId === recipeId);
+    if (candidates.length === 0) {
+      throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
+    }
+
+    const recipe = this.recipes.find((r) => r.id === recipeId)!;
+    // Try-then-commit: walk the match candidates in canonical order and
+    // pick the first one whose output fits at its inputs' anchor. detectRecipes
+    // can return multiple matches per recipeId when the bag has duplicate
+    // inputs in different positions — picking the first FITTING one (rather
+    // than the first one) means strategies that pre-filter via
+    // wouldCombineFit on any specific match still see the controller commit
+    // that combine. Throw fires in validation; nothing is rolled back because
+    // nothing is committed unless validation passes.
+    let chosenFit: { rotation: Rotation; anchor: CellCoord } | null = null;
+    let chosenMatch: RecipeMatch | null = null;
+    for (const candidate of candidates) {
+      const fit = this.findCombineRotation(candidate);
+      if (fit !== null) {
+        chosenFit = fit;
+        chosenMatch = candidate;
         break;
       }
     }
+    if (chosenFit === null || chosenMatch === null) {
+      throw new Error(
+        `combineRecipe: cannot place output ${String(recipe.output)} — no rotation fits the freed footprint (checked ${candidates.length} match variant${candidates.length === 1 ? '' : 's'})`,
+      );
+    }
 
+    // Commit phase.
+    const inputIds = new Set(chosenMatch.inputPlacementIds);
     this.bag.placements = this.bag.placements.filter((p) => !inputIds.has(p.placementId));
     for (const id of inputIds) this.bornFromRecipe.delete(id);
-    this.bag.placements.push(placed!);
+    const outputPlacementId = this.nextPlacementId();
+    this.bag.placements.push({
+      placementId: outputPlacementId,
+      itemId: recipe.output,
+      anchor: chosenFit.anchor,
+      rotation: chosenFit.rotation,
+    });
     // Tinker's class.passive.recipeBonusPct + relic-driven recipe bonuses
     // apply to this placement at combat-start time. Track here; combat.ts
     // reads recipeBornPlacementIds via Combatant (locked answer 15).
@@ -517,6 +572,35 @@ class RunControllerImpl implements RunController {
   }
 
   startCombat(ghost: Combatant): CombatResult {
+    return this.runCombatInternal(ghost, []);
+  }
+
+  startCombatFromGhostBuild(ghost: GhostBuild): CombatResult {
+    const mutators = this.contract.ruleset.mutators;
+    let startingHp = computeStartingHpFromBag(ghost.bag, this.items);
+    // boss_only.hpOverride REPLACES startingHp (does not add).
+    for (const m of mutators) {
+      if (m.type === 'boss_only' && typeof m.hpOverride === 'number') {
+        startingHp = m.hpOverride;
+        break;
+      }
+    }
+    const combatant: Combatant = {
+      bag: {
+        dimensions: ghost.bag.dimensions,
+        placements: ghost.bag.placements.slice(),
+      },
+      relics: { ...ghost.relics },
+      classId: ghost.classId,
+      startingHp,
+    };
+    return this.runCombatInternal(combatant, mutators);
+  }
+
+  private runCombatInternal(
+    ghost: Combatant,
+    mutators: ReadonlyArray<ContractMutator>,
+  ): CombatResult {
     this.requirePhase('arranging', 'startCombat');
     this.phase = 'combat';
 
@@ -552,7 +636,7 @@ class RunControllerImpl implements RunController {
       opponentGhostId: null,
     });
 
-    const result = simulateCombat(combatInput, { items: this.items });
+    const result = simulateCombat(combatInput, { items: this.items, mutators });
     this.lastCombatResult = result;
 
     // Compute damage stats for telemetry / history.
@@ -664,17 +748,10 @@ class RunControllerImpl implements RunController {
   }
 
   private computePlayerStartingHp(): number {
-    let hp = 30; // BASE_COMBATANT_HP — content-schemas.ts § 16.
-    for (const p of this.bag.placements) {
-      const item = this.items[p.itemId]!;
-      // Run controller IS the legitimate consumer of Item.passiveStats per
-      // content-schemas.ts § 0 ("run-controller-only"). The sim-wide lint
-      // rule against passiveStats access is relaxed for packages/sim/src/run/**
-      // in tooling/eslint-config/index.cjs.
-      const bonus = item.passiveStats?.maxHpBonus;
-      if (bonus) hp += bonus;
-    }
-    return hp;
+    return computeStartingHpFromBag(
+      { dimensions: this.bag.dimensions, placements: this.bag.placements },
+      this.items,
+    );
   }
 
   private lastCombatOutcomeForRound(): RoundOutcome {
@@ -741,6 +818,25 @@ class RunControllerImpl implements RunController {
     // guarantees the string is at least 10 chars long.
     return String(ts).slice(0, 10) as IsoDate;
   }
+}
+
+/** Sums maxHpBonus from `passiveStats` across a bag's placements on top of
+ *  `BASE_COMBATANT_HP`. Shared between player and ghost-build conversion paths
+ *  in the run controller — content-schemas.ts § 0 designates the run controller
+ *  as the legitimate `passiveStats` consumer. The sim-wide lint rule against
+ *  passiveStats access is relaxed for `packages/sim/src/run/**` in
+ *  `tooling/eslint-config/index.cjs`. */
+function computeStartingHpFromBag(
+  bag: BagState,
+  items: Readonly<Record<ItemId, Item>>,
+): number {
+  let hp = BASE_COMBATANT_HP;
+  for (const p of bag.placements) {
+    const item = items[p.itemId]!;
+    const bonus = item.passiveStats?.maxHpBonus;
+    if (bonus) hp += bonus;
+  }
+  return hp;
 }
 
 /** Computes per-side damage totals from a CombatResult.events stream. Used

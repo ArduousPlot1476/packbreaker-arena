@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ClassId,
   ContractId,
+  FORGE_TYRANT,
+  GhostId,
+  IsoTimestamp,
   ItemId,
   ITEMS,
   PlacementId,
@@ -13,7 +16,9 @@ import {
   RelicId,
   SimSeed,
   type Combatant,
+  type GhostBuild,
   type Item,
+  type Recipe,
   type RelicSlots,
   type TelemetryEvent,
   type Trigger,
@@ -800,6 +805,275 @@ describe('passiveStats.maxHpBonus', () => {
       expect(playerDmg.amount).toBe(30);
       expect(playerDmg.remainingHp).toBe(5);
     }
+  });
+});
+
+// ─── combineRecipe fit validation (M1.2.5) ─────────────────────────
+
+describe('combineRecipe fit validation', () => {
+  it('throws when output cannot fit at the inputs anchor; bag is unchanged', () => {
+    // Custom recipe: tiny-a + tiny-b -> 2x2 legendary output. Inputs at (0,0)
+    // and (1,0); blocker at (0,1) means the 2x2 output cannot place (any
+    // rotation of a 2x2 is the same 2x2 footprint). combineRecipe must throw
+    // before any state mutation.
+    const tinyA = defineTestItem('tiny-a', [], { tags: ['weapon'], cost: 1 });
+    const tinyB = defineTestItem('tiny-b', [], { tags: ['weapon'], cost: 1 });
+    const blocker = defineTestItem('blocker', [], { tags: ['armor'], cost: 1 });
+    const big = defineTestItem('big-2x2', [], {
+      rarity: 'legendary',
+      tags: ['weapon'],
+      shape: [
+        { col: 0, row: 0 },
+        { col: 1, row: 0 },
+        { col: 0, row: 1 },
+        { col: 1, row: 1 },
+      ],
+    });
+    const customRecipe: Recipe = {
+      id: RecipeId('r-test-big'),
+      name: 'Test Big',
+      inputs: [
+        { itemId: tinyA.id, relativeCol: 0, relativeRow: 0 },
+        { itemId: tinyB.id, relativeCol: 1, relativeRow: 0 },
+      ],
+      output: big.id,
+      rotationLocked: false,
+    };
+    const items = {
+      [tinyA.id]: tinyA,
+      [tinyB.id]: tinyB,
+      [blocker.id]: blocker,
+      [big.id]: big,
+    };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, recipesRegistry: [customRecipe], seed: SimSeed(7) }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const slotA = slots.findIndex((s) => s === tinyA.id);
+    const slotB = slots.findIndex((s) => s === tinyB.id);
+    const slotBlock = slots.findIndex((s) => s === blocker.id);
+    expect(slotA).toBeGreaterThanOrEqual(0);
+    expect(slotB).toBeGreaterThanOrEqual(0);
+    expect(slotBlock).toBeGreaterThanOrEqual(0);
+    expect(new Set([slotA, slotB, slotBlock]).size).toBe(3);
+    ctrl.buyItem(slotA);
+    ctrl.placeItem(tinyA.id, { col: 0, row: 0 }, 0);
+    ctrl.buyItem(slotB);
+    ctrl.placeItem(tinyB.id, { col: 1, row: 0 }, 0);
+    ctrl.buyItem(slotBlock);
+    ctrl.placeItem(blocker.id, { col: 0, row: 1 }, 0);
+
+    const matches = ctrl.detectRecipes();
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.recipeId).toBe(RecipeId('r-test-big'));
+    expect(ctrl.findCombineRotation(matches[0]!)).toBeNull();
+
+    const placementsBefore = ctrl.getState().bag.placements.slice();
+    expect(() => ctrl.combineRecipe(RecipeId('r-test-big'))).toThrow(/no rotation fits/);
+    expect(ctrl.getState().bag.placements).toEqual(placementsBefore);
+  });
+
+  it('findCombineRotation returns the first fitting rotation; combineRecipe uses it', () => {
+    // Iron Sword (1×2V) rotated 90 → cells (0,0),(1,0). Iron Dagger 1×1 at (2,0).
+    // Inputs are edge-adjacent → r-steel-sword matches. Min anchor = (0,0).
+    // Steel Sword 1×2V output:
+    //   rotation 0   → cells (0,0),(0,1) — collides with blocker at (0,1).
+    //   rotation 90  → cells (0,0),(1,0) — both freed input cells. Fits.
+    const blocker = defineTestItem('blocker', [], { tags: ['armor'], cost: 1 });
+    const items = {
+      [ItemId('iron-sword')]: cheapItem('iron-sword'),
+      [ItemId('iron-dagger')]: cheapItem('iron-dagger'),
+      [ItemId('steel-sword')]: ITEMS[ItemId('steel-sword')]!,
+      [blocker.id]: blocker,
+    };
+    const ctrl = createRun(baseInput({ itemsRegistry: items, seed: SimSeed(7) }));
+    const slots = ctrl.getState().shop.slots;
+    const swordSlot = slots.findIndex((s) => s === 'iron-sword');
+    const daggerSlot = slots.findIndex((s) => s === 'iron-dagger');
+    const blockerSlot = slots.findIndex((s) => s === blocker.id);
+    expect(swordSlot).toBeGreaterThanOrEqual(0);
+    expect(daggerSlot).toBeGreaterThanOrEqual(0);
+    expect(blockerSlot).toBeGreaterThanOrEqual(0);
+    expect(new Set([swordSlot, daggerSlot, blockerSlot]).size).toBe(3);
+    ctrl.buyItem(swordSlot);
+    ctrl.placeItem(ItemId('iron-sword'), { col: 0, row: 0 }, 90);
+    ctrl.buyItem(daggerSlot);
+    ctrl.placeItem(ItemId('iron-dagger'), { col: 2, row: 0 }, 0);
+    ctrl.buyItem(blockerSlot);
+    ctrl.placeItem(blocker.id, { col: 0, row: 1 }, 0);
+
+    const matches = ctrl.detectRecipes();
+    expect(matches).toHaveLength(1);
+    const fit = ctrl.findCombineRotation(matches[0]!);
+    expect(fit).not.toBeNull();
+    expect(fit!.rotation).toBe(90);
+    expect(fit!.anchor).toEqual({ col: 0, row: 0 });
+    ctrl.combineRecipe(matches[0]!.recipeId);
+    const sword = ctrl.getState().bag.placements.find((p) => p.itemId === 'steel-sword');
+    expect(sword).toBeDefined();
+    expect(sword!.rotation).toBe(90);
+    expect(sword!.anchor).toEqual({ col: 0, row: 0 });
+  });
+});
+
+// ─── startCombatFromGhostBuild + boss_only mutator ──────────────────
+
+describe('startCombatFromGhostBuild + boss_only mutator', () => {
+  function makeGhostBuild(slug: string, overrides: Partial<GhostBuild> = {}): GhostBuild {
+    return {
+      id: GhostId(slug),
+      classId: TINKER,
+      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      relics: NO_RELICS,
+      recordedRound: 1,
+      trophyAtRecord: 0,
+      seed: SimSeed(1),
+      submittedAt: IsoTimestamp('2025-01-01T00:00:00.000Z'),
+      source: 'bot',
+      ...overrides,
+    };
+  }
+
+  it('neutral contract: derives ghost startingHp from passiveStats; no mutator effects', () => {
+    // Ghost bag has Buckler (passiveStats.maxHpBonus: 5) → ghost startingHp = 30 + 5 = 35.
+    // Player's 35-dmg knife one-shots; remainingHp = 0.
+    const knife = defineTestItem(
+      'test-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 35, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [knife.id]: knife, [ItemId('buckler')]: ITEMS[ItemId('buckler')]! };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    const slots = ctrl.getState().shop.slots;
+    const knifeSlot = slots.findIndex((s) => s === knife.id);
+    expect(knifeSlot).toBeGreaterThanOrEqual(0);
+    ctrl.buyItem(knifeSlot);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('buckler-ghost', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ItemId('buckler'), anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const dmg = result.events.find((e) => e.type === 'damage' && e.target === 'ghost');
+    expect(dmg?.type === 'damage' && dmg.amount).toBe(35);
+    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(0);
+  });
+
+  it('forge-tyrant-boss contract: hpOverride: 50 REPLACES ghost startingHp', () => {
+    // Ghost bag has Buckler (passiveStats: 5) — would normally yield startingHp=35.
+    // hpOverride: 50 replaces it. 35-dmg knife leaves ghost at 50 - 35 = 15.
+    const knife = defineTestItem(
+      'test-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 35, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [knife.id]: knife, [ItemId('buckler')]: ITEMS[ItemId('buckler')]! };
+    const ctrl = createRun(
+      baseInput({
+        itemsRegistry: items,
+        contractId: ContractId('forge-tyrant-boss'),
+      }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const ks = slots.findIndex((s) => s === knife.id);
+    ctrl.buyItem(ks);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('buckler-ghost', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ItemId('buckler'), anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const dmg = result.events.find((e) => e.type === 'damage' && e.target === 'ghost');
+    expect(dmg?.type === 'damage' && dmg.amount).toBe(35);
+    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(15); // 50 - 35 = 15
+  });
+
+  it('forge-tyrant-boss contract: damageBonus: 2 adds to ghost damage events', () => {
+    // Ghost has a 5-dmg knife; player has nothing. Ghost-side damage event amount
+    // = 5 + 2 (damageBonus) = 7. (Ghost's classId TINKER has bonusBaseDamage 0,
+    // no relics, so the +2 comes purely from the boss_only mutator.)
+    const ghostKnife = defineTestItem(
+      'test-ghost-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [ghostKnife.id]: ghostKnife };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, contractId: ContractId('forge-tyrant-boss') }),
+    );
+    const ghost = makeGhostBuild('boss-knifer', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ghostKnife.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const playerDmg = result.events.find((e) => e.type === 'damage' && e.target === 'player');
+    expect(playerDmg?.type === 'damage' && playerDmg.amount).toBe(7);
+  });
+
+  it('forge-tyrant-boss contract: lifestealPctBonus: 15 produces ghost-side heal events on damage', () => {
+    // Player and ghost each have a damaging weapon. Both fire on_round_start.
+    // Player damages ghost first → ghost is below startingHp → ghost's damage
+    // event triggers a lifesteal heal that lands (actualGain > 0). Without the
+    // boss mutator there's no ghost-side lifestealPct, so no heal event.
+    const playerKnife = defineTestItem(
+      'test-player-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] }],
+      { tags: ['weapon'], name: 'p-knife' },
+    );
+    const ghostKnife = defineTestItem(
+      'test-ghost-knife-10',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 10, target: 'opponent' }] }],
+      { tags: ['weapon'], name: 'g-knife' },
+    );
+    const items = { [playerKnife.id]: playerKnife, [ghostKnife.id]: ghostKnife };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, contractId: ContractId('forge-tyrant-boss') }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const ks = slots.findIndex((s) => s === playerKnife.id);
+    expect(ks).toBeGreaterThanOrEqual(0);
+    ctrl.buyItem(ks);
+    ctrl.placeItem(playerKnife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('boss-vampire', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ghostKnife.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const lifestealHeal = result.events.find(
+      (e) => e.type === 'heal' && e.target === 'ghost',
+    );
+    expect(lifestealHeal).toBeDefined();
+  });
+
+  it('FORGE_TYRANT integration: ghostHp = 50 via boss_only.hpOverride (neutral comparison: 67)', () => {
+    // Two runs against FORGE_TYRANT to isolate the mutator path:
+    //   neutral contract  → ghostHp = 30 + chainmail(12) + bloodmoon-plate(25) = 67.
+    //   forge-tyrant-boss → ghostHp = 50 (mutator REPLACES the computed 67).
+    const ctrlNeutral = createRun(baseInput());
+    const neutralResult = ctrlNeutral.startCombatFromGhostBuild(FORGE_TYRANT);
+    const neutralStart = neutralResult.events.find((e) => e.type === 'combat_start');
+    expect(neutralStart?.type === 'combat_start' && neutralStart.ghostHp).toBe(67);
+
+    const ctrlBoss = createRun(baseInput({ contractId: ContractId('forge-tyrant-boss') }));
+    const bossResult = ctrlBoss.startCombatFromGhostBuild(FORGE_TYRANT);
+    const bossStart = bossResult.events.find((e) => e.type === 'combat_start');
+    expect(bossStart?.type === 'combat_start' && bossStart.ghostHp).toBe(50);
   });
 });
 

@@ -205,6 +205,15 @@ describe('Forge Tyrant boss', () => {
       }
     }
   });
+
+  it("equips the Marauder boss relic (Conqueror's Crown) per balance-bible § 13", () => {
+    expect(FORGE_TYRANT.relics.starter).toBeNull();
+    expect(FORGE_TYRANT.relics.mid).toBeNull();
+    expect(FORGE_TYRANT.relics.boss).toBe('conquerors-crown');
+    const boss = RELICS['conquerors-crown']!;
+    expect(boss.classAffinity).toBe(FORGE_TYRANT.classId);
+    expect(boss.slot).toBe('boss');
+  });
 });
 
 describe('schema v0.2 — bonusGoldOnWin (M1.1.1)', () => {

@@ -58,6 +58,7 @@ import {
   type CombatInput,
   type CombatOutcome,
   type CombatResult,
+  type ContractMutator,
   type Effect,
   type EntityRef,
   type Item,
@@ -94,6 +95,13 @@ export interface SimulateCombatOptions {
    *  Test ergonomics escape hatch — fixtures inject synthetic items via
    *  { ...ITEMS, ...customItems } merge. Production callers should omit this. */
   readonly items?: Readonly<Record<ItemId, Item>>;
+  /** Contract mutators applied at combatant-stat derivation. Currently only
+   *  `boss_only` is honored: its `damageBonus` adds to ghost-side
+   *  `bonusBaseDamage` and `lifestealPctBonus` adds to ghost-side `lifestealPct`.
+   *  The mutator's `hpOverride` is applied upstream by the run controller's
+   *  `startCombatFromGhostBuild` (replaces ghost startingHp). Player side is
+   *  unaffected by boss_only. */
+  readonly mutators?: ReadonlyArray<ContractMutator>;
 }
 
 interface CombatantRuntime {
@@ -185,7 +193,10 @@ export function simulateCombat(
     input,
     sideStats: {
       player: deriveSideStats(input.player.classId, input.player.relics),
-      ghost: deriveSideStats(input.ghost.classId, input.ghost.relics),
+      ghost: applyBossMutatorsToGhost(
+        deriveSideStats(input.ghost.classId, input.ghost.relics),
+        options?.mutators,
+      ),
     },
     playerAdjacency: precomputeAdjacency(input.player.bag, items),
     ghostAdjacency: precomputeAdjacency(input.ghost.bag, items),
@@ -755,6 +766,25 @@ function resolveTargetSideForDamage(
 }
 
 // ─── Setup helpers ──────────────────────────────────────────────────
+
+/** Folds boss_only contract mutators into the ghost's SideStats. damageBonus
+ *  adds to bonusBaseDamage; lifestealPctBonus adds to lifestealPct. hpOverride
+ *  is intentionally NOT applied here — it's handled upstream in the run
+ *  controller's startCombatFromGhostBuild before Combatant construction. */
+function applyBossMutatorsToGhost(
+  base: SideStats,
+  mutators: ReadonlyArray<ContractMutator> | undefined,
+): SideStats {
+  if (!mutators || mutators.length === 0) return base;
+  let bonusBaseDamage = base.bonusBaseDamage;
+  let lifestealPct = base.lifestealPct;
+  for (const m of mutators) {
+    if (m.type !== 'boss_only') continue;
+    bonusBaseDamage += m.damageBonus ?? 0;
+    lifestealPct += m.lifestealPctBonus ?? 0;
+  }
+  return { ...base, bonusBaseDamage, lifestealPct };
+}
 
 function deriveSideStats(classId: ClassId, relics: RelicSlots): SideStats {
   const cls = CLASSES[classId];

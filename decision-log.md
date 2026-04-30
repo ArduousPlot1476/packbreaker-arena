@@ -4,6 +4,97 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-30 — M1.2.5 closed (200-fixture determinism suite + boss mutator)
+
+- M1.2.5 closed. 200 JSONL action-stream fixtures across 5 strategies (40/100/40/10/10 split — greedy/hoarder/recipe-chaser/reroll-burner/random-legal) under `packages/sim/test/fixtures/runs/`. Harness (`packages/sim/test/determinism/harness.test.ts`) re-runs each fixture and byte-compares per-round CombatEvent arrays. All 200 replay byte-stable. Sim test count: 232 → 432 (+200 fixture replays + 24 unit tests across 6 commits).
+- **Coverage targets (per ratified spec):**
+  - Boss round (round 11) reached ≥10×: **18** [OK].
+  - Tick-cap draw (`endedAtTick === 600`, organic-only): **184** [OK].
+  - All 12 recipes from balance-bible.md § 11 fire ≥1× each (target #3 narrowed from ≥3× per ratification — see entry below): **10 of 12** [OK with documented Capstone exception].
+  - All 6 starter relics × both classes appear in starter slot ≥5× each (target #4 narrowed from "all 12 relics" per ratification — see entry below): **16–17 each** [OK].
+  - Rotation 270° on a non-square item ≥1×: [OK]. Closes `iteration.ts:151` rotation-270 carry-forward.
+- **Action stream API** ships in `packages/sim/src/run/actions.ts`: `RunControllerAction` discriminated union (one variant per state-mutating RunController method + a `'create_run'` header variant) and `applyAction(controller, action)` pure dispatcher. Exported from sim barrel. JSON round-trips losslessly — no Date/Map/Set/undefined fields.
+- **Boss mutator path** ships: `RunController.startCombatFromGhostBuild(ghost: GhostBuild)` sibling to `startCombat(ghost: Combatant)`. `boss_only.hpOverride` REPLACES ghost startingHp; `damageBonus` and `lifestealPctBonus` flow through `simulateCombat`'s new `options.mutators` to the ghost's SideStats (player-side unaffected). Existing `startCombat` signature preserved — sim contract surface unchanged. Schema v0.4 unchanged (mutator fields were authored at schema time; M1.2.5 implements them).
+- **Procedural ghost generator** lives in test scaffolding only (`test/determinism/ghost-generator.ts`). Per ratification option A: rng-driven, drawn from `ITEMS` weighted by `RARITY_GATE_BY_ROUND[round-1]`. Round 11 returns the canonical `FORGE_TYRANT` GhostBuild. Recorded inline in the `start_combat_from_ghost_build` action — replay does NOT regenerate. M1.5's bot-fallback ghost generator (gdd.md § 11) is a separate design problem and gets to start clean.
+- **CI workflow wiring deferred** to a sub-task before M1.3 per `tech-architecture.md` § 8.2. Determinism suite runs locally via `pnpm turbo test:determinism` (turbo task added with cache key including `test/fixtures/runs/**`) and is non-skippable in default `pnpm test` because the harness file `harness.test.ts` matches the default vitest pattern.
+- **Bundle delta zero** — test scaffolding doesn't ship.
+- Branch hygiene: `m1.2.5-determinism-suite` branched off main (`6344250`), six implementation commits + closing entries. Ready for `--no-ff` merge.
+- M1.2.5 closes the M1.2 sim phase pending M1.2.6 (mid/boss relic granting API + appended fixtures, before M1.3).
+
+---
+
+## 2026-04-30 — M1.2.5 boss mechanics consolidation
+
+Three interlocking gaps surfaced during M1.2.5 recon, ratified as a bundle and resolved in scope:
+
+1. **FORGE_TYRANT.relics.boss** set to `'conquerors-crown'` per balance-bible.md § 13 (Marauder boss relic). Was construction-time `null` since M1.1 — caught when M1.2.5 strategies tried to load FORGE_TYRANT for round 11. The relic's `bonusGoldOnWin: 3` is inert on a ghost (gold-on-win credits the player, no ghost-side gold pool); the value-bearing field is `bonusBaseDamage: 4`, which now stacks correctly with the boss aura at round 11. New `items.test.ts` assertion locks the boss-relic value.
+2. **`RunController.startCombatFromGhostBuild(ghost: GhostBuild)`** added as a sibling to the existing `startCombat(ghost: Combatant)`. Handles GhostBuild → Combatant conversion (per-side passiveStats aggregation via the shared `computeStartingHpFromBag` helper, contract mutator application). `startCombat` signature preserved — sim contract surface unchanged. Existing M1.2.4 boss test (uses `startCombat` directly with a hand-built Combatant) continues to work.
+3. **`ContractMutator['boss_only']` application** implemented inside `startCombatFromGhostBuild`'s flow. `hpOverride` REPLACES startingHp at ghost construction. `damageBonus` and `lifestealPctBonus` flow through `SimulateCombatOptions.mutators` (extended in `combat.ts`) to `applyBossMutatorsToGhost` which folds them into the ghost's `SideStats.bonusBaseDamage` and `SideStats.lifestealPct` respectively. Player side is unaffected. Closes a schema-vs-implementation gap that had been sitting since schema v0.1.
+
+Five new tests in `run.test.ts` lock the bundle: `neutral` contract derives ghost startingHp from passiveStats; `forge-tyrant-boss` contract `hpOverride: 50` REPLACES the computed value (Buckler-bag ghost: 35 → 50); `damageBonus: 2` raises ghost damage events (5 → 7); `lifestealPctBonus: 15` produces ghost-side heal events; FORGE_TYRANT integration verifies `ghostHp: 50` under boss contract vs `67` (chainmail 12 + bloodmoon-plate 25 + 30 base) under neutral.
+
+---
+
+## 2026-04-30 — M1.2.5 surfaced M1.2.4 cleanup regression (combineRecipe rollback restoration)
+
+The M1.2.4 closing entry's "state.ts:510 combineRecipe rollback — function uses try-then-commit ordering, no rollback needed; M3 content protection deferred" ratification was based on a **faulty invariant**: M1 recipes can have outputs strictly larger than inputs. `r-tower-shield` (2 cells → 4 cells), `r-greatsword` (geometry-dependent), and both Epic capstones (3 cells → 4 cells) all produce 2×2 outputs that won't fit at the inputs' top-left anchor when the bag has non-input items in the would-be-output cells. The deleted guard caused a `null` push into `bag.placements` on the first dense-bag layout exercising `r-tower-shield` via the M1.2.5 strategy harness.
+
+**Fix:** restored the throw in `combineRecipe`. Refactored the rotation-fit logic into a public `RunController.findCombineRotation(match)` method — single source of truth shared between `combineRecipe` (for commit-time validation) and strategy-side `wouldCombineFit` (for action-emission filtering). Try-then-commit ordering preserved: throw fires from validation, never from commit. Bag is unchanged on failure.
+
+Two new tests in `run.test.ts`:
+- combineRecipe throws when output cannot fit at the inputs anchor; bag is unchanged (custom 2×2 output recipe with blocker forcing all rotations to collide).
+- findCombineRotation returns the first fitting rotation; combineRecipe uses it (iron-sword rot=90 + iron-dagger + blocker layout where rot=0 collides but rot=90 fits).
+
+The `state.ts:510` branch previously classified as M3-deferred under the M1.2.4 cleanup is now real-path-reachable under M1 content. M1.2.4 closing-entry classification is superseded.
+
+Player UX semantics (combine-button gating at recipe-detection time vs. attempt-and-error) deferred to M1.5 client integration. Sim contract surface gains the `findCombineRotation` query method but keeps `combineRecipe` semantics-compatible (the throw was dormant under M1.2.4's punt; restoring it doesn't change behavior for recipes that fit).
+
+---
+
+## 2026-04-30 — M1.2.5 coverage target #3 revision (≥1× recipes + Capstone exception)
+
+Replaced the original M1.2.5 coverage target #3 — *"all 12 recipes fire ≥3× each"* — with **"all 12 recipes fire ≥1× each"** per ratified rationale: determinism suites need path coverage, not frequency coverage. A recipe's code path that replays byte-stable once replays byte-stable always; multiplicity is content-coverage, not sim-contract coverage.
+
+Authorized a bounded 1-day capstone-solver investment (NOT a full sixth strategy — an extension to `recipe-chaser` activating only when `seed % 12` targets one of `{r-tower-shield, r-berserkers-greataxe, r-master-alchemists-kit}`). Capstone-solver behaviors:
+- **Defensive early game** (rounds 1–3): if bag is empty, buy any weapon/armor item even if off-plan.
+- **Bottom-up planning**: leaf items first via `recipeChainInputs` (target inputs + producers' inputs, recursively).
+- **Aggressive rerolls** (up to 10/round) while target/chain inputs are absent.
+- **Anchor-aware placement**: chain inputs go top-left via `findCornerPlacement('top-left')`; non-chain items go bottom-right. The 2×2 output's anchor (minRow=0, minCol=0) finds free cells at (0,1)/(1,0)/(1,1) when chain inputs occupy the corner.
+- **Plan-pure combines**: only target and chain recipes are combined. Off-chain combines fragment the bag and waste cells.
+
+**Outcome — "1 or 2 of 3 fire ≥1×" branch of the halt-and-surface protocol:**
+- `r-tower-shield`: 2 firings (was 0 before capstone-solver) — **MET**.
+- `r-berserkers-greataxe`: 0 firings — documented exception.
+- `r-master-alchemists-kit`: 0 firings — documented exception.
+
+The two Capstones require 3 specific Rare items (round-7+ gate, ~5–7g each, 2×2 output) simultaneously in a single bag. Capstone-solver cannot organically produce them within the 1-day investment + 50-attempt retry budget. Per ratified justification text:
+
+> combineRecipe's code path is parameterized by recipe content (inputs, output, rotation), not by recipeId. Recipes that fire exercise the same control flow as recipes that don't. Recipe-specific coverage is exhaustiveness, not determinism. The N-of-12 firings plus M1.2.4's unit-tested recipe-combine-bonus fixture provide path coverage; missing recipes are content-coverage gaps, not sim-contract gaps.
+
+The exceptions are encoded in `evaluateCoverage` (in `test/determinism/generate.ts`) as `RECIPE_EXCEPTIONS = {r-berserkers-greataxe, r-master-alchemists-kit}` with a comment pointing to this decision. Future content-balance work (M2 telemetry might surface that these recipes are also rare in real play) may motivate a content lever or a synthesized fixture path; deferred for now.
+
+---
+
+## 2026-04-30 — combineRecipe multi-match selection bug fix (incidental to recipe-chaser)
+
+Surfaced during M1.2.5 strategy-driven generation. `combineRecipe(recipeId)` previously used `matches.find((m) => m.recipeId === recipeId)` to pick the first match, but `detectRecipes()` can return multiple match variants per recipeId when the bag has duplicate inputs in different positions (e.g., two iron-swords + two iron-daggers each yielding a distinct r-steel-sword match). Strategies that pre-filter via `wouldCombineFit` could find a fitting variant `B`, but the controller's first-match `A` would not fit — combineRecipe threw despite the prior validation.
+
+**Fix:** combineRecipe iterates ALL match candidates with the given recipeId (filtered by `m.recipeId === recipeId`, in canonical detectRecipes order) and picks the first one whose output actually fits via `findCombineRotation`. Throws only when NO variant fits, with a message naming how many variants were checked. Try-then-commit ordering preserved — the validation walk happens before any mutation.
+
+Existing `combineRecipe` tests (the M1.2.5 step-2.5 fit-validation tests and the M1.2.4 happy-path tests) continue to pass — the new behavior is a strict generalization of the prior single-match path.
+
+---
+
+## 2026-04-30 — M1.2.5 coverage target #4 narrowing (starter relics only)
+
+Replaced the original target #4 — *"both classes × all 12 relics ≥5× each"* — with **"all 6 starter relics × both classes appear in starter slot ≥5× each"** (12 pairs, ~16 fixtures each at 200 total). Mid- and boss-tier relic granting deferred to **M1.2.6**: `RunController` has no `grantRelic` API, `RelicSlots.mid/.boss` are construction-time null on the player side, and adding the API + telemetry + run-phase rules (gdd.md § 9 "awarded after round 5") is a sim contract surface change that shouldn't ride along with the determinism suite's first ratification.
+
+M1.2.6 will append fixtures additively; the existing 200 stay locked under DO-NOT-REGENERATE. The `m1.2.6` work scope: sim API surface bump, action-stream variant for `grant_relic`, post-round-5 grant logic, fixture appendix exercising mid/boss relic effects through `composeRuleset` and `deriveSideStats`.
+
+Boss-side relic equipping (FORGE_TYRANT.relics.boss = 'conquerors-crown', see "M1.2.5 boss mechanics consolidation" entry above) is content-defined and flows through the existing `composeRuleset` → `deriveSideStats` path — orthogonal to the player-side grantRelic deferral.
+
+---
+
 ## 2026-04-29 — M1.2.4 coverage cleanup pass (closed)
 
 - Closes the "Punted to M1.2.5 fixture authoring or a future cleanup pass" deviation flagged in the M1.2.4 closing entry below. 20 uncovered branches in `packages/sim/src/run/*` resolved on the same `m1.2.4-run-state` branch before merging to main.

@@ -23,6 +23,15 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "test:determinism": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "test/determinism/**",
+        "test/fixtures/runs/**"
+      ],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true
