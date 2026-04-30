@@ -1121,3 +1121,156 @@ describe('status_tick damage stats', () => {
     expect(entry.damageTaken).toBeGreaterThan(0);
   });
 });
+
+// ─── grantRelic (M1.2.6) ───────────────────────────────────────────
+
+describe('grantRelic', () => {
+  /** Drives the controller to (currentRound, phase='arranging') by winning
+   *  rounds 1 .. (currentRound - 1) with a one-shot test knife. Returns the
+   *  controller + the captured telemetry event log. */
+  function driveToRound(
+    targetRound: number,
+    overrides: Partial<CreateRunInput> = {},
+  ): { ctrl: ReturnType<typeof createRun>; events: TelemetryEvent[]; knifeId: ItemId } {
+    const knife = defineTestItem(
+      'gr-test-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [knife.id]: knife };
+    const events: TelemetryEvent[] = [];
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, onTelemetryEvent: (e) => events.push(e), ...overrides }),
+    );
+    ctrl.buyItem(0);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    for (let r = 1; r < targetRound; r++) {
+      ctrl.startCombat(emptyGhost(1));
+      ctrl.advancePhase();
+    }
+    return { ctrl, events, knifeId: knife.id };
+  }
+
+  it('mid grant in round 6 arranging phase succeeds; relic_granted telemetry fires', () => {
+    const { ctrl, events } = driveToRound(6);
+    expect(ctrl.getState().currentRound).toBe(6);
+    expect(ctrl.getPhase()).toBe('arranging');
+    ctrl.grantRelic('mid', RelicId('catalyst'));
+    expect(ctrl.getState().relics.mid).toBe('catalyst');
+    const granted = events.find((e) => e.name === 'relic_granted');
+    expect(granted).toBeDefined();
+    if (granted?.name === 'relic_granted') {
+      expect(granted.slot).toBe('mid');
+      expect(granted.relicId).toBe('catalyst');
+      expect(granted.round).toBe(6);
+      expect(granted.runId).toBe(ctrl.getState().runId);
+    }
+  });
+
+  it('mid grant in round 5 throws (round too early)', () => {
+    const { ctrl } = driveToRound(5);
+    expect(ctrl.getState().currentRound).toBe(5);
+    expect(() => ctrl.grantRelic('mid', RelicId('catalyst'))).toThrow(/round 6\+/);
+  });
+
+  it('mid grant when slot already occupied throws', () => {
+    const { ctrl } = driveToRound(6);
+    ctrl.grantRelic('mid', RelicId('catalyst'));
+    expect(() => ctrl.grantRelic('mid', RelicId('resonant-anchor'))).toThrow(/already occupied/);
+  });
+
+  it('mid grant with a boss-slot relicId throws (slot mismatch)', () => {
+    const { ctrl } = driveToRound(6);
+    expect(() => ctrl.grantRelic('mid', RelicId('worldforge-seed'))).toThrow(/slot 'boss'/);
+  });
+
+  it('boss grant after player_win on round 11 succeeds', () => {
+    const { ctrl, events } = driveToRound(11);
+    expect(ctrl.getState().currentRound).toBe(11);
+    expect(ctrl.getPhase()).toBe('arranging');
+    ctrl.startCombat(emptyGhost(1));
+    expect(ctrl.getPhase()).toBe('resolution');
+    ctrl.grantRelic('boss', RelicId('worldforge-seed'));
+    expect(ctrl.getState().relics.boss).toBe('worldforge-seed');
+    const granted = events.find((e) => e.name === 'relic_granted');
+    expect(granted?.name === 'relic_granted' && granted.slot).toBe('boss');
+    // advancePhase ends the run after a round-11 win.
+    ctrl.advancePhase();
+    expect(ctrl.getState().outcome).toBe('won');
+  });
+
+  it('boss grant after ghost_win on round 11 throws (combat lost)', () => {
+    // Drive to round 11 with knife (one-shot ghosts), then face a heavy
+    // hammer ghost on round 11 that out-damages the player's 30 HP.
+    const playerKnife = defineTestItem(
+      'gr-p-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const ghostHammer = defineTestItem(
+      'gr-g-hammer',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 60, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [playerKnife.id]: playerKnife, [ghostHammer.id]: ghostHammer };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0);
+    ctrl.placeItem(playerKnife.id, { col: 0, row: 0 }, 0);
+    for (let r = 1; r <= 10; r++) {
+      ctrl.startCombat(emptyGhost(1));
+      ctrl.advancePhase();
+    }
+    expect(ctrl.getState().currentRound).toBe(11);
+    const heavyGhost: Combatant = {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          {
+            placementId: PlacementId('g1'),
+            itemId: ghostHammer.id,
+            anchor: { col: 0, row: 0 },
+            rotation: 0,
+          },
+        ],
+      },
+      relics: NO_RELICS,
+      classId: TINKER,
+      startingHp: 200, // tank: knife's 30 leaves 170 HP, hammer's 60 kills player at 30 HP
+    };
+    ctrl.startCombat(heavyGhost);
+    expect(ctrl.getPhase()).toBe('resolution');
+    expect(ctrl.getState().history[ctrl.getState().history.length - 1]!.outcome).toBe('loss');
+    expect(() => ctrl.grantRelic('boss', RelicId('worldforge-seed'))).toThrow(/player_win/);
+  });
+
+  it('boss grant in round 6 throws (phase too early)', () => {
+    const { ctrl } = driveToRound(6);
+    expect(() => ctrl.grantRelic('boss', RelicId('worldforge-seed'))).toThrow(/resolution phase after a round-11/);
+  });
+
+  it("'starter' slot via type bypass throws (defensive runtime check)", () => {
+    const { ctrl } = driveToRound(6);
+    expect(() =>
+      (ctrl as unknown as { grantRelic: (s: string, r: RelicId) => void }).grantRelic(
+        'starter',
+        RelicId('apprentices-loop'),
+      ),
+    ).toThrow(/'starter' is not grantable/);
+  });
+
+  it('ruleset recompose on grant: extraShopSlots applies to next round, not current', () => {
+    // Tinker + Apprentice's Loop has shopSize 5. Granting Resonant Anchor
+    // (extraShopSlots: 1) at round 6 should NOT regenerate the current round's
+    // shop, but round 7's shop should have 6 slots.
+    const { ctrl } = driveToRound(6);
+    expect(ctrl.getState().shop.slots).toHaveLength(5);
+    ctrl.grantRelic('mid', RelicId('resonant-anchor'));
+    // Current round's shop unchanged.
+    expect(ctrl.getState().shop.slots).toHaveLength(5);
+    // Advance to round 7.
+    ctrl.startCombat(emptyGhost(1));
+    ctrl.advancePhase();
+    expect(ctrl.getState().currentRound).toBe(7);
+    expect(ctrl.getState().shop.slots).toHaveLength(6);
+  });
+});

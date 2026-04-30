@@ -56,6 +56,11 @@ export type RunControllerAction =
     }
   | { readonly type: 'reroll_shop' }
   | { readonly type: 'combine_recipe'; readonly recipeId: RecipeId }
+  | {
+      readonly type: 'grant_relic';
+      readonly slot: 'mid' | 'boss';
+      readonly relicId: RelicId;
+    }
   | { readonly type: 'start_combat'; readonly ghost: Combatant }
   | { readonly type: 'start_combat_from_ghost_build'; readonly ghost: GhostBuild }
   | { readonly type: 'advance_phase' };
@@ -94,6 +99,9 @@ export function applyAction(
       return;
     case 'combine_recipe':
       controller.combineRecipe(action.recipeId);
+      return;
+    case 'grant_relic':
+      controller.grantRelic(action.slot, action.relicId);
       return;
     case 'start_combat':
       controller.startCombat(action.ghost);

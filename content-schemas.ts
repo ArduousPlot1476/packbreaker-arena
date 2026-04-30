@@ -802,6 +802,15 @@ export type TelemetryEvent =
       readonly round: RoundNumber
     })
 
+  // Relics (M1.2.6, schema v0.5 — additive)
+  | (TelemetryBase & {
+      readonly name: 'relic_granted'
+      readonly runId: RunId
+      readonly slot: 'mid' | 'boss'
+      readonly relicId: RelicId
+      readonly round: RoundNumber
+    })
+
   // Combat
   | (TelemetryBase & {
       readonly name: 'combat_start'

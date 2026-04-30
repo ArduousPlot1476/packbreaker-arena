@@ -117,6 +117,15 @@ export interface RunController {
    *  combine viability without attempting + catching. */
   findCombineRotation(match: RecipeMatch): { rotation: Rotation; anchor: CellCoord } | null;
   combineRecipe(recipeId: RecipeId): void;
+  /** Grants a mid- or boss-tier relic to the run's RelicSlots and recomposes
+   *  the effective ruleset. Phase gating per gdd.md § 9:
+   *    - 'mid' is legal only in arranging phase of round 6+.
+   *    - 'boss' is legal only in resolution phase after a round-11 player_win.
+   *  Throws on already-occupied slots, slot/relic-tier mismatches, unknown
+   *  relicIds, or out-of-window phases. The new ruleset takes effect for ALL
+   *  subsequent shop generations and combats; the CURRENT round's shop is NOT
+   *  regenerated. Fires `relic_granted` telemetry on success only. */
+  grantRelic(slot: 'mid' | 'boss', relicId: RelicId): void;
   startCombat(ghost: Combatant): CombatResult;
   /** Runs combat against a `GhostBuild` from `@packbreaker/content`. The
    *  controller derives the ghost's `Combatant` (passiveStats-summed startingHp,
@@ -148,8 +157,12 @@ class RunControllerImpl implements RunController {
   private readonly items: Readonly<Record<ItemId, Item>>;
   private readonly recipes: ReadonlyArray<Recipe>;
   private readonly contract: Contract;
-  private readonly effectiveRuleset: Ruleset;
-  private readonly derived: DerivedModifiers;
+  // effectiveRuleset and derived are recomputed on every grantRelic call
+  // (M1.2.6 — new mid/boss relics fold into the run's modifiers immediately).
+  // Initial composition still happens in the constructor; subsequent calls
+  // come from grantRelic.
+  private effectiveRuleset: Ruleset;
+  private derived: DerivedModifiers;
   private readonly classId: ClassId;
   private readonly startedAt: IsoTimestamp;
   private readonly sessionId: string;
@@ -567,6 +580,66 @@ class RunControllerImpl implements RunController {
       name: 'recipe_completed',
       runId: this.runId,
       recipeId: recipe.id,
+      round: this.currentRound,
+    });
+  }
+
+  grantRelic(slot: 'mid' | 'boss', relicId: RelicId): void {
+    // Defensive runtime check — TypeScript prevents 'starter' at compile time.
+    if (slot !== 'mid' && slot !== 'boss') {
+      throw new Error(
+        `grantRelic: invalid slot '${String(slot)}' (must be 'mid' or 'boss'; 'starter' is not grantable post-creation)`,
+      );
+    }
+
+    const relic = RELICS[relicId];
+    if (!relic) {
+      throw new Error(`grantRelic: unknown relicId '${String(relicId)}'`);
+    }
+    if (relic.slot !== slot) {
+      throw new Error(
+        `grantRelic: relic '${String(relicId)}' has slot '${relic.slot}', cannot grant to '${slot}' slot`,
+      );
+    }
+    if (this.relics[slot] !== null) {
+      throw new Error(
+        `grantRelic: '${slot}' slot already occupied by '${String(this.relics[slot])}'`,
+      );
+    }
+
+    if (slot === 'mid') {
+      if (this.phase !== 'arranging' || this.currentRound < 6) {
+        throw new Error(
+          `grantRelic: 'mid' grant requires arranging phase of round 6+ (current: round ${this.currentRound}, phase '${this.phase}')`,
+        );
+      }
+    } else {
+      // slot === 'boss': resolution phase after a round-11 player_win.
+      const last = this.history[this.history.length - 1];
+      const lastOutcome = last?.outcome ?? null;
+      const lastRound = last?.round ?? 0;
+      if (this.phase !== 'resolution' || lastRound !== 11 || lastOutcome !== 'win') {
+        throw new Error(
+          `grantRelic: 'boss' grant requires resolution phase after a round-11 player_win (current: round ${this.currentRound}, phase '${this.phase}', last outcome '${lastOutcome}')`,
+        );
+      }
+    }
+
+    this.relics = { ...this.relics, [slot]: relicId };
+    // Recompose: new mid/boss relic folds into derived modifiers + ruleset.
+    // Current round's shop (already generated) is unchanged; the new ruleset
+    // applies starting next round per locked answer #4.
+    const composed = composeRuleset(this.contract, this.classId, this.relics);
+    this.effectiveRuleset = composed.ruleset;
+    this.derived = composed.derived;
+
+    this.emit({
+      tsClient: this.startedAt,
+      sessionId: this.sessionId,
+      name: 'relic_granted',
+      runId: this.runId,
+      slot,
+      relicId,
       round: this.currentRound,
     });
   }

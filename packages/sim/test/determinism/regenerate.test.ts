@@ -11,16 +11,24 @@ import { writeAllFixtures, formatCoverage } from './generate';
 
 const ENABLED = process.env.npm_lifecycle_event === 'generate-fixtures';
 
-describe.runIf(ENABLED)('M1.2.5 fixture regeneration', () => {
-  it('writes 200 .jsonl fixtures meeting all coverage targets', () => {
+describe.runIf(ENABLED)('M1.2.5 + M1.2.6 fixture regeneration', () => {
+  it('writes 224 .jsonl fixtures meeting all coverage targets', () => {
     const { written, coverage } = writeAllFixtures();
     // eslint-disable-next-line no-console
     console.log(formatCoverage(coverage));
-    expect(written).toBe(200);
+    expect(written).toBe(224);
     expect(coverage.bossRound.ok, 'boss round (>=10x)').toBe(true);
     expect(coverage.tickCap.ok, 'tick-cap draw (>=1x organic)').toBe(true);
     expect(coverage.recipes.ok, 'all 12 recipes (>=1x each)').toBe(true);
     expect(coverage.pairs.ok, 'all (class, starter relic) pairs (>=5x each)').toBe(true);
     expect(coverage.rotation270.ok, 'rotation 270 on non-square (>=1x)').toBe(true);
+    expect(
+      coverage.midRelicPairs.ok,
+      'all (class, mid relic) pairs (>=2x each across the appended 24)',
+    ).toBe(true);
+    expect(
+      coverage.bossRelicPairs.ok,
+      'all (class, boss relic) pairs (>=2x each across the appended 24)',
+    ).toBe(true);
   });
 });

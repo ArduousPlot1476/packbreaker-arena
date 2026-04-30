@@ -130,6 +130,18 @@ describe('applyAction', () => {
     ).toThrow(/no match/);
   });
 
+  it("'grant_relic' propagates the controller's phase-gating throw on round 1", () => {
+    const ctrl = freshController();
+    // Round 1 is too early for a 'mid' grant — the controller throws.
+    expect(() =>
+      applyAction(ctrl, {
+        type: 'grant_relic',
+        slot: 'mid',
+        relicId: RelicId('catalyst'),
+      }),
+    ).toThrow(/round 6\+/);
+  });
+
   it("'start_combat' invokes startCombat(ghost: Combatant)", () => {
     const ctrl = freshController();
     applyAction(ctrl, { type: 'start_combat', ghost: makeGhost() });
