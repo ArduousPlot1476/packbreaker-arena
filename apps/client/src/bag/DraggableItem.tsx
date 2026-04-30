@@ -1,37 +1,46 @@
-// Bag item view + drag handle. Currently uses raw pointer events;
-// @dnd-kit useDraggable integration lands in commit 6.
+// Bag item view + useDraggable handle. Drag activation, pointercancel,
+// and window-blur cleanup are owned by @dnd-kit's PointerSensor; the
+// DndContext at the RunScreen level dispatches into the run reducer.
 
-import type { PointerEvent } from 'react'
-import { dimsOf, ITEMS, type BagItem } from '../data.local'
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon'
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame'
-import { cellPx } from './layout'
-import type { DragState } from './types'
+import { useDraggable } from '@dnd-kit/core';
+import { dimsOf, ITEMS, type BagItem } from '../data.local';
+import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
+import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
+import { cellPx } from './layout';
+import type { DraggableData } from './types';
 
 interface DraggableItemProps {
-  item: BagItem
-  drag: DragState | null
-  onPickUp: (e: PointerEvent<HTMLDivElement>, item: BagItem) => void
+  item: BagItem;
+  disabled?: boolean;
 }
 
-export function DraggableItem({ item, drag, onPickUp }: DraggableItemProps) {
-  const def = ITEMS[item.itemId]
-  const dims = dimsOf(item.itemId, item.rot)
-  const beingDragged = drag !== null && drag.fromBagUid === item.uid
+export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
+  const def = ITEMS[item.itemId];
+  const dims = dimsOf(item.itemId, item.rot);
+  const data: DraggableData = {
+    kind: 'bag',
+    uid: item.uid,
+    itemId: item.itemId,
+    rot: item.rot,
+  };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `bag:${item.uid}`,
+    data,
+    disabled,
+  });
   return (
     <div
-      onPointerDown={(e) => {
-        e.preventDefault()
-        onPickUp(e, item)
-      }}
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       className="absolute ease-snap"
       style={{
         left: item.col * cellPx + 2,
         top: item.row * cellPx + 2,
         width: dims.w * cellPx - 4,
         height: dims.h * cellPx - 4,
-        opacity: beingDragged ? 0.25 : 1,
-        cursor: beingDragged ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.25 : 1,
+        cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
         transition:
           'left 160ms cubic-bezier(0.16, 1, 0.3, 1), top 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
         touchAction: 'none',
@@ -41,5 +50,5 @@ export function DraggableItem({ item, drag, onPickUp }: DraggableItemProps) {
         <ItemIcon itemId={item.itemId} rot={item.rot} />
       </RarityFrame>
     </div>
-  )
+  );
 }

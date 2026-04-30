@@ -1,17 +1,25 @@
-// Per-cell drop target. Currently renders a transparent positioned div;
-// @dnd-kit useDroppable integration lands in commit 6. Visual feedback
-// (glow, valid/invalid preview) is rendered in BagBoard's SVG overlay.
+// Per-cell drop target. useDroppable registers the cell's bounds with
+// @dnd-kit; the DndContext at the RunScreen level handles drag/drop
+// coordination via collision detection.
 
-import { cellPx } from './layout'
+import { useDroppable } from '@dnd-kit/core';
+import { cellPx } from './layout';
+import type { DroppableData } from './types';
 
 interface BagCellProps {
-  col: number
-  row: number
+  col: number;
+  row: number;
 }
 
 export function BagCell({ col, row }: BagCellProps) {
+  const data: DroppableData = { kind: 'cell', col, row };
+  const { setNodeRef } = useDroppable({
+    id: `cell:${col}:${row}`,
+    data,
+  });
   return (
     <div
+      ref={setNodeRef}
       data-cell-col={col}
       data-cell-row={row}
       style={{
@@ -20,8 +28,7 @@ export function BagCell({ col, row }: BagCellProps) {
         top: row * cellPx,
         width: cellPx,
         height: cellPx,
-        pointerEvents: 'none',
       }}
     />
-  )
+  );
 }

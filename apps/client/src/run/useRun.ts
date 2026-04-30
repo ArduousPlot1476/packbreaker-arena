@@ -1,22 +1,29 @@
-// React hook wrapping clientRunReducer + window-listener effects (R-key
-// rotate, pointercancel + window-blur drag cleanup). Provides bound
-// handlers for child components.
+// React hook wrapping clientRunReducer. As of commit 6, drag/drop
+// coordination is delegated to @dnd-kit — the bound onDragStart /
+// onDragOver / onDragEnd / onDragCancel handlers translate
+// dnd-kit events into reducer actions. The R-key rotation listener is
+// the only window-level event handler that remains: dnd-kit doesn't
+// manage non-drag keyboard concerns.
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  type PointerEvent as ReactPointerEvent,
-} from 'react';
-import { ITEMS, type BagItem } from '../data.local';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import type {
+  DragCancelEvent,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+} from '@dnd-kit/core';
+import { ITEMS } from '../data.local';
+import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
   INITIAL_CLIENT_STATE,
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, type RecipeMatch } from './recipes';
+
+function makeUid(prefix: 'b' | 's'): string {
+  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
 
 export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
@@ -25,18 +32,8 @@ export function useRun() {
 
   const dragRef = useRef<ClientRunState['drag']>(null);
   dragRef.current = state.drag;
-  const lastPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   useEffect(() => {
-    function move(e: PointerEvent) {
-      lastPointerRef.current = { x: e.clientX, y: e.clientY };
-      if (!dragRef.current) return;
-      dispatch({ type: 'drag_move', x: e.clientX, y: e.clientY });
-    }
-    function cancel() {
-      if (!dragRef.current) return;
-      dispatch({ type: 'drag_cancel' });
-    }
     function key(e: KeyboardEvent) {
       if (e.key && e.key.toLowerCase() === 'r') {
         const d = dragRef.current;
@@ -48,52 +45,50 @@ export function useRun() {
         dispatch({ type: 'drag_rotate' });
       }
     }
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', cancel);
-    window.addEventListener('pointercancel', cancel);
-    window.addEventListener('blur', cancel);
     window.addEventListener('keydown', key);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', cancel);
-      window.removeEventListener('pointercancel', cancel);
-      window.removeEventListener('blur', cancel);
-      window.removeEventListener('keydown', key);
-    };
+    return () => window.removeEventListener('keydown', key);
   }, []);
 
-  const onPickUpBag = useCallback((e: ReactPointerEvent<HTMLDivElement>, item: BagItem) => {
-    const target = e.currentTarget;
-    const r = target.getBoundingClientRect();
-    dispatch({
-      type: 'pickup_bag',
-      item,
-      x: e.clientX,
-      y: e.clientY,
-      offX: e.clientX - r.left,
-      offY: e.clientY - r.top,
-    });
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.active.data.current as DraggableData | undefined;
+    if (!data) return;
+    if (data.kind === 'bag') {
+      dispatch({ type: 'pickup_bag', uid: data.uid, itemId: data.itemId, rot: data.rot });
+    } else if (data.kind === 'shop') {
+      dispatch({ type: 'pickup_shop', uid: data.uid });
+    }
   }, []);
 
-  const onBuyShop = useCallback((uid: string) => {
-    const { x, y } = lastPointerRef.current;
-    dispatch({ type: 'pickup_shop', uid, x, y });
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const overData = event.over?.data.current as DroppableData | undefined;
+    if (overData?.kind === 'cell') {
+      dispatch({ type: 'set_hover', hover: { col: overData.col, row: overData.row } });
+    } else {
+      dispatch({ type: 'set_hover', hover: null });
+    }
   }, []);
 
-  const onDropBag = useCallback((col: number, row: number) => {
-    dispatch({ type: 'drop_bag', col, row, newUid: 'b' + Date.now().toString(36) });
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const overData = event.over?.data.current as DroppableData | undefined;
+    if (overData?.kind === 'cell') {
+      dispatch({ type: 'drop_bag', col: overData.col, row: overData.row, newUid: makeUid('b') });
+    } else if (overData?.kind === 'sell') {
+      dispatch({ type: 'sell_drop' });
+    } else {
+      dispatch({ type: 'drag_cancel' });
+    }
   }, []);
 
-  const onSellDropZone = useCallback(() => {
-    dispatch({ type: 'sell_drop' });
+  const handleDragCancel = useCallback((_event: DragCancelEvent) => {
+    dispatch({ type: 'drag_cancel' });
   }, []);
 
   const onReroll = useCallback(() => {
-    dispatch({ type: 'reroll', uidPrefix: 's' + Date.now().toString(36) });
+    dispatch({ type: 'reroll', uidPrefix: makeUid('s') });
   }, []);
 
   const onCombine = useCallback((match: RecipeMatch) => {
-    dispatch({ type: 'combine', match, newUid: 'b' + Date.now().toString(36) });
+    dispatch({ type: 'combine', match, newUid: makeUid('b') });
   }, []);
 
   const onContinue = useCallback(() => {
@@ -104,26 +99,16 @@ export function useRun() {
     dispatch({ type: 'combat_done' });
   }, []);
 
-  const setHover = useCallback((hover: { col: number; row: number } | null) => {
-    dispatch({ type: 'set_hover', hover });
-  }, []);
-
-  const setSellHover = useCallback((on: boolean) => {
-    dispatch({ type: 'set_sell_hover', on });
-  }, []);
-
   return {
     state,
     recipes,
-    onPickUpBag,
-    onBuyShop,
-    onDropBag,
-    onSellDropZone,
+    handleDragStart,
+    handleDragOver,
+    handleDragEnd,
+    handleDragCancel,
     onReroll,
     onCombine,
     onContinue,
     onCombatDone,
-    setHover,
-    setSellHover,
   };
 }

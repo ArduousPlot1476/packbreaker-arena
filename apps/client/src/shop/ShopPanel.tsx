@@ -1,35 +1,51 @@
-// Right-side shop panel: 5 slots + reroll button + sell zone + Continue CTA.
-// (Formerly RightRail in the App.tsx prototype monolith.)
+// Right-side shop panel: 5 slots + reroll button + sell zone + Continue
+// CTA. As of commit 6, the sell zone is a @dnd-kit useDroppable; pickup
+// from shop is via useDraggable on each ShopSlot. Buy/sell handlers are
+// wired through the DndContext at the RunScreen level — this component
+// no longer threads drag/sellHover state.
 
+import { useDroppable } from '@dnd-kit/core';
 import { type RunState, type ShopSlot as ShopSlotData } from '../data.local';
-import type { DragState } from '../bag/types';
+import type { DroppableData } from '../bag/types';
 import { ShopSlot } from './ShopSlot';
 
 interface ShopPanelProps {
   state: RunState;
   shop: ShopSlotData[];
-  onBuy: (uid: string) => void;
   onReroll: () => void;
-  onSellDropZone: () => void;
-  drag: DragState | null;
-  sellHover: boolean;
-  setSellHover: (b: boolean) => void;
   onContinue: () => void;
   busy: boolean;
 }
 
-export function ShopPanel({
-  state,
-  shop,
-  onBuy,
-  onReroll,
-  onSellDropZone,
-  drag,
-  sellHover,
-  setSellHover,
-  onContinue,
-  busy,
-}: ShopPanelProps) {
+function SellZone() {
+  const data: DroppableData = { kind: 'sell' };
+  const { setNodeRef, isOver } = useDroppable({ id: 'sell-zone', data });
+  return (
+    <div
+      ref={setNodeRef}
+      className="ease-snap"
+      style={{
+        padding: 12,
+        borderRadius: 6,
+        background: isOver ? 'rgba(239,68,68,0.16)' : 'var(--surface)',
+        border: `2px dashed ${isOver ? '#EF4444' : 'var(--border-default)'}`,
+        textAlign: 'center',
+      }}
+    >
+      <div
+        className="label-cap"
+        style={{ fontSize: 10, color: isOver ? '#F87171' : 'var(--text-secondary)' }}
+      >
+        SELL · 50% RECOVERY
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+        drop a bag item here
+      </div>
+    </div>
+  );
+}
+
+export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanelProps) {
   const rerollCost = state.rerollCount + 1;
   const canReroll = state.gold >= rerollCost && !busy;
 
@@ -55,13 +71,7 @@ export function ShopPanel({
         </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {shop.map((s) => (
-            <ShopSlot
-              key={s.uid}
-              slot={s}
-              gold={state.gold}
-              onBuy={() => onBuy(s.uid)}
-              busy={busy}
-            />
+            <ShopSlot key={s.uid} slot={s} gold={state.gold} busy={busy} />
           ))}
         </div>
         <button
@@ -88,31 +98,7 @@ export function ShopPanel({
         </button>
       </div>
 
-      <div
-        onPointerEnter={() => drag && setSellHover(true)}
-        onPointerLeave={() => setSellHover(false)}
-        onPointerUp={() => {
-          if (drag) onSellDropZone();
-        }}
-        className="ease-snap"
-        style={{
-          padding: 12,
-          borderRadius: 6,
-          background: sellHover ? 'rgba(239,68,68,0.16)' : 'var(--surface)',
-          border: `2px dashed ${sellHover ? '#EF4444' : 'var(--border-default)'}`,
-          textAlign: 'center',
-        }}
-      >
-        <div
-          className="label-cap"
-          style={{ fontSize: 10, color: sellHover ? '#F87171' : 'var(--text-secondary)' }}
-        >
-          SELL · 50% RECOVERY
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-          drop a bag item here
-        </div>
-      </div>
+      <SellZone />
 
       <button
         onClick={onContinue}

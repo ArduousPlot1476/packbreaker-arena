@@ -1,7 +1,12 @@
 // Single shop slot. Renders a SOLD placeholder when the slot has no item;
-// otherwise renders the buyable item card with cost + buy affordance.
+// otherwise renders the buyable item card. As of commit 6 the card is a
+// useDraggable — pickup happens by drag-and-drop into the bag, replacing
+// the prototype's click-to-grab pattern. Drag is disabled when the
+// player can't afford or combat is in progress.
 
+import { useDraggable } from '@dnd-kit/core';
 import { ITEMS, RARITY, type ShopSlot as ShopSlotData } from '../data.local';
+import type { DraggableData } from '../bag/types';
 import { CoinGlyph } from '../icons/icons';
 import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
 import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
@@ -9,11 +14,10 @@ import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
 interface ShopSlotProps {
   slot: ShopSlotData;
   gold: number;
-  onBuy: () => void;
   busy: boolean;
 }
 
-export function ShopSlot({ slot, gold, onBuy, busy }: ShopSlotProps) {
+export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
   if (!slot.itemId) {
     return (
       <div
@@ -38,11 +42,18 @@ export function ShopSlot({ slot, gold, onBuy, busy }: ShopSlotProps) {
   const affordable = gold >= def.cost && !busy;
   const cardWidth = 110;
 
+  const data: DraggableData = { kind: 'shop', uid: slot.uid };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `shop:${slot.uid}`,
+    data,
+    disabled: !affordable,
+  });
+
   return (
-    <button
-      type="button"
-      disabled={!affordable}
-      onClick={onBuy}
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       className="ease-snap text-left relative"
       style={{
         width: cardWidth,
@@ -50,15 +61,11 @@ export function ShopSlot({ slot, gold, onBuy, busy }: ShopSlotProps) {
         borderRadius: 6,
         background: 'var(--surface)',
         border: '1px solid var(--border-default)',
-        opacity: affordable ? 1 : 0.55,
-        cursor: affordable ? 'pointer' : 'not-allowed',
-        transition: 'transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms',
-      }}
-      onMouseEnter={(e) => {
-        if (affordable) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-elev)';
-      }}
-      onMouseLeave={(e) => {
-        if (affordable) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface)';
+        opacity: isDragging ? 0.45 : affordable ? 1 : 0.55,
+        cursor: affordable ? (isDragging ? 'grabbing' : 'grab') : 'not-allowed',
+        transition: 'transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms, opacity 120ms',
+        touchAction: 'none',
+        userSelect: 'none',
       }}
     >
       <div className="flex items-center justify-center mb-2">
@@ -83,6 +90,6 @@ export function ShopSlot({ slot, gold, onBuy, busy }: ShopSlotProps) {
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--coin-fill)' }}>{def.cost}</span>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

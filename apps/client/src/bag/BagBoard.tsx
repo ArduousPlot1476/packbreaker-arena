@@ -1,57 +1,35 @@
-// 6×4 bag grid surface. Owns pointer-event handling for raw drag/drop in
-// commit 3; @dnd-kit DndContext integration lands at the RunScreen level
-// in commit 6.
+// 6×4 bag grid surface. Cells are useDroppable; items are useDraggable.
+// Drag/drop coordination lives in the DndContext at the RunScreen level.
 
-import { useCallback, useRef, type PointerEvent } from 'react'
-import { BAG_COLS, BAG_ROWS, type BagItem, type Cell } from '../data.local'
-import type { RecipeMatch } from '../run/recipes'
-import { BagCell } from './BagCell'
-import { DraggableItem } from './DraggableItem'
-import { RecipeGlow } from './RecipeGlow'
-import { cellPx, footprint, placementValid } from './layout'
-import type { DragState } from './types'
+import { BAG_COLS, BAG_ROWS, type BagItem, type Cell } from '../data.local';
+import type { RecipeMatch } from '../run/recipes';
+import { BagCell } from './BagCell';
+import { DraggableItem } from './DraggableItem';
+import { RecipeGlow } from './RecipeGlow';
+import { cellPx, footprint, placementValid } from './layout';
+import type { DragState } from './types';
 
 interface BagBoardProps {
-  bag: BagItem[]
-  drag: DragState | null
-  hover: { col: number; row: number } | null
-  setHover: (h: { col: number; row: number } | null) => void
-  onDrop: (col: number, row: number) => void
-  onPickUp: (e: PointerEvent<HTMLDivElement>, item: BagItem) => void
-  dimmed: boolean
-  recipeMatches: RecipeMatch[]
-  onCombine: (m: RecipeMatch) => void
+  bag: BagItem[];
+  drag: DragState | null;
+  hover: { col: number; row: number } | null;
+  dimmed: boolean;
+  recipeMatches: RecipeMatch[];
+  onCombine: (m: RecipeMatch) => void;
 }
 
 export function BagBoard({
   bag,
   drag,
   hover,
-  setHover,
-  onDrop,
-  onPickUp,
   dimmed,
   recipeMatches,
   onCombine,
 }: BagBoardProps) {
-  const boardRef = useRef<HTMLDivElement | null>(null)
-  const W = BAG_COLS * cellPx
-  const H = BAG_ROWS * cellPx
+  const W = BAG_COLS * cellPx;
+  const H = BAG_ROWS * cellPx;
 
-  const cellAt = useCallback((clientX: number, clientY: number): [number, number] => {
-    const r = boardRef.current!.getBoundingClientRect()
-    const x = clientX - r.left
-    const y = clientY - r.top
-    return [Math.floor(x / cellPx), Math.floor(y / cellPx)]
-  }, [])
-
-  function onPointerMove(e: PointerEvent<HTMLDivElement>) {
-    if (!drag) return
-    const [c, r] = cellAt(e.clientX, e.clientY)
-    setHover({ col: c, row: r })
-  }
-
-  let preview: { valid: boolean; cells: Cell[] } | null = null
+  let preview: { valid: boolean; cells: Cell[] } | null = null;
   if (drag && hover) {
     const valid = placementValid(
       bag,
@@ -60,8 +38,8 @@ export function BagBoard({
       hover.row,
       drag.rot,
       drag.fromBagUid ?? null,
-    )
-    preview = { valid, cells: footprint(drag.itemId, hover.col, hover.row, drag.rot).cells }
+    );
+    preview = { valid, cells: footprint(drag.itemId, hover.col, hover.row, drag.rot).cells };
   }
 
   return (
@@ -78,13 +56,6 @@ export function BagBoard({
         </div>
       </div>
       <div
-        ref={boardRef}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => {
-          if (!drag) return
-          const [c, r] = cellAt(e.clientX, e.clientY)
-          onDrop(c, r)
-        }}
         className={dimmed ? 'bag-dimmed' : ''}
         style={{
           width: W,
@@ -150,7 +121,7 @@ export function BagBoard({
         )}
 
         {bag.map((b) => (
-          <DraggableItem key={b.uid} item={b} drag={drag} onPickUp={onPickUp} />
+          <DraggableItem key={b.uid} item={b} disabled={dimmed} />
         ))}
       </div>
       <div className="flex items-center justify-between mt-2" style={{ width: W }}>
@@ -166,5 +137,5 @@ export function BagBoard({
         </div>
       </div>
     </div>
-  )
+  );
 }

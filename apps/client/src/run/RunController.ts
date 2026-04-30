@@ -3,6 +3,11 @@
 // (M1.3.4) will introduce a separate ShopController.ts that takes over
 // shop generation. Until then, REROLL_POOL + SEED_SHOP carry the
 // prototype's deterministic-by-counter shop behavior.
+//
+// As of commit 6 (@dnd-kit migration) DragState carries only the
+// item/uid/cost identity fields — drag-cursor positioning lives entirely
+// inside @dnd-kit's DragOverlay, so the prototype's x/y/offX/offY are
+// gone, and the drag_move action with them.
 
 import {
   BAG_COLS,
@@ -19,7 +24,7 @@ import {
   type ShopSlot,
 } from '../data.local';
 import type { DragState } from '../bag/types';
-import { cellPx, placementValid } from '../bag/layout';
+import { placementValid } from '../bag/layout';
 import type { RecipeMatch } from './recipes';
 
 export const REROLL_POOL: ItemId[] = [
@@ -41,7 +46,6 @@ export interface ClientRunState {
   state: RunState;
   drag: DragState | null;
   hover: { col: number; row: number } | null;
-  sellHover: boolean;
   combatActive: boolean;
 }
 
@@ -51,18 +55,15 @@ export const INITIAL_CLIENT_STATE: ClientRunState = {
   state: INITIAL,
   drag: null,
   hover: null,
-  sellHover: false,
   combatActive: false,
 };
 
 export type RunAction =
-  | { type: 'pickup_bag'; item: BagItem; x: number; y: number; offX: number; offY: number }
-  | { type: 'pickup_shop'; uid: string; x: number; y: number }
-  | { type: 'drag_move'; x: number; y: number }
+  | { type: 'pickup_bag'; uid: string; itemId: ItemId; rot: number }
+  | { type: 'pickup_shop'; uid: string }
   | { type: 'drag_rotate' }
   | { type: 'drag_cancel' }
   | { type: 'set_hover'; hover: { col: number; row: number } | null }
-  | { type: 'set_sell_hover'; on: boolean }
   | { type: 'drop_bag'; col: number; row: number; newUid: string }
   | { type: 'sell_drop' }
   | { type: 'reroll'; uidPrefix: string }
@@ -119,13 +120,9 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return {
         ...state,
         drag: {
-          itemId: action.item.itemId,
-          rot: action.item.rot,
-          x: action.x,
-          y: action.y,
-          offX: action.offX,
-          offY: action.offY,
-          fromBagUid: action.item.uid,
+          itemId: action.itemId,
+          rot: action.rot,
+          fromBagUid: action.uid,
         },
       };
 
@@ -140,33 +137,22 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         drag: {
           itemId: slot.itemId,
           rot: 0,
-          x: action.x,
-          y: action.y,
-          offX: cellPx / 2,
-          offY: cellPx / 2,
           fromShopUid: action.uid,
           cost: def.cost,
         },
       };
     }
 
-    case 'drag_move':
-      if (!state.drag) return state;
-      return { ...state, drag: { ...state.drag, x: action.x, y: action.y } };
-
     case 'drag_rotate':
       if (!state.drag) return state;
       return { ...state, drag: { ...state.drag, rot: (state.drag.rot + 90) % 360 } };
 
     case 'drag_cancel':
-      if (!state.drag) return state;
-      return { ...state, drag: null, hover: null, sellHover: false };
+      if (!state.drag && !state.hover) return state;
+      return { ...state, drag: null, hover: null };
 
     case 'set_hover':
       return { ...state, hover: action.hover };
-
-    case 'set_sell_hover':
-      return { ...state, sellHover: action.on };
 
     case 'drop_bag': {
       if (!state.drag) return state;
@@ -221,12 +207,12 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
 
     case 'sell_drop': {
       if (!state.drag || !state.drag.fromBagUid) {
-        return { ...state, drag: null, sellHover: false };
+        return { ...state, drag: null, hover: null };
       }
       const fromUid = state.drag.fromBagUid;
       const item = state.bag.find((b) => b.uid === fromUid);
       if (!item) {
-        return { ...state, drag: null, sellHover: false };
+        return { ...state, drag: null, hover: null };
       }
       const def = ITEMS[item.itemId];
       const refund = Math.floor(def.cost * 0.5);
@@ -235,7 +221,6 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         bag: state.bag.filter((x) => x.uid !== fromUid),
         state: { ...state.state, gold: state.state.gold + refund },
         drag: null,
-        sellHover: false,
         hover: null,
       };
     }
