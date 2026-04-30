@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ClassId,
   ContractId,
+  FORGE_TYRANT,
+  GhostId,
+  IsoTimestamp,
   ItemId,
   ITEMS,
   PlacementId,
@@ -13,6 +16,7 @@ import {
   RelicId,
   SimSeed,
   type Combatant,
+  type GhostBuild,
   type Item,
   type RelicSlots,
   type TelemetryEvent,
@@ -800,6 +804,167 @@ describe('passiveStats.maxHpBonus', () => {
       expect(playerDmg.amount).toBe(30);
       expect(playerDmg.remainingHp).toBe(5);
     }
+  });
+});
+
+// ─── startCombatFromGhostBuild + boss_only mutator ──────────────────
+
+describe('startCombatFromGhostBuild + boss_only mutator', () => {
+  function makeGhostBuild(slug: string, overrides: Partial<GhostBuild> = {}): GhostBuild {
+    return {
+      id: GhostId(slug),
+      classId: TINKER,
+      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      relics: NO_RELICS,
+      recordedRound: 1,
+      trophyAtRecord: 0,
+      seed: SimSeed(1),
+      submittedAt: IsoTimestamp('2025-01-01T00:00:00.000Z'),
+      source: 'bot',
+      ...overrides,
+    };
+  }
+
+  it('neutral contract: derives ghost startingHp from passiveStats; no mutator effects', () => {
+    // Ghost bag has Buckler (passiveStats.maxHpBonus: 5) → ghost startingHp = 30 + 5 = 35.
+    // Player's 35-dmg knife one-shots; remainingHp = 0.
+    const knife = defineTestItem(
+      'test-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 35, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [knife.id]: knife, [ItemId('buckler')]: ITEMS[ItemId('buckler')]! };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    const slots = ctrl.getState().shop.slots;
+    const knifeSlot = slots.findIndex((s) => s === knife.id);
+    expect(knifeSlot).toBeGreaterThanOrEqual(0);
+    ctrl.buyItem(knifeSlot);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('buckler-ghost', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ItemId('buckler'), anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const dmg = result.events.find((e) => e.type === 'damage' && e.target === 'ghost');
+    expect(dmg?.type === 'damage' && dmg.amount).toBe(35);
+    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(0);
+  });
+
+  it('forge-tyrant-boss contract: hpOverride: 50 REPLACES ghost startingHp', () => {
+    // Ghost bag has Buckler (passiveStats: 5) — would normally yield startingHp=35.
+    // hpOverride: 50 replaces it. 35-dmg knife leaves ghost at 50 - 35 = 15.
+    const knife = defineTestItem(
+      'test-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 35, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [knife.id]: knife, [ItemId('buckler')]: ITEMS[ItemId('buckler')]! };
+    const ctrl = createRun(
+      baseInput({
+        itemsRegistry: items,
+        contractId: ContractId('forge-tyrant-boss'),
+      }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const ks = slots.findIndex((s) => s === knife.id);
+    ctrl.buyItem(ks);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('buckler-ghost', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ItemId('buckler'), anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const dmg = result.events.find((e) => e.type === 'damage' && e.target === 'ghost');
+    expect(dmg?.type === 'damage' && dmg.amount).toBe(35);
+    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(15); // 50 - 35 = 15
+  });
+
+  it('forge-tyrant-boss contract: damageBonus: 2 adds to ghost damage events', () => {
+    // Ghost has a 5-dmg knife; player has nothing. Ghost-side damage event amount
+    // = 5 + 2 (damageBonus) = 7. (Ghost's classId TINKER has bonusBaseDamage 0,
+    // no relics, so the +2 comes purely from the boss_only mutator.)
+    const ghostKnife = defineTestItem(
+      'test-ghost-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items = { [ghostKnife.id]: ghostKnife };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, contractId: ContractId('forge-tyrant-boss') }),
+    );
+    const ghost = makeGhostBuild('boss-knifer', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ghostKnife.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const playerDmg = result.events.find((e) => e.type === 'damage' && e.target === 'player');
+    expect(playerDmg?.type === 'damage' && playerDmg.amount).toBe(7);
+  });
+
+  it('forge-tyrant-boss contract: lifestealPctBonus: 15 produces ghost-side heal events on damage', () => {
+    // Player and ghost each have a damaging weapon. Both fire on_round_start.
+    // Player damages ghost first → ghost is below startingHp → ghost's damage
+    // event triggers a lifesteal heal that lands (actualGain > 0). Without the
+    // boss mutator there's no ghost-side lifestealPct, so no heal event.
+    const playerKnife = defineTestItem(
+      'test-player-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] }],
+      { tags: ['weapon'], name: 'p-knife' },
+    );
+    const ghostKnife = defineTestItem(
+      'test-ghost-knife-10',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 10, target: 'opponent' }] }],
+      { tags: ['weapon'], name: 'g-knife' },
+    );
+    const items = { [playerKnife.id]: playerKnife, [ghostKnife.id]: ghostKnife };
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, contractId: ContractId('forge-tyrant-boss') }),
+    );
+    const slots = ctrl.getState().shop.slots;
+    const ks = slots.findIndex((s) => s === playerKnife.id);
+    expect(ks).toBeGreaterThanOrEqual(0);
+    ctrl.buyItem(ks);
+    ctrl.placeItem(playerKnife.id, { col: 0, row: 0 }, 0);
+    const ghost = makeGhostBuild('boss-vampire', {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('g1'), itemId: ghostKnife.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+    });
+    const result = ctrl.startCombatFromGhostBuild(ghost);
+    const lifestealHeal = result.events.find(
+      (e) => e.type === 'heal' && e.target === 'ghost',
+    );
+    expect(lifestealHeal).toBeDefined();
+  });
+
+  it('FORGE_TYRANT integration: ghostHp = 50 via boss_only.hpOverride (neutral comparison: 67)', () => {
+    // Two runs against FORGE_TYRANT to isolate the mutator path:
+    //   neutral contract  → ghostHp = 30 + chainmail(12) + bloodmoon-plate(25) = 67.
+    //   forge-tyrant-boss → ghostHp = 50 (mutator REPLACES the computed 67).
+    const ctrlNeutral = createRun(baseInput());
+    const neutralResult = ctrlNeutral.startCombatFromGhostBuild(FORGE_TYRANT);
+    const neutralStart = neutralResult.events.find((e) => e.type === 'combat_start');
+    expect(neutralStart?.type === 'combat_start' && neutralStart.ghostHp).toBe(67);
+
+    const ctrlBoss = createRun(baseInput({ contractId: ContractId('forge-tyrant-boss') }));
+    const bossResult = ctrlBoss.startCombatFromGhostBuild(FORGE_TYRANT);
+    const bossStart = bossResult.events.find((e) => e.type === 'combat_start');
+    expect(bossStart?.type === 'combat_start' && bossStart.ghostHp).toBe(50);
   });
 });
 

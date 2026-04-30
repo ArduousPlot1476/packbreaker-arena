@@ -18,6 +18,7 @@
 // shipping to PostHog.
 
 import {
+  BASE_COMBATANT_HP,
   CONTRACTS,
   ITEMS,
   IsoTimestamp,
@@ -26,6 +27,7 @@ import {
   RELICS,
   RunId,
   type BagPlacement,
+  type BagState,
   type CellCoord,
   type ClassId,
   type CombatEvent,
@@ -34,6 +36,8 @@ import {
   type Combatant,
   type Contract,
   type ContractId,
+  type ContractMutator,
+  type GhostBuild,
   type Item,
   type ItemId,
   type PlacementId,
@@ -107,6 +111,13 @@ export interface RunController {
   detectRecipes(): ReadonlyArray<RecipeMatch>;
   combineRecipe(recipeId: RecipeId): void;
   startCombat(ghost: Combatant): CombatResult;
+  /** Runs combat against a `GhostBuild` from `@packbreaker/content`. The
+   *  controller derives the ghost's `Combatant` (passiveStats-summed startingHp,
+   *  pass-through relics + classId + bag) and applies any `boss_only` contract
+   *  mutator on this run's contract: `hpOverride` REPLACES startingHp;
+   *  `damageBonus` and `lifestealPctBonus` flow through `simulateCombat`'s
+   *  options.mutators to the ghost's `SideStats`. Player side is unaffected. */
+  startCombatFromGhostBuild(ghost: GhostBuild): CombatResult;
   getEvents(): ReadonlyArray<CombatEvent>;
 }
 
@@ -517,6 +528,35 @@ class RunControllerImpl implements RunController {
   }
 
   startCombat(ghost: Combatant): CombatResult {
+    return this.runCombatInternal(ghost, []);
+  }
+
+  startCombatFromGhostBuild(ghost: GhostBuild): CombatResult {
+    const mutators = this.contract.ruleset.mutators;
+    let startingHp = computeStartingHpFromBag(ghost.bag, this.items);
+    // boss_only.hpOverride REPLACES startingHp (does not add).
+    for (const m of mutators) {
+      if (m.type === 'boss_only' && typeof m.hpOverride === 'number') {
+        startingHp = m.hpOverride;
+        break;
+      }
+    }
+    const combatant: Combatant = {
+      bag: {
+        dimensions: ghost.bag.dimensions,
+        placements: ghost.bag.placements.slice(),
+      },
+      relics: { ...ghost.relics },
+      classId: ghost.classId,
+      startingHp,
+    };
+    return this.runCombatInternal(combatant, mutators);
+  }
+
+  private runCombatInternal(
+    ghost: Combatant,
+    mutators: ReadonlyArray<ContractMutator>,
+  ): CombatResult {
     this.requirePhase('arranging', 'startCombat');
     this.phase = 'combat';
 
@@ -552,7 +592,7 @@ class RunControllerImpl implements RunController {
       opponentGhostId: null,
     });
 
-    const result = simulateCombat(combatInput, { items: this.items });
+    const result = simulateCombat(combatInput, { items: this.items, mutators });
     this.lastCombatResult = result;
 
     // Compute damage stats for telemetry / history.
@@ -664,17 +704,10 @@ class RunControllerImpl implements RunController {
   }
 
   private computePlayerStartingHp(): number {
-    let hp = 30; // BASE_COMBATANT_HP — content-schemas.ts § 16.
-    for (const p of this.bag.placements) {
-      const item = this.items[p.itemId]!;
-      // Run controller IS the legitimate consumer of Item.passiveStats per
-      // content-schemas.ts § 0 ("run-controller-only"). The sim-wide lint
-      // rule against passiveStats access is relaxed for packages/sim/src/run/**
-      // in tooling/eslint-config/index.cjs.
-      const bonus = item.passiveStats?.maxHpBonus;
-      if (bonus) hp += bonus;
-    }
-    return hp;
+    return computeStartingHpFromBag(
+      { dimensions: this.bag.dimensions, placements: this.bag.placements },
+      this.items,
+    );
   }
 
   private lastCombatOutcomeForRound(): RoundOutcome {
@@ -741,6 +774,25 @@ class RunControllerImpl implements RunController {
     // guarantees the string is at least 10 chars long.
     return String(ts).slice(0, 10) as IsoDate;
   }
+}
+
+/** Sums maxHpBonus from `passiveStats` across a bag's placements on top of
+ *  `BASE_COMBATANT_HP`. Shared between player and ghost-build conversion paths
+ *  in the run controller — content-schemas.ts § 0 designates the run controller
+ *  as the legitimate `passiveStats` consumer. The sim-wide lint rule against
+ *  passiveStats access is relaxed for `packages/sim/src/run/**` in
+ *  `tooling/eslint-config/index.cjs`. */
+function computeStartingHpFromBag(
+  bag: BagState,
+  items: Readonly<Record<ItemId, Item>>,
+): number {
+  let hp = BASE_COMBATANT_HP;
+  for (const p of bag.placements) {
+    const item = items[p.itemId]!;
+    const bonus = item.passiveStats?.maxHpBonus;
+    if (bonus) hp += bonus;
+  }
+  return hp;
 }
 
 /** Computes per-side damage totals from a CombatResult.events stream. Used
