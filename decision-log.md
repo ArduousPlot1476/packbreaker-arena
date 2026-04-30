@@ -4,6 +4,53 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-30 — M1.2.6 boss-relic coverage residual gap ratified
+
+After the M1.2.6 ratified halt-and-surface protocol (50 retries per missing triple, weapon-priority strategy with RAZORS_EDGE starter for both classes + 4 rerolls/round), 3 of 4 (class × boss-relic) pairs remained at 0 organic firings across the 24 appended fixtures. The fourth pair (`marauder|worldforge-seed`) fired once. The relic-collector strategy achieved a ~12% round-11 win rate vs. FORGE_TYRANT (67 HP under neutral contract; bag carries greataxe + chainmail + bloodmoon-plate + warhammer + vampire-fang + iron-mace + apple + whetstone), insufficient for ≥2× coverage on each boss pair.
+
+Ratified residual gap (encoded as `BOSS_RELIC_PAIR_EXCEPTIONS` in `packages/sim/test/determinism/generate.ts`):
+
+```
+BOSS_RELIC_PAIR_EXCEPTIONS = [
+  'tinker|worldforge-seed',
+  'marauder|conquerors-crown',
+  'tinker|conquerors-crown',
+];
+```
+
+`marauder|worldforge-seed` stays in the coverage check; its 1× firing satisfies the ≥1× organic threshold for non-excepted boss pairs. The exception list is a "permitted to be zero" set, not a "must be zero" set — if a future regen produces firings for any listed pair, coverage still passes.
+
+**Threshold asymmetry**: mid-relic pairs require ≥2× organic firings each; boss-relic pairs require ≥1× organic OR membership in `BOSS_RELIC_PAIR_EXCEPTIONS`. Justified by boss-win-rate structural cap: boss-grant fires only after a round-11 player_win, structurally hard against FORGE_TYRANT. Mid-grant fires after surviving 5 rounds, reliably achievable. Mid pairs already meet ≥2× × 8/8.
+
+**Path-coverage justification (locked text)**:
+
+> grantRelic's code path is parameterized by slot + relicId, not by (slot, relicId, class) triple. Triples that fire exercise the same control flow as triples that don't.
+
+The 9 of 12 triples that fire (8 mid + 1 boss) provide sim-contract path coverage of grantRelic + composeRuleset re-invocation + relic_granted telemetry; the 3 missing triples are content-coverage gaps, not sim-contract gaps.
+
+**Revisit triggers** (encoded verbatim in the comment block on `BOSS_RELIC_PAIR_EXCEPTIONS`):
+
+- **(a)** M1.5 client integration replaces scripted strategies with player input AND organic boss-win rate exceeds 30%.
+- **(b)** Any code change to `combat.ts`, `RunController.startCombat`, `startCombatFromGhostBuild`, or the `boss_only` mutator path.
+
+When trigger (b) fires (a future contributor modifies one of those files), they regenerate the M1.2.6 appended fixtures and verify the exception list hasn't grown. Trigger (a) is a M1.5 milestone gate — once player input replaces scripted strategies, organic boss-win rate becomes a meaningful balance signal rather than a strategy-tuning artifact.
+
+---
+
+## 2026-04-30 — M1.2.6 closed (grantRelic API + appended fixtures)
+
+- `RunController.grantRelic(slot: 'mid' | 'boss', relicId: RelicId)` added for player-side mid/boss slot population, with phase gating per gdd.md § 9: 'mid' is legal only in arranging phase of round 6+; 'boss' is legal only in resolution phase after a round-11 player_win. Idempotent throw on already-occupied slots; ruleset recomposed via `composeRuleset` on grant (current round's shop NOT regenerated, new ruleset takes effect for ALL subsequent shop generations + combats per locked answer #4). 9 unit tests in `run.test.ts` cover the validation matrix end-to-end. TypeScript prevents 'starter' at compile; a runtime defensive check throws too.
+- `grant_relic` action variant in `RunControllerAction` with `slot` + `relicId` fields. `applyAction` dispatches to `controller.grantRelic`. Pure dispatch — no validation; controller throws on illegal grants and applyAction propagates. One unit test in `actions.test.ts`.
+- `relic_granted` TelemetryEvent variant added (schema v0.5, additive only). `RunId`, `slot`, `relicId`, `round`. `content-schemas.ts` and `packages/content/src/schemas.ts` byte-identical (check-schemas-sync gate). Wired through the existing `onTelemetryEvent` injection. `telemetry-plan.md` § 3 updated with KPI rationale.
+- 24 appended fixtures (200–223) under `packages/sim/test/fixtures/runs/`, all replay byte-stable through the determinism harness. All-`relic-collector` strategy. 16 mid fixtures cover all 8 (class × mid-relic) pairs ≥2×. 8 boss fixtures: 1 (class × boss-relic) pair fires ≥1× organically; the remaining 3 pairs are accepted as documented coverage exceptions per the residual-gap entry above (2026-04-30 — M1.2.6 boss-relic coverage residual gap ratified). The threshold asymmetry (mid ≥2×, boss ≥1× or excepted) is intentional and encoded in `evaluateCoverage`.
+- M1.2.5 fixtures (000–199) remain DO NOT REGENERATE. M1.2.6 ADDS, never modifies, the fixture corpus.
+- Refactor: dropped `readonly` modifiers on `RunController.effectiveRuleset` and `.derived` (previously construction-only). The fields are now mutated by `grantRelic` to support re-composition; initial composition still happens in the constructor.
+- **Total fixture count: 224.** Sim test count: 442 → 466 (+24 fixture replays + 0 new unit tests in this commit; the 9 grantRelic + 1 action-dispatch tests landed in steps 2 and 3). `pnpm turbo lint test` clean: 17/17.
+- Closes the player-side relic-acquisition gap acknowledged in the M1.2.4 closing entry. M1.2 sim phase + acknowledged gaps fully closed; **M1.3** (bag UI rewrite + dnd-kit) is next.
+- Branch hygiene: 6 implementation commits + closing entries on `m1.2.6-grant-relic`, branched off main (`825f3fb`). Ready for `--no-ff` merge after PR CI green.
+
+---
+
 ## 2026-04-30 — M1.2.5.1 closed (CI workflow wiring)
 
 - `.github/workflows/ci.yml` implements tech-architecture.md § 8.2's five-stage pipeline (install / lint / typecheck / test / build) on `ubuntu-latest` with Node 20.x and pnpm 9.x (pinned via `package.json`'s `packageManager: pnpm@9.15.0` field, auto-detected by `pnpm/action-setup@v4`). Triggers on `pull_request` and `push` to `main`. The 200-fixture determinism suite runs as part of stage 4 via the existing non-skippable `pnpm turbo test` path — no separate stage, same protection as unit tests.
