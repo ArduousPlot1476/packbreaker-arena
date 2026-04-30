@@ -6,6 +6,7 @@ import {
   IsoTimestamp,
   ItemId,
   PlacementId,
+  RelicId,
   SimSeed,
   type BagPlacement,
   type GhostBuild,
@@ -43,7 +44,9 @@ export const FORGE_TYRANT: GhostBuild = {
     dimensions: { width: 6, height: 4 },
     placements: FORGE_TYRANT_PLACEMENTS,
   },
-  relics: { starter: null, mid: null, boss: null },
+  // Marauder boss relic per balance-bible.md § 13. The aura in § 15
+  // ("Tyrant's Wrath") stacks on top of this relic and the class passive.
+  relics: { starter: null, mid: null, boss: RelicId('conquerors-crown') },
   recordedRound: 11,
   trophyAtRecord: 0,
   seed: SimSeed(0),
