@@ -71,6 +71,7 @@ export type {
   RecipeMatch,
   ComposedRuleset,
   DerivedModifiers,
+  RunControllerAction,
 } from './run';
 export {
   createRun,
@@ -82,4 +83,5 @@ export {
   computeRerollCost,
   effectiveItemCost,
   sellValueOf,
+  applyAction,
 } from './run';
