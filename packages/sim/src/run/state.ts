@@ -515,31 +515,46 @@ class RunControllerImpl implements RunController {
   combineRecipe(recipeId: RecipeId): void {
     // Locked answer 13: combines arranging-only.
     this.requirePhase('arranging', 'combineRecipe');
-    const matches = this.detectRecipes();
-    const match = matches.find((m) => m.recipeId === recipeId);
-    if (!match) throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
+    const candidates = this.detectRecipes().filter((m) => m.recipeId === recipeId);
+    if (candidates.length === 0) {
+      throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
+    }
 
     const recipe = this.recipes.find((r) => r.id === recipeId)!;
-    // Try-then-commit: validate output placement BEFORE any mutation. The
-    // throw fires in the validation phase; nothing is rolled back because
+    // Try-then-commit: walk the match candidates in canonical order and
+    // pick the first one whose output fits at its inputs' anchor. detectRecipes
+    // can return multiple matches per recipeId when the bag has duplicate
+    // inputs in different positions — picking the first FITTING one (rather
+    // than the first one) means strategies that pre-filter via
+    // wouldCombineFit on any specific match still see the controller commit
+    // that combine. Throw fires in validation; nothing is rolled back because
     // nothing is committed unless validation passes.
-    const fit = this.findCombineRotation(match);
-    if (fit === null) {
+    let chosenFit: { rotation: Rotation; anchor: CellCoord } | null = null;
+    let chosenMatch: RecipeMatch | null = null;
+    for (const candidate of candidates) {
+      const fit = this.findCombineRotation(candidate);
+      if (fit !== null) {
+        chosenFit = fit;
+        chosenMatch = candidate;
+        break;
+      }
+    }
+    if (chosenFit === null || chosenMatch === null) {
       throw new Error(
-        `combineRecipe: cannot place output ${String(recipe.output)} — no rotation fits the freed footprint`,
+        `combineRecipe: cannot place output ${String(recipe.output)} — no rotation fits the freed footprint (checked ${candidates.length} match variant${candidates.length === 1 ? '' : 's'})`,
       );
     }
 
     // Commit phase.
-    const inputIds = new Set(match.inputPlacementIds);
+    const inputIds = new Set(chosenMatch.inputPlacementIds);
     this.bag.placements = this.bag.placements.filter((p) => !inputIds.has(p.placementId));
     for (const id of inputIds) this.bornFromRecipe.delete(id);
     const outputPlacementId = this.nextPlacementId();
     this.bag.placements.push({
       placementId: outputPlacementId,
       itemId: recipe.output,
-      anchor: fit.anchor,
-      rotation: fit.rotation,
+      anchor: chosenFit.anchor,
+      rotation: chosenFit.rotation,
     });
     // Tinker's class.passive.recipeBonusPct + relic-driven recipe bonuses
     // apply to this placement at combat-start time. Track here; combat.ts

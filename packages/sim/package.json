@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:determinism": "vitest run test/determinism/harness.test.ts",
+    "generate-fixtures": "vitest run test/determinism/regenerate.test.ts"
   },
   "dependencies": {
     "@packbreaker/content": "workspace:*"
