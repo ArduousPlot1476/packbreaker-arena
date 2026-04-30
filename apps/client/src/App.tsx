@@ -1,6 +1,6 @@
 // App — composes the entire run screen.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BAG_COLS,
   BAG_ROWS,
@@ -8,71 +8,23 @@ import {
   dimsOf,
   INITIAL,
   ITEMS,
-  RARITY,
   SEED_BAG,
   SEED_SHOP,
   type BagItem,
   type Cell,
   type ItemId,
-  type RarityKey,
   type RunState,
   type ShopSlot,
 } from './data.local';
-
-const RARITY_RANK: Record<RarityKey, number> = {
-  common: 0,
-  uncommon: 1,
-  rare: 2,
-  epic: 3,
-  legendary: 4,
-};
 import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS, RelicLoop, TinkerGlyph } from './icons';
-import { ItemIcon, RarityFrame, ShopCard, cellPx } from './parts';
+import { ItemIcon, RarityFrame, ShopCard } from './parts';
 import { CombatOverlay } from './combat';
 import { detectRecipes, type RecipeMatch } from './run/recipes';
+import { BagBoard } from './bag/BagBoard';
+import { cellPx, placementValid } from './bag/layout';
+import type { DragState } from './bag/types';
 
 const CELL = cellPx;
-
-interface DragState {
-  itemId: ItemId;
-  rot: number;
-  x: number;
-  y: number;
-  offX: number;
-  offY: number;
-  fromBagUid?: string;
-  fromShopUid?: string;
-  cost?: number;
-}
-
-function footprint(itemId: ItemId, col: number, row: number, rot: number): { cells: Cell[]; w: number; h: number } {
-  const { w, h } = dimsOf(itemId, rot);
-  const cells: Cell[] = [];
-  for (let dx = 0; dx < w; dx++) {
-    for (let dy = 0; dy < h; dy++) {
-      cells.push([col + dx, row + dy]);
-    }
-  }
-  return { cells, w, h };
-}
-
-function placementValid(
-  bag: BagItem[],
-  itemId: ItemId,
-  col: number,
-  row: number,
-  rot: number,
-  ignoreUid: string | null = null,
-): boolean {
-  const { cells, w, h } = footprint(itemId, col, row, rot);
-  if (col < 0 || row < 0 || col + w > BAG_COLS || row + h > BAG_ROWS) return false;
-  const occupied = new Map<string, string>();
-  bag.forEach((b) => {
-    if (b.uid === ignoreUid) return;
-    cellsOf(b).forEach(([x, y]) => occupied.set(`${x},${y}`, b.uid));
-  });
-  return cells.every(([x, y]) => !occupied.has(`${x},${y}`));
-}
 
 function TopBar({ state }: { state: RunState }) {
   return (
@@ -221,247 +173,6 @@ function LeftRail() {
           <OpponentSilhouettes />
         </div>
       </div>
-    </div>
-  );
-}
-
-interface BagBoardProps {
-  bag: BagItem[];
-  drag: DragState | null;
-  hover: { col: number; row: number } | null;
-  setHover: (h: { col: number; row: number } | null) => void;
-  onDrop: (col: number, row: number) => void;
-  onPickUp: (e: React.PointerEvent<HTMLDivElement>, item: BagItem) => void;
-  dimmed: boolean;
-  recipeMatches: RecipeMatch[];
-  onCombine: (m: RecipeMatch) => void;
-}
-
-function BagBoard({ bag, drag, hover, setHover, onDrop, onPickUp, dimmed, recipeMatches, onCombine }: BagBoardProps) {
-  const boardRef = useRef<HTMLDivElement | null>(null);
-  const W = BAG_COLS * CELL;
-  const H = BAG_ROWS * CELL;
-
-  const cellAt = useCallback((clientX: number, clientY: number): [number, number] => {
-    const r = boardRef.current!.getBoundingClientRect();
-    const x = clientX - r.left;
-    const y = clientY - r.top;
-    return [Math.floor(x / CELL), Math.floor(y / CELL)];
-  }, []);
-
-  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!drag) return;
-    const [c, r] = cellAt(e.clientX, e.clientY);
-    setHover({ col: c, row: r });
-  }
-
-  // Per-cell glow rarity — when two matches overlap on a cell, the higher rarity wins.
-  const glowCells = useMemo(() => {
-    const map = new Map<string, RarityKey>();
-    recipeMatches.forEach((m) => {
-      const outputRarity = ITEMS[m.recipe.output].rarity;
-      m.uids.forEach((uid) => {
-        const b = bag.find((x) => x.uid === uid);
-        if (!b) return;
-        cellsOf(b).forEach(([x, y]) => {
-          const k = `${x},${y}`;
-          const cur = map.get(k);
-          if (!cur || RARITY_RANK[outputRarity] > RARITY_RANK[cur]) {
-            map.set(k, outputRarity);
-          }
-        });
-      });
-    });
-    return map;
-  }, [recipeMatches, bag]);
-
-  // Anchor at upper-right of cluster bounding box, 6px outward. If the cluster
-  // is flush with the top of the grid, fall back to upper-left below the cluster.
-  const combineAnchors = useMemo(() => {
-    return recipeMatches
-      .map((m) => {
-        const cells = m.uids.flatMap((uid) => {
-          const b = bag.find((x) => x.uid === uid);
-          return b ? cellsOf(b) : [];
-        });
-        if (!cells.length) return null;
-        const xs = cells.map((c) => c[0]);
-        const ys = cells.map((c) => c[1]);
-        const minX = Math.min(...xs);
-        const maxX = Math.max(...xs);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-        const touchesTop = minY === 0;
-        const cx = touchesTop ? minX * CELL - 6 : (maxX + 1) * CELL + 6;
-        const cy = touchesTop ? (maxY + 1) * CELL + 6 : minY * CELL - 6;
-        const transform = touchesTop ? 'translate(0, 0)' : 'translate(-100%, -100%)';
-        return { match: m, cx, cy, transform };
-      })
-      .filter(
-        (a): a is { match: RecipeMatch; cx: number; cy: number; transform: string } => a !== null,
-      );
-  }, [recipeMatches, bag]);
-
-  let preview: { valid: boolean; cells: Cell[] } | null = null;
-  if (drag && hover) {
-    const valid = placementValid(bag, drag.itemId, hover.col, hover.row, drag.rot, drag.fromBagUid ?? null);
-    preview = { valid, cells: footprint(drag.itemId, hover.col, hover.row, drag.rot).cells };
-  }
-
-  return (
-    <div className="relative" style={{ padding: 16 }}>
-      <div className="flex items-center justify-between mb-3" style={{ width: W }}>
-        <div className="label-cap" style={{ fontSize: 10, color: 'var(--text-secondary)', letterSpacing: '0.18em' }}>
-          BAG · 6×4
-        </div>
-        <div className="label-cap" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          R = ROTATE · DRAG TO MOVE
-        </div>
-      </div>
-      <div
-        ref={boardRef}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => {
-          if (!drag) return;
-          const [c, r] = cellAt(e.clientX, e.clientY);
-          onDrop(c, r);
-        }}
-        className={dimmed ? 'bag-dimmed' : ''}
-        style={{
-          width: W,
-          height: H,
-          background: 'var(--bg-mid)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          position: 'relative',
-        }}
-      >
-        <svg width={W} height={H} className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: BAG_COLS + 1 }).map((_, i) => (
-            <line key={'v' + i} x1={i * CELL} y1={0} x2={i * CELL} y2={H} stroke="#2D3854" strokeWidth="1" />
-          ))}
-          {Array.from({ length: BAG_ROWS + 1 }).map((_, i) => (
-            <line key={'h' + i} x1={0} y1={i * CELL} x2={W} y2={i * CELL} stroke="#2D3854" strokeWidth="1" />
-          ))}
-        </svg>
-
-        <svg
-          width={W}
-          height={H}
-          className="absolute inset-0 pointer-events-none recipe-glow"
-          style={{ zIndex: 5 }}
-        >
-          {[...glowCells.entries()].map(([k, rarity]) => {
-            const [x, y] = k.split(',').map(Number);
-            return (
-              <rect
-                key={k}
-                x={x * CELL + 3}
-                y={y * CELL + 3}
-                width={CELL - 6}
-                height={CELL - 6}
-                rx="6"
-                style={{ stroke: RARITY[rarity].color }}
-              />
-            );
-          })}
-        </svg>
-
-        {preview && (
-          <svg width={W} height={H} className="absolute inset-0 pointer-events-none">
-            {preview.cells.map(([x, y], i) =>
-              x >= 0 && y >= 0 && x < BAG_COLS && y < BAG_ROWS ? (
-                <rect
-                  key={i}
-                  x={x * CELL + 2}
-                  y={y * CELL + 2}
-                  width={CELL - 4}
-                  height={CELL - 4}
-                  rx="5"
-                  fill={preview!.valid ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)'}
-                  stroke={preview!.valid ? '#22C55E' : '#EF4444'}
-                  strokeWidth="2"
-                  strokeDasharray={preview!.valid ? '0' : '4 3'}
-                />
-              ) : null,
-            )}
-          </svg>
-        )}
-
-        {bag.map((b) => (
-          <BagItemView key={b.uid} item={b} drag={drag} onPickUp={onPickUp} />
-        ))}
-
-        {combineAnchors.map((a, i) => (
-          <button
-            key={a.match.recipe.id + i}
-            onClick={() => onCombine(a.match)}
-            className="absolute combine-pop label-cap ease-snap"
-            style={{
-              left: a.cx,
-              top: a.cy,
-              transform: a.transform,
-              background: '#F59E0B',
-              color: '#0B0F1A',
-              fontWeight: 700,
-              fontSize: 11,
-              letterSpacing: '0.12em',
-              border: '2px solid #FCD34D',
-              borderRadius: 6,
-              padding: '6px 12px',
-              cursor: 'pointer',
-              boxShadow: '0 6px 18px rgba(245,158,11,0.35)',
-              zIndex: 10,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            COMBINE → {ITEMS[a.match.recipe.output].name.toUpperCase()}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center justify-between mt-2" style={{ width: W }}>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-          {bag.length} ITEM{bag.length === 1 ? '' : 'S'} PLACED
-        </div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-          {recipeMatches.length > 0 ? <span style={{ color: '#F59E0B' }}>{recipeMatches.length} RECIPE READY</span> : 'NO RECIPES READY'}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface BagItemViewProps {
-  item: BagItem;
-  drag: DragState | null;
-  onPickUp: (e: React.PointerEvent<HTMLDivElement>, item: BagItem) => void;
-}
-
-function BagItemView({ item, drag, onPickUp }: BagItemViewProps) {
-  const def = ITEMS[item.itemId];
-  const dims = dimsOf(item.itemId, item.rot);
-  const beingDragged = drag !== null && drag.fromBagUid === item.uid;
-  return (
-    <div
-      onPointerDown={(e) => {
-        e.preventDefault();
-        onPickUp(e, item);
-      }}
-      className="absolute ease-snap"
-      style={{
-        left: item.col * CELL + 2,
-        top: item.row * CELL + 2,
-        width: dims.w * CELL - 4,
-        height: dims.h * CELL - 4,
-        opacity: beingDragged ? 0.25 : 1,
-        cursor: beingDragged ? 'grabbing' : 'grab',
-        transition: 'left 160ms cubic-bezier(0.16, 1, 0.3, 1), top 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
-        touchAction: 'none',
-      }}
-    >
-      <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={CELL - 4}>
-        <ItemIcon itemId={item.itemId} rot={item.rot} />
-      </RarityFrame>
     </div>
   );
 }
