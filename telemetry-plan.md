@@ -91,6 +91,11 @@ Events are grouped by lifecycle. Property shapes are codified in `content-schema
 **`recipe_completed`** — fires when player clicks Combine on a recipe-ready cluster.
 - `recipeId`, `round`. Drives recipe pick-rate. A recipe never completed across 50+ runs is a design failure.
 
+### Relics
+
+**`relic_granted`** — fires when `RunController.grantRelic` succeeds (M1.2.6 schema v0.5).
+- `slot` (`'mid' | 'boss'`), `relicId`, `round`. Drives mid/boss relic pick-rate analysis. Answers "are mid/boss relic choices balanced?" in M1, seeds M2 ladder analytics. Phase-gated: mid only fires in round 6+ arranging, boss only after a round-11 player_win. Starter-relic equip is part of `run_start` and does NOT emit a separate `relic_granted`.
+
 ### Combat
 
 **`combat_start`** — fires at first sim tick.
