@@ -16,166 +16,19 @@ import {
   type RunState,
   type ShopSlot,
 } from './data.local';
-import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS, RelicLoop, TinkerGlyph } from './icons';
-import { ItemIcon, RarityFrame, ShopCard } from './parts';
 import { CombatOverlay } from './combat';
 import { detectRecipes, type RecipeMatch } from './run/recipes';
 import { BagBoard } from './bag/BagBoard';
 import { cellPx, placementValid } from './bag/layout';
 import type { DragState } from './bag/types';
+import { TopBar } from './hud/TopBar';
+import { LeftRail } from './hud/LeftRail';
+import { BottomPanel } from './hud/BottomPanel';
+import { ShopPanel } from './shop/ShopPanel';
+import { RarityFrame } from './ui-kit-overrides/RarityFrame';
+import { ItemIcon } from './ui-kit-overrides/ItemIcon';
 
 const CELL = cellPx;
-
-function TopBar({ state }: { state: RunState }) {
-  return (
-    <div
-      className="flex items-center justify-between"
-      style={{ height: 48, padding: '0 20px', borderBottom: '1px solid var(--border-default)', background: 'var(--bg-mid)' }}
-    >
-      <div className="flex items-center gap-6">
-        <div className="heading-tight" style={{ fontSize: 14, letterSpacing: '0.06em' }}>
-          PACKBREAKER<span style={{ color: 'var(--text-muted)' }}> · ARENA</span>
-        </div>
-        <div className="flex items-center gap-2 tnum">
-          <div style={{ width: 18, height: 18 }}>
-            <CoinGlyph />
-          </div>
-          <span className="heading-tight" style={{ fontSize: 18, color: 'var(--coin-fill)' }}>
-            {state.gold}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: state.maxHearts }).map((_, i) => (
-            <div key={i} style={{ width: 18, height: 18 }}>
-              <HeartGlyph filled={i < state.hearts} />
-            </div>
-          ))}
-        </div>
-        <div className="tnum" style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          ROUND <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{state.round}</span>
-          <span style={{ color: 'var(--text-muted)' }}> / {state.totalRounds}</span>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="label-cap" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-          CONTRACT
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{state.contractName}</span>
-          <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>·</span>
-          <span style={{ marginLeft: 8 }}>{state.contractText}</span>
-        </span>
-        <div className="tnum" style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 12 }}>
-          ◆ <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{state.trophy}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function OpponentSilhouettes() {
-  const Sword = ICONS['iron-sword'];
-  const Shield = ICONS['wooden-shield'];
-  return (
-    <div className="flex gap-2">
-      <div style={{ width: 32, height: 32, background: 'var(--bg-deep)', borderRadius: 4, padding: 4 }}>
-        <div style={{ filter: 'brightness(0) invert(0.6)' }}>
-          <Sword />
-        </div>
-      </div>
-      <div style={{ width: 32, height: 32, background: 'var(--bg-deep)', borderRadius: 4, padding: 4 }}>
-        <div style={{ filter: 'brightness(0) invert(0.6)' }}>
-          <Shield />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LeftRail() {
-  return (
-    <div
-      className="flex flex-col"
-      style={{
-        width: 180,
-        background: 'var(--bg-mid)',
-        borderRight: '1px solid var(--border-default)',
-        padding: 14,
-        gap: 14,
-      }}
-    >
-      <div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>
-          CLASS
-        </div>
-        <div
-          className="flex items-center gap-2"
-          style={{ background: 'var(--surface)', padding: 8, borderRadius: 6, border: '1px solid var(--border-default)' }}
-        >
-          <div style={{ width: 26, height: 26 }}>
-            <TinkerGlyph />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 600 }}>Tinker</div>
-            <div style={{ fontSize: 9, color: 'var(--text-secondary)', lineHeight: 1.2 }}>+10% recipe potency</div>
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>
-          RELICS
-        </div>
-        <div className="flex flex-col gap-2">
-          <div
-            className="flex items-center gap-2"
-            style={{ background: 'var(--surface)', padding: 8, borderRadius: 6, border: '1px solid #3B82F6' }}
-          >
-            <div style={{ width: 22, height: 22 }}>
-              <RelicLoop />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600 }}>Apprentice's Loop</div>
-              <div style={{ fontSize: 9, color: 'var(--text-secondary)' }}>+1 reroll / round</div>
-            </div>
-          </div>
-          {[0, 1].map((i) => (
-            <div
-              key={i}
-              className="flex items-center justify-center"
-              style={{ height: 38, borderRadius: 6, border: '1px dashed var(--border-default)', background: 'transparent' }}
-            >
-              <span className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-                EMPTY
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 6 }}>
-          OPPONENT INTENT
-        </div>
-        <div style={{ background: 'var(--surface)', padding: 10, borderRadius: 6, border: '1px solid var(--border-default)' }}>
-          <div className="flex items-center gap-2 mb-2">
-            <div style={{ width: 28, height: 28 }}>
-              <GhostGlyph />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600 }}>Ghost</div>
-              <div style={{ fontSize: 9, color: 'var(--text-secondary)' }}>Round 4 · ±1 trophy</div>
-            </div>
-          </div>
-          <div className="label-cap" style={{ fontSize: 8, color: 'var(--text-muted)', marginBottom: 4 }}>
-            SILHOUETTES
-          </div>
-          <OpponentSilhouettes />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function DragGhost({ drag }: { drag: DragState | null }) {
   if (!drag) return null;
@@ -197,167 +50,6 @@ function DragGhost({ drag }: { drag: DragState | null }) {
       <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={CELL - 4}>
         <ItemIcon itemId={drag.itemId} rot={drag.rot} />
       </RarityFrame>
-    </div>
-  );
-}
-
-interface RightRailProps {
-  state: RunState;
-  shop: ShopSlot[];
-  onBuy: (uid: string) => void;
-  onReroll: () => void;
-  onSellDropZone: () => void;
-  drag: DragState | null;
-  sellHover: boolean;
-  setSellHover: (b: boolean) => void;
-  onContinue: () => void;
-  busy: boolean;
-}
-
-function RightRail({ state, shop, onBuy, onReroll, onSellDropZone, drag, sellHover, setSellHover, onContinue, busy }: RightRailProps) {
-  const rerollCost = state.rerollCount + 1;
-  const canReroll = state.gold >= rerollCost && !busy;
-
-  return (
-    <div
-      className="flex flex-col"
-      style={{
-        width: 260,
-        background: 'var(--bg-mid)',
-        borderLeft: '1px solid var(--border-default)',
-        padding: 14,
-        gap: 14,
-      }}
-    >
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="label-cap" style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-            SHOP
-          </div>
-          <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-            R{state.rerollCount} REROLLS
-          </div>
-        </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-          {shop.map((s) => (
-            <ShopSlotView key={s.uid} slot={s} state={state} onBuy={() => onBuy(s.uid)} busy={busy} />
-          ))}
-        </div>
-        <button
-          onClick={onReroll}
-          disabled={!canReroll}
-          className="ease-snap label-cap mt-2 flex items-center justify-center gap-2"
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            borderRadius: 6,
-            background: canReroll ? 'var(--surface-elev)' : 'var(--surface)',
-            border: '1px solid var(--border-default)',
-            color: canReroll ? 'var(--text-primary)' : 'var(--text-muted)',
-            cursor: canReroll ? 'pointer' : 'not-allowed',
-            fontSize: 11,
-            fontWeight: 600,
-          }}
-        >
-          <span>REROLL</span>
-          <span className="tnum" style={{ color: canReroll ? 'var(--coin-fill)' : 'var(--text-muted)' }}>
-            {rerollCost}
-            <span style={{ marginLeft: 2, fontSize: 9 }}>g</span>
-          </span>
-        </button>
-      </div>
-
-      <div
-        onPointerEnter={() => drag && setSellHover(true)}
-        onPointerLeave={() => setSellHover(false)}
-        onPointerUp={() => {
-          if (drag) onSellDropZone();
-        }}
-        className="ease-snap"
-        style={{
-          padding: 12,
-          borderRadius: 6,
-          background: sellHover ? 'rgba(239,68,68,0.16)' : 'var(--surface)',
-          border: `2px dashed ${sellHover ? '#EF4444' : 'var(--border-default)'}`,
-          textAlign: 'center',
-        }}
-      >
-        <div className="label-cap" style={{ fontSize: 10, color: sellHover ? '#F87171' : 'var(--text-secondary)' }}>
-          SELL · 50% RECOVERY
-        </div>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>drop a bag item here</div>
-      </div>
-
-      <button
-        onClick={onContinue}
-        disabled={busy}
-        className="ease-snap label-cap"
-        style={{
-          marginTop: 'auto',
-          width: '100%',
-          padding: '14px 16px',
-          borderRadius: 6,
-          background: busy ? 'var(--surface)' : '#3B82F6',
-          color: '#FFFFFF',
-          fontWeight: 700,
-          fontSize: 13,
-          letterSpacing: '0.1em',
-          border: 'none',
-          cursor: busy ? 'not-allowed' : 'pointer',
-          boxShadow: busy ? 'none' : '0 6px 16px rgba(59,130,246,0.32)',
-        }}
-      >
-        CONTINUE →
-      </button>
-    </div>
-  );
-}
-
-function ShopSlotView({ slot, state, onBuy, busy }: { slot: ShopSlot; state: RunState; onBuy: () => void; busy: boolean }) {
-  if (!slot.itemId) {
-    return (
-      <div
-        style={{
-          height: 120,
-          borderRadius: 6,
-          border: '1px dashed var(--border-default)',
-          background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <span className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-          SOLD
-        </span>
-      </div>
-    );
-  }
-  return <ShopCard item={slot} sold={false} gold={state.gold} onBuy={onBuy} busy={busy} />;
-}
-
-function BottomLog() {
-  return (
-    <div
-      className="flex items-center justify-between"
-      style={{
-        height: 32,
-        padding: '0 18px',
-        background: 'var(--bg-mid)',
-        borderTop: '1px solid var(--border-default)',
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <span className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
-          LOG
-        </span>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-          R3 · won vs ghost (Marauder) · 6 dmg dealt · 3 dmg taken
-        </span>
-      </div>
-      <span className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)', cursor: 'pointer' }}>
-        EXPAND ↑
-      </span>
     </div>
   );
 }
@@ -583,7 +275,7 @@ export function App() {
             onCombine={onCombine}
           />
         </div>
-        <RightRail
+        <ShopPanel
           state={state}
           shop={shop}
           onBuy={onBuyShop}
@@ -597,7 +289,7 @@ export function App() {
         />
         {combatActive && <CombatOverlay active={combatActive} onDone={onCombatDone} />}
       </div>
-      <BottomLog />
+      <BottomPanel />
       <DragGhost drag={drag} />
     </div>
   );

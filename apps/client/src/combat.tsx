@@ -1,7 +1,7 @@
 // Combat — canned 4-second sequence + win overlay.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { BurnGlyph, CoinGlyph } from './icons';
+import { BurnGlyph, CoinGlyph } from './icons/icons';
 
 type Side = 'player' | 'ghost';
 type EventKind = 'hit' | 'heal' | 'burn' | 'ko';

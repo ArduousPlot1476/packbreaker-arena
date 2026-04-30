@@ -3,7 +3,8 @@
 
 import type { PointerEvent } from 'react'
 import { dimsOf, ITEMS, type BagItem } from '../data.local'
-import { ItemIcon, RarityFrame } from '../parts'
+import { ItemIcon } from '../ui-kit-overrides/ItemIcon'
+import { RarityFrame } from '../ui-kit-overrides/RarityFrame'
 import { cellPx } from './layout'
 import type { DragState } from './types'
 
