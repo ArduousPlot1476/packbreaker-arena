@@ -4,6 +4,68 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-01 — M1.3.2 closed (visual styling pass + ui-kit primitive promotion)
+
+- Visual-direction.md compliance landed across `apps/client/src/`. First sub-phase where the game looks like the locked Gridline direction rather than the prototype skin. Behavioral parity vs. M1.3.1 preserved end-to-end (Trey-confirmed via 12-screenshot review in chat).
+
+- **ui-kit promotion (M1.3.1 deviation 2 closed):** `RarityFrame` + `ItemIcon` promoted from `apps/client/src/ui-kit-overrides/` to `packages/ui-kit/`. Adds new `RarityGem` primitive (5 SVG corner-gem shapes ◆■▲★✦ via `currentColor`) — promoted as part of the rarity-frame visual treatment in commit 4. 27 tests in `packages/ui-kit/src/*.test.tsx` (12 RarityFrame + 9 RarityGem + 6 ItemIcon). `apps/client/src/ui-kit-overrides/` directory deleted entirely; the 3 import sites swept directly to `@packbreaker/ui-kit` (re-export shim approach rejected — single mechanical sweep keeps mid-styling-pass churn lower per Trey ratification at commit 1).
+
+  - `ItemIcon` API changed from `itemId`-based lookup to children-based transform wrapper. The ICONS map is content-tied to apps/client and doesn't belong in ui-kit; consuming sites in apps/client now do their own `ICONS[itemId]` lookup at the call site and pass the result as children. Documented as an intentional API shift, not a "same component API" regression.
+  - `packages/ui-kit/` test infrastructure: vitest@^2.1.8 + @testing-library/react + @testing-library/jest-dom + happy-dom + @vitejs/plugin-react + vite added as devDeps. Inline vitest config in `packages/ui-kit/vite.config.ts` (happy-dom env, setupFiles). package.json `test` script changed from echo-stub to `vitest run`. tsconfig excludes `*.test.ts(x)` from the `dist/` build output.
+
+- **Color audit (post-pass: zero non-token UI chrome refs except documented combat character art):**
+
+  | Bucket | Pre-M1.3.2 | Post-M1.3.2 |
+  |---|---|---|
+  | Inline-hex UI chrome | 26 | **3** (combat portrait character art only — `#1D4ED8`/`#334155`/`#475569` + `${hex}33` boxShadow alpha; documented inline as M1.3.4 Phaser replacement) |
+  | Inline-hex item-icon ART (icons.tsx) | 78 | 78 (exempt per § 5 body-color rule, content-side identity colors) |
+  | `:root` CSS-variable defs (index.css) | 18 | 18 (these ARE the canonical tokens) |
+  | Tailwind arbitrary classes (`bg-[#xyz]` etc.) | 0 | 0 (never an issue) |
+  | `var(--*)` references in source | (~50) | (~73, +23 swept) |
+  | `#FFFFFF` violations of § 3 ("pure white forbidden") | 2 | **0** (CTA buttons NEXT ROUND + CONTINUE swept to `var(--text-primary)`) |
+
+  Two semantic UI extensions (`life-red`, `coin-gold`) audited for canonical-context-only usage and confirmed compliant: `life-red` (hearts, damage indicator, invalid-drop affordance, sell-zone "destroy item" affordance — all within "hearts and damage" category); `coin-gold` (coin glyph, gold-amount displays, REROLL cost, COMBINE button border — within scope; the `#F59E0B` shared-hex with `rarity-legendary` never collides on the same surface per § 3). No third semantic extension attempted.
+
+- **Typography:** Inter loaded from Google Fonts at `apps/client/index.html` (carry-over from M0; verified). Weights 400/500/600/700 applied per § 4. `apps/client/tailwind.config.js` `theme.fontFamily.sans` extended to `['Inter', 'system-ui', 'sans-serif']`. **Tabular numerals confirmed on 10 numeric-display locations** (audit fixed 2 missed sites in commit 2): `hud/TopBar.tsx` gold + hearts max-count grid + round/totalRounds + trophy; `bag/BagBoard.tsx` items-placed footer + recipes-ready footer; `shop/ShopPanel.tsx` REROLLS counter + REROLL cost; `shop/ShopSlot.tsx` item cost; `combat/CombatOverlay.tsx` damage numbers + burn-stack count; `screens/RoundResolution.tsx` gold/trophy/hearts ratios.
+
+- **Rarity frame system:** 1px border in rarity color (was 2px in M1.3.1; matches "no heavy chrome" per § 6) + corner gem rendered as inline SVG (replaces Unicode-character rendering per task §3 + the M0 inline-SVG decision; 5 distinct shapes — Diamond / Square / Triangle / Star / Sparkle — via `RarityGem` component using `fill="currentColor"`) + soft inner glow scaled to rarity (was uniform inline alpha in M1.3.1). New per-rarity `glowAlpha` (hex 2-char) + `glowBlur` (px) fields on `RarityDef`: common 1A/10px (subtle) → uncommon 2D/13px → rare 38/16px → epic 47/19px → legendary 57/22px (prominent). Dual-coding silhouette discipline test #1 verified — the five gem shapes have distinct silhouette mass distributions (no two share more than ~30% overlap), color-blind safety preserved.
+
+- **Body-color rule audit (12 items, all PASS):** documented inline at the top of `apps/client/src/icons/icons.tsx` as a frozen audit table. 4 items pass via material-identity matching their rarity register (iron-sword, iron-dagger, whetstone, steel-sword); 1 via material identity (wooden-shield, brown = wood); 1 via plant-identity matching own rarity (healing-salve); 6 via Option A identity-color exception (healing-herb, spark-stone, apple, copper-coin, ember-brand, fire-oil). Two notable surface-color overlaps that remain compliant in context: spark-stone + copper-coin body fills include `#F59E0B` (= rarity-legendary frame color) — identity rule (fire / gold currency) overrides + the surface-non-collision invariant (§ 3 — coin glyphs never appear inside a Legendary item frame) keeps them safe; steel-sword's `#94A3B8` gradient stop = rarity-common color but is metallic-base material identity, not signal-color body fill.
+
+- **Recipe-glow evaluation (M0 deferred item 2 closed):** screenshot-driven decision in commit 7 ratified **halo**. **Per-cell rect rendering retained.** Evaluation on the post-styling-pass visual register (1px frame borders, 1.5s/cycle marching dash, rarity-keyed alpha pulse) showed unified halo legibility on both 2-cell and 3-cell clusters; the failure mode the M0 spec named (internal seam fighting halo) did not surface. Perimeter-path approach (~30 lines edge-traversal geometry per the M0 deferred item 2 spec) deferred indefinitely; revisit only if telemetry/playtest surfaces "busy" read in cluster shapes not exercised here (4+ cell clusters, L-shapes, T-shapes — none of which exist in M1 recipe content per `balance-bible.md` § 11). Closure rationale also annotated in `apps/client/src/bag/RecipeGlow.tsx` header for traceability.
+
+- **Motion language (cubic-bezier(0.16, 1, 0.3, 1)):** drop-settle adjusted from 160ms → **120ms** in `bag/DraggableItem.tsx` (matches § 7 "placement settles in 120ms"). ShopSlot transform timing 140ms → 120ms for consistency. New `.hover-lift` CSS class (`filter: brightness(1.06)` on `:hover:not(:disabled)`, 120ms ease-snap transition, no rotation/scale) applied to the 4 CTA buttons: REROLL, CONTINUE, COMBINE → output, NEXT ROUND. Recipe glow 1.5s/cycle confirmed (`recipe-march` linear + `recipe-pulse` ease-in-out). Drag pickup remains instant (no transition delay; @dnd-kit owns pickup activation).
+
+- **Partial data.local.ts dissolution:** `RARITY` palette + `RarityKey` enum + `RarityDef` interface moved from `apps/client/src/data.local.ts` to `packages/ui-kit/src/rarity.ts`. `data.local.ts` retains a re-export shim for back-compat with consumers that still import RARITY from there (full sweep deferred to M1.3.4 with the rest of `data.local.ts`'s dissolution). 3 of 22 M1.3.1-baseline import sites now resolve through `@packbreaker/ui-kit` directly (the consumers that import `RarityFrame`/`ItemIcon`/`RarityGem`); the remaining 19 (RARITY/RarityKey/ITEMS/SEED_*/types/helpers consumers) continue importing from `data.local`. Full dissolution still M1.3.4 with sim integration creating real shop/Ruleset surfaces.
+
+- **12 screenshots delivered** (9 reproducing M1.3.1 set in new visual register + 3 new compliance shots). Behavioral parity preserved: drag valid/invalid affordances, R-key rotation, recipe detection, four-direction first-fit anchor logic, four-second canned combat, round-resolution overlay all work identically. Visual compliance confirmed: palette tokens consistent, Inter typography + tabular numerals visible in close-up, rarity frame system (1px border + SVG gem + scaled inner glow) renders dual-coded, body-color rule preserved on Healing Herb (plant green) vs. Whetstone (slate metal) shared-Common comparison.
+
+- **Bundle delta vs. M1.3.1 close (240.51 KB JS / 9.89 KB CSS / 74.09 KB gzipped / 61 modules):**
+  - JS: **242.15 KB** (+1.64 KB / **+0.68%**) — within ≤+5% budget ✓
+  - CSS: **9.94 KB** (+0.05 KB / +0.51%) — within ≤+20% budget ✓
+  - Gzipped JS: **74.47 KB** (+0.38 KB / +0.51%) — within ≤+5% budget ✓
+  - Modules: 61 → **64** (+3: ui-kit's `RarityFrame`, `ItemIcon`, `RarityGem`)
+  - ui-kit chunk produced: bundled into the main client chunk (workspace TS-source consumption — no separate chunk emitted; tree-shake confirmed by the small +1.64 KB delta against the M1.3.1 baseline that already included ui-kit-overrides versions of RarityFrame + ItemIcon).
+
+- **Test counts:** ui-kit 27 (was 0 — pure addition, RarityFrame×12 + RarityGem×9 + ItemIcon×6); client 27 (unchanged). Workspace total **54 across 9 test files**. Turbo pipeline 19/19 tasks green.
+
+- **Tooling note:** ui-kit's test environment is `happy-dom@^20` (matches `apps/client`'s convention from M1.3.1 commit 8). jsdom@29 still incompatible with the local Node 18 toolchain.
+
+- **Documented non-blocking observation (deferred to M1.3.4):** @dnd-kit `DragOverlay` rotation rendering can show the dragged item at two positions simultaneously (origin + rotated target) with a "ghostly" silhouette during R-key rotation mid-drag. Behavioral parity vs. M1.3.1 holds (prototype had identical rendering). Visual polish on `DragOverlay` deferred to M1.3.4 alongside @dnd-kit visual styling pass + Phaser combat scene work.
+
+- **Documented carry-forwards (all converging at M1.3.4):**
+  1. `shop/ShopController.ts` split → M1.3.4 (sim integration creates real shop action surfaces)
+  2. `data.local.ts` full dissolution → M1.3.4 (partial progress this sub-phase: RARITY + RarityKey + RarityDef in ui-kit; remainder pending sim integration)
+  3. `combat/CombatOverlay.tsx` portrait character-art hex (3 sites) → M1.3.4 (Phaser combat scene replaces the placeholder portraits and their VFX palette)
+  4. `apps/client/src/index.css` `.glow-*` classes (5 `rgba()` palette derivatives) → M1.3.3+ if revisited (currently dead code; `color-mix()` rewrite deferred)
+  5. @dnd-kit `DragOverlay` rotation visual polish → M1.3.4 (per non-blocking observation above)
+
+- **Branch hygiene:** 8 implementation commits + closing entry on `m1.3.2-visual-styling`, branched off main (`53fc2a5`). `--no-ff` merge to main once Trey confirms CI green on origin.
+
+- **M1.3.3** (mobile responsive 390-wide vertical layout per `gdd.md` § 14) is next.
+
+---
+
 ## 2026-04-30 — M1.3.1 closed (component scaffold + dnd-kit migration)
 
 - Monolithic `apps/client/src/App.tsx` (893 lines pre-decomposition) restructured in place into `apps/client/src/` following `tech-architecture.md` § 5.1: `screens/`, `bag/`, `shop/`, `hud/`, `combat/`, `run/`, plus `icons/` and `ui-kit-overrides/` (both in § 5.1's canonical list). Component count: 14 (TopBar, LeftRail, BottomPanel, ShopPanel, ShopSlot, SellZone, BagBoard, BagCell, DraggableItem, RecipeGlow, CombatOverlay, RoundResolution, RunScreen, DragPreview). Largest production file: `hud/LeftRail.tsx` at 147 lines (under the ~200-line cap per DoD §2). `icons/icons.tsx` at 251 lines is icon-data, not a component.
