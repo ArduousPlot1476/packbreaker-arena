@@ -25,6 +25,7 @@ import { CombatOverlay } from '../../combat/CombatOverlay';
 import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
 import { useRun } from '../../run/useRun';
+import { MobileContinueCTA } from './MobileContinueCTA';
 import { MobileTabBar, type MobileTab } from './MobileTabBar';
 import { CraftingTab } from './tabs/CraftingTab';
 import { LogTab } from './tabs/LogTab';
@@ -65,6 +66,7 @@ export function MobileRunScreen() {
     handleDragCancel,
     onReroll,
     onCombine,
+    onContinue,
     onCombatDone,
   } = useRun();
 
@@ -122,6 +124,7 @@ export function MobileRunScreen() {
           {activeTab === 'relics' && <RelicsTab state={state.state} />}
           {activeTab === 'log' && <LogTab state={state.state} />}
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />
+          <MobileContinueCTA onContinue={onContinue} busy={state.combatActive} />
           {state.combatActive && (
             <CombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
