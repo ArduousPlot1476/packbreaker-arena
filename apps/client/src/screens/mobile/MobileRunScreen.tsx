@@ -25,7 +25,7 @@ import { CellSizeProvider } from '../../bag/CellSize';
 import { CombatOverlay } from '../../combat/CombatOverlay';
 import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
-import { useRun } from '../../run/useRun';
+import { useRunContext } from '../../run/RunContext';
 import { MobileContinueCTA } from './MobileContinueCTA';
 import { MobileTabBar, type MobileTab } from './MobileTabBar';
 import { CraftingTab } from './tabs/CraftingTab';
@@ -69,7 +69,7 @@ export function MobileRunScreen() {
     onCombine,
     onContinue,
     onCombatDone,
-  } = useRun();
+  } = useRunContext();
 
   const [activeTab, setActiveTab] = useState<MobileTab>('shop');
 

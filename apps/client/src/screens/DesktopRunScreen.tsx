@@ -1,11 +1,9 @@
 // Desktop run-screen orchestrator (1280×720 baseline per gdd.md § 14).
 // Owns the @dnd-kit DndContext + DragOverlay and the desktop page
 // layout (top bar, left rail, bag center, shop right rail, bottom
-// panel, combat overlay). Consumes useRun for state + dnd-kit handlers.
-//
-// Renamed from screens/RunScreen.tsx in M1.3.3 commit 3 when the
-// branching dispatcher took over the RunScreen name. Behavior at
-// ≥ 768px viewport is identical to M1.3.2.
+// panel, combat overlay). Consumes run state via useRunContext()
+// (lifted into <RunProvider> at the dispatcher level in M1.3.3
+// commit 10 to survive viewport-switch remounts — Codex P1 fix).
 
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
@@ -18,7 +16,7 @@ import { TopBar } from '../hud/TopBar';
 import { LeftRail } from '../hud/LeftRail';
 import { BottomPanel } from '../hud/BottomPanel';
 import { ShopPanel } from '../shop/ShopPanel';
-import { useRun } from '../run/useRun';
+import { useRunContext } from '../run/RunContext';
 
 function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   const def = ITEMS[itemId];
@@ -54,7 +52,7 @@ export function DesktopRunScreen() {
     onCombine,
     onContinue,
     onCombatDone,
-  } = useRun();
+  } = useRunContext();
 
   // 4px activation distance distinguishes click from drag (matches the
   // prototype's intent — quick clicks shouldn't accidentally start a drag).
