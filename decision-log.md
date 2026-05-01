@@ -4,6 +4,68 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-04-30 — M1.3.1 closed (component scaffold + dnd-kit migration)
+
+- Monolithic `apps/client/src/App.tsx` (893 lines pre-decomposition) restructured in place into `apps/client/src/` following `tech-architecture.md` § 5.1: `screens/`, `bag/`, `shop/`, `hud/`, `combat/`, `run/`, plus `icons/` and `ui-kit-overrides/` (both in § 5.1's canonical list). Component count: 14 (TopBar, LeftRail, BottomPanel, ShopPanel, ShopSlot, SellZone, BagBoard, BagCell, DraggableItem, RecipeGlow, CombatOverlay, RoundResolution, RunScreen, DragPreview). Largest production file: `hud/LeftRail.tsx` at 147 lines (under the ~200-line cap per DoD §2). `icons/icons.tsx` at 251 lines is icon-data, not a component.
+
+- `@dnd-kit/core@^6.3.1` + `@dnd-kit/sortable@^10.0.0` installed at `apps/client/package.json`. `pnpm-lock.yaml` refreshed (+58 lines). First sub-phase to land @dnd-kit's bundle cost — was declared in the M1.3.1 prompt as "already installed but tree-shaken" but was actually never in any `package.json` until commit 2 of this branch. Replaces raw pointer-event drag from the M0 prototype: `DndContext` at `RunScreen` level with `PointerSensor` (4px activation distance) + `pointerWithin` collision detection. Each `BagCell` is `useDroppable`; each `DraggableItem` and `ShopSlot` is `useDraggable`. `DragOverlay` replaces the prototype's `DragGhost` (cursor-tracking is now @dnd-kit's responsibility — `DragState`'s `x/y/offX/offY` fields removed). Behavioral parity verified via 9 screenshots in chat (M0 DoD set reproduced + 3 combine-anchor cases). Pointercancel + window-blur drag cleanup carried forward, owned now by @dnd-kit's `PointerSensor` and routed through `onDragCancel` → `drag_cancel` reducer action; reducer-level test verifies the cleanup transition in `apps/client/src/run/RunController.test.ts`.
+
+- Combine-button anchor upgraded from upper-right-with-top-fallback to four-direction first-fit (M0 deferred item 1 closed). Priority order: upper-right → upper-left → lower-right → lower-left. Collision-check button rect 44×24 (configurable via `COMBINE_BUTTON_W` / `_H` in `bag/layout.ts`); fails on off-grid extension OR overlap with non-cluster items. Degenerate case (all four collide) returns upper-right with `fallback: true` and accepts visual overlap. Unit tests in `apps/client/src/bag/layout.test.ts` cover null cluster + each direction winning + the dense-bag fallback (7 cases).
+
+- Canned 4s combat sequence ported from `src/combat.tsx` into `combat/CombatOverlay.tsx`. `WinOverlay` extracted as `screens/RoundResolution.tsx` (round-end overlay with reward + Continue). Phaser scene scaffolding (`CombatScene.ts`, `effects/`) deferred to M1.3.4 with sim integration.
+
+- State model shift: `useState`-per-slice → `useReducer` over a single `ClientRunState`. `run/RunController.ts` hosts pure reducer + `RunAction` union (12 action variants); `run/useRun.ts` wraps with `useReducer` + bound handlers + the residual window-keydown listener for `R`-key rotation (gated to non-square items per M0 ratification — squared items have rotation-invariant footprints). Same observable behavior; reducer transitions are explicit and unit-testable.
+
+- M0 prototype monolith files deleted from `apps/client/src/`:
+  - `App.tsx` (deleted as a re-export shim in commit 9)
+  - `combat.tsx` (deleted as a re-export shim in commit 9)
+  - `data.local.ts` + `data.local.test.ts` retained — see deviation #3 below.
+
+  `main.tsx` cut over to render `RunScreen` directly in commit 5; `index.css` unchanged. Dev command unchanged: `pnpm --filter @packbreaker/client dev`. `CONTRIBUTING.md` no changes needed. `pnpm install --frozen-lockfile` + `pnpm turbo lint test build` green from clean state (19/19 turbo tasks pass).
+
+- **Documented deviations** — three, all converging at M1.3.4 as the natural carving-up point:
+
+  1. **`shop/ShopController.ts` split deferred to M1.3.4.** `tech-architecture.md` § 5.1 specifies a separate ShopController; without sim-driven shop generation there is no meaningful controller logic to host. Shop state lives in `run/RunController.ts` for M1.3.1 (`shop`, `pickup_shop` action, `reroll` action, `REROLL_POOL` deterministic-by-counter pool from the M0 prototype). **Revisit trigger:** M1.3.4 sim integration creates real shop action surfaces.
+
+  2. **`packages/ui-kit/` primitive extraction deferred to M1.3.2.** Stub remains `export {};`. `RarityFrame` + `ItemIcon` live in `apps/client/src/ui-kit-overrides/` for M1.3.1 (the `ui-kit-overrides/` directory is in `tech-architecture.md` § 5.1's canonical list and signals "client-side primitives pending packages/ui-kit promotion"). **Revisit trigger:** M1.3.2 visual styling pass touches primitives for `visual-direction.md` compliance — promote at that point.
+
+  3. **`apps/client/src/data.local.ts` retained as load-bearing client-side adapter.** Pre-deletion audit per Task §5 step 1 revealed 22 active import sites across the new component tree carrying five non-content concerns with no canonical home in `@packbreaker/content`:
+     - UI tokens (`RarityKey` enum, `RARITY` palette)
+     - Run-state seeds (`INITIAL`, `SEED_BAG`, `SEED_SHOP`)
+     - Game-rules constants (`BAG_COLS`, `BAG_ROWS` — eventually flow from `DEFAULT_RULESET.bagDimensions` at M1.3.4)
+     - Client-shape types (`BagItem`, `ShopSlot`, `RunState`, `Cell`, `ItemDef` — narrowed UI shapes, not canonical `Item`/`Recipe`)
+     - Helpers (`dimsOf`, `cellsOf` — operate on client `BagItem`)
+
+     `ITEMS` and `RECIPES` exports are thin adapters/filters over `@packbreaker/content`; no material content authority drift. Deletion deferred to M1.3.4 with sim integration. The `.local` infix remains accurate ("not the final form"); dissolution path is to distribute concerns at M1.3.4: client-shape types → `run/types.ts`, seeds → `RunController.ts`, UI tokens → `ui-kit-overrides/`, game-rules constants → flow from sim's `Ruleset`, content adapters → replaced by direct `@packbreaker/content` consumption. Updates the M1.3.1 prompt's Task §5 step 2 framing: `data.local.ts` removed from the commit-9 deletion list. Spec deviation ratified by Trey in chat. **Revisit trigger:** M1.3.4 sim integration.
+
+- **Behavioral nuances** — split into two categories, do not lump:
+
+  **Intended behavioral upgrades (M0 deferred items closing):**
+  - Combine-anchor four-direction first-fit with priority order UR → UL → LR → LL replaces prototype's UR-with-top-fallback. Side effect: clusters touching the top edge now anchor at LR instead of the prototype's ad-hoc LL — this is the intended outcome of the priority order, not a regression.
+
+  **Incidental @dnd-kit semantics differences (acceptable, documented):**
+  - Shop slot pickup activation: 4px-move pointerdown (per @dnd-kit's `PointerSensor` default) replaces prototype's click-then-pointermove. Sub-perceptual on desktop mouse; end-to-end semantics identical.
+  - Drag preview clears on pointer-leave-bag (per `onDragOver` semantics). Prototype's lingering preview was a coincidence of the raw pointer-event implementation, not a designed behavior. Stricter is better.
+
+- **Tooling note:** `happy-dom@17` (not `jsdom`) for vitest's DOM environment in `apps/client`. Local toolchain is Node 18; `jsdom@29` dropped Node 18 support. `happy-dom@17` works on both Node 18 and 20. `vitest.config` block added inline in `apps/client/vite.config.ts` with `environment: 'happy-dom'` + `setupFiles: ['./test/setup.ts']` (registers `@testing-library/jest-dom/vitest` matchers + RTL `cleanup` afterEach). `apps/client/src/vitest.d.ts` triple-slash references `@testing-library/jest-dom` for typecheck-time matcher augmentation.
+
+- **Bundle delta vs. M1.2.6 baseline (194.69 KB JS):**
+  - Final: **240.51 KB raw / 74.09 KB gzipped** (61 modules)
+  - Pre-@dnd-kit (post-commit-5): 196.73 KB raw / 59.73 KB gzipped (58 modules)
+  - @dnd-kit's contribution: **+43.78 KB raw / +14.36 KB gzipped** (one-time install + import — first build to include it)
+  - Adjusted delta excluding @dnd-kit: **+2.04 KB raw / +1.05%**
+  - Within budget (≤+5% beyond @dnd-kit cost). ✓
+
+- **Component-level tests added:** 22 new (15 in commit 8 + 7 in commit 7). Total client test count: **27** (was 5 at branch-start). Test files: `data.local.test.ts` (5, existing), `bag/layout.test.ts` (7, new), `run/RunController.test.ts` (9, new), `bag/RecipeGlow.test.tsx` (2, new), `bag/BagBoard.test.tsx` (2, new), `shop/ShopPanel.test.tsx` (2, new). RTL + `@testing-library/jest-dom` + happy-dom installed as devDependencies in apps/client.
+
+- **M0 deferred items resolved in this sub-phase:** items 1 (combine-anchor four-direction first-fit), 3 (component split), 4 (@dnd-kit migration). Items 2 (recipe-glow perimeter path) and 5 (Phaser combat overlay) remain deferred to M1.3.2 and M1.3.4 respectively.
+
+- **M1.3.2** (visual styling pass per `visual-direction.md`, including `packages/ui-kit/` primitive promotion + recipe-glow perimeter-path approach if it surfaces) is next.
+
+- **Branch hygiene:** 10 implementation commits + closing entry on `m1.3.1-component-scaffold`, branched off main (`0ba754c`). `--no-ff` merge to main once Trey confirms CI green on origin.
+
+---
+
 ## 2026-04-30 — M1.2.6 boss-relic coverage residual gap ratified
 
 After the M1.2.6 ratified halt-and-surface protocol (50 retries per missing triple, weapon-priority strategy with RAZORS_EDGE starter for both classes + 4 rerolls/round), 3 of 4 (class × boss-relic) pairs remained at 0 organic firings across the 24 appended fixtures. The fourth pair (`marauder|worldforge-seed`) fired once. The relic-collector strategy achieved a ~12% round-11 win rate vs. FORGE_TYRANT (67 HP under neutral contract; bag carries greataxe + chainmail + bloodmoon-plate + warhammer + vampire-fang + iron-mace + apple + whetstone), insufficient for ≥2× coverage on each boss pair.
