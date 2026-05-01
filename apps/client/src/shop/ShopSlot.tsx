@@ -14,13 +14,20 @@ interface ShopSlotProps {
   slot: ShopSlotData;
   gold: number;
   busy: boolean;
+  /**
+   * Card width. Default 110 matches the desktop ShopPanel column. Mobile
+   * ShopTab passes a wider value (or '100%') so slots fill the larger
+   * mobile grid column.
+   */
+  cardWidth?: number | string;
 }
 
-export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
+export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
   if (!slot.itemId) {
     return (
       <div
         style={{
+          width: cardWidth,
           height: 120,
           borderRadius: 6,
           border: '1px dashed var(--border-default)',
@@ -39,7 +46,6 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
   const def = ITEMS[slot.itemId];
   const r = RARITY[def.rarity];
   const affordable = gold >= def.cost && !busy;
-  const cardWidth = 110;
   const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
   const data: DraggableData = { kind: 'shop', uid: slot.uid };

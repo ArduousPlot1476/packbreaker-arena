@@ -26,6 +26,10 @@ import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
 import { useRun } from '../../run/useRun';
 import { MobileTabBar, type MobileTab } from './MobileTabBar';
+import { CraftingTab } from './tabs/CraftingTab';
+import { LogTab } from './tabs/LogTab';
+import { RelicsTab } from './tabs/RelicsTab';
+import { ShopTab } from './tabs/ShopTab';
 
 const MOBILE_CELL_SIZE = 52;
 
@@ -51,37 +55,6 @@ function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   );
 }
 
-function TabContentStub({ tab }: { tab: MobileTab }) {
-  // M1.3.3 commit 4 shell. Real content panels (ShopTab, CraftingTab,
-  // RelicsTab, LogTab) land in commit 5.
-  return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        padding: 16,
-        overflow: 'auto',
-        background: 'var(--bg-deep)',
-      }}
-    >
-      <div
-        className="label-cap"
-        style={{
-          fontSize: 10,
-          color: 'var(--text-secondary)',
-          letterSpacing: '0.18em',
-          marginBottom: 8,
-        }}
-      >
-        {tab.toUpperCase()}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        Tab content lands in M1.3.3 commit 5.
-      </div>
-    </div>
-  );
-}
-
 export function MobileRunScreen() {
   const {
     state,
@@ -90,6 +63,7 @@ export function MobileRunScreen() {
     handleDragOver,
     handleDragEnd,
     handleDragCancel,
+    onReroll,
     onCombine,
     onCombatDone,
   } = useRun();
@@ -136,7 +110,17 @@ export function MobileRunScreen() {
               compact
             />
           </div>
-          <TabContentStub tab={activeTab} />
+          {activeTab === 'shop' && (
+            <ShopTab
+              state={state.state}
+              shop={state.shop}
+              onReroll={onReroll}
+              busy={state.combatActive}
+            />
+          )}
+          {activeTab === 'crafting' && <CraftingTab recipes={recipes} onCombine={onCombine} />}
+          {activeTab === 'relics' && <RelicsTab state={state.state} />}
+          {activeTab === 'log' && <LogTab state={state.state} />}
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />
           {state.combatActive && (
             <CombatOverlay active={state.combatActive} onDone={onCombatDone} />

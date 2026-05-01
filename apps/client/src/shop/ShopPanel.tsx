@@ -4,9 +4,8 @@
 // wired through the DndContext at the RunScreen level — this component
 // no longer threads drag/sellHover state.
 
-import { useDroppable } from '@dnd-kit/core';
 import { type RunState, type ShopSlot as ShopSlotData } from '../data.local';
-import type { DroppableData } from '../bag/types';
+import { SellZone } from './SellZone';
 import { ShopSlot } from './ShopSlot';
 
 interface ShopPanelProps {
@@ -15,34 +14,6 @@ interface ShopPanelProps {
   onReroll: () => void;
   onContinue: () => void;
   busy: boolean;
-}
-
-function SellZone() {
-  const data: DroppableData = { kind: 'sell' };
-  const { setNodeRef, isOver } = useDroppable({ id: 'sell-zone', data });
-  return (
-    <div
-      ref={setNodeRef}
-      className="ease-snap"
-      style={{
-        padding: 12,
-        borderRadius: 6,
-        background: isOver ? 'rgba(239,68,68,0.16)' : 'var(--surface)',
-        border: `2px dashed ${isOver ? 'var(--life-red)' : 'var(--border-default)'}`,
-        textAlign: 'center',
-      }}
-    >
-      <div
-        className="label-cap"
-        style={{ fontSize: 10, color: isOver ? 'var(--life-stroke)' : 'var(--text-secondary)' }}
-      >
-        SELL · 50% RECOVERY
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-        drop a bag item here
-      </div>
-    </div>
-  );
 }
 
 export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanelProps) {
