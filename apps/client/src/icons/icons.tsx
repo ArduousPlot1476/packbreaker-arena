@@ -3,7 +3,7 @@
 // Body fill carries identity; rarity is on the frame, not the icon.
 
 import type { ReactNode, SVGProps } from 'react';
-import type { ItemId } from './data.local';
+import type { ItemId } from '../data.local';
 
 type StrokeyProps = { children: ReactNode } & Omit<SVGProps<SVGSVGElement>, 'children'>;
 

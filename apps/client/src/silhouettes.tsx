@@ -3,7 +3,7 @@
 
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ICONS } from './icons';
+import { ICONS } from './icons/icons';
 
 const Sword = ICONS['iron-sword'];
 const Herb = ICONS['healing-herb'];

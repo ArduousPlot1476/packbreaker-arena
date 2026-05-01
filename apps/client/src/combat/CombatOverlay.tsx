@@ -1,7 +1,11 @@
-// Combat — canned 4-second sequence + win overlay.
+// Canned 4-second combat sequence + win-overlay handoff to
+// screens/RoundResolution. Phaser scene scaffolding (CombatScene.ts,
+// effects/) lands in M1.3.4 with sim integration; M1.3.1 plays the
+// prototype's existing scripted animation.
 
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { BurnGlyph, CoinGlyph } from './icons';
+import { BurnGlyph } from '../icons/icons';
+import { RoundResolution } from '../screens/RoundResolution';
 
 type Side = 'player' | 'ghost';
 type EventKind = 'hit' | 'heal' | 'burn' | 'ko';
@@ -69,7 +73,7 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
       style={{ background: 'rgba(11,15,26,0.78)', zIndex: 50, backdropFilter: 'blur(2px)' }}
     >
       {phase === 'combat' && <CombatStage events={events} />}
-      {phase === 'resolved' && <WinOverlay onNext={onDone} />}
+      {phase === 'resolved' && <RoundResolution onNext={onDone} />}
     </div>
   );
 }
@@ -189,7 +193,14 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
         }}
       >
         <svg viewBox="0 0 64 64" width="100%" height="100%">
-          <circle cx="32" cy="22" r="10" fill={isPlayer ? '#3B82F6' : '#475569'} stroke="#0B0F1A" strokeWidth="1.5" />
+          <circle
+            cx="32"
+            cy="22"
+            r="10"
+            fill={isPlayer ? '#3B82F6' : '#475569'}
+            stroke="#0B0F1A"
+            strokeWidth="1.5"
+          />
           <path
             d={
               isPlayer
@@ -252,79 +263,6 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function WinOverlay({ onNext }: { onNext: () => void }) {
-  return (
-    <div
-      className="ease-snap"
-      style={{
-        width: 360,
-        padding: 24,
-        background: 'var(--surface-elev)',
-        border: '2px solid #22C55E',
-        borderRadius: 8,
-        textAlign: 'center',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-      }}
-    >
-      <div className="label-cap" style={{ color: '#22C55E', fontSize: 12, marginBottom: 6 }}>
-        ROUND 4 — VICTORY
-      </div>
-      <div className="heading-tight" style={{ fontSize: 32, marginBottom: 16 }}>
-        You crushed the ghost.
-      </div>
-      <div className="flex items-center justify-center gap-6 mb-5">
-        <div>
-          <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-secondary)' }}>
-            GOLD
-          </div>
-          <div className="flex items-center gap-1 justify-center mt-1">
-            <div style={{ width: 16, height: 16 }}>
-              <CoinGlyph />
-            </div>
-            <span className="tnum heading-tight" style={{ fontSize: 22, color: 'var(--coin-fill)' }}>
-              +1
-            </span>
-          </div>
-        </div>
-        <div>
-          <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-secondary)' }}>
-            TROPHY
-          </div>
-          <div className="tnum heading-tight" style={{ fontSize: 22 }}>
-            +18
-          </div>
-        </div>
-        <div>
-          <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-secondary)' }}>
-            HEARTS
-          </div>
-          <div className="tnum heading-tight" style={{ fontSize: 22, color: '#F87171' }}>
-            3/3
-          </div>
-        </div>
-      </div>
-      <button
-        onClick={onNext}
-        className="ease-snap label-cap"
-        style={{
-          width: '100%',
-          padding: '12px 16px',
-          borderRadius: 6,
-          background: 'var(--accent)',
-          color: '#FFFFFF',
-          fontWeight: 700,
-          fontSize: 12,
-          letterSpacing: '0.08em',
-          border: 'none',
-          cursor: 'pointer',
-        }}
-      >
-        NEXT ROUND →
-      </button>
     </div>
   );
 }
