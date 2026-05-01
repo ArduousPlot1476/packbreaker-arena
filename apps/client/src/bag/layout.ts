@@ -132,11 +132,15 @@ interface AnchorCandidate {
   rect: ButtonRect
 }
 
-function anchorCandidate(direction: AnchorDirection, bounds: ClusterBounds): AnchorCandidate {
-  const left = bounds.minX * cellPx
-  const right = (bounds.maxX + 1) * cellPx
-  const top = bounds.minY * cellPx
-  const bottom = (bounds.maxY + 1) * cellPx
+function anchorCandidate(
+  direction: AnchorDirection,
+  bounds: ClusterBounds,
+  cellSize: number,
+): AnchorCandidate {
+  const left = bounds.minX * cellSize
+  const right = (bounds.maxX + 1) * cellSize
+  const top = bounds.minY * cellSize
+  const bottom = (bounds.maxY + 1) * cellSize
   const W = COMBINE_BUTTON_W
   const H = COMBINE_BUTTON_H
   const G = COMBINE_BUTTON_GAP
@@ -172,17 +176,21 @@ function anchorCandidate(direction: AnchorDirection, bounds: ClusterBounds): Anc
   }
 }
 
-function rectOffGrid(rect: ButtonRect): boolean {
-  const W = BAG_COLS * cellPx
-  const H = BAG_ROWS * cellPx
+function rectOffGrid(rect: ButtonRect, cellSize: number): boolean {
+  const W = BAG_COLS * cellSize
+  const H = BAG_ROWS * cellSize
   return rect.x < 0 || rect.y < 0 || rect.x + rect.w > W || rect.y + rect.h > H
 }
 
-function rectOverlapsCells(rect: ButtonRect, occupiedCells: ReadonlySet<string>): boolean {
-  const startCol = Math.floor(rect.x / cellPx)
-  const endCol = Math.floor((rect.x + rect.w - 1) / cellPx)
-  const startRow = Math.floor(rect.y / cellPx)
-  const endRow = Math.floor((rect.y + rect.h - 1) / cellPx)
+function rectOverlapsCells(
+  rect: ButtonRect,
+  occupiedCells: ReadonlySet<string>,
+  cellSize: number,
+): boolean {
+  const startCol = Math.floor(rect.x / cellSize)
+  const endCol = Math.floor((rect.x + rect.w - 1) / cellSize)
+  const startRow = Math.floor(rect.y / cellSize)
+  const endRow = Math.floor((rect.y + rect.h - 1) / cellSize)
   for (let c = startCol; c <= endCol; c++) {
     for (let r = startRow; r <= endRow; r++) {
       if (occupiedCells.has(`${c},${r}`)) return true
@@ -197,7 +205,15 @@ function rectOverlapsCells(rect: ButtonRect, occupiedCells: ReadonlySet<string>)
 // non-cluster bag item wins. If all four collide (extremely dense bags)
 // returns the upper-right anchor with `fallback: true` and accepts the
 // visual overlap.
-export function combineAnchorPosition(uids: string[], bag: BagItem[]): CombineAnchorPos | null {
+//
+// `cellSize` defaults to the desktop cellPx (88) for back-compat with
+// pre-M1.3.3 callers. Mobile callers pass 52 (per decision-log
+// 2026-04-27 second-style-frame ratification).
+export function combineAnchorPosition(
+  uids: string[],
+  bag: BagItem[],
+  cellSize: number = cellPx,
+): CombineAnchorPos | null {
   const clusterCells = uids.flatMap((uid) => {
     const b = bag.find((x) => x.uid === uid)
     return b ? cellsOf(b) : []
@@ -220,9 +236,9 @@ export function combineAnchorPosition(uids: string[], bag: BagItem[]): CombineAn
   }
 
   for (const direction of ANCHOR_PRIORITY) {
-    const candidate = anchorCandidate(direction, bounds)
-    if (rectOffGrid(candidate.rect)) continue
-    if (rectOverlapsCells(candidate.rect, nonClusterCells)) continue
+    const candidate = anchorCandidate(direction, bounds, cellSize)
+    if (rectOffGrid(candidate.rect, cellSize)) continue
+    if (rectOverlapsCells(candidate.rect, nonClusterCells, cellSize)) continue
     return {
       cx: candidate.cx,
       cy: candidate.cy,
@@ -232,7 +248,7 @@ export function combineAnchorPosition(uids: string[], bag: BagItem[]): CombineAn
     }
   }
 
-  const fallback = anchorCandidate('upper-right', bounds)
+  const fallback = anchorCandidate('upper-right', bounds, cellSize)
   return {
     cx: fallback.cx,
     cy: fallback.cy,

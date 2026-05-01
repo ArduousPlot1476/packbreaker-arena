@@ -6,7 +6,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { dimsOf, ITEMS, type BagItem } from '../data.local';
 import { ICONS } from '../icons/icons';
-import { cellPx } from './layout';
+import { useCellSize } from './CellSize';
 import type { DraggableData } from './types';
 
 interface DraggableItemProps {
@@ -15,6 +15,7 @@ interface DraggableItemProps {
 }
 
 export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
+  const cellSize = useCellSize();
   const def = ITEMS[item.itemId];
   const dims = dimsOf(item.itemId, item.rot);
   const Icon = ICONS[item.itemId] ?? ICONS['copper-coin'];
@@ -36,10 +37,10 @@ export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
       {...listeners}
       className="absolute ease-snap"
       style={{
-        left: item.col * cellPx + 2,
-        top: item.row * cellPx + 2,
-        width: dims.w * cellPx - 4,
-        height: dims.h * cellPx - 4,
+        left: item.col * cellSize + 2,
+        top: item.row * cellSize + 2,
+        width: dims.w * cellSize - 4,
+        height: dims.h * cellSize - 4,
         opacity: isDragging ? 0.25 : 1,
         cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
         // 120ms drop-settle per visual-direction.md § 7 ("placement
@@ -49,7 +50,7 @@ export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
         touchAction: 'none',
       }}
     >
-      <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellPx - 4}>
+      <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellSize - 4}>
         <ItemIcon rot={item.rot}>
           <Icon />
         </ItemIcon>

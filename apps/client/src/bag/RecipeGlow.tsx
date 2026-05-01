@@ -16,7 +16,8 @@
 
 import { BAG_COLS, BAG_ROWS, ITEMS, RARITY, type BagItem } from '../data.local'
 import type { RecipeMatch } from '../run/recipes'
-import { cellPx, combineAnchorPosition, glowCellsForMatches } from './layout'
+import { useCellSize } from './CellSize'
+import { combineAnchorPosition, glowCellsForMatches } from './layout'
 
 interface RecipeGlowProps {
   bag: BagItem[]
@@ -25,8 +26,9 @@ interface RecipeGlowProps {
 }
 
 export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
-  const W = BAG_COLS * cellPx
-  const H = BAG_ROWS * cellPx
+  const cellSize = useCellSize()
+  const W = BAG_COLS * cellSize
+  const H = BAG_ROWS * cellSize
   const glowCells = glowCellsForMatches(matches, bag)
 
   return (
@@ -42,10 +44,10 @@ export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
           return (
             <rect
               key={k}
-              x={x * cellPx + 3}
-              y={y * cellPx + 3}
-              width={cellPx - 6}
-              height={cellPx - 6}
+              x={x * cellSize + 3}
+              y={y * cellSize + 3}
+              width={cellSize - 6}
+              height={cellSize - 6}
               rx="6"
               style={{ stroke: RARITY[rarity].color }}
             />
@@ -54,7 +56,7 @@ export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
       </svg>
 
       {matches.map((m, i) => {
-        const anchor = combineAnchorPosition(m.uids, bag)
+        const anchor = combineAnchorPosition(m.uids, bag, cellSize)
         if (!anchor) return null
         return (
           <button
