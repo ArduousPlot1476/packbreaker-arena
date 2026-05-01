@@ -63,7 +63,8 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
         border: '1px solid var(--border-default)',
         opacity: isDragging ? 0.45 : affordable ? 1 : 0.55,
         cursor: affordable ? (isDragging ? 'grabbing' : 'grab') : 'not-allowed',
-        transition: 'transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms, opacity 120ms',
+        // 120ms snappy ease per visual-direction.md § 7. Was 140ms in M1.3.1.
+        transition: 'transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms, opacity 120ms',
         touchAction: 'none',
         userSelect: 'none',
       }}

@@ -42,8 +42,10 @@ export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
         height: dims.h * cellPx - 4,
         opacity: isDragging ? 0.25 : 1,
         cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
+        // 120ms drop-settle per visual-direction.md § 7 ("placement
+        // settles in 120ms"). Was 160ms in the M0/M1.3.1 prototype.
         transition:
-          'left 160ms cubic-bezier(0.16, 1, 0.3, 1), top 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
+          'left 120ms cubic-bezier(0.16, 1, 0.3, 1), top 120ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
         touchAction: 'none',
       }}
     >

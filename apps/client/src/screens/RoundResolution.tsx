@@ -65,7 +65,7 @@ export function RoundResolution({ onNext }: RoundResolutionProps) {
       </div>
       <button
         onClick={onNext}
-        className="ease-snap label-cap"
+        className="ease-snap hover-lift label-cap"
         style={{
           width: '100%',
           padding: '12px 16px',

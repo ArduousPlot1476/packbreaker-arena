@@ -77,7 +77,7 @@ export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanel
         <button
           onClick={onReroll}
           disabled={!canReroll}
-          className="ease-snap label-cap mt-2 flex items-center justify-center gap-2"
+          className="ease-snap hover-lift label-cap mt-2 flex items-center justify-center gap-2"
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -103,7 +103,7 @@ export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanel
       <button
         onClick={onContinue}
         disabled={busy}
-        className="ease-snap label-cap"
+        className="ease-snap hover-lift label-cap"
         style={{
           marginTop: 'auto',
           width: '100%',

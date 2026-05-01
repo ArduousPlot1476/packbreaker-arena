@@ -48,7 +48,7 @@ export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
           <button
             key={`${m.recipe.id}:${i}`}
             onClick={() => onCombine(m)}
-            className="absolute combine-pop label-cap ease-snap"
+            className="absolute combine-pop label-cap ease-snap hover-lift"
             style={{
               left: anchor.cx,
               top: anchor.cy,
