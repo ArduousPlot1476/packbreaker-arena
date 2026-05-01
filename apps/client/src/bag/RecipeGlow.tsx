@@ -1,6 +1,18 @@
 // Recipe-ready visual: per-cell dashed pulsing outline (rarity-keyed) +
 // combine button anchored to the cluster bounding box. Glow renders at
 // zIndex 5; combine button at zIndex 10 above the glow.
+//
+// M0 deferred item 2 — closed at M1.3.2 commit 7. Per-cell rect
+// rendering retained. Evaluation on the post-styling-pass visual
+// register (1px frame borders, 1.5s/cycle marching dash, rarity-keyed
+// alpha pulse) showed unified halo legibility on both 2-cell and
+// 3-cell clusters; the failure mode the M0 spec named (internal seam
+// fighting halo) did not surface. Perimeter-path approach (~30 lines
+// edge-traversal geometry per the M0 deferred item 2 spec) deferred
+// indefinitely; revisit only if telemetry/playtest surfaces "busy"
+// read in cluster shapes not exercised here (4+ cell clusters,
+// L-shapes, T-shapes — none of which exist in M1 recipe content per
+// balance-bible.md § 11).
 
 import { BAG_COLS, BAG_ROWS, ITEMS, RARITY, type BagItem } from '../data.local'
 import type { RecipeMatch } from '../run/recipes'
