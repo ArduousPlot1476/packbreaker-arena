@@ -125,10 +125,10 @@ export function BagBoard({
         ))}
       </div>
       <div className="flex items-center justify-between mt-2" style={{ width: W }}>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+        <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
           {bag.length} ITEM{bag.length === 1 ? '' : 'S'} PLACED
         </div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+        <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
           {recipeMatches.length > 0 ? (
             <span style={{ color: '#F59E0B' }}>{recipeMatches.length} RECIPE READY</span>
           ) : (
