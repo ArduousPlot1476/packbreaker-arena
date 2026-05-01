@@ -85,6 +85,11 @@ export function BagBoard({
           border: '1px solid var(--border-default)',
           borderRadius: 8,
           position: 'relative',
+          // Lock pinch-zoom + scroll-while-touching on the bag area
+          // (mobile). Drag/drop interactions own this surface
+          // exclusively. Items' touchAction is 'none' too so the lock
+          // applies whether the touch starts on a cell or an item.
+          touchAction: 'none',
         }}
       >
         <svg width={W} height={H} className="absolute inset-0 pointer-events-none">

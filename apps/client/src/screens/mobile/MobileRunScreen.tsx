@@ -13,6 +13,7 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  TouchSensor,
   pointerWithin,
   useSensor,
   useSensors,
@@ -72,8 +73,19 @@ export function MobileRunScreen() {
 
   const [activeTab, setActiveTab] = useState<MobileTab>('shop');
 
+  // Mobile sensor stack (M1.3.3 commit 7):
+  //   - PointerSensor handles mouse + non-touch pointer fallback (e.g.
+  //     stylus on touch devices that don't fire pure touch events).
+  //   - TouchSensor handles native touch with a 200ms long-press
+  //     activation per gdd.md § 14 mobile drag mechanics. Tolerance 5px
+  //     allows the finger to wobble slightly during the hold without
+  //     cancelling the press.
+  // Tap-tap rotate (second finger taps anywhere while drag is active)
+  // is handled in useRun's window-level touchstart listener; @dnd-kit
+  // doesn't manage non-drag gestures.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
   );
 
   return (
