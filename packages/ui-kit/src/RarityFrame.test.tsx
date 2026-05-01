@@ -12,18 +12,40 @@ const RARITIES: RarityKey[] = ['common', 'uncommon', 'rare', 'epic', 'legendary'
 
 describe('RarityFrame — rarity variants', () => {
   RARITIES.forEach((rarity) => {
-    it(`renders with the correct gem (${RARITY[rarity].gem}) and border color for ${rarity}`, () => {
-      const { container, getByText } = render(
+    it(`renders the SVG gem (aria-label "${rarity}") and border color for ${rarity}`, () => {
+      const { container } = render(
         <RarityFrame rarity={rarity} size={88}>
           <span>icon</span>
         </RarityFrame>,
       );
-      // Corner gem rendered.
-      expect(getByText(RARITY[rarity].gem)).toBeInTheDocument();
-      // Frame border uses the rarity color.
+      // Corner gem rendered as inline SVG with aria-label = rarity key.
+      const gemSvg = container.querySelector(`svg[aria-label="${rarity}"]`);
+      expect(gemSvg).not.toBeNull();
+      // Frame border uses the rarity color (1px after M1.3.2 § 6 visual treatment).
       const frame = container.firstElementChild as HTMLElement;
       expect(frame.style.border).toContain(RARITY[rarity].color);
+      expect(frame.style.border).toContain('1px');
     });
+  });
+
+  it('inner-glow alpha + blur radius scale per rarity (M1.3.2 § 6)', () => {
+    const measure = (rarity: 'common' | 'legendary') => {
+      const { container } = render(
+        <RarityFrame rarity={rarity} size={88}>
+          <span>x</span>
+        </RarityFrame>,
+      );
+      const frame = container.firstElementChild as HTMLElement;
+      return frame.style.boxShadow;
+    };
+    const commonGlow = measure('common');
+    const legendaryGlow = measure('legendary');
+    // Common: 10px blur, 1A alpha → subtle.
+    expect(commonGlow).toContain('10px');
+    expect(commonGlow.toLowerCase()).toContain('1a');
+    // Legendary: 22px blur, 57 alpha → prominent.
+    expect(legendaryGlow).toContain('22px');
+    expect(legendaryGlow.toLowerCase()).toContain('57');
   });
 });
 

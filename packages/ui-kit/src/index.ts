@@ -5,5 +5,6 @@
 // itself ships TS only (no CSS layer until M1.3.3+ if needed).
 
 export { RarityFrame } from './RarityFrame';
+export { RarityGem, RARITY_GEM_SHAPE } from './RarityGem';
 export { ItemIcon } from './ItemIcon';
 export { RARITY, type RarityKey, type RarityDef } from './rarity';
