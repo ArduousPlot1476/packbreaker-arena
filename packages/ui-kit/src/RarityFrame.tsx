@@ -1,17 +1,20 @@
 // Rarity-bordered presentation primitive used by bag cells and shop slots.
-// apps/client-local for M1.3.1; promotion to packages/ui-kit lands in
-// M1.3.2 with the visual-direction.md compliance pass.
+// Promoted from apps/client/src/ui-kit-overrides/RarityFrame.tsx during
+// M1.3.2 commit 1. Visual treatment lands in commit 4 (corner gem SVG
+// variants + scaled inner glow per visual-direction.md § 6).
 
 import type { ReactNode } from 'react';
-import { RARITY, type RarityKey } from '../data.local';
-import { cellPx } from '../bag/layout';
+import { RARITY, type RarityKey } from './rarity';
 
 interface RarityFrameProps {
   rarity: RarityKey;
   children: ReactNode;
+  /** Width in cell units. Default 1. */
   w?: number;
+  /** Height in cell units. Default 1. */
   h?: number;
-  size?: number;
+  /** Cell size in pixels. Required — callers know the bag-cell or shop-card size. */
+  size: number;
   dim?: boolean;
 }
 
@@ -20,7 +23,7 @@ export function RarityFrame({
   children,
   w = 1,
   h = 1,
-  size = cellPx,
+  size,
   dim = false,
 }: RarityFrameProps) {
   const r = RARITY[rarity];

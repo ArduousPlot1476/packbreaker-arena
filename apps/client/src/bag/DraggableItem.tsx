@@ -3,9 +3,9 @@
 // DndContext at the RunScreen level dispatches into the run reducer.
 
 import { useDraggable } from '@dnd-kit/core';
+import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { dimsOf, ITEMS, type BagItem } from '../data.local';
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
+import { ICONS } from '../icons/icons';
 import { cellPx } from './layout';
 import type { DraggableData } from './types';
 
@@ -17,6 +17,7 @@ interface DraggableItemProps {
 export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
   const def = ITEMS[item.itemId];
   const dims = dimsOf(item.itemId, item.rot);
+  const Icon = ICONS[item.itemId] ?? ICONS['copper-coin'];
   const data: DraggableData = {
     kind: 'bag',
     uid: item.uid,
@@ -47,7 +48,9 @@ export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
       }}
     >
       <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellPx - 4}>
-        <ItemIcon itemId={item.itemId} rot={item.rot} />
+        <ItemIcon rot={item.rot}>
+          <Icon />
+        </ItemIcon>
       </RarityFrame>
     </div>
   );

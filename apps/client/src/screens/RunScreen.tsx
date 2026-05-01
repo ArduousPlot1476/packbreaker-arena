@@ -3,21 +3,22 @@
 // panel + combat overlay). Consumes useRun for state + dnd-kit handlers.
 
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
+import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { dimsOf, ITEMS, type ItemId } from '../data.local';
 import { BagBoard } from '../bag/BagBoard';
 import { cellPx } from '../bag/layout';
 import { CombatOverlay } from '../combat/CombatOverlay';
+import { ICONS } from '../icons/icons';
 import { TopBar } from '../hud/TopBar';
 import { LeftRail } from '../hud/LeftRail';
 import { BottomPanel } from '../hud/BottomPanel';
 import { ShopPanel } from '../shop/ShopPanel';
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
 import { useRun } from '../run/useRun';
 
 function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   const def = ITEMS[itemId];
   const dims = dimsOf(itemId, rot);
+  const Icon = ICONS[itemId] ?? ICONS['copper-coin'];
   return (
     <div
       style={{
@@ -28,7 +29,9 @@ function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
       }}
     >
       <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellPx - 4}>
-        <ItemIcon itemId={itemId} rot={rot} />
+        <ItemIcon rot={rot}>
+          <Icon />
+        </ItemIcon>
       </RarityFrame>
     </div>
   );

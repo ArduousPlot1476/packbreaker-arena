@@ -5,11 +5,10 @@
 // player can't afford or combat is in progress.
 
 import { useDraggable } from '@dnd-kit/core';
+import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ITEMS, RARITY, type ShopSlot as ShopSlotData } from '../data.local';
 import type { DraggableData } from '../bag/types';
-import { CoinGlyph } from '../icons/icons';
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
+import { CoinGlyph, ICONS } from '../icons/icons';
 
 interface ShopSlotProps {
   slot: ShopSlotData;
@@ -41,6 +40,7 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
   const r = RARITY[def.rarity];
   const affordable = gold >= def.cost && !busy;
   const cardWidth = 110;
+  const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
   const data: DraggableData = { kind: 'shop', uid: slot.uid };
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -70,7 +70,9 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
     >
       <div className="flex items-center justify-center mb-2">
         <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={42}>
-          <ItemIcon itemId={def.id} />
+          <ItemIcon>
+            <Icon />
+          </ItemIcon>
         </RarityFrame>
       </div>
       <div className="flex items-baseline justify-between gap-1">
