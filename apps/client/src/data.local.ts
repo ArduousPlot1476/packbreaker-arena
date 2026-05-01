@@ -55,22 +55,12 @@ const SEED_ITEM_SLUGS: ReadonlyArray<ItemId> = [
   'steel-sword', 'healing-salve', 'fire-oil', 'ember-brand',
 ];
 
-export type RarityKey = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
-
-export interface RarityDef {
-  color: string;
-  label: string;
-  gem: string;
-  glow: string;
-}
-
-export const RARITY: Record<RarityKey, RarityDef> = {
-  common: { color: '#94A3B8', label: 'COMMON', gem: '◆', glow: 'glow-common' },
-  uncommon: { color: '#22C55E', label: 'UNCOMMON', gem: '■', glow: 'glow-uncommon' },
-  rare: { color: '#3B82F6', label: 'RARE', gem: '▲', glow: 'glow-rare' },
-  epic: { color: '#A855F7', label: 'EPIC', gem: '★', glow: 'glow-epic' },
-  legendary: { color: '#F59E0B', label: 'LEGENDARY', gem: '✦', glow: 'glow-legendary' },
-};
+// RarityKey, RARITY, and RarityDef now live in @packbreaker/ui-kit/src/rarity.ts
+// (M1.3.2 commit 1, partial dissolution of data.local.ts). Re-exported here
+// for back-compat with the existing import sites; sweep to direct
+// @packbreaker/ui-kit imports lands in commit 3 (palette token consolidation).
+export { RARITY, type RarityKey, type RarityDef } from '@packbreaker/ui-kit';
+import type { RarityKey } from '@packbreaker/ui-kit';
 
 // ─── ItemDef (prototype shape) — adapted from content's full Item ────
 

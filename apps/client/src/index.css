@@ -53,6 +53,16 @@ body {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Hover lift per visual-direction.md § 6 — "Hover lifts brightness ~6%,
+   no rotation/scale". Applied to interactive buttons (Reroll, Continue,
+   Combine, Next Round). 120ms snappy ease on filter for smooth lift. */
+.hover-lift {
+  transition: filter 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms, opacity 120ms;
+}
+.hover-lift:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
 @keyframes recipe-march {
   to {
     stroke-dashoffset: -24;

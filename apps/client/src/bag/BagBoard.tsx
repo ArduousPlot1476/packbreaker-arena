@@ -74,7 +74,7 @@ export function BagBoard({
               y1={0}
               x2={i * cellPx}
               y2={H}
-              stroke="#2D3854"
+              stroke="var(--border-default)"
               strokeWidth="1"
             />
           ))}
@@ -85,7 +85,7 @@ export function BagBoard({
               y1={i * cellPx}
               x2={W}
               y2={i * cellPx}
-              stroke="#2D3854"
+              stroke="var(--border-default)"
               strokeWidth="1"
             />
           ))}
@@ -111,7 +111,7 @@ export function BagBoard({
                   height={cellPx - 4}
                   rx="5"
                   fill={preview!.valid ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)'}
-                  stroke={preview!.valid ? '#22C55E' : '#EF4444'}
+                  stroke={preview!.valid ? 'var(--r-uncommon)' : 'var(--life-red)'}
                   strokeWidth="2"
                   strokeDasharray={preview!.valid ? '0' : '4 3'}
                 />
@@ -125,12 +125,12 @@ export function BagBoard({
         ))}
       </div>
       <div className="flex items-center justify-between mt-2" style={{ width: W }}>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+        <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
           {bag.length} ITEM{bag.length === 1 ? '' : 'S'} PLACED
         </div>
-        <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+        <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
           {recipeMatches.length > 0 ? (
-            <span style={{ color: '#F59E0B' }}>{recipeMatches.length} RECIPE READY</span>
+            <span style={{ color: 'var(--r-legendary)' }}>{recipeMatches.length} RECIPE READY</span>
           ) : (
             'NO RECIPES READY'
           )}

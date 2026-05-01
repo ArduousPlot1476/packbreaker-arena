@@ -107,7 +107,10 @@ function CombatStage({ events }: { events: CombatEvent[] }) {
         const isHeal = ev.kind === 'heal';
         const isBurn = ev.kind === 'burn';
         const x = sideX[ev.side];
-        const color = isHeal ? '#86EFAC' : isBurn ? '#F59E0B' : '#F87171';
+        // Heal uses --r-uncommon (closest in-palette green); burn uses
+        // --r-legendary (amber); hit uses --life-stroke. Replaced in
+        // M1.3.4 with the Phaser combat scene's own VFX palette.
+        const color = isHeal ? 'var(--r-uncommon)' : isBurn ? 'var(--r-legendary)' : 'var(--life-stroke)';
         const sign = isHeal ? '+' : '−';
         return (
           <Fragment key={ev.id}>
@@ -186,8 +189,12 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
           width: '100%',
           height: '100%',
           borderRadius: 10,
-          border: `2px solid ${isPlayer ? '#3B82F6' : '#94A3B8'}`,
+          border: `2px solid ${isPlayer ? 'var(--accent)' : 'var(--text-secondary)'}`,
           background: 'var(--surface)',
+          // Inset glow uses fixed alpha-modified hex; the colors are
+          // accent/text-secondary derivatives. CSS color-mix() would let
+          // us derive these from --accent / --text-secondary at runtime;
+          // M1.3.4 Phaser combat scene replaces the placeholder portraits.
           boxShadow: `inset 0 0 30px ${isPlayer ? '#3B82F633' : '#94A3B833'}`,
           position: 'relative',
         }}
@@ -197,8 +204,8 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
             cx="32"
             cy="22"
             r="10"
-            fill={isPlayer ? '#3B82F6' : '#475569'}
-            stroke="#0B0F1A"
+            fill={isPlayer ? 'var(--accent)' : '#475569'}
+            stroke="var(--bg-deep)"
             strokeWidth="1.5"
           />
           <path
@@ -208,7 +215,7 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
                 : 'M14 58 L14 44 C14 38, 22 36, 32 36 C42 36, 50 38, 50 44 L50 58 Z'
             }
             fill={isPlayer ? '#1D4ED8' : '#334155'}
-            stroke="#0B0F1A"
+            stroke="var(--bg-deep)"
             strokeWidth="1.5"
           />
         </svg>
@@ -235,7 +242,7 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
               height: 28,
               background: 'var(--surface-elev)',
               borderRadius: 6,
-              border: '2px solid #F59E0B',
+              border: '2px solid var(--r-legendary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -250,12 +257,12 @@ function Portrait({ side, label, cls, burnStacks = 0 }: PortraitProps) {
               style={{
                 right: -6,
                 bottom: -6,
-                background: '#F59E0B',
+                background: 'var(--r-legendary)',
                 borderRadius: 8,
                 padding: '0 4px',
                 fontSize: 10,
                 fontWeight: 700,
-                color: '#0B0F1A',
+                color: 'var(--bg-deep)',
               }}
             >
               {burnStacks}

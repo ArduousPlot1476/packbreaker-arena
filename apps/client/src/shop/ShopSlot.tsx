@@ -5,11 +5,10 @@
 // player can't afford or combat is in progress.
 
 import { useDraggable } from '@dnd-kit/core';
+import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ITEMS, RARITY, type ShopSlot as ShopSlotData } from '../data.local';
 import type { DraggableData } from '../bag/types';
-import { CoinGlyph } from '../icons/icons';
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
+import { CoinGlyph, ICONS } from '../icons/icons';
 
 interface ShopSlotProps {
   slot: ShopSlotData;
@@ -41,6 +40,7 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
   const r = RARITY[def.rarity];
   const affordable = gold >= def.cost && !busy;
   const cardWidth = 110;
+  const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
   const data: DraggableData = { kind: 'shop', uid: slot.uid };
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -63,14 +63,17 @@ export function ShopSlot({ slot, gold, busy }: ShopSlotProps) {
         border: '1px solid var(--border-default)',
         opacity: isDragging ? 0.45 : affordable ? 1 : 0.55,
         cursor: affordable ? (isDragging ? 'grabbing' : 'grab') : 'not-allowed',
-        transition: 'transform 140ms cubic-bezier(0.16, 1, 0.3, 1), background 140ms, opacity 120ms',
+        // 120ms snappy ease per visual-direction.md § 7. Was 140ms in M1.3.1.
+        transition: 'transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms, opacity 120ms',
         touchAction: 'none',
         userSelect: 'none',
       }}
     >
       <div className="flex items-center justify-center mb-2">
         <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={42}>
-          <ItemIcon itemId={def.id} />
+          <ItemIcon>
+            <Icon />
+          </ItemIcon>
         </RarityFrame>
       </div>
       <div className="flex items-baseline justify-between gap-1">

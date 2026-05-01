@@ -1,6 +1,18 @@
 // Recipe-ready visual: per-cell dashed pulsing outline (rarity-keyed) +
 // combine button anchored to the cluster bounding box. Glow renders at
 // zIndex 5; combine button at zIndex 10 above the glow.
+//
+// M0 deferred item 2 — closed at M1.3.2 commit 7. Per-cell rect
+// rendering retained. Evaluation on the post-styling-pass visual
+// register (1px frame borders, 1.5s/cycle marching dash, rarity-keyed
+// alpha pulse) showed unified halo legibility on both 2-cell and
+// 3-cell clusters; the failure mode the M0 spec named (internal seam
+// fighting halo) did not surface. Perimeter-path approach (~30 lines
+// edge-traversal geometry per the M0 deferred item 2 spec) deferred
+// indefinitely; revisit only if telemetry/playtest surfaces "busy"
+// read in cluster shapes not exercised here (4+ cell clusters,
+// L-shapes, T-shapes — none of which exist in M1 recipe content per
+// balance-bible.md § 11).
 
 import { BAG_COLS, BAG_ROWS, ITEMS, RARITY, type BagItem } from '../data.local'
 import type { RecipeMatch } from '../run/recipes'
@@ -48,17 +60,17 @@ export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
           <button
             key={`${m.recipe.id}:${i}`}
             onClick={() => onCombine(m)}
-            className="absolute combine-pop label-cap ease-snap"
+            className="absolute combine-pop label-cap ease-snap hover-lift"
             style={{
               left: anchor.cx,
               top: anchor.cy,
               transform: anchor.transform,
-              background: '#F59E0B',
-              color: '#0B0F1A',
+              background: 'var(--r-legendary)',
+              color: 'var(--bg-deep)',
               fontWeight: 700,
               fontSize: 11,
               letterSpacing: '0.12em',
-              border: '2px solid #FCD34D',
+              border: '2px solid var(--coin-stroke)',
               borderRadius: 6,
               padding: '6px 12px',
               cursor: 'pointer',

@@ -3,9 +3,9 @@
 // DndContext at the RunScreen level dispatches into the run reducer.
 
 import { useDraggable } from '@dnd-kit/core';
+import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { dimsOf, ITEMS, type BagItem } from '../data.local';
-import { ItemIcon } from '../ui-kit-overrides/ItemIcon';
-import { RarityFrame } from '../ui-kit-overrides/RarityFrame';
+import { ICONS } from '../icons/icons';
 import { cellPx } from './layout';
 import type { DraggableData } from './types';
 
@@ -17,6 +17,7 @@ interface DraggableItemProps {
 export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
   const def = ITEMS[item.itemId];
   const dims = dimsOf(item.itemId, item.rot);
+  const Icon = ICONS[item.itemId] ?? ICONS['copper-coin'];
   const data: DraggableData = {
     kind: 'bag',
     uid: item.uid,
@@ -41,13 +42,17 @@ export function DraggableItem({ item, disabled = false }: DraggableItemProps) {
         height: dims.h * cellPx - 4,
         opacity: isDragging ? 0.25 : 1,
         cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
+        // 120ms drop-settle per visual-direction.md § 7 ("placement
+        // settles in 120ms"). Was 160ms in the M0/M1.3.1 prototype.
         transition:
-          'left 160ms cubic-bezier(0.16, 1, 0.3, 1), top 160ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
+          'left 120ms cubic-bezier(0.16, 1, 0.3, 1), top 120ms cubic-bezier(0.16, 1, 0.3, 1), opacity 120ms',
         touchAction: 'none',
       }}
     >
       <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellPx - 4}>
-        <ItemIcon itemId={item.itemId} rot={item.rot} />
+        <ItemIcon rot={item.rot}>
+          <Icon />
+        </ItemIcon>
       </RarityFrame>
     </div>
   );
