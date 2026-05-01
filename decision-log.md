@@ -66,6 +66,22 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 - **M1.3.4** (sim integration + Phaser combat overlay) is next. **This is the inflection point:** `data.local.ts` dissolves, `packages/sim` integrates into the client bundle (lazy-loaded alongside Phaser, following the M1.3.3 mobile-chunk precedent), canned 4-second combat replaced by deterministic playback of real combat events. The game stops being a UI demo and starts being a deterministic real game.
 
+### Codex P1 catch + hotfix (commit 10)
+
+- **Codex Review on PR #5 caught a P1 regression on the lazy-loaded dispatcher:** the cross-breakpoint orchestrator swap destroyed `useRun` state. Both `DesktopRunScreen` and `MobileRunScreen` independently called `useRun()`, so when the dispatcher swapped one for the other (rotation, window resize across 768px), the leaving orchestrator's `useReducer` state was destroyed and the new tree started from `INITIAL_CLIENT_STATE`. Bag, shop, gold, hearts, round all reset. Regressed M1.3.2's single-orchestrator behavior.
+
+- **Hotfix:** lifted `useRun()` into a new `RunProvider` (option B from Trey's ratification — Context over prop drilling). `screens/RunScreen.tsx` now wraps its children in `<RunProvider>`; both orchestrators consume via `useRunContext()` instead of calling `useRun()` independently. The provider stays mounted across the dispatcher's child swap, so the underlying `useReducer` state persists across viewport switches.
+
+- **New files:**
+  - `apps/client/src/run/RunContext.tsx` — `RunContext` + `RunProvider` + `useRunContext` hook. Throws a clear error if consumed outside the provider.
+  - `apps/client/src/run/RunContext.test.tsx` (+2 tests) — direct regression coverage. (1) "preserves state when the provider child subtree swaps" mutates state in child A (gold 8 → 7, rerollCount 0 → 1), swaps the provider's children to B, asserts B reads the preserved state, mutates again from B (gold 7 → 5, rerollCount 1 → 2). Unit-test analog of a viewport-driven orchestrator swap. (2) "throws a clear error when useRunContext is called outside `<RunProvider>`" — defensive invariant.
+
+- **Architectural rule (project-wide, carry-forward to M1.3.4+):** _Lazy-loaded sub-tree dispatchers must own any state that should persist across the dispatch boundary. State below the dispatcher's swap point is destroyed on every swap._ Documented inline at `run/RunContext.tsx`. M1.3.4 Phaser will follow the same lazy-load pattern; any combat-scene state that should persist across mount/unmount cycles must live above the lazy boundary.
+
+- **Updated stats:** test count **75 across 15 files** (was 73/14); main chunk **244.93 KB raw / 75.65 KB gzipped** (was 244.63 / 75.52 — +0.30 KB raw / +0.13 KB gzipped from `RunContext.tsx` + glue). All bundle-delta budgets still satisfied (desktop +1.15% raw / +1.58% gzipped vs M1.3.2 baseline). Mobile chunk unchanged at 12.06 KB / 3.22 KB. CSS unchanged at 10.07 KB. Modules 78 (was 77, +1 RunContext file).
+
+- **Updated branch hygiene:** 11 implementation commits on `m1.3.3-mobile-responsive` (3, 4, 5, 6, 7, 8, 8.5, 8.6, 9 = original closing entry, 10 = Codex hotfix, 11 = this closing-log amendment). Branch force-pushed to origin after the hotfix lands so the PR re-runs CI against the corrected tree.
+
 ---
 
 ## 2026-05-01 — M1.3.2 closed (visual styling pass + ui-kit primitive promotion)
