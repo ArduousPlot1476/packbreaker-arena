@@ -1,6 +1,39 @@
 // Icons — vector-flat, 64×64 source, 1.5px stroke, gridline aesthetic.
 // Each icon is rendered to fill its parent (via viewBox 0 0 64 64).
 // Body fill carries identity; rarity is on the frame, not the icon.
+//
+// Body-color rule audit (M1.3.2 commit 5, per visual-direction.md § 5
+// + decision-log.md 2026-04-26 Option A: "identity/tag colors (plant,
+// fire, food, blood, gold) override the rarity-collision rule"):
+//
+//   item            rarity      body palette                     pass-reason
+//   --------------  ----------  -------------------------------  ----------------------------
+//   iron-sword      common      slate gradient (CBD5E1→64748B)   iron material = rarity-common
+//   iron-dagger     common      slate (CBD5E1) + brown handle    same as iron-sword
+//   wooden-shield   common      brown (92400E, 7C2D12)           wood material identity
+//   healing-herb    common      leaf-green (86EFAC, 16A34A);     plant identity (Option A)
+//                               not equal to rarity-uncommon
+//                               22C55E
+//   spark-stone     common      amber spark (F59E0B, FCD34D)     fire identity (Option A);
+//                               on dark stone                    F59E0B coincides w/ legendary
+//                                                                frame, identity rule overrides
+//   whetstone       common      slate gradient (94A3B8, CBD5E1)  stone/metal material identity
+//   apple           common      red body (DC2626) + leaf         food identity (Option A)
+//   copper-coin     common      gold (F59E0B, FCD34D)            gold currency identity (Opt A)
+//                                                                — coin-glyph never appears
+//                                                                inside Legendary item frame
+//                                                                per § 3, no surface collision
+//   steel-sword     uncommon    silver gradient (E2E8F0→94A3B8)  metal material identity
+//                                                                94A3B8 stop = rarity-common
+//                                                                but is metallic base
+//   healing-salve   uncommon    bottle-green (16A34A)            plant identity matches rarity
+//   ember-brand     rare        ember gradient + flames          fire identity (Option A)
+//   fire-oil        uncommon    dark + amber flame (F59E0B)      fire identity (Option A)
+//
+// Pass: all 12 items. No body fill collides with a non-own,
+// non-identity-exempted rarity color. Frame border + corner gem
+// (dual-coded rarity carriers per § 1) remain the rarity-language
+// authority on each surface.
 
 import type { ReactNode, SVGProps } from 'react';
 import type { ItemId } from '../data.local';
