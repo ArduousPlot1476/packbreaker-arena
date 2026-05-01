@@ -1,12 +1,9 @@
-// Branch-dispatcher test: RunScreen reads useViewport and renders
-// DesktopRunScreen at desktop, MobileRunScreen at mobile. Stubs
-// matchMedia to control viewport. Smoke-tests both branches via a
-// "MOBILE LAYOUT" / "BAG · 6×4" header sentinel since fully rendering
-// the desktop tree requires the @dnd-kit DndContext that the
-// orchestrators provide internally.
+// Branch-dispatcher tests for RunScreen. Stubs matchMedia to control
+// viewport. Desktop branch renders synchronously; mobile branch is
+// lazy-loaded behind React.lazy + Suspense per M1.3.3 commit 8.5.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, waitFor } from '@testing-library/react';
 import { RunScreen } from './RunScreen';
 
 interface FakeMediaQueryList {
@@ -46,22 +43,37 @@ describe('RunScreen branch dispatcher', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders DesktopRunScreen when matchMedia(max-width:767) is false', () => {
+  it('renders DesktopRunScreen synchronously when matchMedia is false', () => {
     matchesValue = false;
     const { container } = render(<RunScreen />);
-    // Desktop renders BAG · 6×4 header (compact mode is OFF by default).
+    // Desktop renders BAG · 6×4 header (compact mode is OFF by default)
+    // and renders synchronously — no Suspense fallback path involved.
     expect(container.textContent).toContain('BAG · 6×4');
+    expect(container.querySelector('[data-testid="mobile-suspense-fallback"]')).toBeNull();
   });
 
-  it('renders MobileRunScreen when matchMedia(max-width:767) is true', () => {
+  it('renders MobileRunScreen (lazy) when matchMedia is true', async () => {
     matchesValue = true;
     const { container } = render(<RunScreen />);
-    // Mobile compact mode hides the BAG · 6×4 header. The mobile tab bar
-    // is rendered with all 4 tab labels.
-    expect(container.textContent).not.toContain('BAG · 6×4');
-    expect(container.textContent).toContain('SHOP');
+    // The mobile module is loaded async; tab labels appear once
+    // React.lazy resolves and Suspense unblocks.
+    await waitFor(() => {
+      expect(container.textContent).toContain('SHOP');
+    });
     expect(container.textContent).toContain('CRAFTING');
     expect(container.textContent).toContain('RELICS');
     expect(container.textContent).toContain('LOG');
+    expect(container.textContent).not.toContain('BAG · 6×4');
   });
+
 });
+
+// NOTE: a "Suspense fallback transient" test was attempted but proved
+// unreliable under vitest/happy-dom — the dynamic import resolves
+// faster than the synchronous DOM query can capture the fallback
+// element, even when the test inspects `container` immediately after
+// `render()`. The async-render path is covered above by the
+// waitFor-based mobile test ("renders MobileRunScreen (lazy) when
+// matchMedia is true"). The fallback render path is exercised in the
+// real browser; visual confirmation lands as part of the screenshot
+// deliverable hand-off.
