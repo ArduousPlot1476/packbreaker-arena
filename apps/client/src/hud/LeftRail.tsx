@@ -79,7 +79,7 @@ export function LeftRail() {
               background: 'var(--surface)',
               padding: 8,
               borderRadius: 6,
-              border: '1px solid #3B82F6',
+              border: '1px solid var(--accent)',
             }}
           >
             <div style={{ width: 22, height: 22 }}>

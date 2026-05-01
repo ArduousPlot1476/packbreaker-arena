@@ -17,13 +17,13 @@ export function RoundResolution({ onNext }: RoundResolutionProps) {
         width: 360,
         padding: 24,
         background: 'var(--surface-elev)',
-        border: '2px solid #22C55E',
+        border: '2px solid var(--r-uncommon)',
         borderRadius: 8,
         textAlign: 'center',
         boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
       }}
     >
-      <div className="label-cap" style={{ color: '#22C55E', fontSize: 12, marginBottom: 6 }}>
+      <div className="label-cap" style={{ color: 'var(--r-uncommon)', fontSize: 12, marginBottom: 6 }}>
         ROUND 4 — VICTORY
       </div>
       <div className="heading-tight" style={{ fontSize: 32, marginBottom: 16 }}>
@@ -58,7 +58,7 @@ export function RoundResolution({ onNext }: RoundResolutionProps) {
           <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-secondary)' }}>
             HEARTS
           </div>
-          <div className="tnum heading-tight" style={{ fontSize: 22, color: '#F87171' }}>
+          <div className="tnum heading-tight" style={{ fontSize: 22, color: 'var(--life-stroke)' }}>
             3/3
           </div>
         </div>
@@ -71,7 +71,7 @@ export function RoundResolution({ onNext }: RoundResolutionProps) {
           padding: '12px 16px',
           borderRadius: 6,
           background: 'var(--accent)',
-          color: '#FFFFFF',
+          color: 'var(--text-primary)',
           fontWeight: 700,
           fontSize: 12,
           letterSpacing: '0.08em',

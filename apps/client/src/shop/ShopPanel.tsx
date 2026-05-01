@@ -28,13 +28,13 @@ function SellZone() {
         padding: 12,
         borderRadius: 6,
         background: isOver ? 'rgba(239,68,68,0.16)' : 'var(--surface)',
-        border: `2px dashed ${isOver ? '#EF4444' : 'var(--border-default)'}`,
+        border: `2px dashed ${isOver ? 'var(--life-red)' : 'var(--border-default)'}`,
         textAlign: 'center',
       }}
     >
       <div
         className="label-cap"
-        style={{ fontSize: 10, color: isOver ? '#F87171' : 'var(--text-secondary)' }}
+        style={{ fontSize: 10, color: isOver ? 'var(--life-stroke)' : 'var(--text-secondary)' }}
       >
         SELL · 50% RECOVERY
       </div>
@@ -109,8 +109,8 @@ export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanel
           width: '100%',
           padding: '14px 16px',
           borderRadius: 6,
-          background: busy ? 'var(--surface)' : '#3B82F6',
-          color: '#FFFFFF',
+          background: busy ? 'var(--surface)' : 'var(--accent)',
+          color: 'var(--text-primary)',
           fontWeight: 700,
           fontSize: 13,
           letterSpacing: '0.1em',
