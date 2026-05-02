@@ -18,7 +18,7 @@
 // authoritative when contracts mutate the levers.
 
 import { computeRerollCost } from '@packbreaker/sim';
-import { DEFAULT_RULESET, type ClassId } from '@packbreaker/content';
+import { DEFAULT_RULESET, type ClassId, type CombatResult } from '@packbreaker/content';
 
 // M1.3.4a: hardcoded class for the prototype run. Class-select screen
 // (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
@@ -96,7 +96,7 @@ export type RunAction =
   | { type: 'reroll' }
   | { type: 'combine'; match: RecipeMatch; newUid: string }
   | { type: 'continue_to_combat' }
-  | { type: 'combat_done' };
+  | { type: 'combat_done'; result: CombatResult };
 
 // Pure helper: computes placement of the combine output. Returns the new
 // bag with the output placed, or null if no placement fits.
@@ -292,8 +292,12 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return { ...state, combatActive: true };
 
     case 'combat_done': {
-      // Round advancement + reward. Real damage / outcome / history population
-      // lands in M1.3.4a commit 3 alongside the CombatResult flow.
+      // Round advancement + reward. M1.3.4a commit 2 plumbs the
+      // CombatResult into the action; commit 3 consumes outcome +
+      // damage to populate hearts loss + RunHistoryEntry. For now the
+      // reducer advances optimistically (always-win); voiding the
+      // payload reads keeps the parameter present without behavior.
+      void action.result;
       const nextRound = state.state.round + 1;
       const ruleset = state.state.ruleset;
       // Generate next round's shop deterministically from the run seed.

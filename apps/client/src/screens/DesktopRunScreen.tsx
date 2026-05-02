@@ -11,7 +11,7 @@ import { BagBoard } from '../bag/BagBoard';
 import { cellPx, dimsOf } from '../bag/layout';
 import { ITEMS } from '../run/content';
 import type { ItemId } from '../run/types';
-import { CombatOverlay } from '../combat/CombatOverlay';
+import { LazyCombatOverlay } from '../combat/LazyCombatOverlay';
 import { ICONS } from '../icons/icons';
 import { TopBar } from '../hud/TopBar';
 import { LeftRail } from '../hud/LeftRail';
@@ -96,7 +96,7 @@ export function DesktopRunScreen() {
             busy={state.combatActive}
           />
           {state.combatActive && (
-            <CombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
         </div>
         <BottomPanel />

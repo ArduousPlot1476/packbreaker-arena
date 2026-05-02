@@ -4,12 +4,24 @@
 // PointerSensor pointercancel + window-blur handling routes through.
 
 import { describe, expect, it } from 'vitest';
+import type { CombatResult } from '@packbreaker/content';
 import {
   clientRunReducer,
   createInitialState,
   type ClientRunState,
 } from './RunController';
 import type { BagItem, ItemId } from './types';
+
+// Stub CombatResult — the reducer's combat_done handler doesn't read
+// outcome / damage in M1.3.4a commit 2 (commit 3 wires the consumption).
+// The minimal shape satisfies the action type so the reducer test can
+// drive the round-advance branch.
+const STUB_COMBAT_RESULT: CombatResult = {
+  events: [],
+  outcome: 'player_win',
+  finalHp: { player: 30, ghost: 0 },
+  endedAtTick: 0,
+};
 
 const SWORD = 'iron-sword' as ItemId;
 
@@ -137,7 +149,7 @@ describe('clientRunReducer', () => {
   it('combat_done advances round + grants reward + resets rerollCount', () => {
     const initial = freshInitial();
     const inCombat: ClientRunState = { ...initial, combatActive: true };
-    const next = clientRunReducer(inCombat, { type: 'combat_done' });
+    const next = clientRunReducer(inCombat, { type: 'combat_done', result: STUB_COMBAT_RESULT });
     expect(next.combatActive).toBe(false);
     expect(next.state.round).toBe(initial.state.round + 1);
     expect(next.state.gold).toBe(initial.state.gold + 1);

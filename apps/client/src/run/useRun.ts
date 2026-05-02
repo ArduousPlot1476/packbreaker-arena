@@ -12,6 +12,7 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
+import type { CombatResult } from '@packbreaker/content';
 import { ITEMS } from './content';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
@@ -115,8 +116,12 @@ export function useRun() {
     dispatch({ type: 'continue_to_combat' });
   }, []);
 
-  const onCombatDone = useCallback(() => {
-    dispatch({ type: 'combat_done' });
+  // The CombatResult is plumbed through to the reducer so the next-round
+  // shop / hearts / history can consume real damage + outcome data.
+  // M1.3.4a commit 2 wires the path; commit 3 consumes outcome + damage
+  // for the heart-loss / history-entry side of the reducer.
+  const onCombatDone = useCallback((result: CombatResult) => {
+    dispatch({ type: 'combat_done', result });
   }, []);
 
   return {

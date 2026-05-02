@@ -24,7 +24,7 @@ import { ITEMS } from '../../run/content';
 import type { ItemId } from '../../run/types';
 import { BagBoard } from '../../bag/BagBoard';
 import { CellSizeProvider } from '../../bag/CellSize';
-import { CombatOverlay } from '../../combat/CombatOverlay';
+import { LazyCombatOverlay } from '../../combat/LazyCombatOverlay';
 import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
 import { useRunContext } from '../../run/RunContext';
@@ -140,7 +140,7 @@ export function MobileRunScreen() {
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />
           <MobileContinueCTA onContinue={onContinue} busy={state.combatActive} />
           {state.combatActive && (
-            <CombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
         </div>
         <DragOverlay dropAnimation={null}>
