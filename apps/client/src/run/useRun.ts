@@ -45,8 +45,25 @@ export function useRun() {
         dispatch({ type: 'drag_rotate' });
       }
     }
+    // Mobile tap-tap rotate (M1.3.3 commit 7): while a drag is active,
+    // a second finger touching the screen rotates the held item. Same
+    // square-no-op gating as the R-key path. The first finger remains
+    // down holding the drag (TouchSensor activation); the second
+    // touchstart fires once per new touch contact.
+    function touchStart(e: TouchEvent) {
+      if (e.touches.length < 2) return;
+      const d = dragRef.current;
+      if (!d) return;
+      const def = ITEMS[d.itemId];
+      if (def.w === def.h) return;
+      dispatch({ type: 'drag_rotate' });
+    }
     window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    window.addEventListener('touchstart', touchStart);
+    return () => {
+      window.removeEventListener('keydown', key);
+      window.removeEventListener('touchstart', touchStart);
+    };
   }, []);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {

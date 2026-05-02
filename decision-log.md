@@ -4,6 +4,86 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-01 — M1.3.3 closed (mobile responsive 390-wide vertical layout)
+
+- First sub-phase to target a viewport other than desktop. Layout reflows per `gdd.md` § 14 mobile spec; visual register from M1.3.2 carries forward unchanged across mobile (no mobile-specific palette extensions, no mobile-specific typography deviations, no mobile-specific easing curves). Trey-confirmed via 12-of-14 screenshot review in chat.
+
+- **Layout audit ratifications:**
+  1. **Opponent intent → top-bar element.** `GhostGlyph` 18px + two 20px monochrome silhouette swatches (sword + shield) inline. No explicit class label — the silhouette pair pattern implies the apparent class per `gdd.md` § 14 ("opponent intent shows the opponent's apparent class and 1–2 marquee item silhouettes — never their full bag pre-combat").
+  2. **Class passive → `[Relics]` tab header card.** Tinker glyph + class name + "+10% recipe potency" passive text. Header card precedes the relic slots in the Relics tab.
+  3. **Silhouettes → top-bar inline** (collapsed into Decision 1 — silhouettes ride with the opponent-intent block, not a separate top-bar item).
+  4. **`[Crafting]` tab → active recipes mirror** (option A). Lists the recipes currently ready to combine, each row a tappable COMBINE target. Mirrors (does not replace) the COMBINE buttons anchored on the bag itself — provides an ergonomic backup for awkward combine-anchor positions. Empty state copy: "No recipes ready. Place items adjacent to see combinations." Recipe scouting (recipes-you-could-make-with-current-items) deferred to M1.3.4 with sim integration.
+  5. **`[Log]` tab → vertical stack of round entries.** R1/R2/R3 line items with WON/LOST + damage summary (mock data until M1.3.4 sim integration provides real per-round results). **Last-round damage chart remains deferred on both desktop and mobile; revisit when telemetry surfaces a need.**
+  6. **Tab-content layout → stacked** (option ii — bag upper, tab content lower). Bag must always be visible per visual-direction.md § 1 (60%-of-smaller-dim floor). Stack: top bar 44 + bag 240 (4 × 52px cells + 32px padding, BAG/items-placed header+footer rows hidden via `compact` prop) + tab content ~360 scrollable + tab bar 56 + Continue CTA 56 = 756 of 844 viewport.
+  7. **Floating CTA → option C (full-width bar).** Closes `visual-direction.md` § 13 question 4. Always-visible regardless of active tab; reroll moves to `[Shop]` tab header (visible only when Shop is active). User can tap Continue from any tab without first switching back to Shop. Largest tap target (≈390 × 56 vs floating-pill ≈64 × 40); no dual-meaning confusion.
+  8. **Breakpoint mechanism → JS viewport-detect at 768px** (`window.matchMedia('(max-width: 767px)')` + `useState` + `change` event listener in `apps/client/src/run/useViewport.ts`). Two orchestrators sharing primitives; only the active layout's component tree mounts at a time, which keeps @dnd-kit sensor config (PointerSensor on desktop, PointerSensor + TouchSensor on mobile) cleanly per-layout. Tablet/intermediate (768–1024) reads as desktop per `gdd.md` § 14. Breakpoint flicker mitigations (debounce, persist-last-active) deferred — revisit only if a user reports it.
+
+- **Lazy-load mobile (commit 8.5) per option-B ratification on bundle-delta halt.** `MobileRunScreen` loaded on-demand via `React.lazy(() => import('./mobile/MobileRunScreen'))` + minimal `<Suspense fallback={<MobileFallback />}>` wrapper at the dispatcher level. Desktop branch stays default-synchronous. Per `tech-architecture.md` § 10's mid-tier-mobile parse-time budget, raw bytes matter as much as gzipped transmission — the mobile-only payload doesn't ship to desktop users. Sets the precedent for M1.3.4 Phaser code-splitting.
+
+- **Viewport-meta fix (commit 8.6).** Trey's first-pass screenshot capture surfaced a real bug: M0's `<meta name="viewport" content="width=1280" />` graybox hack was forcing all browsers (including Chrome DevTools mobile emulation) to use a 1280-wide layout viewport, which made `matchMedia('(max-width: 767px)').matches` return false at 390-wide → useViewport returned 'desktop' → DesktopRunScreen rendered inside the 390-wide canvas. Fix: meta updated to `width=device-width, initial-scale=1`. The useViewport hook + dispatcher logic were correct as-is. The pre-M1.3.3 hack made graybox desktop viewable on phones for design review without responsive implementation; M1.3.3 makes mobile a real surface so the hack must go.
+
+- **Mobile components added** (`apps/client/src/`):
+  - `screens/mobile/MobileRunScreen.tsx` — orchestrator. Wraps `DndContext` + `<CellSizeProvider value={52}>` + stacked layout. Combines PointerSensor (mouse/stylus fallback) + TouchSensor (200ms long-press, 5px tolerance).
+  - `screens/mobile/MobileTabBar.tsx` — 4-tab shell (Shop / Crafting / Relics / Log), default = Shop, active-tab indicator (2px accent border-top + heading-tight), tabs ≥ 44×56 touch targets.
+  - `screens/mobile/tabs/{ShopTab,CraftingTab,RelicsTab,LogTab}.tsx` — tab content panels.
+  - `screens/mobile/MobileContinueCTA.tsx` — full-width × 56px bottom bar Continue.
+  - `hud/mobile/MobileTopBar.tsx` — compact 44px top bar with gold/hearts/round + opponent intent.
+  - `bag/CellSize.tsx` — `CellSizeContext` (default 88) + `CellSizeProvider` + `useCellSize` hook. Mobile orchestrator wraps with `value={52}`. Pure pixel-math utilities in `bag/layout.ts` (combineAnchorPosition + helpers) parameterized by `cellSize` arg defaulting to the desktop constant.
+  - `shop/SellZone.tsx` — extracted from `ShopPanel.tsx`'s inline subcomponent for shared use between desktop ShopPanel and mobile ShopTab.
+  - `bag/BagBoard.tsx` — added `compact` prop (default false) hiding the BAG/items-placed header+footer rows so the mobile bag area fits 240px.
+  - `shop/ShopSlot.tsx` — added `cardWidth` prop default 110 (desktop) so mobile ShopTab can pass `'100%'` and slots fill the wider mobile grid columns.
+
+- `bag/`, `shop/`, `packages/ui-kit/` — shared between desktop and mobile, no fork. CellSize context drives the per-layout pixel scale.
+
+- **Touch ergonomics:** @dnd-kit `TouchSensor` wired with 200ms `delay` + 5px `tolerance` activation. **Tap-tap rotate** during drag implemented via window-level `touchstart` listener in `useRun.ts`: while `dragRef.current` is non-null, a second concurrent touch (`touches.length >= 2`) fires `drag_rotate`. Same square-no-op gating as the R-key path. **Touch-target audit:** all interactive mobile elements ≥ 44×44 WCAG-AA floor (tab buttons ~95×56, REROLL minHeight 44, COMBINE rows minHeight 44, Continue CTA full-width × 56, ShopSlot cards ~159×140, bag cells 52×52). **Pinch-zoom + scroll lock during drag:** `touch-action: none` applied to the bag's inner board container so taps on empty cells and items both inhibit native pinch/scroll.
+
+- **Recipe-glow halo legibility verified at 52px cell — confirmed readable.** Per-cell rect rendering retained at the smaller mobile scale; the failure mode the M0 spec named (internal seam fighting halo) does not surface. M0 deferred item 2 stays closed; perimeter-path revival NOT needed for mobile. Per Trey's screenshot ratification, shared edges between cluster cells read as part of dashed marching pattern, not as internal seams. Mobile cell size does not trigger the busy-read failure mode.
+
+- **Visual register continuity:** zero mobile-specific palette extensions, zero mobile-specific typography deviations, zero mobile-specific easing curves. Inter weights 400/500/600/700 + tabular numerals + cubic-bezier(0.16, 1, 0.3, 1) all flow through unchanged. Desktop screenshots 13–14 confirm desktop did NOT regress at 1280×720 or at 1024×768 (intermediate width correctly routes to desktop layout).
+
+- **12 of 14 screenshots delivered** (mobile 3–12 + desktop 13–14). Mobile screenshots 1 (mid-drag valid outline) and 2 (invalid drop shake) not captured due to a documented OS-tooling limitation: standard screenshot keystrokes release the drag mid-capture under Chrome DevTools mobile emulation, since the touch is held by the mouse pointer that the screenshot tool interrupts. Workarounds (touch event recording, video capture, real-device testing) add tooling complexity beyond M1.3.3 scope. Behavioral parity for drag affordances verified IMPLICITLY across screenshots 3–7 (drag-to-place, recipe detection, four-direction first-fit anchor, combine flow all functional). Skip framed as a tooling limitation, NOT a regression. Revisit at M1.3.4 if real-device testing becomes in-scope alongside Phaser combat overlay work.
+
+- **Bundle delta vs. M1.3.2 close (242.15 KB JS / 9.94 KB CSS / 74.47 KB gzipped / 64 modules):**
+  - **Desktop-only bundle:** 244.63 KB raw / 75.52 KB gzipped — Δ +2.48 KB raw (+1.02%) / +1.05 KB gzipped (+1.41%). Within ≤+5% on both axes ✓
+  - **Mobile chunk (lazy):** 12.06 KB raw / 3.22 KB gzipped — additive, only loaded when viewport < 768px
+  - **Total (mobile users):** 256.69 KB raw / 78.74 KB gzipped — first-load cost on mobile only, then cached
+  - **CSS:** 10.05 KB (+0.11 KB / +1.11%) — within ≤+30% budget ✓
+  - **Modules:** 64 → 77 (+13: 12 mobile-component files + 1 lazy-chunk runtime metadata, split across 2 chunks)
+  - Pre-lazy single-chunk build was 255.00 KB / 76.35 KB gzipped (76 modules); the split adds ~1.7 KB raw / ~2.4 KB gzipped of code-splitting overhead but only mobile users pay it. **Desktop users save 10.37 KB raw / 0.83 KB gzipped vs the un-split build.**
+
+- **Tests:** ui-kit 27 (unchanged); client **46** (was 31; +15 across 5 new test files: `screens/RunScreen.test.tsx` ×2 [desktop sync + lazy mobile via `waitFor`], `screens/mobile/MobileTabBar.test.tsx` ×4, `screens/mobile/MobileContinueCTA.test.tsx` ×3, `screens/mobile/tabs/CraftingTab.test.tsx` ×4, `screens/mobile/tabs/RelicsTab.test.tsx` ×2). Workspace total **73 across 14 test files**, all passing. Turbo pipeline 19/19 tasks green.
+
+- **Documented carry-forwards** (most converging at M1.3.4):
+  1. `shop/ShopController.ts` split → M1.3.4 (sim integration creates real shop action surfaces)
+  2. `data.local.ts` full dissolution → M1.3.4
+  3. `combat/CombatOverlay.tsx` portrait character-art (3 hex sites) → M1.3.4 (Phaser replacement)
+  4. @dnd-kit `DragOverlay` rotation visual polish → M1.3.4 (non-blocking observation, carry-forward from M1.3.2)
+  5. **Mobile drag-state screenshot capture** (touch + screenshot tool conflict under DevTools emulation) → M1.3.4 if real-device testing becomes in-scope
+  6. `apps/client/src/index.css` `.glow-*` `rgba()` palette derivatives (5 entries) → M1.3.3+ if revisited (carry-forward from M1.3.2; not surfaced this sub-phase)
+  7. **Viewport-meta side-effect:** `DesktopRunScreen` at fixed 1280px width may show horizontal scroll on desktop browser windows narrower than 1280 with the new responsive meta. Not visible at the 1024×768 verification capture; M1.3.4+ if it surfaces at narrower widths (desktop responsive layout would fix it).
+
+- **Branch hygiene:** 9 implementation commits (3, 4, 5, 6, 7, 8, 8.5, 8.6) + closing entry on `m1.3.3-mobile-responsive`, branched off main (`0d9803b`). `--no-ff` merge to main once Trey confirms CI green on origin.
+
+- **M1.3.4** (sim integration + Phaser combat overlay) is next. **This is the inflection point:** `data.local.ts` dissolves, `packages/sim` integrates into the client bundle (lazy-loaded alongside Phaser, following the M1.3.3 mobile-chunk precedent), canned 4-second combat replaced by deterministic playback of real combat events. The game stops being a UI demo and starts being a deterministic real game.
+
+### Codex P1 catch + hotfix (commit 10)
+
+- **Codex Review on PR #5 caught a P1 regression on the lazy-loaded dispatcher:** the cross-breakpoint orchestrator swap destroyed `useRun` state. Both `DesktopRunScreen` and `MobileRunScreen` independently called `useRun()`, so when the dispatcher swapped one for the other (rotation, window resize across 768px), the leaving orchestrator's `useReducer` state was destroyed and the new tree started from `INITIAL_CLIENT_STATE`. Bag, shop, gold, hearts, round all reset. Regressed M1.3.2's single-orchestrator behavior.
+
+- **Hotfix:** lifted `useRun()` into a new `RunProvider` (option B from Trey's ratification — Context over prop drilling). `screens/RunScreen.tsx` now wraps its children in `<RunProvider>`; both orchestrators consume via `useRunContext()` instead of calling `useRun()` independently. The provider stays mounted across the dispatcher's child swap, so the underlying `useReducer` state persists across viewport switches.
+
+- **New files:**
+  - `apps/client/src/run/RunContext.tsx` — `RunContext` + `RunProvider` + `useRunContext` hook. Throws a clear error if consumed outside the provider.
+  - `apps/client/src/run/RunContext.test.tsx` (+2 tests) — direct regression coverage. (1) "preserves state when the provider child subtree swaps" mutates state in child A (gold 8 → 7, rerollCount 0 → 1), swaps the provider's children to B, asserts B reads the preserved state, mutates again from B (gold 7 → 5, rerollCount 1 → 2). Unit-test analog of a viewport-driven orchestrator swap. (2) "throws a clear error when useRunContext is called outside `<RunProvider>`" — defensive invariant.
+
+- **Architectural rule (project-wide, carry-forward to M1.3.4+):** _Lazy-loaded sub-tree dispatchers must own any state that should persist across the dispatch boundary. State below the dispatcher's swap point is destroyed on every swap._ Documented inline at `run/RunContext.tsx`. M1.3.4 Phaser will follow the same lazy-load pattern; any combat-scene state that should persist across mount/unmount cycles must live above the lazy boundary.
+
+- **Updated stats:** test count **75 across 15 files** (was 73/14); main chunk **244.93 KB raw / 75.65 KB gzipped** (was 244.63 / 75.52 — +0.30 KB raw / +0.13 KB gzipped from `RunContext.tsx` + glue). All bundle-delta budgets still satisfied (desktop +1.15% raw / +1.58% gzipped vs M1.3.2 baseline). Mobile chunk unchanged at 12.06 KB / 3.22 KB. CSS unchanged at 10.07 KB. Modules 78 (was 77, +1 RunContext file).
+
+- **Updated branch hygiene:** 11 implementation commits on `m1.3.3-mobile-responsive` (3, 4, 5, 6, 7, 8, 8.5, 8.6, 9 = original closing entry, 10 = Codex hotfix, 11 = this closing-log amendment). Branch force-pushed to origin after the hotfix lands so the PR re-runs CI against the corrected tree.
+
+---
+
 ## 2026-05-01 — M1.3.2 closed (visual styling pass + ui-kit primitive promotion)
 
 - Visual-direction.md compliance landed across `apps/client/src/`. First sub-phase where the game looks like the locked Gridline direction rather than the prototype skin. Behavioral parity vs. M1.3.1 preserved end-to-end (Trey-confirmed via 12-screenshot review in chat).

@@ -3,7 +3,7 @@
 // coordination via collision detection.
 
 import { useDroppable } from '@dnd-kit/core';
-import { cellPx } from './layout';
+import { useCellSize } from './CellSize';
 import type { DroppableData } from './types';
 
 interface BagCellProps {
@@ -12,6 +12,7 @@ interface BagCellProps {
 }
 
 export function BagCell({ col, row }: BagCellProps) {
+  const cellSize = useCellSize();
   const data: DroppableData = { kind: 'cell', col, row };
   const { setNodeRef } = useDroppable({
     id: `cell:${col}:${row}`,
@@ -24,10 +25,10 @@ export function BagCell({ col, row }: BagCellProps) {
       data-cell-row={row}
       style={{
         position: 'absolute',
-        left: col * cellPx,
-        top: row * cellPx,
-        width: cellPx,
-        height: cellPx,
+        left: col * cellSize,
+        top: row * cellSize,
+        width: cellSize,
+        height: cellSize,
       }}
     />
   );
