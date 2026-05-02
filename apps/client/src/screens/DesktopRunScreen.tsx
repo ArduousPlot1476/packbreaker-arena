@@ -99,7 +99,7 @@ export function DesktopRunScreen() {
             <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
         </div>
-        <BottomPanel />
+        <BottomPanel state={state.state} />
       </div>
       <DragOverlay dropAnimation={null}>
         {state.drag ? <DragPreview itemId={state.drag.itemId} rot={state.drag.rot} /> : null}

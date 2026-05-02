@@ -26,16 +26,19 @@ const SALVE_SCOUT: Recipe = {
 };
 
 describe('CraftingTab', () => {
-  it('shows the empty-state copy when there are no recipes', () => {
-    const { getByText, queryByText } = render(
+  it('shows empty-state copy in BOTH sections when nothing is ready or scoutable', () => {
+    const { getByText } = render(
       <CraftingTab recipes={[]} scoutedRecipes={[]} onCombine={() => {}} />,
     );
+    expect(getByText('READY TO CRAFT')).toBeInTheDocument();
     expect(getByText('NO RECIPES READY')).toBeInTheDocument();
     expect(
       getByText('Place items adjacent to see combinations.'),
     ).toBeInTheDocument();
-    // The scouted section header is hidden when there's nothing to scout.
-    expect(queryByText('AVAILABLE WITH CURRENT ITEMS')).toBeNull();
+    // Per Trey's screenshot review: the scouted section is ALWAYS
+    // rendered, with its own empty state when nothing is scoutable.
+    expect(getByText('AVAILABLE WITH CURRENT ITEMS')).toBeInTheDocument();
+    expect(getByText('No recipes possible with current items.')).toBeInTheDocument();
   });
 
   it('renders one COMBINE row per ready recipe with the output name', () => {

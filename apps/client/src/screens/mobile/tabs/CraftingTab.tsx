@@ -164,7 +164,6 @@ function ReadySection({
 }
 
 function ScoutedSection({ recipes }: { recipes: Recipe[] }) {
-  if (recipes.length === 0) return null;
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
       <div className="flex items-baseline gap-2">
@@ -175,8 +174,30 @@ function ScoutedSection({ recipes }: { recipes: Recipe[] }) {
           {recipes.length}
         </div>
       </div>
-      <div className="flex flex-col gap-2">
-        {recipes.map((r) => {
+      {recipes.length === 0 ? (
+        <div
+          className="flex items-center justify-center"
+          style={{
+            padding: '20px 12px',
+            border: '1px dashed var(--border-default)',
+            borderRadius: 6,
+            background: 'var(--surface)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              textAlign: 'center',
+              maxWidth: 240,
+            }}
+          >
+            No recipes possible with current items.
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {recipes.map((r) => {
           const outDef = ITEMS[r.output];
           const Icon = ICONS[outDef.id] ?? ICONS['copper-coin'];
           const inputNames = r.inputs.map((id) => ITEMS[id]?.name ?? String(id)).join(' + ');
@@ -240,7 +261,8 @@ function ScoutedSection({ recipes }: { recipes: Recipe[] }) {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
