@@ -63,6 +63,7 @@ export function MobileRunScreen() {
   const {
     state,
     recipes,
+    scoutedRecipes,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
@@ -134,7 +135,13 @@ export function MobileRunScreen() {
               busy={state.combatActive}
             />
           )}
-          {activeTab === 'crafting' && <CraftingTab recipes={recipes} onCombine={onCombine} />}
+          {activeTab === 'crafting' && (
+            <CraftingTab
+              recipes={recipes}
+              scoutedRecipes={scoutedRecipes}
+              onCombine={onCombine}
+            />
+          )}
           {activeTab === 'relics' && <RelicsTab state={state.state} />}
           {activeTab === 'log' && <LogTab state={state.state} />}
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />

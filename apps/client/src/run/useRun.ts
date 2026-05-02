@@ -30,7 +30,8 @@ import {
   INITIAL_CLIENT_STATE,
   type ClientRunState,
 } from './RunController';
-import { detectRecipes, type RecipeMatch } from './recipes';
+import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
+import type { Recipe } from './types';
 
 function makeUid(prefix: 'b' | 's'): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -40,6 +41,17 @@ export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   const recipes = useMemo(() => detectRecipes(state.bag), [state.bag]);
+
+  // scoutedRecipes: inventory-only matches (multiset; no adjacency).
+  // Filtered to recipes whose id is NOT already a `recipes` (ready)
+  // match — so the mobile Crafting tab's two sections stay disjoint:
+  //   "Ready to combine" (recipes) — the player can tap COMBINE now.
+  //   "Available with current items" (scoutedRecipes) — would need to
+  //                                                    rearrange first.
+  const scoutedRecipes = useMemo<Recipe[]>(() => {
+    const ready = new Set(recipes.map((m) => m.recipe.id));
+    return scoutRecipes(state.bag).filter((r) => !ready.has(r.id));
+  }, [state.bag, recipes]);
 
   const dragRef = useRef<ClientRunState['drag']>(null);
   dragRef.current = state.drag;
@@ -137,6 +149,7 @@ export function useRun() {
   return {
     state,
     recipes,
+    scoutedRecipes,
     handleDragStart,
     handleDragOver,
     handleDragEnd,

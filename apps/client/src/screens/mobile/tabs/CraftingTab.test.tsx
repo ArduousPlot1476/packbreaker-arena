@@ -1,38 +1,46 @@
-// Unit tests for CraftingTab. Empty state + populated state with
-// COMBINE rows + COMBINE button touch-target compliance.
+// Unit tests for CraftingTab. Verifies the two-section layout
+// ("READY TO CRAFT" + "AVAILABLE WITH CURRENT ITEMS"), empty state,
+// COMBINE row interaction, and the 44×44 touch-target floor.
 
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import { CraftingTab } from './CraftingTab';
 import type { RecipeMatch } from '../../../run/recipes';
-import type { ItemId } from '../../../run/types';
+import type { ItemId, Recipe } from '../../../run/types';
 
 const SWORD = 'iron-sword' as ItemId;
 const DAGGER = 'iron-dagger' as ItemId;
 const STEEL = 'steel-sword' as ItemId;
+const HERB = 'healing-herb' as ItemId;
+const SALVE = 'healing-salve' as ItemId;
+
+const STEEL_MATCH: RecipeMatch = {
+  recipe: { id: 'r-steel-sword', inputs: [SWORD, DAGGER], output: STEEL },
+  uids: ['a', 'b'],
+};
+
+const SALVE_SCOUT: Recipe = {
+  id: 'r-healing-salve',
+  inputs: [HERB, HERB],
+  output: SALVE,
+};
 
 describe('CraftingTab', () => {
   it('shows the empty-state copy when there are no recipes', () => {
-    const { getByText } = render(<CraftingTab recipes={[]} onCombine={() => {}} />);
+    const { getByText, queryByText } = render(
+      <CraftingTab recipes={[]} scoutedRecipes={[]} onCombine={() => {}} />,
+    );
     expect(getByText('NO RECIPES READY')).toBeInTheDocument();
     expect(
       getByText('Place items adjacent to see combinations.'),
     ).toBeInTheDocument();
+    // The scouted section header is hidden when there's nothing to scout.
+    expect(queryByText('AVAILABLE WITH CURRENT ITEMS')).toBeNull();
   });
 
-  it('renders one COMBINE row per recipe with the output name', () => {
-    const recipes: RecipeMatch[] = [
-      {
-        recipe: {
-          id: 'r-steel-sword',
-          inputs: [SWORD, DAGGER],
-          output: STEEL,
-        },
-        uids: ['a', 'b'],
-      },
-    ];
+  it('renders one COMBINE row per ready recipe with the output name', () => {
     const { getByText, getByRole } = render(
-      <CraftingTab recipes={recipes} onCombine={() => {}} />,
+      <CraftingTab recipes={[STEEL_MATCH]} scoutedRecipes={[]} onCombine={() => {}} />,
     );
     expect(getByText('Steel Sword')).toBeInTheDocument();
     expect(getByText('2 INPUTS')).toBeInTheDocument();
@@ -40,35 +48,44 @@ describe('CraftingTab', () => {
   });
 
   it('fires onCombine with the matched recipe when COMBINE is tapped', () => {
-    const recipes: RecipeMatch[] = [
-      {
-        recipe: {
-          id: 'r-steel-sword',
-          inputs: [SWORD, DAGGER],
-          output: STEEL,
-        },
-        uids: ['a', 'b'],
-      },
-    ];
     const onCombine = vi.fn();
-    const { getByRole } = render(<CraftingTab recipes={recipes} onCombine={onCombine} />);
+    const { getByRole } = render(
+      <CraftingTab recipes={[STEEL_MATCH]} scoutedRecipes={[]} onCombine={onCombine} />,
+    );
     fireEvent.click(getByRole('button', { name: 'COMBINE' }));
-    expect(onCombine).toHaveBeenCalledWith(recipes[0]);
+    expect(onCombine).toHaveBeenCalledWith(STEEL_MATCH);
   });
 
   it('COMBINE button meets the 44×44 touch-target floor', () => {
-    const recipes: RecipeMatch[] = [
-      {
-        recipe: {
-          id: 'r-steel-sword',
-          inputs: [SWORD, DAGGER],
-          output: STEEL,
-        },
-        uids: ['a', 'b'],
-      },
-    ];
-    const { getByRole } = render(<CraftingTab recipes={recipes} onCombine={() => {}} />);
+    const { getByRole } = render(
+      <CraftingTab recipes={[STEEL_MATCH]} scoutedRecipes={[]} onCombine={() => {}} />,
+    );
     const button = getByRole('button', { name: 'COMBINE' }) as HTMLElement;
     expect(parseInt(button.style.minHeight, 10)).toBeGreaterThanOrEqual(44);
+  });
+
+  it('renders a scouted-recipes section listing each recipe with its inputs', () => {
+    const { getByText } = render(
+      <CraftingTab recipes={[]} scoutedRecipes={[SALVE_SCOUT]} onCombine={() => {}} />,
+    );
+    expect(getByText('AVAILABLE WITH CURRENT ITEMS')).toBeInTheDocument();
+    expect(getByText('Healing Salve')).toBeInTheDocument();
+    expect(getByText('Healing Herb + Healing Herb')).toBeInTheDocument();
+    expect(getByText('REARRANGE')).toBeInTheDocument();
+  });
+
+  it('renders both sections when both ready and scouted recipes exist', () => {
+    const { getByText, getByRole } = render(
+      <CraftingTab
+        recipes={[STEEL_MATCH]}
+        scoutedRecipes={[SALVE_SCOUT]}
+        onCombine={() => {}}
+      />,
+    );
+    expect(getByText('READY TO CRAFT')).toBeInTheDocument();
+    expect(getByText('AVAILABLE WITH CURRENT ITEMS')).toBeInTheDocument();
+    expect(getByRole('button', { name: 'COMBINE' })).toBeInTheDocument();
+    expect(getByText('Steel Sword')).toBeInTheDocument();
+    expect(getByText('Healing Salve')).toBeInTheDocument();
   });
 });
