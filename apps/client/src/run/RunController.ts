@@ -18,7 +18,14 @@
 // authoritative when contracts mutate the levers.
 
 import { computeRerollCost } from '@packbreaker/sim';
-import { DEFAULT_RULESET, type ClassId, type CombatResult } from '@packbreaker/content';
+import {
+  DEFAULT_RULESET,
+  type ClassId,
+  type CombatResult,
+  type GhostId,
+  type RoundNumber,
+  type RunHistoryEntry,
+} from '@packbreaker/content';
 
 // M1.3.4a: hardcoded class for the prototype run. Class-select screen
 // (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
@@ -96,7 +103,13 @@ export type RunAction =
   | { type: 'reroll' }
   | { type: 'combine'; match: RecipeMatch; newUid: string }
   | { type: 'continue_to_combat' }
-  | { type: 'combat_done'; result: CombatResult };
+  | {
+      type: 'combat_done';
+      result: CombatResult;
+      opponentGhostId: GhostId | null;
+      damageDealt: number;
+      damageTaken: number;
+    };
 
 // Pure helper: computes placement of the combine output. Returns the new
 // bag with the output placed, or null if no placement fits.
@@ -292,14 +305,35 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return { ...state, combatActive: true };
 
     case 'combat_done': {
-      // Round advancement + reward. M1.3.4a commit 2 plumbs the
-      // CombatResult into the action; commit 3 consumes outcome +
-      // damage to populate hearts loss + RunHistoryEntry. For now the
-      // reducer advances optimistically (always-win); voiding the
-      // payload reads keeps the parameter present without behavior.
-      void action.result;
-      const nextRound = state.state.round + 1;
+      // Resolve the round: append a RunHistoryEntry + apply hearts /
+      // gold / trophy deltas based on outcome. Sim's CombatResult is
+      // authoritative for outcome and finalHp; the action carries the
+      // pre-computed damage values so the reducer doesn't need to
+      // import combat/ghost.ts (which would defeat the lazy split).
+      //
+      // M1.3.4a economic rules:
+      //   - Win: +winBonusGold, +18 trophy, hearts unchanged.
+      //   - Loss: +0 gold, +0 trophy, hearts -1 (clamped to 0).
+      //   - Draw: treated as loss for hearts; trophy / gold neutral.
+      //
+      // M1.5+ adds run-end detection (hearts === 0 → eliminated +
+      // game-over screen) + per-round goldPerRound passive sums +
+      // multi-round trophy schedule from the contract.
       const ruleset = state.state.ruleset;
+      const isWin = action.result.outcome === 'player_win';
+      const hearts = isWin ? state.state.hearts : Math.max(0, state.state.hearts - 1);
+      const goldEarned = isWin ? ruleset.winBonusGold : 0;
+      const trophyEarned = isWin ? 18 : 0;
+      const round = state.state.round;
+      const historyEntry: RunHistoryEntry = {
+        round: round as RoundNumber,
+        outcome: isWin ? 'win' : 'loss',
+        damageDealt: action.damageDealt,
+        damageTaken: action.damageTaken,
+        goldEarnedThisRound: goldEarned,
+        opponentGhostId: action.opponentGhostId,
+      };
+      const nextRound = round + 1;
       // Generate next round's shop deterministically from the run seed.
       const nextShop = generateShop(state.state.seed, nextRound, M1_PROTOTYPE_CLASS, ruleset, 0);
       // Empty relic slots (M1.3.4a — relic state machinery is M1.5).
@@ -310,10 +344,12 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         shop: nextShop,
         state: {
           ...state.state,
-          gold: state.state.gold + ruleset.winBonusGold,
-          trophy: state.state.trophy + 18,
+          hearts,
+          gold: state.state.gold + goldEarned,
+          trophy: state.state.trophy + trophyEarned,
           round: nextRound,
           rerollCount: 0,
+          history: [...state.state.history, historyEntry],
         },
       };
     }

@@ -12,7 +12,7 @@
 // alongside CombatOverlay + ghost.ts.
 
 import { lazy, Suspense } from 'react';
-import type { CombatResult } from '@packbreaker/content';
+import type { CombatDonePayload } from '../run/useRun';
 
 const CombatOverlayInner = lazy(() =>
   import('./CombatOverlay').then((m) => ({ default: m.CombatOverlay })),
@@ -20,7 +20,7 @@ const CombatOverlayInner = lazy(() =>
 
 interface LazyCombatOverlayProps {
   active: boolean;
-  onDone: (result: CombatResult) => void;
+  onDone: (payload: CombatDonePayload) => void;
 }
 
 export function LazyCombatOverlay({ active, onDone }: LazyCombatOverlayProps) {

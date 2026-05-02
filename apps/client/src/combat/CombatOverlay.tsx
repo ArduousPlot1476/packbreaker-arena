@@ -19,9 +19,11 @@ import {
   type CombatInput,
   type CombatResult,
   type EntityRef,
+  type GhostId,
 } from '@packbreaker/content';
 import { BurnGlyph } from '../icons/icons';
 import { useRunContext } from '../run/RunContext';
+import type { CombatDonePayload } from '../run/useRun';
 import { clientBagToSimBag, emptyRelicSlots, runCombat } from '../run/sim-bridge';
 import { RoundResolution } from '../screens/RoundResolution';
 import { makeGhostForRound } from './ghost';
@@ -36,7 +38,7 @@ const M1_PROTOTYPE_CLASS_LABEL = 'Tinker';
 
 interface CombatOverlayProps {
   active: boolean;
-  onDone: (result: CombatResult) => void;
+  onDone: (payload: CombatDonePayload) => void;
 }
 
 /** Builds a CombatInput from current run state. Pure construction —
@@ -44,7 +46,7 @@ interface CombatOverlayProps {
 function buildCombatInput(
   bag: ReturnType<typeof useRunContext>['state']['bag'],
   state: ReturnType<typeof useRunContext>['state']['state'],
-): { input: CombatInput; ghostClass: string } {
+): { input: CombatInput; ghostClass: string; ghostId: GhostId } {
   const playerBag = clientBagToSimBag(bag, state.ruleset.bagDimensions);
   const ghost = makeGhostForRound(state.seed, state.round, state.ruleset.bagDimensions);
   const input: CombatInput = {
@@ -59,7 +61,7 @@ function buildCombatInput(
     },
     ghost: ghost.combatant,
   };
-  return { input, ghostClass: titleCase(ghost.classId) };
+  return { input, ghostClass: titleCase(ghost.classId), ghostId: ghost.id };
 }
 
 function titleCase(s: string): string {
@@ -80,22 +82,24 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
   // active flag so each combat-start re-runs the sim. Memoize against
   // bag + state.round + state.seed to keep the result stable across
   // renders within a single combat.
-  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel } = useMemo(() => {
+  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId } = useMemo(() => {
     if (!active) {
       return {
         result: null as CombatResult | null,
         initialPlayerHp: 0,
         initialGhostHp: 0,
         ghostClassLabel: 'Marauder',
+        ghostId: null as GhostId | null,
       };
     }
-    const { input, ghostClass } = buildCombatInput(ctx.state.bag, ctx.state.state);
+    const { input, ghostClass, ghostId: gid } = buildCombatInput(ctx.state.bag, ctx.state.state);
     const r = runCombat(input);
     return {
       result: r,
       initialPlayerHp: input.player.startingHp,
       initialGhostHp: input.ghost.startingHp,
       ghostClassLabel: ghostClass,
+      ghostId: gid,
     };
     // Intentional narrow dep list: combat is reconstructed on combat
     // start (active false → true) and on round/seed change. Bag /
@@ -234,6 +238,17 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
     return { playerHp: pHp, ghostHp: gHp, statusStacks: status };
   }, [result, currentTick, initialPlayerHp, initialGhostHp]);
 
+  // Damage attributable to player / ghost. result.finalHp is HP at the
+  // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
+  // status-tick lethal hits don't underflow if HP went negative inside
+  // sim before being clamped at the event boundary.
+  const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
+  const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
+  const isWin = result?.outcome === 'player_win';
+  const ruleset = ctx.state.state.ruleset;
+  const goldEarned = isWin ? ruleset.winBonusGold : 0;
+  const trophyEarned = isWin ? 18 : 0;
+
   function handleSkip() {
     if (!result) return;
     setCurrentTick(result.endedAtTick + 2);
@@ -241,10 +256,25 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
   }
 
   function handleNext() {
-    if (result) onDone(result);
+    if (result) {
+      onDone({
+        result,
+        opponentGhostId: ghostId,
+        damageDealt,
+        damageTaken,
+      });
+    }
   }
 
   if (!active) return null;
+
+  // Hearts shown in the resolution panel are post-loss values: hearts go
+  // from current → current-1 on a loss (clamped to 0). The reducer
+  // applies the same delta when combat_done dispatches; we render the
+  // post-state here so the player sees the cost before pressing NEXT.
+  const heartsPost = isWin
+    ? ctx.state.state.hearts
+    : Math.max(0, ctx.state.state.hearts - 1);
 
   return (
     <div
@@ -264,7 +294,19 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
           onSkip={handleSkip}
         />
       )}
-      {phase === 'resolved' && result && <RoundResolution onNext={handleNext} />}
+      {phase === 'resolved' && result && (
+        <RoundResolution
+          round={ctx.state.state.round}
+          outcome={isWin ? 'win' : 'loss'}
+          damageDealt={damageDealt}
+          damageTaken={damageTaken}
+          goldEarned={goldEarned}
+          trophyEarned={trophyEarned}
+          hearts={heartsPost}
+          maxHearts={ctx.state.state.maxHearts}
+          onNext={handleNext}
+        />
+      )}
     </div>
   );
 }

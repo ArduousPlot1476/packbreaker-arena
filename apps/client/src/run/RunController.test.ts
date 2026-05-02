@@ -146,14 +146,72 @@ describe('clientRunReducer', () => {
     expect(noOp).toBe(next); // identity-equal: no state change
   });
 
-  it('combat_done advances round + grants reward + resets rerollCount', () => {
+  it('combat_done (win) advances round + grants reward + appends history', () => {
     const initial = freshInitial();
     const inCombat: ClientRunState = { ...initial, combatActive: true };
-    const next = clientRunReducer(inCombat, { type: 'combat_done', result: STUB_COMBAT_RESULT });
+    const next = clientRunReducer(inCombat, {
+      type: 'combat_done',
+      result: STUB_COMBAT_RESULT,
+      opponentGhostId: null,
+      damageDealt: 30,
+      damageTaken: 6,
+    });
     expect(next.combatActive).toBe(false);
     expect(next.state.round).toBe(initial.state.round + 1);
     expect(next.state.gold).toBe(initial.state.gold + 1);
     expect(next.state.trophy).toBe(initial.state.trophy + 18);
+    expect(next.state.hearts).toBe(initial.state.hearts);
     expect(next.state.rerollCount).toBe(0);
+    expect(next.state.history).toHaveLength(1);
+    expect(next.state.history[0]).toMatchObject({
+      round: initial.state.round,
+      outcome: 'win',
+      damageDealt: 30,
+      damageTaken: 6,
+      goldEarnedThisRound: 1,
+      opponentGhostId: null,
+    });
+  });
+
+  it('combat_done (loss) decrements hearts + grants no reward', () => {
+    const initial = freshInitial();
+    const inCombat: ClientRunState = { ...initial, combatActive: true };
+    const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
+    const next = clientRunReducer(inCombat, {
+      type: 'combat_done',
+      result: lossResult,
+      opponentGhostId: null,
+      damageDealt: 12,
+      damageTaken: 30,
+    });
+    expect(next.combatActive).toBe(false);
+    expect(next.state.round).toBe(initial.state.round + 1);
+    expect(next.state.gold).toBe(initial.state.gold);
+    expect(next.state.trophy).toBe(initial.state.trophy);
+    expect(next.state.hearts).toBe(initial.state.hearts - 1);
+    expect(next.state.history).toHaveLength(1);
+    expect(next.state.history[0]).toMatchObject({
+      outcome: 'loss',
+      goldEarnedThisRound: 0,
+      damageTaken: 30,
+    });
+  });
+
+  it('combat_done (loss at 0 hearts) clamps hearts at zero', () => {
+    const initial = freshInitial();
+    const inCombat: ClientRunState = {
+      ...initial,
+      combatActive: true,
+      state: { ...initial.state, hearts: 0 },
+    };
+    const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
+    const next = clientRunReducer(inCombat, {
+      type: 'combat_done',
+      result: lossResult,
+      opponentGhostId: null,
+      damageDealt: 0,
+      damageTaken: 30,
+    });
+    expect(next.state.hearts).toBe(0);
   });
 });

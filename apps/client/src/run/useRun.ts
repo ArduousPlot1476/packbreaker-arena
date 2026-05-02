@@ -12,7 +12,17 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { CombatResult } from '@packbreaker/content';
+import type { CombatResult, GhostId } from '@packbreaker/content';
+
+/** Payload CombatOverlay forwards to the reducer's combat_done action.
+ *  Damage values are pre-computed against the player's / ghost's
+ *  startingHp + result.finalHp so the reducer doesn't need ghost.ts. */
+export interface CombatDonePayload {
+  result: CombatResult;
+  opponentGhostId: GhostId | null;
+  damageDealt: number;
+  damageTaken: number;
+}
 import { ITEMS } from './content';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
@@ -116,12 +126,12 @@ export function useRun() {
     dispatch({ type: 'continue_to_combat' });
   }, []);
 
-  // The CombatResult is plumbed through to the reducer so the next-round
-  // shop / hearts / history can consume real damage + outcome data.
-  // M1.3.4a commit 2 wires the path; commit 3 consumes outcome + damage
-  // for the heart-loss / history-entry side of the reducer.
-  const onCombatDone = useCallback((result: CombatResult) => {
-    dispatch({ type: 'combat_done', result });
+  // CombatOverlay computes damageDealt / damageTaken / opponentGhostId
+  // at combat-end (it has the input + result on hand) and forwards them
+  // to the reducer so the round-resolution branch doesn't need to
+  // import combat/ghost.ts (which would defeat the lazy chunk split).
+  const onCombatDone = useCallback((payload: CombatDonePayload) => {
+    dispatch({ type: 'combat_done', ...payload });
   }, []);
 
   return {

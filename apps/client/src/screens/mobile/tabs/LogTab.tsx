@@ -3,9 +3,9 @@
 // on both desktop and mobile per the closing-entry note ("revisit
 // when telemetry surfaces a need").
 //
-// M1.3.3 graybox: round history is mocked (sim integration in M1.3.4
-// will provide real per-round results). Static placeholder entries
-// scaled to current round number.
+// M1.3.4a commit 3: reads runState.history (real per-round results
+// from the resolved CombatResult). Pre-M1.3.4a this rendered a static
+// mockHistory(state.round) shim — see git history for the reference.
 
 import type { RunState } from '../../../run/types';
 
@@ -13,25 +13,17 @@ interface LogTabProps {
   state: RunState;
 }
 
-interface MockRoundEntry {
-  round: number;
-  outcome: 'won' | 'lost';
-  opponentClass: 'Tinker' | 'Marauder';
-  damageDealt: number;
-  damageTaken: number;
-}
-
-function mockHistory(currentRound: number): MockRoundEntry[] {
-  const entries: MockRoundEntry[] = [
-    { round: 1, outcome: 'won', opponentClass: 'Marauder', damageDealt: 5, damageTaken: 2 },
-    { round: 2, outcome: 'lost', opponentClass: 'Tinker', damageDealt: 4, damageTaken: 5 },
-    { round: 3, outcome: 'won', opponentClass: 'Marauder', damageDealt: 6, damageTaken: 3 },
-  ];
-  return entries.filter((e) => e.round < currentRound);
+/** Class label inferred from round parity (mirrors combat/ghost.ts's
+ *  per-round class assignment). M1.3.4a's procedural ghost templates
+ *  are deterministic in (seed, round); class-by-parity gives us a
+ *  consistent label without threading ghost metadata into RunState.
+ *  Re-derive when M2 ghost storage starts persisting opponent classes. */
+function opponentClassLabel(round: number): string {
+  return round % 2 === 1 ? 'Marauder' : 'Tinker';
 }
 
 export function LogTab({ state }: LogTabProps) {
-  const history = mockHistory(state.round);
+  const history = state.history;
   return (
     <div
       style={{
@@ -91,16 +83,16 @@ export function LogTab({ state }: LogTabProps) {
                 className="label-cap"
                 style={{
                   fontSize: 10,
-                  color: e.outcome === 'won' ? 'var(--r-uncommon)' : 'var(--life-stroke)',
+                  color: e.outcome === 'win' ? 'var(--r-uncommon)' : 'var(--life-stroke)',
                   minWidth: 36,
                 }}
               >
-                {e.outcome.toUpperCase()}
+                {e.outcome === 'win' ? 'WON' : 'LOST'}
               </span>
               <span
                 style={{ fontSize: 11, color: 'var(--text-secondary)', flex: 1, minWidth: 0 }}
               >
-                vs ghost ({e.opponentClass})
+                vs ghost ({opponentClassLabel(e.round)})
               </span>
               <span
                 className="tnum"
