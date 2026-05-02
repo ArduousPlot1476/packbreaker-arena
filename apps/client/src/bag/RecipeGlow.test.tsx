@@ -3,21 +3,20 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { BagItem } from '../data.local';
-import type { RecipeMatch } from '../run/recipes';
+import type { BagItem, ItemId, RecipeMatch } from '../run/types';
 import { RecipeGlow } from './RecipeGlow';
 
 describe('RecipeGlow', () => {
   it('renders a glow rect for each cluster cell + a combine button', () => {
     const bag: BagItem[] = [
-      { uid: 'a', itemId: 'iron-sword', col: 1, row: 0, rot: 0 }, // 1×2 V → (1,0)+(1,1)
-      { uid: 'b', itemId: 'iron-dagger', col: 2, row: 0, rot: 0 }, // 1×1 → (2,0)
+      { uid: 'a', itemId: 'iron-sword' as ItemId, col: 1, row: 0, rot: 0 }, // 1×2 V → (1,0)+(1,1)
+      { uid: 'b', itemId: 'iron-dagger' as ItemId, col: 2, row: 0, rot: 0 }, // 1×1 → (2,0)
     ];
     const match: RecipeMatch = {
       recipe: {
         id: 'r-steel-sword',
-        inputs: ['iron-sword', 'iron-dagger'],
-        output: 'steel-sword',
+        inputs: ['iron-sword' as ItemId, 'iron-dagger' as ItemId],
+        output: 'steel-sword' as ItemId,
       },
       uids: ['a', 'b'],
     };

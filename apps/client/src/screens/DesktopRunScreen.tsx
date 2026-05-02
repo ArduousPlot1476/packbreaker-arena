@@ -7,9 +7,10 @@
 
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { dimsOf, ITEMS, type ItemId } from '../data.local';
 import { BagBoard } from '../bag/BagBoard';
-import { cellPx } from '../bag/layout';
+import { cellPx, dimsOf } from '../bag/layout';
+import { ITEMS } from '../run/content';
+import type { ItemId } from '../run/types';
 import { CombatOverlay } from '../combat/CombatOverlay';
 import { ICONS } from '../icons/icons';
 import { TopBar } from '../hud/TopBar';

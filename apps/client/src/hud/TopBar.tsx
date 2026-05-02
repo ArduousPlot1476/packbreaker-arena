@@ -1,6 +1,6 @@
 // Top bar: title + gold + hearts + round/totalRounds + contract objective + trophy.
 
-import type { RunState } from '../data.local';
+import type { RunState } from '../run/types';
 import { CoinGlyph, HeartGlyph } from '../icons/icons';
 
 export function TopBar({ state }: { state: RunState }) {

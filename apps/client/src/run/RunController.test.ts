@@ -6,14 +6,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   clientRunReducer,
-  INITIAL_CLIENT_STATE,
+  createInitialState,
   type ClientRunState,
 } from './RunController';
-import type { BagItem } from '../data.local';
+import type { BagItem, ItemId } from './types';
+
+const SWORD = 'iron-sword' as ItemId;
 
 const sampleBagItem: BagItem = {
   uid: 'b1',
-  itemId: 'iron-sword',
+  itemId: SWORD,
   col: 1,
   row: 0,
   rot: 0,
@@ -22,38 +24,46 @@ const sampleBagItem: BagItem = {
 function withDrag(state: ClientRunState): ClientRunState {
   return {
     ...state,
-    drag: { itemId: 'iron-sword', rot: 0, fromBagUid: 'b1' },
+    drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
   };
+}
+
+/** Each test mints its own initial state to keep state isolated when run
+ *  in parallel (vitest concurrent mode) — the wall-clock-derived seed
+ *  inside createInitialState changes each call but the structural shape
+ *  is invariant, which is what these reducer tests assert. */
+function freshInitial(): ClientRunState {
+  return createInitialState();
 }
 
 describe('clientRunReducer', () => {
   it('starts a bag pickup, recording drag.fromBagUid', () => {
-    const next = clientRunReducer(INITIAL_CLIENT_STATE, {
+    const next = clientRunReducer(freshInitial(), {
       type: 'pickup_bag',
       uid: sampleBagItem.uid,
       itemId: sampleBagItem.itemId,
       rot: sampleBagItem.rot,
     });
     expect(next.drag).toEqual({
-      itemId: 'iron-sword',
+      itemId: SWORD,
       rot: 0,
       fromBagUid: 'b1',
     });
   });
 
   it('refuses pickup_bag while combat is active', () => {
-    const combatActive: ClientRunState = { ...INITIAL_CLIENT_STATE, combatActive: true };
+    const combatActive: ClientRunState = { ...freshInitial(), combatActive: true };
     const next = clientRunReducer(combatActive, {
       type: 'pickup_bag',
       uid: 'b1',
-      itemId: 'iron-sword',
+      itemId: SWORD,
       rot: 0,
     });
     expect(next.drag).toBeNull();
   });
 
   it('rotates the drag — adds 90° per dispatch', () => {
-    let state = withDrag(INITIAL_CLIENT_STATE);
+    let state = withDrag(freshInitial());
     state = clientRunReducer(state, { type: 'drag_rotate' });
     expect(state.drag?.rot).toBe(90);
     state = clientRunReducer(state, { type: 'drag_rotate' });
@@ -65,8 +75,8 @@ describe('clientRunReducer', () => {
 
   it('drag_cancel clears drag + hover (the pointercancel/blur cleanup path)', () => {
     const dragging: ClientRunState = {
-      ...INITIAL_CLIENT_STATE,
-      drag: { itemId: 'iron-sword', rot: 0, fromBagUid: 'b1' },
+      ...freshInitial(),
+      drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
       hover: { col: 3, row: 2 },
     };
     const next = clientRunReducer(dragging, { type: 'drag_cancel' });
@@ -75,9 +85,11 @@ describe('clientRunReducer', () => {
   });
 
   it('drop_bag on a valid empty cell moves a bag item', () => {
+    const initial = freshInitial();
     const dragging: ClientRunState = {
-      ...INITIAL_CLIENT_STATE,
-      drag: { itemId: 'iron-sword', rot: 0, fromBagUid: 'b1' },
+      ...initial,
+      bag: [{ ...sampleBagItem }],
+      drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
     };
     const next = clientRunReducer(dragging, {
       type: 'drop_bag',
@@ -92,43 +104,44 @@ describe('clientRunReducer', () => {
   });
 
   it('sell_drop refunds 50% of cost (rounded down) and removes the item', () => {
+    const initial = freshInitial();
     const dragging: ClientRunState = {
-      ...INITIAL_CLIENT_STATE,
-      drag: { itemId: 'iron-sword', rot: 0, fromBagUid: 'b1' },
+      ...initial,
+      bag: [{ ...sampleBagItem }],
+      drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
     };
     const goldBefore = dragging.state.gold;
-    const sword = dragging.bag.find((b) => b.uid === 'b1');
-    expect(sword).toBeDefined();
     const next = clientRunReducer(dragging, { type: 'sell_drop' });
     expect(next.bag.find((b) => b.uid === 'b1')).toBeUndefined();
     expect(next.state.gold).toBe(goldBefore + Math.floor(3 * 0.5)); // iron-sword cost = 3
   });
 
   it('reroll deducts cost and increments rerollCount', () => {
-    // INITIAL has rerollCount = 0, gold = 8. First reroll costs 1.
-    const next = clientRunReducer(INITIAL_CLIENT_STATE, {
-      type: 'reroll',
-      uidPrefix: 'sX',
-    });
+    // Round-1 initial: rerollCount = 0, gold = baseGoldPerRound = 4. First
+    // reroll costs rerollCostStart + 0*increment = 1.
+    const initial = freshInitial();
+    const next = clientRunReducer(initial, { type: 'reroll' });
     expect(next.state.rerollCount).toBe(1);
-    expect(next.state.gold).toBe(INITIAL_CLIENT_STATE.state.gold - 1);
-    expect(next.shop).toHaveLength(INITIAL_CLIENT_STATE.shop.length);
+    expect(next.state.gold).toBe(initial.state.gold - 1);
+    expect(next.shop).toHaveLength(initial.shop.length);
   });
 
   it('continue_to_combat sets combatActive only when not already in combat', () => {
-    const next = clientRunReducer(INITIAL_CLIENT_STATE, { type: 'continue_to_combat' });
+    const initial = freshInitial();
+    const next = clientRunReducer(initial, { type: 'continue_to_combat' });
     expect(next.combatActive).toBe(true);
     const noOp = clientRunReducer(next, { type: 'continue_to_combat' });
     expect(noOp).toBe(next); // identity-equal: no state change
   });
 
   it('combat_done advances round + grants reward + resets rerollCount', () => {
-    const inCombat: ClientRunState = { ...INITIAL_CLIENT_STATE, combatActive: true };
+    const initial = freshInitial();
+    const inCombat: ClientRunState = { ...initial, combatActive: true };
     const next = clientRunReducer(inCombat, { type: 'combat_done' });
     expect(next.combatActive).toBe(false);
-    expect(next.state.round).toBe(INITIAL_CLIENT_STATE.state.round + 1);
-    expect(next.state.gold).toBe(INITIAL_CLIENT_STATE.state.gold + 1);
-    expect(next.state.trophy).toBe(INITIAL_CLIENT_STATE.state.trophy + 18);
+    expect(next.state.round).toBe(initial.state.round + 1);
+    expect(next.state.gold).toBe(initial.state.gold + 1);
+    expect(next.state.trophy).toBe(initial.state.trophy + 18);
     expect(next.state.rerollCount).toBe(0);
   });
 });

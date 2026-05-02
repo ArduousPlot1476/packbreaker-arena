@@ -9,7 +9,7 @@
 // combinations." (Trey-ratified copy.)
 
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { ITEMS } from '../../../data.local';
+import { ITEMS } from '../../../run/content';
 import { ICONS } from '../../../icons/icons';
 import type { RecipeMatch } from '../../../run/recipes';
 

@@ -14,10 +14,11 @@
 // L-shapes, T-shapes — none of which exist in M1 recipe content per
 // balance-bible.md § 11).
 
-import { BAG_COLS, BAG_ROWS, ITEMS, RARITY, type BagItem } from '../data.local'
-import type { RecipeMatch } from '../run/recipes'
+import { RARITY } from '@packbreaker/ui-kit'
+import { ITEMS } from '../run/content'
+import type { BagItem, RecipeMatch } from '../run/types'
 import { useCellSize } from './CellSize'
-import { combineAnchorPosition, glowCellsForMatches } from './layout'
+import { BAG_COLS, BAG_ROWS, combineAnchorPosition, glowCellsForMatches } from './layout'
 
 interface RecipeGlowProps {
   bag: BagItem[]

@@ -5,6 +5,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import { CraftingTab } from './CraftingTab';
 import type { RecipeMatch } from '../../../run/recipes';
+import type { ItemId } from '../../../run/types';
+
+const SWORD = 'iron-sword' as ItemId;
+const DAGGER = 'iron-dagger' as ItemId;
+const STEEL = 'steel-sword' as ItemId;
 
 describe('CraftingTab', () => {
   it('shows the empty-state copy when there are no recipes', () => {
@@ -20,8 +25,8 @@ describe('CraftingTab', () => {
       {
         recipe: {
           id: 'r-steel-sword',
-          inputs: ['iron-sword', 'iron-dagger'],
-          output: 'steel-sword',
+          inputs: [SWORD, DAGGER],
+          output: STEEL,
         },
         uids: ['a', 'b'],
       },
@@ -39,8 +44,8 @@ describe('CraftingTab', () => {
       {
         recipe: {
           id: 'r-steel-sword',
-          inputs: ['iron-sword', 'iron-dagger'],
-          output: 'steel-sword',
+          inputs: [SWORD, DAGGER],
+          output: STEEL,
         },
         uids: ['a', 'b'],
       },
@@ -56,8 +61,8 @@ describe('CraftingTab', () => {
       {
         recipe: {
           id: 'r-steel-sword',
-          inputs: ['iron-sword', 'iron-dagger'],
-          output: 'steel-sword',
+          inputs: [SWORD, DAGGER],
+          output: STEEL,
         },
         uids: ['a', 'b'],
       },

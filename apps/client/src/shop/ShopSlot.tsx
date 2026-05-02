@@ -6,7 +6,9 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { ITEMS, RARITY, type ShopSlot as ShopSlotData } from '../data.local';
+import { RARITY } from '@packbreaker/ui-kit';
+import { ITEMS } from '../run/content';
+import type { ShopSlot as ShopSlotData } from '../run/types';
 import type { DraggableData } from '../bag/types';
 import { CoinGlyph, ICONS } from '../icons/icons';
 

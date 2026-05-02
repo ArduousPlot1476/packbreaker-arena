@@ -4,7 +4,7 @@
 // wired through the DndContext at the RunScreen level — this component
 // no longer threads drag/sellHover state.
 
-import { type RunState, type ShopSlot as ShopSlotData } from '../data.local';
+import { type RunState, type ShopSlot as ShopSlotData } from '../run/types';
 import { SellZone } from './SellZone';
 import { ShopSlot } from './ShopSlot';
 

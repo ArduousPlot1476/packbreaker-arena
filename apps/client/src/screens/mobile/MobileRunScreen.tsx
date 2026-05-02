@@ -19,7 +19,9 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { dimsOf, ITEMS, type ItemId } from '../../data.local';
+import { dimsOf } from '../../bag/layout';
+import { ITEMS } from '../../run/content';
+import type { ItemId } from '../../run/types';
 import { BagBoard } from '../../bag/BagBoard';
 import { CellSizeProvider } from '../../bag/CellSize';
 import { CombatOverlay } from '../../combat/CombatOverlay';

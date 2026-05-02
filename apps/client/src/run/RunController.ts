@@ -1,44 +1,34 @@
 // UI-side state machine for the run screen. Pure reducer + helpers; no
-// React. M1.3.1 owns shop state alongside bag/run state — sim integration
-// (M1.3.4) will introduce a separate ShopController.ts that takes over
-// shop generation. Until then, REROLL_POOL + SEED_SHOP carry the
-// prototype's deterministic-by-counter shop behavior.
+// React.
 //
-// As of commit 6 (@dnd-kit migration) DragState carries only the
-// item/uid/cost identity fields — drag-cursor positioning lives entirely
-// inside @dnd-kit's DragOverlay, so the prototype's x/y/offX/offY are
-// gone, and the drag_move action with them.
+// M1.3.4a — sim wire-up + data.local dissolution. ShopController.ts now
+// owns shop generation (sim-driven via @packbreaker/sim's generateShop).
+// REROLL_POOL is gone; the reroll action handler delegates to
+// ShopController. SEED_BAG and SEED_SHOP dissolved entirely — runs start
+// at round 1 with an empty bag and a sim-generated initial shop. INITIAL
+// became createInitialState() so each run-screen mount mints a fresh
+// SimSeed (M1.5 persistence saves/restores seeds for replays).
+//
+// Reroll cost formula uses sim's computeRerollCost
+// (rerollCostStart + rerollsThisRound * rerollCostIncrement, with the
+// extraRerollsPerRound allowance from relics — Apprentice's Loop, M1.5
+// — currently always 0). The prototype's `rerollCount + 1` produced the
+// same numbers because DEFAULT_RULESET sets both costStart and
+// costIncrement to 1; using sim's helper now keeps the formula
+// authoritative when contracts mutate the levers.
 
-import {
-  BAG_COLS,
-  BAG_ROWS,
-  cellsOf,
-  INITIAL,
-  ITEMS,
-  SEED_BAG,
-  SEED_SHOP,
-  type BagItem,
-  type Cell,
-  type ItemId,
-  type RunState,
-  type ShopSlot,
-} from '../data.local';
+import { computeRerollCost } from '@packbreaker/sim';
+import { DEFAULT_RULESET, type ClassId } from '@packbreaker/content';
+
+// M1.3.4a: hardcoded class for the prototype run. Class-select screen
+// (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
+const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
+import { generateInitialShop, generateShop } from '../shop/ShopController';
+import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
+import { ITEMS } from './content';
+import { emptyRelicSlots, makeRunSeed } from './sim-bridge';
+import type { BagItem, Cell, ItemId, RecipeMatch, RunState, ShopSlot } from './types';
 import type { DragState } from '../bag/types';
-import { placementValid } from '../bag/layout';
-import type { RecipeMatch } from './recipes';
-
-export const REROLL_POOL: ItemId[] = [
-  'iron-sword',
-  'iron-dagger',
-  'wooden-shield',
-  'healing-herb',
-  'spark-stone',
-  'whetstone',
-  'apple',
-  'copper-coin',
-  'healing-salve',
-  'fire-oil',
-];
 
 export interface ClientRunState {
   bag: BagItem[];
@@ -49,14 +39,51 @@ export interface ClientRunState {
   combatActive: boolean;
 }
 
-export const INITIAL_CLIENT_STATE: ClientRunState = {
-  bag: SEED_BAG,
-  shop: SEED_SHOP,
-  state: INITIAL,
-  drag: null,
-  hover: null,
-  combatActive: false,
-};
+/** Mints a fresh ClientRunState for a new run. Seed is wall-clock-derived
+ *  via sim-bridge.makeRunSeed; the round-1 shop is sim-generated.
+ *
+ *  M1.3.4a notes:
+ *    - The companion `INITIAL_CLIENT_STATE` const below evaluates this at
+ *      module-import time, so the run starts at the same seed for the
+ *      lifetime of the page load. New-run / persistence is M1.5+.
+ *    - Each call mints a NEW seed (wall-clock + Math.random). For tests
+ *      that need determinism, construct fixtures explicitly rather than
+ *      relying on the const. */
+export function createInitialState(): ClientRunState {
+  const seed = makeRunSeed();
+  const ruleset = DEFAULT_RULESET;
+  const shop = generateInitialShop(seed, M1_PROTOTYPE_CLASS, ruleset);
+  return {
+    bag: [],
+    shop,
+    state: {
+      round: 1,
+      totalRounds: ruleset.maxRounds,
+      hearts: ruleset.startingHearts,
+      maxHearts: ruleset.startingHearts,
+      gold: ruleset.baseGoldPerRound,
+      trophy: 0,
+      rerollCount: 0,
+      className: 'Tinker',
+      contractName: 'Neutral',
+      contractText: 'No modifiers',
+      ruleset,
+      seed,
+      history: [],
+    },
+    drag: null,
+    hover: null,
+    combatActive: false,
+  };
+}
+
+/** Module-level singleton initial state. useRun uses this directly so
+ *  state at first render matches what tests observe. */
+export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState();
+
+// Relic-driven extraRerollsPerRound bonus is M1.5 (Apprentice's Loop). For
+// M1.3.4a no relic state is modeled, so the allowance is always zero.
+const EXTRA_REROLLS_PER_ROUND = 0;
 
 export type RunAction =
   | { type: 'pickup_bag'; uid: string; itemId: ItemId; rot: number }
@@ -66,7 +93,7 @@ export type RunAction =
   | { type: 'set_hover'; hover: { col: number; row: number } | null }
   | { type: 'drop_bag'; col: number; row: number; newUid: string }
   | { type: 'sell_drop' }
-  | { type: 'reroll'; uidPrefix: string }
+  | { type: 'reroll' }
   | { type: 'combine'; match: RecipeMatch; newUid: string }
   | { type: 'continue_to_combat' }
   | { type: 'combat_done' };
@@ -85,6 +112,7 @@ function placeCombineOutput(
   const minX = Math.min(...cells.map((c) => c[0]));
   const minY = Math.min(...cells.map((c) => c[1]));
   const outDef = ITEMS[match.recipe.output];
+  if (!outDef) return null;
   const newBagBase = bag.filter((b) => !match.uids.includes(b.uid));
   let placed: { col: number; row: number; rot: number } | null = null;
   const tryCells: Cell[] = [[minX, minY], ...cells];
@@ -131,7 +159,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       const slot = state.shop.find((s) => s.uid === action.uid);
       if (!slot || !slot.itemId) return state;
       const def = ITEMS[slot.itemId];
-      if (state.state.gold < def.cost) return state;
+      if (!def || state.state.gold < def.cost) return state;
       return {
         ...state,
         drag: {
@@ -215,6 +243,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         return { ...state, drag: null, hover: null };
       }
       const def = ITEMS[item.itemId];
+      if (!def) return { ...state, drag: null, hover: null };
       const refund = Math.floor(def.cost * 0.5);
       return {
         ...state,
@@ -226,12 +255,21 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
     }
 
     case 'reroll': {
-      const cost = state.state.rerollCount + 1;
+      const ruleset = state.state.ruleset;
+      const cost = computeRerollCost(
+        state.state.rerollCount,
+        ruleset.rerollCostStart,
+        ruleset.rerollCostIncrement,
+        EXTRA_REROLLS_PER_ROUND,
+      );
       if (state.state.gold < cost) return state;
-      const newSlots: ShopSlot[] = SEED_SHOP.map((_s, i) => {
-        const id = REROLL_POOL[(state.state.rerollCount * 2 + i + 3) % REROLL_POOL.length];
-        return { uid: action.uidPrefix + i, itemId: id };
-      });
+      const newSlots = generateShop(
+        state.state.seed,
+        state.state.round,
+        M1_PROTOTYPE_CLASS,
+        ruleset,
+        state.state.rerollCount + 1,
+      );
       return {
         ...state,
         shop: newSlots,
@@ -253,18 +291,28 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       if (state.combatActive) return state;
       return { ...state, combatActive: true };
 
-    case 'combat_done':
+    case 'combat_done': {
+      // Round advancement + reward. Real damage / outcome / history population
+      // lands in M1.3.4a commit 3 alongside the CombatResult flow.
+      const nextRound = state.state.round + 1;
+      const ruleset = state.state.ruleset;
+      // Generate next round's shop deterministically from the run seed.
+      const nextShop = generateShop(state.state.seed, nextRound, M1_PROTOTYPE_CLASS, ruleset, 0);
+      // Empty relic slots (M1.3.4a — relic state machinery is M1.5).
+      void emptyRelicSlots;
       return {
         ...state,
         combatActive: false,
+        shop: nextShop,
         state: {
           ...state.state,
-          gold: state.state.gold + 1,
+          gold: state.state.gold + ruleset.winBonusGold,
           trophy: state.state.trophy + 18,
-          round: state.state.round + 1,
+          round: nextRound,
           rerollCount: 0,
         },
       };
+    }
 
     default: {
       const _exhaustive: never = action;

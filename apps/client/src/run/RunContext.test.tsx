@@ -45,8 +45,11 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
   it('preserves state when the provider child subtree swaps', () => {
     const { rerender, getByTestId, queryByTestId } = render(<Wrapper child="A" />);
 
-    // Initial state — gold = 8, rerollCount = 0 (INITIAL_CLIENT_STATE).
-    expect(getByTestId('a-gold').textContent).toBe('8');
+    // Initial state — gold = DEFAULT_RULESET.baseGoldPerRound (4 in M1.3.4a's
+    // round-1 fresh-start; was 8 pre-M1.3.4a when SEED_BAG/SEED_SHOP seeded
+    // a mid-run mock at round 4). rerollCount starts at 0.
+    const initialGold = parseInt(getByTestId('a-gold').textContent ?? '', 10);
+    expect(initialGold).toBeGreaterThan(0);
     expect(getByTestId('a-reroll-count').textContent).toBe('0');
 
     // Mutate state via reroll: cost = rerollCount + 1 = 1, so gold
@@ -54,7 +57,8 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
     act(() => {
       fireEvent.click(getByTestId('a-reroll'));
     });
-    expect(getByTestId('a-gold').textContent).toBe('7');
+    const goldAfterFirstReroll = initialGold - 1;
+    expect(getByTestId('a-gold').textContent).toBe(String(goldAfterFirstReroll));
     expect(getByTestId('a-reroll-count').textContent).toBe('1');
 
     // Swap children — analog of dispatcher swapping Desktop ↔ Mobile
@@ -65,16 +69,16 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
     // The leaving child is unmounted; the new child mounts and reads
     // the preserved context value.
     expect(queryByTestId('a')).toBeNull();
-    expect(getByTestId('b-gold').textContent).toBe('7');
+    expect(getByTestId('b-gold').textContent).toBe(String(goldAfterFirstReroll));
     expect(getByTestId('b-reroll-count').textContent).toBe('1');
 
     // Mutate again from the new child — the same reducer instance
-    // continues to advance the state.
+    // continues to advance the state. Second reroll cost = 2, so gold
+    // decrements by 2.
     act(() => {
       fireEvent.click(getByTestId('b-reroll'));
     });
-    // Second reroll: cost = 2, gold 7 → 5, rerollCount 1 → 2.
-    expect(getByTestId('b-gold').textContent).toBe('5');
+    expect(getByTestId('b-gold').textContent).toBe(String(goldAfterFirstReroll - 2));
     expect(getByTestId('b-reroll-count').textContent).toBe('2');
   });
 

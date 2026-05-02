@@ -3,7 +3,7 @@
 // x/y/offX/offY fields from the prototype's pointer-event drag are no
 // longer needed.
 
-import type { ItemId } from '../data.local';
+import type { ItemId } from '../run/types';
 
 export interface DragState {
   itemId: ItemId;

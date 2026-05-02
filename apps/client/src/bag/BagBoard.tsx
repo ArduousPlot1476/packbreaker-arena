@@ -11,13 +11,12 @@
 // — total bag area must fit 240px at 52px cells × 4 rows + 32px
 // padding, no room for the desktop header/footer).
 
-import { BAG_COLS, BAG_ROWS, type BagItem, type Cell } from '../data.local';
-import type { RecipeMatch } from '../run/recipes';
+import type { BagItem, Cell, RecipeMatch } from '../run/types';
 import { BagCell } from './BagCell';
 import { useCellSize } from './CellSize';
 import { DraggableItem } from './DraggableItem';
 import { RecipeGlow } from './RecipeGlow';
-import { footprint, placementValid } from './layout';
+import { BAG_COLS, BAG_ROWS, footprint, placementValid } from './layout';
 import type { DragState } from './types';
 
 interface BagBoardProps {

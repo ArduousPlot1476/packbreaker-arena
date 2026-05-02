@@ -7,7 +7,7 @@
 // header. User can tap Continue from any tab without first switching
 // to [Shop].
 
-import type { RunState, ShopSlot as ShopSlotData } from '../../../data.local';
+import type { RunState, ShopSlot as ShopSlotData } from '../../../run/types';
 import { CoinGlyph } from '../../../icons/icons';
 import { SellZone } from '../../../shop/SellZone';
 import { ShopSlot } from '../../../shop/ShopSlot';

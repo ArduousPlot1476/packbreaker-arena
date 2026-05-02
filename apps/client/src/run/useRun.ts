@@ -12,7 +12,7 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import { ITEMS } from '../data.local';
+import { ITEMS } from './content';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
@@ -101,7 +101,10 @@ export function useRun() {
   }, []);
 
   const onReroll = useCallback(() => {
-    dispatch({ type: 'reroll', uidPrefix: makeUid('s') });
+    // The reroll action carries no payload as of M1.3.4a — ShopController
+    // generates the new shop using state.seed + round + rerollCount inside
+    // the reducer, so makeUid for slot ids is no longer needed here.
+    dispatch({ type: 'reroll' });
   }, []);
 
   const onCombine = useCallback((match: RecipeMatch) => {

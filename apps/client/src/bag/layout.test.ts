@@ -3,7 +3,7 @@
 // winning, plus the dense-bag degenerate case where all four collide.
 
 import { describe, expect, it } from 'vitest';
-import type { BagItem, ItemId } from '../data.local';
+import type { BagItem, ItemId } from '../run/types';
 import { combineAnchorPosition } from './layout';
 
 function place(uid: string, itemId: ItemId, col: number, row: number): BagItem {
@@ -12,12 +12,12 @@ function place(uid: string, itemId: ItemId, col: number, row: number): BagItem {
 
 // All items used in these tests are 1×1 — single-cell occupancy keeps
 // the cluster-bounds and collision math straightforward to reason about.
-const HERB: ItemId = 'healing-herb';
-const SPARK: ItemId = 'spark-stone';
-const WHET: ItemId = 'whetstone';
-const APPLE: ItemId = 'apple';
-const COIN: ItemId = 'copper-coin';
-const DAGGER: ItemId = 'iron-dagger';
+const HERB = 'healing-herb' as ItemId;
+const SPARK = 'spark-stone' as ItemId;
+const WHET = 'whetstone' as ItemId;
+const APPLE = 'apple' as ItemId;
+const COIN = 'copper-coin' as ItemId;
+const DAGGER = 'iron-dagger' as ItemId;
 
 describe('combineAnchorPosition — four-direction first-fit', () => {
   it('returns null when the cluster has no resolvable cells', () => {

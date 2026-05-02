@@ -7,7 +7,7 @@
 // will provide real per-round results). Static placeholder entries
 // scaled to current round number.
 
-import type { RunState } from '../../../data.local';
+import type { RunState } from '../../../run/types';
 
 interface LogTabProps {
   state: RunState;
