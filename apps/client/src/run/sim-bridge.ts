@@ -1,27 +1,35 @@
-// Single integration surface between the client and @packbreaker/sim.
+// Shop-side integration surface between the client and @packbreaker/sim.
 //
-// All sim calls from client code (RunController, ShopController, CombatOverlay)
-// go through this module — they NEVER import @packbreaker/sim directly. This
-// gives one place to install client-shape adapters at the sim boundary, and
-// one place to lazy-defer sim entry points behind code-split chunks.
+// This module is the MAIN-CHUNK bridge — it imports from sim's shop +
+// rng + iteration paths only, never from sim/combat.ts. The combat-side
+// counterpart (`apps/client/src/combat/sim-bridge.combat.ts`) imports
+// simulateCombat and is consumed only by CombatOverlay, so the
+// static-import edge for combat.ts/status.ts/triggers.ts originates
+// inside the lazy boundary and Vite chunk-splits the combat-only sim
+// subgraph into the combat chunk.
 //
-// Bridge functions are pure pass-throughs to sim with adapters. Document
-// each impedance mismatch inline.
+// The split exists to make the lazy-load promise from
+// tech-architecture.md § 10 ("title screen ships React + bag UI only —
+// combat module does not load until first combat") actually true at
+// the bundle level. Pre-split (M1.3.4a step 2 ratification),
+// simulateCombat was imported here statically and Vite hoisted the
+// whole sim runtime into main; sourcemap audit at step 6 caught it.
+//
+// All client → sim calls flow through one of the two bridges; direct
+// `@packbreaker/sim` imports from feature code remain forbidden.
 
 import type {
   BagDimensions,
   BagPlacement,
   BagState,
   ClassId,
-  CombatInput,
-  CombatResult,
   PlacementId,
   RelicSlots,
   Ruleset,
   SimSeed,
 } from '@packbreaker/content';
 import type { Rng } from '@packbreaker/sim';
-import { createRng, generateShop as simGenerateShop, simulateCombat } from '@packbreaker/sim';
+import { createRng, generateShop as simGenerateShop } from '@packbreaker/sim';
 import { SHOP_POOL_ITEMS } from './content';
 import type { BagItem, ItemId, ShopSlot } from './types';
 
@@ -100,9 +108,5 @@ export function emptyRelicSlots(): RelicSlots {
   return { starter: null, mid: null, boss: null };
 }
 
-/** Run a combat. Pure delegation to sim's simulateCombat — the only
- *  client-side concern is constructing the CombatInput from client-shape
- *  state (handled at call sites; this bridge just forwards). */
-export function runCombat(input: CombatInput): CombatResult {
-  return simulateCombat(input);
-}
+// runCombat moved to apps/client/src/combat/sim-bridge.combat.ts so the
+// simulateCombat static-import edge stays inside the lazy boundary.

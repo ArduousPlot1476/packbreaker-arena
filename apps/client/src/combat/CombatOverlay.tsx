@@ -24,7 +24,8 @@ import {
 import { BurnGlyph } from '../icons/icons';
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
-import { clientBagToSimBag, emptyRelicSlots, runCombat } from '../run/sim-bridge';
+import { clientBagToSimBag, emptyRelicSlots } from '../run/sim-bridge';
+import { runCombat } from './sim-bridge.combat';
 import { RoundResolution } from '../screens/RoundResolution';
 import { makeGhostForRound } from './ghost';
 
