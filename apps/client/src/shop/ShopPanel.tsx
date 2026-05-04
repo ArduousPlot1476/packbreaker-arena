@@ -3,8 +3,13 @@
 // from shop is via useDraggable on each ShopSlot. Buy/sell handlers are
 // wired through the DndContext at the RunScreen level — this component
 // no longer threads drag/sellHover state.
+//
+// Reroll affordability uses the same computeRerollCost path the reducer
+// uses to deduct spend (Codex P1 fix on PR #6). UI never reimplements
+// game-rule arithmetic — see run/sim-bridge.ts for context.
 
 import { type RunState, type ShopSlot as ShopSlotData } from '../run/types';
+import { computeRerollCost, EXTRA_REROLLS_PER_ROUND } from '../run/sim-bridge';
 import { SellZone } from './SellZone';
 import { ShopSlot } from './ShopSlot';
 
@@ -17,7 +22,12 @@ interface ShopPanelProps {
 }
 
 export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanelProps) {
-  const rerollCost = state.rerollCount + 1;
+  const rerollCost = computeRerollCost(
+    state.rerollCount,
+    state.ruleset.rerollCostStart,
+    state.ruleset.rerollCostIncrement,
+    EXTRA_REROLLS_PER_ROUND,
+  );
   const canReroll = state.gold >= rerollCost && !busy;
 
   return (

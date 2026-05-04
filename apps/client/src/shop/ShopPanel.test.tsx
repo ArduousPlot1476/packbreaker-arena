@@ -56,7 +56,12 @@ describe('ShopPanel', () => {
     expect(screen.getByText('Apple')).toBeInTheDocument();
     expect(screen.getByText('Iron Dagger')).toBeInTheDocument();
 
-    // Reroll button: cost = rerollCount + 1 = 1 at TEST_RUN_STATE.
+    // Reroll button cost via sim's computeRerollCost — for the default
+    // ruleset (rerollCostStart=1, rerollCostIncrement=1,
+    // EXTRA_REROLLS_PER_ROUND=0) at rerollCount=0, the cost is 1.
+    // Codex P1 fix on PR #6 routed UI affordability through the same
+    // formula the reducer charges from; previous "rerollCount + 1"
+    // happened to agree on default values.
     const rerollButton = screen.getByRole('button', { name: /REROLL/i });
     expect(rerollButton).toBeInTheDocument();
     expect(rerollButton).toHaveTextContent('1');

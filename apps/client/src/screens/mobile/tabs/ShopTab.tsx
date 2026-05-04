@@ -6,9 +6,14 @@
 // Per Trey's decision-7 ratification: REROLL lives in the [Shop] tab
 // header. User can tap Continue from any tab without first switching
 // to [Shop].
+//
+// Reroll affordability uses the same computeRerollCost path the reducer
+// uses to deduct spend (Codex P1 fix on PR #6). UI never reimplements
+// game-rule arithmetic — see run/sim-bridge.ts for context.
 
 import type { RunState, ShopSlot as ShopSlotData } from '../../../run/types';
 import { CoinGlyph } from '../../../icons/icons';
+import { computeRerollCost, EXTRA_REROLLS_PER_ROUND } from '../../../run/sim-bridge';
 import { SellZone } from '../../../shop/SellZone';
 import { ShopSlot } from '../../../shop/ShopSlot';
 
@@ -20,7 +25,12 @@ interface ShopTabProps {
 }
 
 export function ShopTab({ state, shop, onReroll, busy }: ShopTabProps) {
-  const rerollCost = state.rerollCount + 1;
+  const rerollCost = computeRerollCost(
+    state.rerollCount,
+    state.ruleset.rerollCostStart,
+    state.ruleset.rerollCostIncrement,
+    EXTRA_REROLLS_PER_ROUND,
+  );
   const canReroll = state.gold >= rerollCost && !busy;
 
   return (

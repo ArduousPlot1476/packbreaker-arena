@@ -33,6 +33,26 @@ import { createRng, generateShop as simGenerateShop } from '@packbreaker/sim';
 import { SHOP_POOL_ITEMS } from './content';
 import type { BagItem, ItemId, ShopSlot } from './types';
 
+/** Re-exported from sim so UI affordability state and the reducer's
+ *  spend-deduction logic compute reroll cost via the same authoritative
+ *  formula. Codex Review on PR #6 caught a divergence: ShopPanel and
+ *  ShopTab were computing `state.rerollCount + 1` while the reducer
+ *  used `computeRerollCost(...)` — these incidentally agree on the
+ *  default ruleset (rerollCostStart=1, rerollCostIncrement=1,
+ *  extraRerollsPerRound=0) but would diverge as soon as M1.5 relics
+ *  introduce non-zero extraRerollsPerRound or contract mutators modify
+ *  the cost curve. Architectural rule reinforced: UI affordability
+ *  state never reimplements game-rule arithmetic — it consumes the
+ *  authoritative formula from sim. */
+export { computeRerollCost } from '@packbreaker/sim';
+
+/** Relic-driven extra-rerolls-per-round allowance (Apprentice's Loop +
+ *  similar). M1.3.4a doesn't model relic state, so the allowance is
+ *  always zero. Hoisted here (was a local const in RunController) so
+ *  ShopPanel + ShopTab + the reducer all read the same placeholder
+ *  value; replace with a relic-state derived value at M1.5. */
+export const EXTRA_REROLLS_PER_ROUND = 0;
+
 /** Build a sim Rng from a base SimSeed. Identical inputs always produce
  *  identical sequences (mulberry32, integer-only) — that's the determinism
  *  contract sim's fixture suite enforces. */

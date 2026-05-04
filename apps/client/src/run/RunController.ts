@@ -17,7 +17,6 @@
 // costIncrement to 1; using sim's helper now keeps the formula
 // authoritative when contracts mutate the levers.
 
-import { computeRerollCost } from '@packbreaker/sim';
 import {
   DEFAULT_RULESET,
   type ClassId,
@@ -33,7 +32,12 @@ const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
 import { generateInitialShop, generateShop } from '../shop/ShopController';
 import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
 import { ITEMS } from './content';
-import { emptyRelicSlots, makeRunSeed } from './sim-bridge';
+import {
+  computeRerollCost,
+  emptyRelicSlots,
+  EXTRA_REROLLS_PER_ROUND,
+  makeRunSeed,
+} from './sim-bridge';
 import type { BagItem, Cell, ItemId, RecipeMatch, RunState, ShopSlot } from './types';
 import type { DragState } from '../bag/types';
 
@@ -88,9 +92,10 @@ export function createInitialState(): ClientRunState {
  *  state at first render matches what tests observe. */
 export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState();
 
-// Relic-driven extraRerollsPerRound bonus is M1.5 (Apprentice's Loop). For
-// M1.3.4a no relic state is modeled, so the allowance is always zero.
-const EXTRA_REROLLS_PER_ROUND = 0;
+// EXTRA_REROLLS_PER_ROUND + computeRerollCost are imported from
+// run/sim-bridge.ts so the reducer's spend-deduction and ShopPanel /
+// ShopTab affordability state share one authoritative source. See
+// sim-bridge.ts for the Codex P1 context.
 
 export type RunAction =
   | { type: 'pickup_bag'; uid: string; itemId: ItemId; rot: number }

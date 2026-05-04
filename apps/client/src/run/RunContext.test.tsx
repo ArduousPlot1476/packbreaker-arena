@@ -52,8 +52,10 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
     expect(initialGold).toBeGreaterThan(0);
     expect(getByTestId('a-reroll-count').textContent).toBe('0');
 
-    // Mutate state via reroll: cost = rerollCount + 1 = 1, so gold
-    // decrements by 1 and rerollCount increments to 1.
+    // Mutate state via reroll: cost = computeRerollCost(0, 1, 1, 0) = 1
+    // (default ruleset: rerollCostStart=1, rerollCostIncrement=1,
+    // EXTRA_REROLLS_PER_ROUND=0), so gold decrements by 1 and
+    // rerollCount increments to 1.
     act(() => {
       fireEvent.click(getByTestId('a-reroll'));
     });
