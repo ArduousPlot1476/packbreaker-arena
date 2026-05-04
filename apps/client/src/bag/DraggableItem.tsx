@@ -4,9 +4,11 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { dimsOf, ITEMS, type BagItem } from '../data.local';
 import { ICONS } from '../icons/icons';
+import { ITEMS } from '../run/content';
+import type { BagItem } from '../run/types';
 import { useCellSize } from './CellSize';
+import { dimsOf } from './layout';
 import type { DraggableData } from './types';
 
 interface DraggableItemProps {

@@ -7,10 +7,11 @@
 
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { dimsOf, ITEMS, type ItemId } from '../data.local';
 import { BagBoard } from '../bag/BagBoard';
-import { cellPx } from '../bag/layout';
-import { CombatOverlay } from '../combat/CombatOverlay';
+import { cellPx, dimsOf } from '../bag/layout';
+import { ITEMS } from '../run/content';
+import type { ItemId } from '../run/types';
+import { LazyCombatOverlay } from '../combat/LazyCombatOverlay';
 import { ICONS } from '../icons/icons';
 import { TopBar } from '../hud/TopBar';
 import { LeftRail } from '../hud/LeftRail';
@@ -95,10 +96,10 @@ export function DesktopRunScreen() {
             busy={state.combatActive}
           />
           {state.combatActive && (
-            <CombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
         </div>
-        <BottomPanel />
+        <BottomPanel state={state.state} />
       </div>
       <DragOverlay dropAnimation={null}>
         {state.drag ? <DragPreview itemId={state.drag.itemId} rot={state.drag.rot} /> : null}

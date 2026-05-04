@@ -19,10 +19,12 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
-import { dimsOf, ITEMS, type ItemId } from '../../data.local';
+import { dimsOf } from '../../bag/layout';
+import { ITEMS } from '../../run/content';
+import type { ItemId } from '../../run/types';
 import { BagBoard } from '../../bag/BagBoard';
 import { CellSizeProvider } from '../../bag/CellSize';
-import { CombatOverlay } from '../../combat/CombatOverlay';
+import { LazyCombatOverlay } from '../../combat/LazyCombatOverlay';
 import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
 import { useRunContext } from '../../run/RunContext';
@@ -61,6 +63,7 @@ export function MobileRunScreen() {
   const {
     state,
     recipes,
+    scoutedRecipes,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
@@ -132,13 +135,19 @@ export function MobileRunScreen() {
               busy={state.combatActive}
             />
           )}
-          {activeTab === 'crafting' && <CraftingTab recipes={recipes} onCombine={onCombine} />}
+          {activeTab === 'crafting' && (
+            <CraftingTab
+              recipes={recipes}
+              scoutedRecipes={scoutedRecipes}
+              onCombine={onCombine}
+            />
+          )}
           {activeTab === 'relics' && <RelicsTab state={state.state} />}
           {activeTab === 'log' && <LogTab state={state.state} />}
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />
           <MobileContinueCTA onContinue={onContinue} busy={state.combatActive} />
           {state.combatActive && (
-            <CombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
           )}
         </div>
         <DragOverlay dropAnimation={null}>

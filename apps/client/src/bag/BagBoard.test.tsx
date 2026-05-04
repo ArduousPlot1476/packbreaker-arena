@@ -5,9 +5,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DndContext } from '@dnd-kit/core';
 import { render } from '@testing-library/react';
-import type { BagItem } from '../data.local';
-import { SEED_BAG } from '../data.local';
+import type { BagItem, ItemId } from '../run/types';
 import { BagBoard } from './BagBoard';
+
+// Inline a small bag fixture mirroring the M0 SEED_BAG shape so the
+// "populated" test can count rendered DraggableItem nodes.
+const TEST_BAG: BagItem[] = [
+  { uid: 'b1', itemId: 'iron-sword' as ItemId, col: 1, row: 0, rot: 0 },
+  { uid: 'b2', itemId: 'healing-herb' as ItemId, col: 4, row: 0, rot: 0 },
+  { uid: 'b3', itemId: 'spark-stone' as ItemId, col: 0, row: 3, rot: 0 },
+  { uid: 'b4', itemId: 'copper-coin' as ItemId, col: 5, row: 3, rot: 0 },
+];
 
 describe('BagBoard', () => {
   it('renders the empty 6×4 grid (no item nodes) when bag is empty', () => {
@@ -33,7 +41,7 @@ describe('BagBoard', () => {
   });
 
   it('renders one DraggableItem per bag entry when populated', () => {
-    const populated: BagItem[] = SEED_BAG;
+    const populated: BagItem[] = TEST_BAG;
     const { container } = render(
       <DndContext>
         <BagBoard

@@ -1,21 +1,26 @@
 // Bag-grid coordinate utilities. Cell-to-pixel conversion, item footprint
 // computation, placement validation, recipe-glow priority resolution, and
 // combine-button anchor positioning.
+//
+// M1.3.4a — data.local dissolution moved cellsOf + dimsOf into this module
+// (they operate on the client BagItem shape, so they belong with the bag
+// pure helpers, not in ui-kit or sim). BAG_COLS / BAG_ROWS are derived
+// from DEFAULT_RULESET.bagDimensions; threading state-driven dimensions
+// through these pure helpers is M2 work when bag-dimension-mutating
+// contracts ship.
 
-import {
-  BAG_COLS,
-  BAG_ROWS,
-  cellsOf,
-  dimsOf,
-  ITEMS,
-  type BagItem,
-  type Cell,
-  type ItemId,
-  type RarityKey,
-} from '../data.local'
-import type { RecipeMatch } from '../run/recipes'
+import { DEFAULT_RULESET } from '@packbreaker/content'
+import type { RarityKey } from '@packbreaker/ui-kit'
+import { ITEMS } from '../run/content'
+import type { BagItem, Cell, ItemId, RecipeMatch } from '../run/types'
 
 export const cellPx = 88
+
+/** Bag dimensions derived from DEFAULT_RULESET. M1 contracts don't mutate
+ *  bagDimensions; M2 contract-driven mutators will need to thread the
+ *  dimensions through these pure helpers as a parameter. */
+export const BAG_COLS = DEFAULT_RULESET.bagDimensions.width
+export const BAG_ROWS = DEFAULT_RULESET.bagDimensions.height
 
 export const RARITY_RANK: Record<RarityKey, number> = {
   common: 0,
@@ -23,6 +28,33 @@ export const RARITY_RANK: Record<RarityKey, number> = {
   rare: 2,
   epic: 3,
   legendary: 4,
+}
+
+/** Bag-cell rotation for an item id (square footprints are rotation-invariant). */
+export function dimsOf(itemId: ItemId, rot = 0): { w: number; h: number } {
+  const def = ITEMS[itemId]
+  if (!def) {
+    // Unknown ids should never reach UI under M1.3.4a's iconned-pool
+    // constraint, but defensively fall back to a 1×1 footprint so layout
+    // doesn't crash on an unexpected sim-generated id.
+    return { w: 1, h: 1 }
+  }
+  let w = def.w
+  let h = def.h
+  if (rot % 180 !== 0) [w, h] = [h, w]
+  return { w, h }
+}
+
+/** Cells occupied by a placed bag item, given its anchor + rotation. */
+export function cellsOf(bagItem: BagItem): Cell[] {
+  const { w, h } = dimsOf(bagItem.itemId, bagItem.rot)
+  const out: Cell[] = []
+  for (let dx = 0; dx < w; dx++) {
+    for (let dy = 0; dy < h; dy++) {
+      out.push([bagItem.col + dx, bagItem.row + dy])
+    }
+  }
+  return out
 }
 
 export interface Footprint {

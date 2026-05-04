@@ -3,7 +3,7 @@
 // LeftRail's CLASS + RELICS blocks (less the OPPONENT INTENT block,
 // which moved to the top bar per decision-1).
 
-import type { RunState } from '../../../data.local';
+import type { RunState } from '../../../run/types';
 import { RelicLoop, TinkerGlyph } from '../../../icons/icons';
 
 interface RelicsTabProps {

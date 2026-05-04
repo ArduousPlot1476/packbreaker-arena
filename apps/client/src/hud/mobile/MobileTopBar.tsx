@@ -4,7 +4,7 @@
 // silhouette swatches (sword/shield default). Class is implied by
 // the silhouette pair pattern, not text.
 
-import type { RunState } from '../../data.local';
+import type { RunState } from '../../run/types';
 import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS } from '../../icons/icons';
 
 function OpponentSilhouette() {

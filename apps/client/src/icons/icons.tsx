@@ -36,7 +36,6 @@
 // authority on each surface.
 
 import type { ReactNode, SVGProps } from 'react';
-import type { ItemId } from '../data.local';
 
 type StrokeyProps = { children: ReactNode } & Omit<SVGProps<SVGSVGElement>, 'children'>;
 
@@ -196,7 +195,12 @@ const FireOil = () => (
   </Strokey>
 );
 
-export const ICONS: Record<ItemId, () => JSX.Element> = {
+// String-keyed lookup so the literal slugs below assign cleanly post-
+// M1.3.4a's ItemId broadening to a brand. Items outside this 12-prototype
+// subset fall back to ICONS['copper-coin'] at the call site (DraggableItem,
+// ShopSlot, etc.). Drop the fallback when icon-art expansion lands the
+// full M1 content set (post-M1.3.4b).
+export const ICONS: Record<string, () => JSX.Element> = {
   'iron-sword': IronSword,
   'iron-dagger': IronDagger,
   'wooden-shield': WoodenShield,

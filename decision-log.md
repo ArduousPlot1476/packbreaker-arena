@@ -4,6 +4,135 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-02 — M1.3.4a closed (sim wire-up + data.local dissolution; first half of the M1.3.4 inflection split)
+
+- **The inflection point lands.** `data.local.ts` is gone; `packages/sim` integrates into the client through two lazy-boundary-aware bridge modules; the canned 4-second combat SCRIPT is replaced by deterministic playback of real `CombatResult` events; the mobile [Crafting] tab gains its scouted-recipes section. The game stops being a UI demo and starts being a deterministic real game. Trey-confirmed via screenshot review in chat (3 screenshots + re-screenshot pass after blocker fixes).
+
+- **Phasing — M1.3.4a vs M1.3.4b.** The original M1.3.4 scope (sim integration + Phaser combat overlay) was **ratified split into halves in chat before the M1.3.4a prompt was issued.** M1.3.4a (this close) lands sim integration + dissolution + DOM combat playback, letting the sim path stand alone and ratify cleanly. M1.3.4b (next) replaces the DOM portraits / HP-bars with the Phaser combat scene against the already-sim-wired bag — purely a render-layer swap, no new state surfaces.
+
+- **Sim integration ratifications:**
+  1. **Single integration surface, split by lazy-boundary.** All client → `@packbreaker/sim` calls flow through one of two bridge modules: `apps/client/src/run/sim-bridge.ts` (shop + run-RNG, main-chunk consumers) and `apps/client/src/combat/sim-bridge.combat.ts` (combat resolver, combat-chunk consumer). Neither bridge imports the other; the split exists to keep `simulateCombat`'s static-import edge inside the lazy boundary. Direct sim imports from feature code are forbidden (one place per chunk to install adapters at the boundary).
+  2. **`ItemId` broadens from the M0 narrow 12-slug union to the canonical content brand** (`Brand<string, 'ItemId'>` — re-exported from `@packbreaker/content` via `apps/client/src/run/types.ts`). Sim-generated shop slots can now be any of the 45 canonical items; the iconned-coherence constraint is preserved by filtering the **shop pool** at the bridge (`SHOP_POOL_ITEMS` = 12 iconned slugs), not the type. Drop the filter when icon-art expansion lands the full 45-item set (post-M1.3.4b per `visual-direction.md` § 14).
+  3. **Reroll determinism.** `ShopController.generateShop` derives a per-(round, rerollCount) seed via `shopSeedFor(baseSeed, round, rerollCount)` with stride `SHOP_REROLL_STRIDE = 65521` (largest 16-bit prime). Reroll-counter sequences across adjacent rounds stay disjoint up to ~65k rerolls per round. Reroll cost flows through sim's `computeRerollCost(rerollsThisRound, rerollCostStart, rerollCostIncrement, extraRerollsPerRound)`; `extraRerollsPerRound` is hardcoded 0 until relic state machinery lands in M1.5.
+  4. **Run-state factory pattern.** `INITIAL_CLIENT_STATE` was a static const in M0; M1.3.4a introduces `createInitialState()` because round-1 shop is sim-generated against a fresh wall-clock `SimSeed`. The companion module-const calls the factory once at import time so tests still observe a stable round-1 state without each test re-running the factory.
+  5. **+18 trophy on win is an M0-placeholder value carried into M1.3.4a unchanged.** The real per-round trophy schedule (loss penalties, contract modifiers, win-streak multipliers) lands with M2 trophy-curve work. Until then, win → +18 / loss → +0 keeps the HUD's trophy counter incrementing predictably for screenshot review.
+
+- **Data.local.ts dissolution — 5 distributed concerns:**
+  - **Types** → `apps/client/src/run/types.ts` (`BagItem`, `ShopSlot`, `ItemDef`, `Recipe`, `RecipeMatch`, `RunState`; re-exports canonical `ItemId`).
+  - **ITEMS / RECIPES adapter** → `apps/client/src/run/content.ts` (45 canonical items adapted to `ItemDef`; recipes filtered to the 4 whose I/O is fully iconned; `SHOP_POOL_ITEMS` = 12 iconned slugs for the sim shop pool).
+  - **Layout helpers** (`cellsOf`, `dimsOf`) → `apps/client/src/bag/layout.ts`. `BAG_COLS` / `BAG_ROWS` derived from `DEFAULT_RULESET.bagDimensions` (state-driven dims through pure helpers is M2 work when contract mutators rewrite bag size).
+  - **Initial-state seed** → `RunController.createInitialState()` (round 1 fresh start: empty bag, sim-generated shop, gold = ruleset.baseGoldPerRound = 4, hearts = 3, history = []).
+  - **`RecipeMatch` type** → `run/types.ts` (moved from `run/recipes.ts` to break the `bag/layout` ⇄ `run/recipes` import cycle that arose when `cellsOf` moved).
+  - `data.local.ts` + `data.local.test.ts` deleted; zero `data.local` imports remain.
+  - **Intended player-facing divergence:** the prototype's `SEED_BAG` pre-placed mock items at "round 4" so the demo opened mid-run with a populated bag for visual review. Post-M1.3.4a runs start at round 1 with an empty bag (reflecting real game state — the player buys their first items from the round-1 shop). This is not a regression; it's the dissolution of a graybox crutch. The demo experience now matches the actual M1 game flow.
+
+- **Lazy-load combat module per `tech-architecture.md` § 10.** Following the M1.3.3 mobile-chunk precedent, `combat/CombatOverlay.tsx` loads on first combat via `combat/LazyCombatOverlay.tsx` (`React.lazy` + `<Suspense fallback>` at the orchestrator level). The reducer doesn't import `combat/ghost.ts` (which would cross the lazy boundary) — `CombatOverlay` pre-computes `damageDealt` / `damageTaken` / `opponentGhostId` against `initialPlayerHp` / `initialGhostHp` − `result.finalHp`, then forwards a `CombatDonePayload` to `combat_done`.
+  - **Lazy-boundary integrity:** Vite sourcemap audit confirms the combat-only sim subgraph (`combat.ts`, `status.ts`, `triggers.ts`) ships exclusively in the combat chunk. Main chunk's sim imports are limited to shop-side modules (`rng.ts`, `iteration.ts`, `math.ts`, `run/shop.ts`). Title-screen and pre-combat users do not parse combat code. Achieved via `sim-bridge.ts` (shop-side) + `sim-bridge.combat.ts` (combat-side) split — the static-import edge from `simulateCombat` originates only in modules the combat chunk consumes.
+
+- **Combat playback (DOM, transitional).** `CombatOverlay` schedules at `TICKS_PER_SECOND = 10` (100ms / tick). For each tick step, damage / heal / status_tick / combat_end events at that tick materialize as floaters; HP bars derive from each event's `remainingHp` / `newHp` (sim's authoritative value) so displayed HP at `currentTick > endedAtTick` equals `result.finalHp` exactly. SKIP button (bottom-right of stage) snaps `currentTick` past `endedAtTick + 2` and advances directly to `<RoundResolution>`. Phaser combat scene replaces the DOM portraits + HP-bar layout in M1.3.4b.
+
+- **Procedural ghost template (`combat/ghost.ts`).** Pure function; inputs `(baseSeed, round, bagDimensions)` → `GhostTemplate`. Class alternates by round parity (odd → marauder, even → tinker — deliberate affinity-mix so combat dynamics differ round-to-round). Item count scales 1 → 5 with round per `ITEM_COUNT_BY_ROUND`. Rarity-gate follows `RARITY_GATE_BY_ROUND`. Items drawn from `SHOP_POOL_ITEMS` so the build stays in the iconned subset. HP scales gently: `BASE_COMBATANT_HP + ⌊(round-1)/2⌋ × 2`. Reuses `shopSeedFor` with a sentinel reroll-offset `7 × 65521` so ghost seeds never collide with shop seeds at the same round. **Not** a port of `packages/sim/test/determinism/ghost-generator.ts` (test scaffolding, ratified do-not-import in production); fresh + simpler builder, intentionally narrow design surface, easy to delete when M2 ghost storage replaces it.
+
+- **Round resolution + history flow.** `combat_done` action carries `result: CombatResult`, `opponentGhostId`, `damageDealt`, `damageTaken`. Reducer applies:
+  - **Win:** +`ruleset.winBonusGold`, +18 trophy (M0-placeholder, see ratification 5), hearts unchanged.
+  - **Loss:** +0 gold, +0 trophy, hearts −= 1 (clamped to 0).
+  - **Draw:** treated as loss for hearts.
+  - **Always:** append a canonical `RunHistoryEntry { round, outcome, damageDealt, damageTaken, goldEarnedThisRound, opponentGhostId }` to `runState.history`.
+  - Run-end detection (hearts === 0 → eliminated screen) deferred to M1.5.
+
+  `RoundResolution.tsx` consumes the new props (round, outcome, damageDealt, damageTaken, goldEarned, trophyEarned, hearts, maxHearts) — VICTORY / DEFEAT header, real +gold / +trophy values, real hearts/maxHearts, DEALT / TAKEN line. Loss path uses `--life-stroke` for the header colour to telegraph the heart cost. `LogTab` reads `runState.history` directly (mock removed). Desktop `BottomPanel` reads the most recent history entry (or `"0 ROUNDS · awaiting first combat"` empty state).
+
+- **`scoutRecipes` + `[Crafting]` two-section ratification (closes M1.3.3 carry-forward 1 — option-A active recipes mirror was the M1.3.3 close; the §7.2 second section deferred to M1.3.4a).** `apps/client/src/run/recipes.ts` exports `scoutRecipes(bag) → Recipe[]` — multiset match over `bag.itemId`, no adjacency requirement. The mobile `[Crafting]` tab now renders two sections:
+  - **READY TO CRAFT** — recipes whose inputs are 4-edge-adjacent (output of `detectRecipes`); each row is a tappable COMBINE target. Empty-state copy unchanged: "Place items adjacent to see combinations."
+  - **AVAILABLE WITH CURRENT ITEMS** — recipes whose inputs are present but not yet adjacent (output of `scoutRecipes` minus the ready set so sections stay disjoint). Read-only preview with REARRANGE pill. Empty-state copy: "No recipes possible with current items." Section is **always rendered** even when empty (Trey screenshot review — hiding it made the §7.2 layout look unimplemented on a starting bag). Auto-rearrange affordance over this list is M3 hint-system work.
+
+### Screenshot-review hotfixes + lazy-boundary correction
+
+- **Commit 5 (screenshot review).** Trey's halt-gate screenshot review caught two blockers that step-1–4 missed:
+  1. Desktop `BottomPanel` rendered a hardcoded "R3 · won vs ghost (Marauder) · 6 dmg dealt · 3 dmg taken" string regardless of run state. The literal survived data.local dissolution by being JSX-baked rather than living in `data.local.ts`. Fixed by reading `state.history[state.history.length - 1]` with an empty-state fallback ("0 ROUNDS · awaiting first combat").
+  2. Mobile `CraftingTab` hid the AVAILABLE WITH CURRENT ITEMS section entirely when `scoutedRecipes` was empty — the common starting case (one Iron Dagger in bag → no scoutable recipes) made the §7.2 two-section layout invisible. Fixed by always rendering the section header + count with an empty-state row ("No recipes possible with current items.") when no scouted recipes match. Test rewritten to assert both sections' empty states render simultaneously.
+  Verification ask 3 (HP reconciliation between mid-tick CombatOverlay and RoundResolution) reconciled by code walk: `playerHp` derives from each damage event's `remainingHp` (sim's authoritative value), advancing tick-by-tick; at `currentTick > endedAtTick` the displayed HP equals `result.finalHp.player`. Image 2's mid-tick "12/30" was a frozen frame from the playback (player took 18 of 30 total damage so far). No code change needed.
+
+- **Commit 6 (lazy-boundary correction; closing-pass audit finding caught before the closing-log committed).** Step 2's lazy-load split shipped `CombatOverlay` JSX + `ghost.ts` + `RoundResolution` into the combat chunk but **left the entire sim runtime in main**. The original step-2 implementation imported `simulateCombat` statically from a `sim-bridge.ts` that was shared between main-chunk consumers (ShopController, RunController, ghost.ts) and the combat-chunk consumer (CombatOverlay). Vite's chunk-splitting heuristic hoisted the shared bridge to the common ancestor (main); the static-import edge for `simulateCombat` rode along with it, dragging the combat-only sim subgraph (`combat.ts` + `status.ts` + `triggers.ts`) into main. Sourcemap audit at the closing pass surfaced the violation: title-screen / pre-combat users were paying the full sim parse cost despite the `tech-architecture.md` § 10 invariant. Fix: split the bridge into `apps/client/src/run/sim-bridge.ts` (shop-side, no `simulateCombat` import) + `apps/client/src/combat/sim-bridge.combat.ts` (NEW, combat-side, imports `simulateCombat` and exports `runCombat`). Neither bridge imports the other. Post-split sourcemap audit confirms `combat.ts` / `status.ts` / `triggers.ts` ship exclusively in the combat chunk; main's sim imports are limited to `rng.ts` / `iteration.ts` / `math.ts` / `run/shop.ts`. This documentation pattern mirrors M1.3.3's Codex P1 hotfix sub-section: original close + post-close correction unified under one heading.
+
+### Bundle delta
+
+- **vs. M1.3.3 close** (244.93 KB raw / 75.65 KB gzipped main; 12.06 KB raw / 3.22 KB gzipped mobile chunk; 78 modules):
+  - **Main chunk:** 243.02 KB raw / 75.84 KB gzipped — Δ −1.91 KB raw (−0.78%) / +0.19 KB gzipped (+0.25%). Within the ≤+5% gzipped target ✓ — sim's combat code moved OUT (combat-chunk-bound), and the bridge / content / types / ShopController / glue moved IN, netting roughly zero. **Desktop pre-combat users actually save raw bytes vs. M1.3.3 baseline.**
+  - **Combat chunk (NEW, lazy):** 22.19 KB raw / 7.50 KB gzipped — additive, only loaded when the player presses Continue. Includes `CombatOverlay` + `ghost.ts` + `sim-bridge.combat.ts` + `RoundResolution` + sim's `combat.ts` + `status.ts` + `triggers.ts` + `iteration.ts`.
+  - **Mobile chunk:** 13.85 KB raw / 3.44 KB gzipped — Δ +1.79 KB raw / +0.22 KB gzipped (absorbs the scouted-section JSX).
+  - **CSS:** 10.05 KB / 2.97 KB gzipped — unchanged.
+  - **Modules:** 78 → 99 (+21: sim-bridge + sim-bridge.combat + content + types + ShopController + ShopController.test + recipes.test + ghost + ghost.test + LazyCombatOverlay + various adjacent test/source pairs, split across 3 chunks — main + combat + mobile).
+  - First-load cost for desktop pre-combat is **lower** than M1.3.3 close: combat chunk fetched on-demand at the Continue button press.
+
+### Tests
+
+- Workspace baseline at M1.3.3 close (per project convention: client + ui-kit, sim/content tests not folded into "workspace"): **75 across 15 files** (48 client / 12 files + 27 ui-kit / 3 files).
+  - **Added (+24 tests across 3 new files + 2 expansions):** `recipes.test.ts` (NEW, +8 = 5 detectRecipes regression migrated from `data.local.test.ts` + 3 scoutRecipes); `ghost.test.ts` (NEW, +7); `ShopController.test.ts` (NEW, +5); `CraftingTab.test.tsx` (4 → 6, +2); `RunController.test.ts` (9 → 11, +2 covering combat_done loss path + 0-hearts clamp).
+  - **Deleted (−5 tests across 1 file):** `data.local.test.ts` (5 detectRecipes regression tests; migrated into `recipes.test.ts` alongside the 3 new scoutRecipes tests).
+  - **Net delta:** +19 tests / +3 files. **Workspace post-M1.3.4a: 94 across 18 files** (67 client / 15 files + 27 ui-kit / 3 files). Sim 466 tests / 13 files + content 30 tests / 1 file unchanged. Turbo pipeline 25/25 tasks green.
+
+### Files added (`apps/client/src/`)
+
+- `run/sim-bridge.ts` (shop-side bridge)
+- `combat/sim-bridge.combat.ts` (combat-side bridge — NEW at step 6)
+- `run/types.ts`
+- `run/content.ts`
+- `run/recipes.test.ts`
+- `shop/ShopController.ts`
+- `shop/ShopController.test.ts`
+- `combat/ghost.ts`
+- `combat/ghost.test.ts`
+- `combat/LazyCombatOverlay.tsx`
+
+### Files deleted
+
+- `apps/client/src/data.local.ts`
+- `apps/client/src/data.local.test.ts`
+
+### Files modified non-trivially
+
+`run/RunController.ts`, `run/useRun.ts`, `bag/layout.ts`, `run/recipes.ts`, `combat/CombatOverlay.tsx`, `screens/RoundResolution.tsx`, `screens/mobile/tabs/CraftingTab.tsx`, `screens/mobile/tabs/LogTab.tsx`, `hud/BottomPanel.tsx`, `screens/{DesktopRunScreen, mobile/MobileRunScreen}.tsx`, `icons/icons.tsx`, plus 15 other test/component files swept for new import homes.
+
+### Documented carry-forwards
+
+  1. **Phaser combat overlay → M1.3.4b** (replaces the DOM portraits/HP-bars with the Phaser scene). Combat chunk already lazy-split, so adding Phaser is purely additive to the combat chunk size.
+  2. **Real-device drag-state screenshot capture** (carry-forward from M1.3.3) → still deferred; surfaces alongside M1.3.4b if Phaser scene work makes mobile real-device testing in-scope.
+  3. **`combat/CombatOverlay.tsx` portrait character-art (3 hex sites)** → M1.3.4b (Phaser replacement supersedes; the carry-forward sites are now in the DOM Portrait component, easy to replace wholesale).
+  4. **@dnd-kit `DragOverlay` rotation visual polish** → M1.3.4b or later (carry-forward from M1.3.2 / M1.3.3; not surfaced this sub-phase).
+  5. **Run-end detection (hearts === 0 → eliminated)** → M1.5 (alongside class-select screen + relic state machinery + LocalSaveV1 persistence).
+  6. **State-driven bag dimensions through pure helpers** → M2 (when contract mutators rewrite bag size; until then `BAG_COLS` / `BAG_ROWS` derived constants are sufficient).
+  7a. **`opponentClassId` field on `RunHistoryEntry`** → M1.5 (replaces the round-parity class derivation in `LogTab` + `BottomPanel`; the field is local to the client-side history record, not server state, so it can land independently of M2 ghost storage).
+  7b. **Server-side ghost record (per-(round, trophy_band) GhostBuild storage)** → M2 (replaces `combat/ghost.ts`'s procedural template entirely; the carry-forward language treats `combat/ghost.ts` as a placeholder explicitly designed to be deleted).
+  8. **Auto-rearrange hint affordance over the AVAILABLE WITH CURRENT ITEMS section** → M3 (hint-system work).
+  9. **Per-round trophy schedule + contract modifiers + win-streak multipliers** → M2 (closes the +18-placeholder ratification 5).
+  10. **`RarityGem` for shop rarity dot** (carry-forward from M1.3.2; not surfaced this sub-phase).
+  11. **`apps/client/src/index.css` `.glow-*` rgba palette derivatives** (carry-forward from M1.3.2 / M1.3.3).
+
+### Branch hygiene
+
+6 implementation commits + closing entry on `m1.3.4a-sim-wire-up`, branched off main (`0b07722`). `--no-ff` merge to main once Trey confirms CI green on origin.
+
+### Next
+
+**M1.3.4b** (Phaser combat scene). The DOM combat overlay shipped this sub-phase is the placeholder that proves the sim path; M1.3.4b is purely a render-layer swap (Phaser replaces the Portrait + HP-bar DOM tree). No new sim integration, no new state surface — the combat chunk's bytes grow to absorb Phaser, but the architectural shape is set.
+
+### Codex P1 catch + reroll-cost authority fix (commit 8)
+
+- **Codex Review on PR #6 caught a P1 on the closing-pass tree:** `ShopPanel.tsx` (and the mobile `ShopTab` equivalent) computed reroll affordability as `state.rerollCount + 1`, while the reducer charged via sim's `computeRerollCost(rerollsThisRound, rerollCostStart, rerollCostIncrement, extraRerollsPerRound)` per ratification 3. Default ruleset values (`rerollCostStart=1`, `rerollCostIncrement=1`, `EXTRA_REROLLS_PER_ROUND=0`) made the formulas incidentally agree. Divergence surfaces as soon as M1.5 lands relics with non-zero `extraRerollsPerRound`, or contract mutators modify the cost curve.
+
+- **Fix:** hoisted the placeholder `EXTRA_REROLLS_PER_ROUND` const + a pass-through re-export of `computeRerollCost` into `run/sim-bridge.ts` so the reducer + `ShopPanel` + `ShopTab` share one authoritative source. `RunController` imports both from sim-bridge instead of `@packbreaker/sim` directly + a local const; `ShopPanel` + `ShopTab` replace the `+ 1` arithmetic with the same `computeRerollCost(...)` call. Test fixture comments updated (`ShopPanel.test.tsx`, `RunContext.test.tsx`); rendered values unchanged (cost is still 1 for default ruleset, so all assertions hold).
+
+- **Architectural rule reinforced + documented inline at `run/sim-bridge.ts`:** _UI affordability state never reimplements game-rule arithmetic — it consumes the authoritative formula from sim._ Future shop-related ratifications inherit this rule. Sweep audit on `apps/client/src` for `rerollCount + 1` and other local affordability arithmetic returned zero remaining sites.
+
+- **Sourcemap audit re-confirms post-fix chunk integrity unchanged.** `computeRerollCost` lives in `packages/sim/src/run/shop.ts` (already in main per the M1.3.4a step 6 split), so the re-export adds no combat-side sim modules to main. Combat chunk still owns `combat.ts` / `status.ts` / `triggers.ts` / `iteration.ts`; main's sim imports remain `rng.ts` / `math.ts` / `run/shop.ts`.
+
+- **Updated stats:** test count **67 / 15 client files** unchanged (assertion values unchanged at default ruleset; only test comments updated); workspace total **94 / 18 files** unchanged. Main chunk **243.10 KB raw / 75.86 KB gzipped** (was 243.02 / 75.84 — Δ +0.08 KB raw / +0.02 KB gzipped from re-export glue). Mobile chunk 13.92 KB raw / 3.47 KB gzipped (Δ +0.07 / +0.03 KB from ShopTab call-site swap). Combat chunk 22.19 KB raw / 7.50 KB gzipped (unchanged). All bundle-delta budgets still satisfied (main +0.39% raw / +0.28% gzipped vs. M1.3.3 baseline). Modules 99 (was 99 — re-export glue lives inside an existing module).
+
+- **Updated branch hygiene:** 8 implementation commits + closing-log amendment (commit 9) on `m1.3.4a-sim-wire-up` (commits 1–4 implementation + 5 screenshot-review hotfix + 6 lazy-boundary correction + 7 closing log + 8 Codex P1 hotfix + 9 = this closing-log amendment). Branch force-pushed to origin after the hotfix lands so the PR re-runs CI against the corrected tree.
+
+---
+
 ## 2026-05-01 — M1.3.3 closed (mobile responsive 390-wide vertical layout)
 
 - First sub-phase to target a viewport other than desktop. Layout reflows per `gdd.md` § 14 mobile spec; visual register from M1.3.2 carries forward unchanged across mobile (no mobile-specific palette extensions, no mobile-specific typography deviations, no mobile-specific easing curves). Trey-confirmed via 12-of-14 screenshot review in chat.

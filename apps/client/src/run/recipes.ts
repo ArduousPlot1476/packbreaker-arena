@@ -1,13 +1,19 @@
 // Recipe detection — multiset match over bag items + BFS connectivity over
-// edge-adjacent neighbors. Verbatim extraction from App.tsx to support
-// regression testing of the data adapter (M1.1.1 bugfix). Logic unchanged.
+// edge-adjacent neighbors. Verbatim algorithm from M1.1.1 bugfix.
+//
+// M1.3.4a — RECIPES + Recipe + RecipeMatch types moved to run/content.ts and
+// run/types.ts. cellsOf moved to bag/layout.ts. detectRecipes still drives
+// the bag's per-cell glow + COMBINE button anchoring (visual-direction.md
+// § 6 / decision-log 2026-04-26 ratification). scoutRecipes (added in
+// M1.3.4a §7) returns inventory-based recipe possibilities — adjacency-
+// independent — for the mobile [Crafting] tab's "Available with current
+// items" section.
 
-import { cellsOf, RECIPES, type BagItem, type Recipe } from '../data.local';
+import { cellsOf } from '../bag/layout';
+import { RECIPES } from './content';
+import type { BagItem, ItemId, Recipe, RecipeMatch } from './types';
 
-export interface RecipeMatch {
-  recipe: Recipe;
-  uids: string[];
-}
+export type { RecipeMatch } from './types';
 
 export function detectRecipes(bag: BagItem[]): RecipeMatch[] {
   const matches: RecipeMatch[] = [];
@@ -77,4 +83,41 @@ export function detectRecipes(bag: BagItem[]): RecipeMatch[] {
     seen.add(k);
     return true;
   });
+}
+
+/** Inventory-based recipe scouting — returns the recipe ids the player
+ *  could complete given the items they have in their bag, regardless of
+ *  current adjacency. Multiset match over bag.itemId; no rearrangement
+ *  search (BFS over move sequences is M3 hint-system work).
+ *
+ *  Surfaces "you could make X with Y + Z" in the mobile Crafting tab's
+ *  scouting section per the M1.3.4a §7 ratification. Differs from
+ *  detectRecipes by NOT requiring 4-neighbor edge adjacency — the player
+ *  still has to physically arrange the items to combine them; this just
+ *  surfaces what's possible. */
+export function scoutRecipes(bag: BagItem[]): Recipe[] {
+  // Build a multiset of itemIds present in the bag.
+  const have = new Map<ItemId, number>();
+  for (const b of bag) {
+    have.set(b.itemId, (have.get(b.itemId) ?? 0) + 1);
+  }
+
+  const out: Recipe[] = [];
+  for (const recipe of RECIPES) {
+    // Each recipe's required multiset (e.g., {iron-sword: 1, iron-dagger: 1}
+    // for r-steel-sword; {healing-herb: 2} for r-healing-salve).
+    const need = new Map<ItemId, number>();
+    for (const id of recipe.inputs) {
+      need.set(id, (need.get(id) ?? 0) + 1);
+    }
+    let ok = true;
+    for (const [id, count] of need) {
+      if ((have.get(id) ?? 0) < count) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) out.push(recipe);
+  }
+  return out;
 }

@@ -12,14 +12,26 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import { ITEMS } from '../data.local';
+import type { CombatResult, GhostId } from '@packbreaker/content';
+
+/** Payload CombatOverlay forwards to the reducer's combat_done action.
+ *  Damage values are pre-computed against the player's / ghost's
+ *  startingHp + result.finalHp so the reducer doesn't need ghost.ts. */
+export interface CombatDonePayload {
+  result: CombatResult;
+  opponentGhostId: GhostId | null;
+  damageDealt: number;
+  damageTaken: number;
+}
+import { ITEMS } from './content';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
   INITIAL_CLIENT_STATE,
   type ClientRunState,
 } from './RunController';
-import { detectRecipes, type RecipeMatch } from './recipes';
+import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
+import type { Recipe } from './types';
 
 function makeUid(prefix: 'b' | 's'): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -29,6 +41,17 @@ export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   const recipes = useMemo(() => detectRecipes(state.bag), [state.bag]);
+
+  // scoutedRecipes: inventory-only matches (multiset; no adjacency).
+  // Filtered to recipes whose id is NOT already a `recipes` (ready)
+  // match — so the mobile Crafting tab's two sections stay disjoint:
+  //   "Ready to combine" (recipes) — the player can tap COMBINE now.
+  //   "Available with current items" (scoutedRecipes) — would need to
+  //                                                    rearrange first.
+  const scoutedRecipes = useMemo<Recipe[]>(() => {
+    const ready = new Set(recipes.map((m) => m.recipe.id));
+    return scoutRecipes(state.bag).filter((r) => !ready.has(r.id));
+  }, [state.bag, recipes]);
 
   const dragRef = useRef<ClientRunState['drag']>(null);
   dragRef.current = state.drag;
@@ -101,7 +124,10 @@ export function useRun() {
   }, []);
 
   const onReroll = useCallback(() => {
-    dispatch({ type: 'reroll', uidPrefix: makeUid('s') });
+    // The reroll action carries no payload as of M1.3.4a — ShopController
+    // generates the new shop using state.seed + round + rerollCount inside
+    // the reducer, so makeUid for slot ids is no longer needed here.
+    dispatch({ type: 'reroll' });
   }, []);
 
   const onCombine = useCallback((match: RecipeMatch) => {
@@ -112,13 +138,18 @@ export function useRun() {
     dispatch({ type: 'continue_to_combat' });
   }, []);
 
-  const onCombatDone = useCallback(() => {
-    dispatch({ type: 'combat_done' });
+  // CombatOverlay computes damageDealt / damageTaken / opponentGhostId
+  // at combat-end (it has the input + result on hand) and forwards them
+  // to the reducer so the round-resolution branch doesn't need to
+  // import combat/ghost.ts (which would defeat the lazy chunk split).
+  const onCombatDone = useCallback((payload: CombatDonePayload) => {
+    dispatch({ type: 'combat_done', ...payload });
   }, []);
 
   return {
     state,
     recipes,
+    scoutedRecipes,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
