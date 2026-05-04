@@ -117,6 +117,20 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 **M1.3.4b** (Phaser combat scene). The DOM combat overlay shipped this sub-phase is the placeholder that proves the sim path; M1.3.4b is purely a render-layer swap (Phaser replaces the Portrait + HP-bar DOM tree). No new sim integration, no new state surface — the combat chunk's bytes grow to absorb Phaser, but the architectural shape is set.
 
+### Codex P1 catch + reroll-cost authority fix (commit 8)
+
+- **Codex Review on PR #6 caught a P1 on the closing-pass tree:** `ShopPanel.tsx` (and the mobile `ShopTab` equivalent) computed reroll affordability as `state.rerollCount + 1`, while the reducer charged via sim's `computeRerollCost(rerollsThisRound, rerollCostStart, rerollCostIncrement, extraRerollsPerRound)` per ratification 3. Default ruleset values (`rerollCostStart=1`, `rerollCostIncrement=1`, `EXTRA_REROLLS_PER_ROUND=0`) made the formulas incidentally agree. Divergence surfaces as soon as M1.5 lands relics with non-zero `extraRerollsPerRound`, or contract mutators modify the cost curve.
+
+- **Fix:** hoisted the placeholder `EXTRA_REROLLS_PER_ROUND` const + a pass-through re-export of `computeRerollCost` into `run/sim-bridge.ts` so the reducer + `ShopPanel` + `ShopTab` share one authoritative source. `RunController` imports both from sim-bridge instead of `@packbreaker/sim` directly + a local const; `ShopPanel` + `ShopTab` replace the `+ 1` arithmetic with the same `computeRerollCost(...)` call. Test fixture comments updated (`ShopPanel.test.tsx`, `RunContext.test.tsx`); rendered values unchanged (cost is still 1 for default ruleset, so all assertions hold).
+
+- **Architectural rule reinforced + documented inline at `run/sim-bridge.ts`:** _UI affordability state never reimplements game-rule arithmetic — it consumes the authoritative formula from sim._ Future shop-related ratifications inherit this rule. Sweep audit on `apps/client/src` for `rerollCount + 1` and other local affordability arithmetic returned zero remaining sites.
+
+- **Sourcemap audit re-confirms post-fix chunk integrity unchanged.** `computeRerollCost` lives in `packages/sim/src/run/shop.ts` (already in main per the M1.3.4a step 6 split), so the re-export adds no combat-side sim modules to main. Combat chunk still owns `combat.ts` / `status.ts` / `triggers.ts` / `iteration.ts`; main's sim imports remain `rng.ts` / `math.ts` / `run/shop.ts`.
+
+- **Updated stats:** test count **67 / 15 client files** unchanged (assertion values unchanged at default ruleset; only test comments updated); workspace total **94 / 18 files** unchanged. Main chunk **243.10 KB raw / 75.86 KB gzipped** (was 243.02 / 75.84 — Δ +0.08 KB raw / +0.02 KB gzipped from re-export glue). Mobile chunk 13.92 KB raw / 3.47 KB gzipped (Δ +0.07 / +0.03 KB from ShopTab call-site swap). Combat chunk 22.19 KB raw / 7.50 KB gzipped (unchanged). All bundle-delta budgets still satisfied (main +0.39% raw / +0.28% gzipped vs. M1.3.3 baseline). Modules 99 (was 99 — re-export glue lives inside an existing module).
+
+- **Updated branch hygiene:** 8 implementation commits + closing-log amendment (commit 9) on `m1.3.4a-sim-wire-up` (commits 1–4 implementation + 5 screenshot-review hotfix + 6 lazy-boundary correction + 7 closing log + 8 Codex P1 hotfix + 9 = this closing-log amendment). Branch force-pushed to origin after the hotfix lands so the PR re-runs CI against the corrected tree.
+
 ---
 
 ## 2026-05-01 — M1.3.3 closed (mobile responsive 390-wide vertical layout)
