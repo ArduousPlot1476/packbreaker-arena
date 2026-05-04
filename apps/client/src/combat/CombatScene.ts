@@ -29,6 +29,7 @@
 
 import Phaser from 'phaser';
 import type { CombatEvent, EntityRef } from '@packbreaker/content';
+import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
 
 // ─────────────────────────────────────────────────────────────────────
 // Palette — locked per visual-direction.md § 3 + semantic extensions.
@@ -69,6 +70,21 @@ const STATUS_PULSE_MS = 280;
 const COMBAT_END_SETTLE_MS = 480;
 const SHAKE_DURATION_MS = 220;
 const SHAKE_INTENSITY = 0.005;
+
+/** Wall-clock gap (in ticks) between events that triggers silent
+ *  fast-forward in update(). M1 starting value; tune via telemetry once
+ *  the tick-cap-draw rate dashboard from telemetry-plan.md § 4 Goal 4
+ *  surfaces. 8 ticks × 100ms/tick = 800ms — long enough that visual
+ *  pause feels intentional, short enough that 60s-tick-cap combats
+ *  compress to a watchable handful of seconds.
+ *
+ *  Tunable; not a magic number. Sourced + applied at update() entry. */
+const DEAD_TIME_THRESHOLD_TICKS = 8;
+/** Lead-in (in ticks) retained before the next event when
+ *  fast-forwarding so the event has windup. 2 ticks = 200ms gives the
+ *  HP bar tween + portrait pulse just enough lead time to feel
+ *  intentional rather than abrupt. M1 starting value; tune later. */
+const LEAD_IN_TICKS = 2;
 
 // ─────────────────────────────────────────────────────────────────────
 // Texture keys generated programmatically in preload(). One palette of
@@ -188,6 +204,8 @@ export class CombatScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     if (this.resolved) {
+      // Accumulator briefly bumps post-skip as the resolved-settle
+      // branch drains; cosmetic, not a leak.
       this.resolvedAt += delta;
       if (this.resolvedAt >= COMBAT_END_SETTLE_MS) {
         this.resolved = false; // gate against double-fire
@@ -196,14 +214,38 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    this.elapsedMs += delta;
-    while (this.elapsedMs >= this.msPerTick && this.currentTick <= this.endedAtTick + 1) {
-      this.elapsedMs -= this.msPerTick;
-      this.currentTick += 1;
+    // Flush any pending events at currentTick before the helper decides
+    // fast-forward. Catches combat_start at tick=0 on the very first
+    // frame so a long gap to the first damage event doesn't snap past
+    // it. Cheap when nothing pends — flushEventsAtCurrentTick's inner
+    // loop iterates 0 times and skips syncHpBars.
+    this.flushEventsAtCurrentTick();
+
+    const nextEvTick = findNextEventTick(this.combatEvents, this.nextEventIdx);
+    const result = advanceCombatTickClock({
+      currentTick: this.currentTick,
+      accumulator: this.elapsedMs,
+      delta,
+      msPerTick: this.msPerTick,
+      endedAtTick: this.endedAtTick,
+      nextEventTick: nextEvTick,
+      deadTimeThresholdTicks: DEAD_TIME_THRESHOLD_TICKS,
+      leadInTicks: LEAD_IN_TICKS,
+    });
+
+    // Apply each tick's events in order. flushEventsAtCurrentTick
+    // reads this.currentTick + this.nextEventIdx, so step the field
+    // per tick before flushing.
+    for (const tick of result.ticksAdvanced) {
+      this.currentTick = tick;
       this.flushEventsAtCurrentTick();
     }
+    // Covers the fast-forward case (ticksAdvanced is empty;
+    // result.newTick is the snap target).
+    this.currentTick = result.newTick;
+    this.elapsedMs = result.newAccumulator;
 
-    if (this.currentTick > this.endedAtTick + 1 && !this.resolved) {
+    if (result.reachedEnd && !this.resolved) {
       this.resolved = true;
       this.resolvedAt = 0;
     }
@@ -230,6 +272,7 @@ export class CombatScene extends Phaser.Scene {
   // ─────────────────────────────────────────────────────────────────
 
   private flushEventsAtCurrentTick(): void {
+    let flushed = 0;
     while (
       this.nextEventIdx < this.combatEvents.length &&
       this.combatEvents[this.nextEventIdx]!.tick <= this.currentTick
@@ -238,8 +281,12 @@ export class CombatScene extends Phaser.Scene {
       this.applyEventState(ev);
       this.playEventVisuals(ev);
       this.nextEventIdx += 1;
+      flushed += 1;
     }
-    this.syncHpBars(true);
+    // Skip the HP-bar tween when nothing flushed — update() now calls
+    // this every frame to clear any pending events at currentTick
+    // before the fast-forward decision (see update() entry comment).
+    if (flushed > 0) this.syncHpBars(true);
   }
 
   /** Updates internal HP + status mirrors from the event's authoritative

@@ -103,7 +103,27 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
     };
   }, [active, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag]);
 
-  const [phase, setPhase] = useState<'combat' | 'resolved'>('combat');
+  // Damage attributable to player / ghost. result.finalHp is HP at the
+  // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
+  // status-tick lethal hits don't underflow if HP went negative inside
+  // sim before being clamped at the event boundary.
+  const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
+  const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
+
+  // Zero-content fast-skip — see decision-log 2026-05-04. Sparse /
+  // silent sim outcomes (no damage either side, draw at
+  // MAX_COMBAT_TICKS) skip the Phaser mount entirely and jump straight
+  // to the resolution screen. Reducer + telemetry path is unchanged
+  // (combat_done still dispatches on NEXT click via handleNext).
+  const isZeroContent =
+    result !== null &&
+    damageDealt === 0 &&
+    damageTaken === 0 &&
+    result.outcome === 'draw';
+
+  const [phase, setPhase] = useState<'combat' | 'resolved'>(
+    isZeroContent ? 'resolved' : 'combat',
+  );
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
@@ -153,12 +173,6 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
     };
   }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, phase]);
 
-  // Damage attributable to player / ghost. result.finalHp is HP at the
-  // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
-  // status-tick lethal hits don't underflow if HP went negative inside
-  // sim before being clamped at the event boundary.
-  const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
-  const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
   const isWin = result?.outcome === 'player_win';
   const ruleset = ctx.state.state.ruleset;
   const goldEarned = isWin ? ruleset.winBonusGold : 0;
