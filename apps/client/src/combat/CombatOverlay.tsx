@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type Phaser from 'phaser';
 import {
   TICKS_PER_SECOND,
+  type CombatEvent,
   type CombatInput,
   type CombatResult,
   type GhostId,
@@ -40,6 +41,29 @@ import { makeGhostForRound } from './ghost';
 // Player class is the M1 prototype Tinker — visible in the portrait
 // label. Real class-select screen (gdd.md § 14 screen #2) is M1.5+.
 const M1_PROTOTYPE_CLASS_LABEL = 'Tinker';
+
+// Event types that mean "the player needs to see this combat play out."
+// Used by the option-2 zero-content fast-skip predicate. Codex P1 fix on
+// PR #7 (decision-log 2026-05-04 amendment): the previous predicate
+// (`damageDealt === 0 && damageTaken === 0`) matched any combat that
+// netted to zero HP delta on both sides — e.g., damage offset by
+// healing, mutual-burn stalemates, shield-wall stalemates — and would
+// have skipped Phaser playback despite real events the player needed
+// to see. Switching the check to event-content protects against that.
+//
+// `recipe_combine` is intentionally absent: it is not a member of the
+// CombatEvent union (only listed in CombatScene.ts:337 as a future
+// type). `stun_consumed` / `buff_apply` / `buff_remove` are intentionally
+// absent too — the scene currently renders no VFX for them, so mounting
+// Phaser to play one of those alone would re-introduce a "scene appears
+// frozen" halt-gate. Add them here once their VFX lands (M1.4+).
+const MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']> = new Set([
+  'damage',
+  'heal',
+  'status_apply',
+  'status_tick',
+  'item_trigger',
+]);
 // Phaser RESIZE mode adapts to the actual parent size after the first
 // layout tick; createCombatGame falls back to safe non-zero defaults
 // inside the game config if measurement isn't ready at construction.
@@ -110,16 +134,19 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
   const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
   const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
 
-  // Zero-content fast-skip — see decision-log 2026-05-04. Sparse /
-  // silent sim outcomes (no damage either side, draw at
-  // MAX_COMBAT_TICKS) skip the Phaser mount entirely and jump straight
-  // to the resolution screen. Reducer + telemetry path is unchanged
-  // (combat_done still dispatches on NEXT click via handleNext).
+  // Zero-content fast-skip — see decision-log 2026-05-04 + the Codex P1
+  // amendment block in the same entry. Predicate checks event CONTENT,
+  // not net HP deltas, so combats that net to zero HP on both sides via
+  // offsetting damage + healing (or any other meaningful event sequence)
+  // still mount Phaser. The `outcome === 'draw'` guard stays — a non-
+  // draw with no meaningful events would be a sim bug worth surfacing
+  // rather than silently bypassing. Reducer + telemetry path is
+  // unchanged (combat_done still dispatches on NEXT click via
+  // handleNext).
+  const hasNoMeaningfulEvents =
+    result !== null && !result.events.some((e) => MEANINGFUL_EVENT_TYPES.has(e.type));
   const isZeroContent =
-    result !== null &&
-    damageDealt === 0 &&
-    damageTaken === 0 &&
-    result.outcome === 'draw';
+    result !== null && hasNoMeaningfulEvents && result.outcome === 'draw';
 
   const [phase, setPhase] = useState<'combat' | 'resolved'>(
     isZeroContent ? 'resolved' : 'combat',
