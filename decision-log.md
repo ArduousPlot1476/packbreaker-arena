@@ -105,6 +105,27 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 - **M1.5** — relic state machinery, class-select screen, run-end detection (hearts === 0 → eliminated), LocalSaveV1 persistence, the M1.3.4a Codex P1 non-default-ruleset regression test.
 - **M1.6+** — boss round + content fill to 45 items / 12 recipes / 3 status / 1 boss.
 
+### Codex P1 catch + zero-content predicate fix (commit 5)
+
+- **Codex Review on PR #7 caught a P1 on the closing-pass tree:** the option-2 zero-content fast-skip predicate `damageDealt === 0 && damageTaken === 0 && outcome === 'draw'` matched not just the canonical empty-event stalemate (the M1.3.4b step-4 halt-gate fixture: round-1 empty bag + passive ghost item) but also any **active** combat that netted to zero HP delta on both sides — damage exactly offset by healing across the combat, mutual-burn stalemates, shield-wall stalemates. Those would have skipped Phaser playback entirely despite having real events the player needed to see.
+
+- **Fix:** replaced the net-HP-delta check with an event-content-based predicate. New module-scope const `MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']>` = `{ damage, heal, status_apply, status_tick, item_trigger }`; `hasNoMeaningfulEvents = !result.events.some(e => MEANINGFUL_EVENT_TYPES.has(e.type))`; `isZeroContent = result !== null && hasNoMeaningfulEvents && result.outcome === 'draw'`. The `outcome === 'draw'` guard stays — a non-draw with no meaningful events would be a sim bug worth surfacing rather than silently bypassing. `CombatOverlay.test.tsx` gains a regression case (Case B) for the offset-heal scenario alongside the preserved canonical-bypass case (Case A).
+
+- **Set composition deviations from the original prompt** (documented inline at the const + recorded here for posterity):
+  - **`recipe_combine` is intentionally absent** — it is not a member of the `CombatEvent` union (only listed in `combat/CombatScene.ts:337` as a future event type). Including it as a string literal would fail typecheck against `Set<CombatEvent['type']>`. The original prompt's set proposal included it; the fix had to drop it. If `recipe_combine` is added to the `CombatEvent` union in M2's content sweep, add it here too.
+  - **`stun_consumed` / `buff_apply` / `buff_remove` are intentionally absent** — the scene currently renders no VFX for them (`combat/CombatScene.ts:337-339`), so mounting Phaser to play one of those alone would re-introduce a "scene appears frozen" version of the original M1.3.4b halt-gate. Add them here once their VFX lands (M1.4+ alongside the item-anchored VFX work from carry-forward 1).
+
+- **Architectural rule reinforced + documented inline at the const block:** _UI fast-skip predicates check event CONTENT, not net-state deltas._ State deltas are derived; events are authoritative. Future skip / fast-forward decisions inherit this rule. Adds to the M1.3.4b architectural-rules set as rule **4**.
+
+- **Updated stats:** workspace test count **108 across 20 files** (was 107/20 — +1 from the Case B regression test). Sim 466 active + 1 skipped intentional / 13 + 1 unchanged. Content 30 / 1 unchanged. Turbo pipeline 25/25 green. Bundle delta vs the M1.3.4b closing-log baseline at commit `04a335d`:
+  - **main:** 242.88 / 75.81 KB gz — Δ 0 raw / +0.01 KB gz (chunk-graph noise per carry-forward 12; predicate logic lives in the combat chunk, not main).
+  - **combat:** 1505.59 → 1505.70 KB raw (+0.11 KB) / 348.69 → 348.74 KB gz (+0.05 KB) — Set + comment block + predicate land in the combat chunk per the lazy-boundary discipline.
+  - **mobile:** 14.02 / 3.49 KB gz — unchanged.
+
+- **Sourcemap audit re-confirms post-hotfix chunk integrity unchanged.** No new sim modules cross the lazy boundary. `phaser` still combat-chunk-exclusive (1 source in `CombatOverlay-*.js`, 0 in main, 0 in `MobileRunScreen-*.js`); combat-only sim subgraph (`combat.ts` / `status.ts` / `triggers.ts` / `iteration.ts`) still combat-chunk-only; main's sim imports remain `rng.ts` / `math.ts` / `run/shop.ts`.
+
+- **Updated branch hygiene:** 2 implementation commits (`439ff73`, `8146692`) + 1 DragOverlay polish commit (`9b88ab8`) + 1 closing-log commit (`04a335d`) + 1 P1 hotfix commit + 1 closing-log amendment commit on `m1.3.4b-phaser-scene`. Branch force-pushed (`--force-with-lease`) to origin after the hotfix lands so PR #7 re-runs CI against the corrected tree. `--no-ff` merge to main once Trey confirms CI re-run is green on origin.
+
 ---
 
 ## 2026-05-02 — M1.3.4a closed (sim wire-up + data.local dissolution; first half of the M1.3.4 inflection split)
