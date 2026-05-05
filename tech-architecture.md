@@ -132,6 +132,31 @@ This is the test we never get to break. CI will run a fixture suite of 200+ reco
 
 The sim only handles individual **combats**. The **run** state machine (round progression, shop generation, gold, hearts, contract objectives) lives in `packages/sim/src/run/`. It's still pure and deterministic, just at a higher level. Same RNG rules apply.
 
+### 4.5 Authority and predicate hygiene
+
+The sim is the authoritative source of computed game-rule values. Consumers (UI, server validation, replay tooling, telemetry observers) read those values from sim-exported helpers or sim-derived state — they do not recompute.
+
+**Rule 1 — Predicates encode the invariant they name, not a proxy that usually correlates.**
+A predicate named after intent X must exclude only events genuinely irrelevant to X. Proxies that usually track X (net-state deltas, dimension-zero checks, downstream observable effects) fail on edge cases that X is meant to cover. When writing a predicate, enumerate the events it excludes and verify each one is irrelevant to the named intent — not merely zero in the proxy dimension.
+
+Examples:
+- "Did anything meaningful happen this combat" by net-HP-delta is a proxy. Mutual-burn and offset-by-heal stalemates net to zero damage but contain meaningful events. Correct predicate checks event content directly.
+- "Item is purchasable" by gold ≥ baseCost is a proxy. The reducer-side affordability check considers ruleset overrides, relic effects, contract mutators. UI must consume the reducer's affordability output, not duplicate the gold check.
+
+**Rule 2 — Consumers do not reimplement sim-side arithmetic.**
+Any value the sim computes (cost, affordability, eligibility, threshold, derived stat) is read from a sim-exported helper or a reducer-derived state field. UI-side recomputation is a defect, not an optimization, even when the formulas incidentally agree under default ruleset values.
+
+If exporting the value is awkward, that is a sim API gap to close — not a license to recompute. Add the helper.
+
+**Rule 3 — Closing-pass review explicitly sweeps for predicate-vs-name correspondence and authority-layer correctness.**
+Both rules are most often violated on cleanup-pass commits where the offending code looks like polish. The closing-pass checklist for any sub-phase that touches sim consumers must include:
+
+- Every conditional checks the invariant its name claims.
+- Every computed value lives at the correct authority layer; no consumer-side recomputation of sim-owned arithmetic.
+- Predicate exclusions are enumerated against intent, not against proxy correlation.
+
+**Enforcement.** Violations are halt-gate findings, fixed inline on the originating sub-phase branch with a closing-log amendment, per the M1.3.4a/b Codex P1 precedent. They are not deferred as carry-forwards; the affordability and event-content predicates that motivated this section both shipped as same-branch hotfixes rather than crossing into the next milestone.
+
 ---
 
 ## 5. Client architecture
@@ -170,6 +195,8 @@ apps/client/src/
 5. On final event, Phaser emits `combat_end`, React unmounts overlay, advances run.
 
 The sim runs to completion **before** playback starts. Playback is just animation over a known event log. This keeps the sim pure and the playback layer dumb. (Nice side effect: skip-button is trivial — jump to last event.)
+
+**Authority hygiene.** All values consumed by the React tree (HP, affordability, eligibility, derived stats) must come from `CombatResult`, sim-exported helpers, or reducer-derived state. UI-side recomputation of sim-owned arithmetic is a defect — see § 4.5.
 
 ### 5.3 Sim-on-main-thread, for now
 M1 keeps the sim on the main thread. Combat sims are tiny — even a 200-tick combat is sub-millisecond. Worker isolation costs `postMessage` serialization complexity for no measurable benefit at our scale. **Trigger to revisit**: any single combat exceeds 5ms, or run-state computations cause input lag. Decision deferred to telemetry.
