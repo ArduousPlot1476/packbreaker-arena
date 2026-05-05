@@ -8,7 +8,7 @@
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { BagBoard } from '../bag/BagBoard';
-import { cellPx, dimsOf } from '../bag/layout';
+import { cellPx } from '../bag/layout';
 import { ITEMS } from '../run/content';
 import type { ItemId } from '../run/types';
 import { LazyCombatOverlay } from '../combat/LazyCombatOverlay';
@@ -21,19 +21,28 @@ import { useRunContext } from '../run/RunContext';
 
 function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   const def = ITEMS[itemId];
-  const dims = dimsOf(itemId, rot);
   const Icon = ICONS[itemId] ?? ICONS['copper-coin'];
+  // Single transformed silhouette: outer holds the un-rotated def
+  // footprint and CSS-rotates the whole frame as one element. The prior
+  // pattern (dimsOf on the outer + ItemIcon's inner transform) produced
+  // the M1.3.2 / M1.3.3 origin-ghost + rotated-target double-render on
+  // R-key rotation mid-drag — outer snap-resized while the inner icon
+  // transitioned. Drop-zone math reads state.drag.rot directly, so the
+  // visual transform is decorative; drop validation is unchanged.
   return (
     <div
       style={{
-        width: dims.w * cellPx - 4,
-        height: dims.h * cellPx - 4,
+        width: def.w * cellPx - 4,
+        height: def.h * cellPx - 4,
         opacity: 0.92,
         filter: 'drop-shadow(0 8px 18px rgba(0,0,0,0.55))',
+        transform: `rotate(${rot}deg)`,
+        transformOrigin: 'center center',
+        transition: 'transform 160ms cubic-bezier(0.16, 1, 0.3, 1)',
       }}
     >
-      <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellPx - 4}>
-        <ItemIcon rot={rot}>
+      <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={cellPx - 4}>
+        <ItemIcon rot={0}>
           <Icon />
         </ItemIcon>
       </RarityFrame>

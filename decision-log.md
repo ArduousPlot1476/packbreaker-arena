@@ -4,6 +4,130 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-04 — M1.3.4b closed (Phaser combat scene + silent-playback fix; second half of the M1.3.4 inflection split)
+
+- **The render-layer swap lands; M1.3.4 closes.** The DOM Portrait + HP-bar tree dissolved out of `combat/CombatOverlay.tsx`; a Phaser scene (`combat/CombatScene.ts`) now owns combat playback against the already-sim-wired bag from M1.3.4a. No new sim integration. No new state surface. The combat chunk grows to absorb Phaser's runtime; main + mobile chunks essentially unchanged. One design-side fix added under halt-gate (silent-playback option 1 + option 2 combined). Trey-confirmed via screenshot review (mount, mid-tick damage burst, combat-end frame, RoundResolution handoff) plus a manual Chrome DevTools mid-tier mobile profile.
+
+- **Phaser scene ratifications** (per `tech-architecture.md` § 2 + `visual-direction.md` § 7):
+  1. **One scene only** (`CombatScene`, scene key `'CombatScene'`). Absolute-position canvas overlay parented into the React-owned `<div>`; transparent canvas; bag stays visible behind per `visual-direction.md` § 1 (60%-of-smaller-dim floor). Asset preload runs in `preload()` and only fires after the combat chunk lazy-loads — title-screen / pre-combat parse cost: zero Phaser, zero textures.
+  2. **Floater typography:** `Phaser.GameObjects.Text` with `fontFamily: 'Inter, sans-serif'`, `fontFeatureSettings: 'tnum'`, `resolution: 2`, drop-shadow for legibility against the bag. Glyph cache covers repeat damage values without a bitmap atlas; no BitmapText pipeline (deferred — not justified at graybox scale; see carry-forward 7).
+  3. **Easing:** stock `Phaser.Math.Easing.Quartic.Out` is the documented placeholder for the locked `cubic-bezier(0.16, 1, 0.3, 1)` from `visual-direction.md` § 7. Visually indistinguishable at the durations used (80ms HP-bar tween, 600ms floater rise, 280ms portrait pulse). Byte-exact bezier match deferred to M2 if a designer flags inconsistency (carry-forward 6).
+  4. **SKIP button:** DOM-owned by React (lives in `CombatOverlay.tsx`'s harness, overlaid above the canvas). Keeps keyboard focus + screen-reader semantics intact; calls into `CombatScene.skipToEnd()` which drains all remaining events without playing visuals, snaps HP/state to final, and advances to `RoundResolution`.
+  5. **Geometric particles only** (squares, lines, plus signs) drawn via `Graphics → generateTexture` once at preload, in palette colors (`PALETTE.lifeRed` / `PALETTE.rarityUncommon` / `PALETTE.rarityLegendary`). No organic VFX, no sprite atlases.
+  6. **HP arithmetic stays sim-authoritative.** The scene reads `remainingHp` / `newHp` directly from each event's payload — never computes locally. Extends the M1.3.4a step-8 ratification ("UI affordability never reimplements game-rule arithmetic") to render-layer HP as well: the rule is now **UI consumes sim-authoritative HP**.
+
+- **Halt-gate journey (full narrative).** Step 4's first-pass test scenario — a round-1 combat against an empty-bag player — appeared to FREEZE the scene for 60 seconds. A diagnostic instrumentation pass (5 log points across `CombatOverlay.tsx` + `CombatScene.ts`: phase transitions, scene-init events, tick-clock state, event flushes, accumulator math) returned conclusive evidence: the Phaser game loop was healthy, the accumulator math was correct, the tick rate was exactly 10/sec, and events were flushing on schedule. The "freeze" was **60 seconds of valid sparse playback** — the round-1 ghost (deterministic from `combat/ghost.ts`) had rolled a passive item (Apple, Healing Herb, Wooden Shield, or Copper Coin) producing 9 events that never moved HP. The combat ran to completion correctly; it just had no visible action. **Design gap, not bug.** The diagnostic logs were stripped as part of the halt-gate-fix commit.
+
+- **Combined silent-playback fix (option 3 = option 1 + option 2).**
+  - **Option 1 — silent fast-forward** in `CombatScene.update()`: when `nextEventTick - currentTick > DEAD_TIME_THRESHOLD_TICKS`, snap `currentTick = nextEventTick - LEAD_IN_TICKS`. Constants live at the top of `CombatScene.ts` with `// tunable per telemetry` comments:
+    - `DEAD_TIME_THRESHOLD_TICKS = 8` (800ms at 100ms/tick — long enough that visual pause feels intentional, short enough that 60s-tick-cap combats compress to a watchable handful of seconds).
+    - `LEAD_IN_TICKS = 2` (200ms preserved before next event so HP-bar tweens + portrait pulses get visible windup).
+    - Tunable via `telemetry-plan.md` § 4 if tick-cap-draw rate or sparse-combat playback time surfaces a need.
+  - **Option 2 — zero-content fast-skip** in `combat/CombatOverlay.tsx`: when the pre-mounted `CombatResult` has `damageDealt === 0 && damageTaken === 0 && result.outcome === 'draw'`, dispatch `combat_done` directly without ever mounting Phaser. Telemetry call sites (`combat_start`, `combat_end`) still fire on this path so the playback log stays consistent.
+  - **Generation-side fix (filter `combat/ghost.ts` round-1 draws to active-effect items) explicitly NOT taken** — folds into M2's wholesale ghost storage rework where the procedural template gets replaced by per-(round, trophy_band) `GhostBuild` records (see carry-forward 13).
+
+- **Test coverage ratifications.**
+  - **Test extraction — option A (pure helper).** Tick-advance + auto-end logic extracted into `apps/client/src/combat/tickAdvancer.ts` (pure functions: `advanceCombatTickClock`, `findNextEventTick`; no Phaser dependency). `CombatScene.update()` calls into the helper. Mirrors `packages/sim`'s pure-function pattern. Tests target the helper directly under happy-dom; Phaser scene-level state (e.g., resolved-flag SKIP behavior) is covered transitively rather than directly. **Documented coverage gap:** scene-level SKIP unit-test absent — revisit if SKIP regresses; manual screenshot verification across two halt-gate passes confirms current SKIP behavior. The pure-helper-first pattern becomes a project rule (see architectural rules below).
+  - **+13 client tests / +2 client files:** `combat/tickAdvancer.test.ts` (NEW, +12: auto-end exactly-once, fast-forward compression of the failed halt-gate's exact 600-tick fixture, `findNextEventTick` boundary cases), `combat/CombatOverlay.test.tsx` (NEW, +1: zero-content bypass — asserts no canvas testid, `createCombatGame` mock never invoked, DEFEAT/DEALT/TAKEN copy renders, `combat_done` dispatched with zero-content payload).
+
+- **Halt-gate audit pack (post-fix).**
+  - **Vitest:** 4 named cases all green (auto onCombatEnd, fast-forward compression vs the exact 600-tick fixture from the failed pass, zero-content bypass, exactly-once auto-fire). SKIP transitively covered via the helper's `reachedEnd` signal.
+  - **Bundle audit:** main delta = 0 KB raw vs M1.3.4b post-fix baseline; combat chunk +0.75 KB raw / +0.30 KB gz on rebuild (likely Vite chunk-graph non-determinism on the Phaser bytecode — tracked, not blocking; if drift exceeds ~5 KB across multiple builds it becomes a real signal — carry-forward 12).
+  - **Sourcemap audit:** `phaser` exclusively in `CombatOverlay-*.js` (1 source); main + mobile chunks 0 phaser sources. Combat-only sim subgraph (`combat.ts` / `status.ts` / `triggers.ts` / `iteration.ts`) still combat-chunk-only; main's sim imports remain `rng.ts` / `math.ts` / `run/shop.ts`. M1.3.4a's lazy-boundary integrity holds.
+  - **60fps p95 manual profile** (Trey, Chrome DevTools, CPU 4× slowdown, iPhone 12 Pro emulation): scene held 60fps; a 12-16s busy region in the trace resolved to DevTools profiling overhead (728ms of 735ms = 99.1%), not real scene work.
+
+- **Bundle delta (vs M1.3.4a close: main 243.10 KB raw / 75.86 KB gz; combat 22.19 KB raw / 7.50 KB gz; mobile 13.92 KB raw / 3.47 KB gz).**
+  - **Main chunk:** 242.88 KB raw / 75.80 KB gz — Δ −0.22 KB raw (−0.09%) / −0.06 KB gz (−0.08%). DOM Portrait + HP-bar tree deletion offset the option-2 fast-skip wiring + DragOverlay rotation transform additions; net slightly lighter.
+  - **Combat chunk:** 1,505.59 KB raw / 348.69 KB gz — Δ **+1,483.40 KB raw / +341.19 KB gz** (Phaser 3.90.0 cost predicted by `tech-architecture.md` § 10; chunk fetched on-demand at the Continue button press, so first-load for desktop pre-combat users is unaffected).
+  - **Mobile chunk:** 14.02 KB raw / 3.49 KB gz — Δ +0.10 KB raw / +0.02 KB gz (DragOverlay rotation transform style additions in `MobileRunScreen.tsx`).
+  - Modules: 99 → 103 (+4: CombatScene, tickAdvancer, tickAdvancer.test, CombatOverlay.test).
+
+- **Test counts (with sim baseline correction — option B).**
+  - **Workspace post-M1.3.4b: 107 across 20 files** (80 client / 17 files + 27 ui-kit / 3 files). Δ from M1.3.4a: +13 client tests / +2 client files. ui-kit unchanged.
+  - **Sim: 466 active + 1 skipped (intentional) / 13 active files + 1 conditional.** The skipped test is the M1.2.5-step-4 fixture-regeneration entry point gated by `describe.runIf(npm_lifecycle_event === 'generate-fixtures')`; it has been part of the suite since 2026-04-30 and was implicit in the M1.3.4a "sim unchanged" shorthand. M1.3.4b introduced no sim-side test changes — the corrected baseline language is the only delta against M1.3.4a's report.
+  - **Content: 30 active / 1 file. Unchanged.**
+  - **Turbo pipeline: 25/25 tasks green.**
+
+- **Files added** (`apps/client/src/`):
+  - `combat/CombatScene.ts` (Phaser scene + `createCombatGame` factory)
+  - `combat/tickAdvancer.ts` (pure helper — `advanceCombatTickClock`, `findNextEventTick`)
+  - `combat/tickAdvancer.test.ts`
+  - `combat/CombatOverlay.test.tsx`
+
+- **Files deleted:** none at the file level. The M1.3.4a inline DOM Portrait + HP-bar function (`function Portrait` at the bottom of `CombatOverlay.tsx`) was removed during the CombatOverlay rewrite — the 3 character-art hex carry-forward sites lived inside that inline function and dissolve with it.
+
+- **Files modified non-trivially:**
+  - `apps/client/src/combat/CombatOverlay.tsx` — Phaser mount + lifecycle (mount on phase entry, `game.destroy(true)` on unmount, SKIP button wiring); option-2 zero-content fast-skip (`isZeroContent` check before `useState(phase)` initialization); DOM Portrait + HP-bar tree deleted.
+  - `apps/client/src/screens/DesktopRunScreen.tsx` + `apps/client/src/screens/mobile/MobileRunScreen.tsx` — DragOverlay rotation polish (single-transform silhouette using un-rotated `def.w / def.h` + `transform: rotate(rot deg)` on the outer wrapper, see carry-forward closure 23a below).
+  - `apps/client/package.json` — added `"phaser": "^3.80.0"` (resolves to 3.90.0 in `pnpm-lock.yaml`).
+  - `pnpm-lock.yaml` — Phaser dependency tree.
+
+- **Architectural rules introduced (project-wide carry-forward).**
+  1. **UI consumes sim-authoritative HP.** Render layers — DOM or Phaser — never compute HP locally. Always read `remainingHp` / `newHp` from sim's events. Extends the M1.3.4a step-8 rule ("UI affordability never reimplements game-rule arithmetic") to render-layer HP.
+  2. **Fast-forward thresholds are tunable consts, not magic numbers.** Any future scene-timing decisions (combat speed, post-event lead-in, etc.) live as named consts at the top of the consuming file with `// tunable per telemetry` comments. `DEAD_TIME_THRESHOLD_TICKS` + `LEAD_IN_TICKS` set the precedent.
+  3. **Pure-helper-first for scene logic.** When scene logic is testable as pure math (tick clocks, event scheduling, etc.), extract to a helper. Scene-mock-based tests are a fallback, not a first choice. `tickAdvancer.ts` is the precedent.
+
+### Carry-forwards
+
+  1. **Item-anchored VFX + `BagLayout` handshake** → M1.4 (when `simulateCombat()` replaces canned combat per the M0 roadmap; `tech-architecture.md` § 2 named the handshake but it stays non-load-bearing through M1.3.4b).
+  2. **Real character art in portraits** → M2 (placeholder geometric silhouettes carry through M1).
+  3. **Real particle sprite sheets** → post-M1 (programmatic textures sufficient for graybox).
+  4. **`item_trigger` / `recipe_combine` event VFX** → M1.4 (require item anchoring).
+  5. **Music + SFX integration** → post-M2 per `visual-direction.md` § 8 anchor-only language.
+  6. **Custom cubic-bezier easing function** → M2 if a designer flags `Quartic.Out` as off.
+  7. **BitmapText / pre-rasterized font atlas** → post-M1 if floater spawn rate at high rounds saturates Phaser's glyph cache.
+  8. **`>>` fast-forward indicator visual styling** → M2 polish (function works without it; styling is non-load-bearing).
+  9. **Telemetry event for "fast-forward triggered"** → if `telemetry-plan.md` § 4 tick-cap draw rate dashboard surfaces a need.
+  10. **Configurable per-user playback speed (1× / 2× / 4× toggle)** → M2+.
+  11. **SKIP scene-level direct unit test coverage** → revisit if SKIP behavior regresses; helper-level + manual verification sufficient for graybox.
+  12. **Combat chunk Vite build non-determinism** (~0.75 KB raw drift between rebuilds of identical tree) → tracked; flag if drift exceeds ~5 KB across multiple builds.
+  13. **Generation-side ghost-loadout filter (option 5)** → M2 ghost storage rework wholesale.
+  14. **Codex P1 regression test for UI-vs-reducer affordability under non-default rulesets** → M1.5 (carries from M1.3.4a; relic state machinery makes this load-bearing).
+  15. **`opponentClassId` field on `RunHistoryEntry`** → M1.5 (carries from M1.3.4a).
+  16. **Server-side ghost record (per-(round, trophy_band) `GhostBuild`)** → M2 (carries from M1.3.4a).
+  17. **Auto-rearrange hint affordance over AVAILABLE WITH CURRENT ITEMS** → M3 hint-system work (carries from M1.3.4a).
+  18. **Per-round trophy schedule + contract modifiers + win-streak multipliers** → M2 (carries from M1.3.4a).
+  19. **`RarityGem` for shop rarity dot** → carries from M1.3.2.
+  20. **`apps/client/src/index.css` `.glow-*` rgba palette derivatives** → carries from M1.3.2 / M1.3.3.
+  21. **Run-end detection (hearts === 0 → eliminated screen)** → M1.5.
+  22. **State-driven bag dimensions through pure helpers** → M2.
+  23. **Real-device drag-state screenshot capture** → still carried (M1.3.4b's DragOverlay rotation polish landed code-only; visual capture deferred to next sub-phase or whenever real-device session organically surfaces).
+  24. **Player portrait dying-state visual feedback** — M1.3.4b's probe confirmed there is **no** progressive HP-curve tint and **no** binary "took damage" flag on the portrait body; the only red signals are the (always-red) HP bar and the one-shot KO flash on `combat_end`. Filed as **acknowledged absence** for M1.4+ design polish (e.g., low-HP threshold tint, hit-flash pulse) if a graybox reviewer requests it. Not load-bearing for M1 graybox.
+
+### Branch hygiene
+
+2 implementation commits (`439ff73`, `8146692`) + 1 DragOverlay polish commit + 1 closing-log commit on `m1.3.4b-phaser-scene`, branched off main (`a2a31f2`). `--no-ff` merge to main once Trey confirms CI green on origin.
+
+### Next
+
+**M1.3.5+** — Trey scopes the next sub-phase split. The M0 milestone roadmap puts the remaining M1 work as:
+- **M1.4** — finalize whatever wiring remains around `simulateCombat()` invocation (M1.3.4a's `combat/sim-bridge.combat.ts` already drives playback; M1.4 is mostly item-anchored VFX + the `BagLayout` handshake from carry-forward 1).
+- **M1.5** — relic state machinery, class-select screen, run-end detection (hearts === 0 → eliminated), LocalSaveV1 persistence, the M1.3.4a Codex P1 non-default-ruleset regression test.
+- **M1.6+** — boss round + content fill to 45 items / 12 recipes / 3 status / 1 boss.
+
+### Codex P1 catch + zero-content predicate fix (commit 5)
+
+- **Codex Review on PR #7 caught a P1 on the closing-pass tree:** the option-2 zero-content fast-skip predicate `damageDealt === 0 && damageTaken === 0 && outcome === 'draw'` matched not just the canonical empty-event stalemate (the M1.3.4b step-4 halt-gate fixture: round-1 empty bag + passive ghost item) but also any **active** combat that netted to zero HP delta on both sides — damage exactly offset by healing across the combat, mutual-burn stalemates, shield-wall stalemates. Those would have skipped Phaser playback entirely despite having real events the player needed to see.
+
+- **Fix:** replaced the net-HP-delta check with an event-content-based predicate. New module-scope const `MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']>` = `{ damage, heal, status_apply, status_tick, item_trigger }`; `hasNoMeaningfulEvents = !result.events.some(e => MEANINGFUL_EVENT_TYPES.has(e.type))`; `isZeroContent = result !== null && hasNoMeaningfulEvents && result.outcome === 'draw'`. The `outcome === 'draw'` guard stays — a non-draw with no meaningful events would be a sim bug worth surfacing rather than silently bypassing. `CombatOverlay.test.tsx` gains a regression case (Case B) for the offset-heal scenario alongside the preserved canonical-bypass case (Case A).
+
+- **Set composition deviations from the original prompt** (documented inline at the const + recorded here for posterity):
+  - **`recipe_combine` is intentionally absent** — it is not a member of the `CombatEvent` union (only listed in `combat/CombatScene.ts:337` as a future event type). Including it as a string literal would fail typecheck against `Set<CombatEvent['type']>`. The original prompt's set proposal included it; the fix had to drop it. If `recipe_combine` is added to the `CombatEvent` union in M2's content sweep, add it here too.
+  - **`stun_consumed` / `buff_apply` / `buff_remove` are intentionally absent** — the scene currently renders no VFX for them (`combat/CombatScene.ts:337-339`), so mounting Phaser to play one of those alone would re-introduce a "scene appears frozen" version of the original M1.3.4b halt-gate. Add them here once their VFX lands (M1.4+ alongside the item-anchored VFX work from carry-forward 1).
+
+- **Architectural rule reinforced + documented inline at the const block:** _UI fast-skip predicates check event CONTENT, not net-state deltas._ State deltas are derived; events are authoritative. Future skip / fast-forward decisions inherit this rule. Adds to the M1.3.4b architectural-rules set as rule **4**.
+
+- **Updated stats:** workspace test count **108 across 20 files** (was 107/20 — +1 from the Case B regression test). Sim 466 active + 1 skipped intentional / 13 + 1 unchanged. Content 30 / 1 unchanged. Turbo pipeline 25/25 green. Bundle delta vs the M1.3.4b closing-log baseline at commit `04a335d`:
+  - **main:** 242.88 / 75.81 KB gz — Δ 0 raw / +0.01 KB gz (chunk-graph noise per carry-forward 12; predicate logic lives in the combat chunk, not main).
+  - **combat:** 1505.59 → 1505.70 KB raw (+0.11 KB) / 348.69 → 348.74 KB gz (+0.05 KB) — Set + comment block + predicate land in the combat chunk per the lazy-boundary discipline.
+  - **mobile:** 14.02 / 3.49 KB gz — unchanged.
+
+- **Sourcemap audit re-confirms post-hotfix chunk integrity unchanged.** No new sim modules cross the lazy boundary. `phaser` still combat-chunk-exclusive (1 source in `CombatOverlay-*.js`, 0 in main, 0 in `MobileRunScreen-*.js`); combat-only sim subgraph (`combat.ts` / `status.ts` / `triggers.ts` / `iteration.ts`) still combat-chunk-only; main's sim imports remain `rng.ts` / `math.ts` / `run/shop.ts`.
+
+- **Updated branch hygiene:** 2 implementation commits (`439ff73`, `8146692`) + 1 DragOverlay polish commit (`9b88ab8`) + 1 closing-log commit (`04a335d`) + 1 P1 hotfix commit + 1 closing-log amendment commit on `m1.3.4b-phaser-scene`. Branch force-pushed (`--force-with-lease`) to origin after the hotfix lands so PR #7 re-runs CI against the corrected tree. `--no-ff` merge to main once Trey confirms CI re-run is green on origin.
+
+---
+
 ## 2026-05-02 — M1.3.4a closed (sim wire-up + data.local dissolution; first half of the M1.3.4 inflection split)
 
 - **The inflection point lands.** `data.local.ts` is gone; `packages/sim` integrates into the client through two lazy-boundary-aware bridge modules; the canned 4-second combat SCRIPT is replaced by deterministic playback of real `CombatResult` events; the mobile [Crafting] tab gains its scouted-recipes section. The game stops being a UI demo and starts being a deterministic real game. Trey-confirmed via screenshot review in chat (3 screenshots + re-screenshot pass after blocker fixes).
