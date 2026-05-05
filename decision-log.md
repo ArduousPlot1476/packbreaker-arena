@@ -4,6 +4,18 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-05 — M1.3.4 retrospective: predicate hygiene and authority-layer rules
+
+Both Codex P1 catches in M1.3.4 (a-c8 reroll-cost UI authority; b-c7 zero-content event predicate) shared shape: a predicate or computation that looked correct but encoded the wrong invariant. Three principles ratified going forward, load-bearing for M1.5 relic state and any future ruleset-modifying systems:
+
+1. Predicates encode the invariant they name, not a proxy that usually correlates. Verify every event a predicate excludes is genuinely irrelevant to the named intent, not merely zero in the proxy dimension.
+2. Consumers do not reimplement sim-side arithmetic. Sim-computed values are read from sim-exported helpers or reducer-derived state, never recomputed consumer-side. Awkward export = sim API gap, not a license to recompute.
+3. Closing-pass review explicitly sweeps predicate-vs-name correspondence and authority-layer correctness, especially on cleanup-pass commits where polish-looking code can hide invariant errors.
+
+Codified as `tech-architecture.md § 4.5 — Authority and predicate hygiene`. Enforcement: prompt-time review (master-developer chat) flags predicate/authority surfaces during scoping; Claude Code halts-when-premise-doesn't-match on detected violations; closing-pass review treats violations as halt-gate findings fixed inline.
+
+---
+
 ## 2026-05-04 — M1.3.4b closed (Phaser combat scene + silent-playback fix; second half of the M1.3.4 inflection split)
 
 - **The render-layer swap lands; M1.3.4 closes.** The DOM Portrait + HP-bar tree dissolved out of `combat/CombatOverlay.tsx`; a Phaser scene (`combat/CombatScene.ts`) now owns combat playback against the already-sim-wired bag from M1.3.4a. No new sim integration. No new state surface. The combat chunk grows to absorb Phaser's runtime; main + mobile chunks essentially unchanged. One design-side fix added under halt-gate (silent-playback option 1 + option 2 combined). Trey-confirmed via screenshot review (mount, mid-tick damage burst, combat-end frame, RoundResolution handoff) plus a manual Chrome DevTools mid-tier mobile profile.
