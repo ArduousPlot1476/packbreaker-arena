@@ -15,12 +15,14 @@ export type AnchorMode = 'source' | 'target' | 'both' | 'portrait' | 'unanchored
 /** Locked design intent per decision-log 2026-05-05 scoping ratification
  *  + 2026-05-05+ chat ratification locking three placeholders to 'target'
  *  before commit so M1.4b's VFX work doesn't land into a
- *  predicate-vs-name trap (§ 4.5 R1).
+ *  predicate-vs-name trap (§ 4.5 R1). Heal row amended 2026-05-06
+ *  ('source' → 'both') per decision-log heal-anchor entry; render
+ *  refactor lands in M1.4b2.1.
  *
  *  | Event          | Mode         | Intent
  *  |----------------|--------------|---------------------------------------------
  *  | damage         | 'both'       | source flash on attacker + impact at target
- *  | heal           | 'source'     | healer is focus; target gets passive +N floater
+ *  | heal           | 'both'       | recipient +N floater + source-item flash (M1.4b2.1)
  *  | status_apply   | 'target'     | new debuff/buff lands on target
  *  | status_tick    | 'target'     | tick effects show on affected entity
  *  | item_trigger   | 'source'     | the item just did its thing
@@ -34,7 +36,7 @@ export const ANCHOR_RULE: Record<CombatEvent['type'], AnchorMode> = {
   combat_start: 'unanchored',
   item_trigger: 'source',
   damage: 'both',
-  heal: 'source',
+  heal: 'both',
   status_apply: 'target',
   status_tick: 'target',
   stun_consumed: 'target',

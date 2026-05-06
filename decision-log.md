@@ -4,6 +4,111 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-06 — M1.4b2.1 closure (heal anchor 'both' refactor + CF 26 / CF 28 closure)
+
+### Branch + commit topology
+
+Branch: `m1.4b2.1-heal-anchor-both` off main `3042ca7` (clean — heal-anchor design decision committed separately as `3042ca7` per branch-hygiene rule before Phase 2 began).
+
+| SHA       | Sub-phase | Scope |
+|-----------|-----------|-------|
+| (no commit) | Phase 1 | Read-only investigation + design proposal — six-section halt-gate, ratification in chat |
+| `9806cda` | Phase 2   | Implementation: ANCHOR_RULE.heal flip + helper rename to dual-axis + CombatScene heal-render refactor + vampire-fang anchor fixture |
+
+### Phase 1 ratifications (chat-recorded; no commits)
+
+Five questions ratified pre-implementation:
+- **Q1 (helper signature):** Option A — `resolveEventTargetAnchor` → `resolveEventAnchors` returning `{ source: CanvasAnchor | null; target: CanvasAnchor | null }`. Single helper, dual-axis return; preferred over Option B (parallel helpers) for § 4.5 R2 single-source compliance.
+- **Q2 (source-item flash primitive):** Reuse `spawnParticleBurstAt` with `TEX.plusHeal` at the resolved source anchor. No new VFX primitive in .b2.1; item-cell halo deferred to M1.4b2.2.
+- **Q3 (recipient render):** Additive — keep existing target floater + target particles; ADD source flash. Three visual events per heal accepted; subtraction (if playtest flags muddiness) goes through design review separately.
+- **Q4 (source-coord capture method):** Compute via production helper at fixture-creation time, freeze. Independent-oracle discipline lives in `anchorResolution.test.ts` per-row tests; vampire-fang fixture is a regression lock against drift in `resolveAnchor` or `resolveEventAnchors`.
+- **Q5 (CF 28 closure scope):** Vampire-fang fixture closes CF 28. Damage source-render gap tracked separately as catch #7 (running tally) + new CF 29 (M1.4b2.2 work surface).
+
+### Phase 2 — surface changes
+
+- **`apps/client/src/combat/anchorResolution.ts`:** `ANCHOR_RULE.heal` flipped `'source'` → `'both'`. Inline table comment amended ("Heal row amended 2026-05-06"); intent column updated to "recipient +N floater + source-item flash (M1.4b2.1)". `resolveAnchor` core unchanged — heal already grouped with damage/status_apply at the case level, so dual-axis output is purely a data-driven flip.
+- **`apps/client/src/combat/eventAnchorResolver.ts`:** Renamed `resolveEventTargetAnchor` → `resolveEventAnchors`. New return type `ResolvedCanvasAnchors = { source: CanvasAnchor | null; target: CanvasAnchor | null }` exported. Comment header updated to enumerate per-mode return shape.
+- **`apps/client/src/combat/CombatScene.ts`:** Three call sites in `playEventVisuals`:
+  - `damage` branch — renamed call + reads `.target` field. Source axis populated by helper but unconsumed by render (CF 29 — M1.4b2.2 portrait hit-flash work).
+  - `heal` branch — refactored. Existing recipient-side render preserved verbatim (`spawnFloater(refs)` + `spawnParticleBurst(refs, TEX.plusHeal, 5)`). New source-side `spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.plusHeal, 5)` gated on `anchors.source` non-null. Comment narrates the M1.4b2 lock (decision-log 2026-05-06) + Q3 additive ratification.
+  - `status_tick` branch — renamed call + reads `.target` field.
+- **`apps/client/src/combat/anchorResolution.test.ts`:** Per-row test heal assertion flipped `'source'` → `'both'` (description includes "decision-log 2026-05-06" reference). Resolution test heal payload assertion updated from `{ source: PLAYER_ITEM_B }` → `{ source: PLAYER_ITEM_B, target: PLAYER_PORTRAIT }`. Independent-oracle discipline preserved — coords are hand-coded test constants.
+- **`apps/client/src/combat/eventAnchorResolver.test.ts`:** Two describe blocks. Burn-application block re-targeted to `resolveEventAnchors` reading `.target` field (M1.4b1 surface preserved). New vampire-fang block adds count-match + 43 per-event source+target byte-equality tests + 1 source-axis translation invariant test (45 net new tests).
+- **`apps/client/src/combat/test/fixtures/anchors/on-hit-vampire-fang.json` (NEW):** 43-event dual-axis frozen fixture. Coords computed via `resolveEventAnchors` against synthesized `BagLayout` in test (player.itemAnchors at p1=(100,200), p2=(200,200); ghost.itemAnchors at g1=(1080,200); portraits at canonical 1280×720 ratios). `$comment` documents the regression-lock framing per Q4.
+
+### Test count delta (vs M1.4b1 close baseline)
+
+138 → 183 (+45 net). All 45 from `eventAnchorResolver.test.ts` vampire-fang block: 1 count-match + 43 per-event byte-equality + 1 source-axis translation invariant. Burn-application block tests preserved at 26 (1 count + 23 in-scope per-event + 1 translation + 1 null-return) — assertions adapted to `.target` field reads, no scope change.
+
+Sim test count unchanged: **466 active + 1 manually-gated** (`regenerate.test.ts`). On-hit-vampire-fang sim fixture is M1.2.3b-locked DO-NOT-REGENERATE; reused as-is.
+
+### Architectural patterns codified through M1.4b2.1 (running list)
+
+1–5 unchanged from M1.4b1 closing.
+6. **(M1.4b2.1) Compute-via-production-helper-and-freeze fixture pattern.** When new VFX surface has no legacy-render oracle, fixture coords are computed via the production helper against a deterministic synthesized layout, then frozen. Independent-oracle discipline stays load-bearing via per-row helper tests with hand-coded coords. Pairs with Pattern #2.
+
+### Predicate-vs-name catches (running tally — 6 → 7 over M1.4b2.1)
+
+- Catches 1-6 unchanged from M1.4b1.
+- **Catch 7 (M1.4b2.1 Phase 1):** `ANCHOR_RULE.damage='both'` table claim never validated against `playEventVisuals` damage-branch render — damage render today reads `.target` only, source-side render unconsumed. Caught when Phase 1 §1 surfaced the heal-decision rationale ("matches damage='both' pattern") could be misread as render-mirror; the table-vs-render gap is the same shape as catch 5 (design-vs-impl divergence) but on a different row. Sharpens CF 27. Render gap tracked under CF 29 (M1.4b2.2 portrait hit-flash); not addressed in .b2.1 per scope.
+
+### Carry-forwards delta
+
+**CLOSED:**
+- **CF 26** (source-side test discipline on 'both' promotion) — closed by vampire-fang fixture's per-event source byte-equality assertions on heal events (7 events) + per-row resolution test in `anchorResolution.test.ts` asserting heal=`'both'` populates source from `itemAnchors`.
+- **CF 28** (player-branch fixture coverage gap) — closed by vampire-fang fixture covering 7 heal events with `target='player'` + 5 damage events with `target='player'` + player-source items at p1/p2.
+
+**OPENED:**
+- **CF 29 (NEW M1.4b2.1) — Damage source-render gap.** `ANCHOR_RULE.damage='both'` but `playEventVisuals` damage branch consumes only the target anchor; source-side render unconsumed. M1.4b2.2 portrait hit-flash work consumes the source axis. Closes alongside that work. Catch 7 is the framing that surfaced this.
+
+### Helper signature change — ratified in Phase 1, executed Phase 2
+
+`resolveEventTargetAnchor(event, bagLayout, canvasBounds): CanvasAnchor | null`
+→
+`resolveEventAnchors(event, bagLayout, canvasBounds): ResolvedCanvasAnchors`
+
+where `ResolvedCanvasAnchors = { source: CanvasAnchor | null; target: CanvasAnchor | null }`.
+
+Two consumer sites in `CombatScene.ts` updated mechanically (damage, status_tick); third site (heal) is the new dual-axis consumer.
+
+### Vampire-fang fixture — synthesized layout values
+
+Frozen in `buildVampireFangLayout` at `eventAnchorResolver.test.ts`:
+- `player.itemAnchors`: `p1 → (100, 200)`, `p2 → (200, 200)`
+- `ghost.itemAnchors`: `g1 → (1080, 200)`
+- `player.portraitAnchor`: `(canvasLeft + W * 0.25, canvasTop + H * 0.5)` = `(320, 360)` at canvas origin
+- `ghost.portraitAnchor`: `(canvasLeft + W * 0.75, canvasTop + H * 0.5)` = `(960, 360)` at canvas origin
+
+Round numbers chosen for deterministic test output + visual distinction; **NOT a mirror of `computeBagLayout`'s real output**. The fixture's value is regression detection on resolver/helper output drift, not on layout-computation parity.
+
+### Verification — Turbo pipeline (all `--force`, no cache replay)
+
+- `pnpm turbo test --force` → 10/10 successful, 0 cached, 30s.
+- `pnpm turbo lint --force` → 7/7 successful, 0 cached, 7s. Schema-sync gate green.
+- `pnpm turbo build --force` → 6/6 successful, 0 cached, 19s.
+- **23 unique cache-bust tasks green.**
+
+### Bundle envelope (vs M1.4a `148916e` baseline; M1.4b1 was visual-no-op)
+
+- main: **243.36 KB raw / 75.97 KB gz** — unchanged.
+- combat chunk: **1,508.12 KB raw / 349.41 KB gz** — +1.69 KB raw / +0.43 KB gz vs M1.4a. Source: dual-axis helper return type + heal source-flash render path + the new fixture import; combat-chunk-only.
+- mobile chunk: **14.07 KB raw / 3.51 KB gz** — unchanged.
+- 105 modules (M1.4a was 103; +2 from new fixture + interface declaration).
+
+### Going-forward rules carried from M1.4b1+
+
+All in effect:
+- Closing-log metric framing anchors explicitly to milestone-total or vs-N-baseline.
+- `--force` on verification runs.
+- Phase 2.5 interlude precedent (no Phase 2.5 needed in .b2.1; surface clean).
+
+### Locked answers cumulative through M1.4b2.1
+
+1–29 unchanged from M1.4b1 closing.
+30. **(M1.4b2.1) Compute-via-production-helper-and-freeze fixture pattern.** When new VFX surface has no legacy-render oracle to mirror, fixture coords are computed once via the production helper against a deterministic synthesized layout and frozen as regression-lock. Independent-oracle discipline lives in per-row helper tests with hand-coded coords; the fixture is the drift detector, not the design-truth oracle.
+
+---
+
 ## 2026-05-06 — Heal anchor locked to 'both'
 
 **Decision:** `ANCHOR_RULE.heal` moves from `'source'` (M1.4a-locked) to `'both'`. Heal events render a recipient-portrait floater + source-item flash, mirroring the damage=`'both'` convention.
