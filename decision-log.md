@@ -4,6 +4,130 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-06 — M1.4b1 closure (Phase 1 design + Phase 2 scaffold + Phase 2.5 flake hardening + Phase 3 refactor)
+
+### Branch + commit topology
+
+Branch: `m1.4b1-refactor-lift` (pre-merge, 4 sub-phases on top of M1.4a merge `148916e`).
+
+| SHA       | Sub-phase | Scope |
+|-----------|-----------|-------|
+| (no commit) | Phase 1 | Read-only investigation + design proposal — scoping decisions ratified in chat |
+| `a438b0a` | Phase 2   | `legacyAnchorFor` scaffold + `burn-application.json` frozen fixture + scaffold assertion test |
+| `ac781c2` | Phase 2.5 | `RunScreen.test.tsx` `vi.mock` of lazy `MobileRunScreen` — closes Suspense + viewport-detect race surfaced at Phase 3 halt |
+| `dc04b07` | Phase 3   | Production refactor: `eventAnchorResolver.ts` + test, `CombatScene.ts` damage/status_tick consume `resolveAnchor`, scaffolding deleted |
+
+### Sub-phase ratifications
+
+**Phase 1 (design, no commit) — locked:**
+- Heal descoped from M1.4b1 (ANCHOR_RULE.heal='source' vs render-at-target divergence; deferred to M1.4b2 alongside heal-anchor decision).
+- Fixture: `burn-application.json` (8 damage + 15 status_tick events; 23 in-scope anchors; mock canvas 1280×720 floats no-rounding).
+- JSON shape: `{$comment, fixture, canvasWidth, canvasHeight, anchors: [{eventIndex, eventType, target}]}`. `source` field reserved for M1.4b2 (CF 26).
+- Capture mechanism: `legacyAnchorFor` pure helper at `apps/client/src/combat/legacyAnchorDispatch.ts` (scaffolding-only, deleted Phase 3).
+- Coord frame at fixture: canvas-local. Phase 3 translates screen-space → canvas-local at consumption.
+- Verbatim-mirror discipline load-bearing (codified as architectural pattern below).
+
+**Phase 2 (`a438b0a`) — outcomes:**
+- Verbatim-mirror diff clean: helper byte-equivalent in spirit to `playEventVisuals` inline dispatch at `CombatScene.ts:336-353`.
+- Sample fixture values verified at 1280×720: ghost target (960, 360), player target (320, 360).
+- One-sided fixture: all 23 in-scope events target 'ghost'; player branch identical-by-construction. Byte-equality on ghost branch sufficient for Phase 3's visual-no-op assertion. Player-branch coverage gap noted (→ CF 28).
+- `RunScreen.test.tsx` flake surfaced once on first parallel-mode run; Run 2 passed via turbo cache replay. This artifact later proved load-bearing (catch 6 + Phase 2.5).
+
+**Phase 2.5 (`ac781c2`) — interlude:**
+- Triggered by Phase 3 halt: `RunScreen.test.tsx` flake reproduction profile shifted from "occasional" (Phase 2: 1× across 2 runs) to deterministic (Phase 3 baseline: 4/4 consecutive parallel-mode failures, due to test-cache invalidation removing cache-replay opportunity).
+- Original out-of-scope punt rationale deemed stale → escalated to in-scope (Phase 2.5 interlude precedent, codified below).
+- Fix candidate 1 selected: `vi.mock` the lazy-loaded `MobileRunScreen` import at test-file scope. Resolves dynamic import synchronously; eliminates Suspense + viewport-detect race at structural level. Test target (RunScreen dispatcher logic) preserved; real-label coverage stays in `MobileTabBar.test.tsx`.
+- Fix surface: 14 lines, single file. Rejection rationale captured for candidates 2-5.
+- Verification: 5/5 cache-busted (`--force`) parallel-mode runs green; 0 cached, 25 total per run. Confirmed flake structurally closed, not symptom-masked.
+- Phase 3 working-tree changes preserved sacrosanct throughout (explicit-paths staging discipline).
+
+**Phase 3 (`dc04b07`) — refactor:**
+- `playEventVisuals` damage + status_tick branches consume `resolveAnchor(ev, this.bagLayout)` + canvas-local translation via `this.scale.canvasBounds`.
+- Heal branch byte-identical to pre-Phase-3 (deferred M1.4b2).
+- Other branches (status_apply, combat_end, item_trigger) byte-identical to pre-Phase-3.
+- New helper: `resolveEventTargetAnchor(event, bagLayout, canvasBounds): CanvasAnchor | null`. Signature deviations from prompt sketch ratified (see below).
+- Scaffolding deleted: `legacyAnchorDispatch.ts` + `legacyAnchorDispatch.test.ts`.
+- Visual-no-op verified: 26/26 focused (1 count-match + 23 per-event byte-equality + 1 translation-invariant + 1 null-target); 23 in-scope events resolve to fixture's frozen target coords ghost (960, 360), player (320, 360) at 1280×720.
+- Post-commit 2/2 cache-busted runs green at new HEAD.
+
+### Test count delta (vs Phase 2 baseline)
+
+136 → 138 (+2 net). 24 scaffold tests deleted (`legacyAnchorDispatch.test.ts`); 26 production-helper tests added (`eventAnchorResolver.test.ts`). Framed explicitly "vs Phase 2 baseline" per going-forward closing-log metric rule.
+
+### Helper signature — ratified deviations from prompt sketch
+
+`resolveEventTargetAnchor(event: CombatEvent, bagLayout: BagLayout, canvasBounds: { left: number; top: number }): CanvasAnchor | null`
+
+Three deviations, all ratified in chat at Phase 3 halt + committed in `dc04b07` body:
+
+1. **Name** `resolveEventTargetAnchor` over `eventAnchorResolver` — descriptive (bridges `resolveAnchor`'s target output to canvas-local).
+2. **Return** `CanvasAnchor | null` over forced non-null with target discriminator — null for non-target events; cleaner consumer-side guard pattern.
+3. **Dropped `target: 'player' | 'ghost'`** field — no current consumer; M1.4b2 status_apply migration extends at point-of-need rather than speculative API surface now.
+
+### Phaser canvas-bounds API access path locked
+
+`this.scale.canvasBounds` (Phaser 3.90.0 `Phaser.Geom.Rectangle`, auto-updated on resize). Direct scene-level access; no additional plumbing required. M1.4a's 5-file `bagContainerRef` plumbing pattern stays scoped to BagLayout handshake — not extended.
+
+### Architectural patterns codified through M1.4b1 (running list)
+
+1. (M1.4a) Audit-gate spirit-vs-letter — const substitution allowed under "zero visual changes" if behavior is byte-identical.
+2. (M1.4a) 10-row ANCHOR_RULE with per-row test discipline.
+3. (M1.4a) 5-file plumbing pattern for sibling-DOM ref handoff.
+4. (M1.4a) `PORTRAIT_*_RATIO` consts pattern.
+5. **(M1.4b1 Phase 2) Verbatim-mirror discipline for legacy-extraction scaffolding.** When extracting a pure helper that mirrors existing inline logic for test purposes, the helper body must be byte-equivalent in spirit to the inline source (signature + call shape may differ; semantics + numeric output must not). Halt on quirks rather than silently fixing. Closing-pass diff between helper body and inline source is the load-bearing review item.
+
+### Predicate-vs-name catches (running tally, 4 → 6 over M1.4b1)
+
+- Catches 1-4 (M1.3.4 + M1.4a): all "internal artifact A doesn't match internal artifact B" within an implementation cycle.
+- **Catch 5 (M1.4b1 Phase 1):** design-time predicate (ANCHOR_RULE.heal='source') was never validated against existing implementation (heal-at-target). Different shape — table internally consistent at M1.4a close; divergence only surfaced when consumption forced the comparison. Per-row table tests assert "table contains what we wrote" — they do NOT assert "implementation matches the table." Sharpens CF 27.
+- **Catch 6 (M1.4b1 Phase 3 → Phase 2.5):** "pipeline green" predicate vs cache-replayed reality. Phase 2 effectively committed-through `RunScreen.test.tsx` flake via turbo cache replay; cache-replayed green satisfied surface predicate ("pipeline 25/25 green") but did not match canonical truth ("pipeline executed-and-green"). Phase 3 surfaced this at halt-gate when test-cache invalidation removed cache-replay opportunity. Closed structurally by Phase 2.5 + `--force` flag now load-bearing in verification runs.
+
+### Going-forward rules (codified, applies M1.4b1+ closing logs)
+
+- **Closing-log metric framing:** every metric line explicitly anchors to "milestone total" or "vs Phase N baseline" / "vs pre-commit halt" so the predicate matches the name.
+- **`--force` on verification runs:** when verification is the load-bearing gate (post-flake-fix, post-refactor commits, pre-PR), use `--force` to ensure runs actually execute. Cache replay acceptable for routine work where prior-green is genuinely valid; not acceptable as proof-of-green for new work.
+- **Phase 2.5 interlude precedent:** when an explicitly out-of-scope item shifts reproduction profile mid-milestone (e.g., flake → reliable failure), the original punt rationale is stale and the item escalates to in-scope. Smallest-fix interlude on the milestone branch is acceptable; sub-phase numbering accommodates (e.g., 2.5 between 2 and 3).
+
+### CF 27 sharpening (deferred to M1.4b/M1.5 retro for full doc amendment)
+
+Original framing: extend `tech-architecture.md` § 4.5 R1 for cross-axis case + design-vs-implementation cross-cutting test rule.
+
+Sharpened framing as of M1.4b1: design-time invariants need cross-cutting tests against the implementation that's supposed to honor them, not just internal-consistency tests against the design itself. Per-row table tests assert "the table contains what we wrote" — they do NOT assert "the implementation matches the table." § 4.5 R1 amendment must explicitly call out the cross-axis design-vs-implementation case.
+
+Deferral target unchanged. Carries to M1.4b retro or M1.5 retro.
+
+### Open / pre-M1.4b2 gates
+
+- **Heal-anchor decision** (target / source / both): blocks M1.4b2 scoping. Three framings, balance/UX call:
+  - `'target'` (recipient): match existing render. Player feedback "you got +N HP". Loses item attribution.
+  - `'source'` (item): M1.4a-locked. Player feedback "this item just healed". Loses portrait HP-change reinforcement.
+  - `'both'`: floater at recipient + flash on source item. Richer feedback; matches damage='both' pattern.
+- **Player-branch fixture coverage gap** (CF 28, new this milestone): 23 in-scope events all target 'ghost'. Player-branch logic identical-by-construction; coverage gap may warrant second fixture in M1.4b2 if CF 26's source-side discipline lands.
+
+### Carry-forward status updates
+
+- **CF 1** (item-anchored VFX foundation): foundational pieces in place via M1.4b1. Layer lands M1.4b2. *In flight, M1.4b2 next.*
+- **CF 4** (item_trigger / recipe_combine event VFX): item_trigger queued M1.4b2; recipe_combine deferred until sim emits event. *Partial.*
+- **CF 25** (status / buff event VFX): *Queued M1.4b2.*
+- **CF 26** (source-side test discipline on 'both' promotion): *Queued M1.4b2.* May interact with second fixture for player-branch coverage.
+- **CF 27** (§ 4.5 R1 amendment): *Deferred; framing sharpened by catches 5 + 6.*
+- **CF 28 (NEW)** — player-branch fixture coverage: noted Phase 2 § 3, ratified Phase 3 close. *Open; M1.4b2 candidate.*
+- **CLOSED:** pre-existing `RunScreen.test.tsx` flake. Was flagged for separate hardening pass; addressed structurally Phase 2.5 via `vi.mock`. *Status: CLOSED.*
+
+### What's NOT in M1.4b1 (deferred / out of scope)
+
+Heal-branch refactor (M1.4b2); new VFX types — portrait hit-flash, MEANINGFUL_EVENT_TYPES updates, item_trigger / status / buff event VFX (M1.4b2); recipe_combine VFX (deferred until sim emits); source-side 'both'-promotion test discipline (CF 26); § 4.5 R1 doc amendment (CF 27); player-branch fixture coverage (CF 28); M1.4b2 scoping (post heal-anchor decision); stale M1.1 / M1.2.x branch cleanup.
+
+### Next moves (post-merge)
+
+1. Closing-log commit (separate from refactor commits, halt-gate ratification before commit).
+2. Push + browser PR + CI.
+3. After CI green: `--no-ff` merge to main; delete `m1.4b1-refactor-lift` local + origin.
+4. Heal-anchor decision (Trey's call: target / source / both).
+5. M1.4b2 scoping (after heal-anchor decision is locked).
+
+---
+
 ## 2026-05-05 — M1.4a: BagLayout handshake foundation closed
 
 **Branch**: `m1.4a-baglayout` → main (pending --no-ff merge)
