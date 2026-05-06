@@ -30,7 +30,7 @@
 import Phaser from 'phaser';
 import type { CombatEvent, EntityRef } from '@packbreaker/content';
 import type { BagLayout } from '../bag/layout';
-import { resolveEventTargetAnchor } from './eventAnchorResolver';
+import { resolveEventAnchors } from './eventAnchorResolver';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -335,23 +335,30 @@ export class CombatScene extends Phaser.Scene {
 
   private playEventVisuals(ev: CombatEvent): void {
     if (ev.type === 'damage') {
-      // M1.4b1: consume resolveAnchor + canvas-local translation.
-      // ANCHOR_RULE.damage='both' guarantees a target anchor; the
-      // null-guard is for future modes (e.g., a 'source'-only
-      // promotion) and is unreachable today.
-      const anchor = resolveEventTargetAnchor(ev, this.bagLayout, this.scale.canvasBounds);
-      if (anchor) {
-        this.spawnFloaterAt(anchor.x, anchor.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
-        this.spawnParticleBurstAt(anchor.x, anchor.y, TEX.squareDmg, 5);
+      // M1.4b1 + M1.4b2.1: consume resolveEventAnchors. Damage='both'
+      // populates source AND target, but render today reads target only.
+      // Source-side render (portrait hit-flash on attacker) is M1.4b2.2
+      // (CF 29; catch #7 surfaced M1.4b2.1 Phase 1).
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
+        this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareDmg, 5);
       }
     } else if (ev.type === 'heal') {
-      // UNTOUCHED — heal-anchor decision deferred to M1.4b2.
-      // ANCHOR_RULE.heal='source' contradicts the existing
-      // target-anchored render; resolving the divergence is the
-      // M1.4b2 gate, not a visual-no-op refactor.
+      // M1.4b2.1: ANCHOR_RULE.heal flipped 'source' → 'both' per
+      // decision-log 2026-05-06. Render is additive (Phase 1 Q3
+      // ratification): recipient floater + recipient particles
+      // (existing target-side render preserved) + source-item flash
+      // (new). Source flash uses TEX.plusHeal at the resolved source
+      // anchor — same primitive as the recipient burst per Q2 (no new
+      // VFX in .b2.1; item-cell halo is M1.4b2.2 territory).
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
       this.spawnFloater(refs, '+' + String(ev.amount), PALETTE_HEX.rarityUncommon);
       this.spawnParticleBurst(refs, TEX.plusHeal, 5);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.source) {
+        this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.plusHeal, 5);
+      }
     } else if (ev.type === 'status_apply') {
       // UNTOUCHED — status_apply migration is M1.4b2 territory
       // (uses pulsePortrait + refreshBurnPip which still need refs).
@@ -361,12 +368,12 @@ export class CombatScene extends Phaser.Scene {
       this.pulsePortrait(refs);
       this.refreshBurnPip(refs, this.burnStacks[ev.target]);
     } else if (ev.type === 'status_tick') {
-      // M1.4b1: consume resolveAnchor + canvas-local translation.
+      // M1.4b1 + M1.4b2.1: consume resolveEventAnchors.
       // ANCHOR_RULE.status_tick='target' guarantees a target anchor.
-      const anchor = resolveEventTargetAnchor(ev, this.bagLayout, this.scale.canvasBounds);
-      if (anchor) {
-        this.spawnFloaterAt(anchor.x, anchor.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
-        this.spawnParticleBurstAt(anchor.x, anchor.y, TEX.squareStatus, 3);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
+        this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
     } else if (ev.type === 'combat_end') {
       this.cameras.main.shake(SHAKE_DURATION_MS, SHAKE_INTENSITY);

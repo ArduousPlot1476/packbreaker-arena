@@ -1,7 +1,9 @@
 // Production helper bridging resolveAnchor's screen-space output to
 // the canvas-local frame Phaser's add.text / add.image consume.
-// Used by playEventVisuals's damage and status_tick branches as the
-// M1.4b1 visual-no-op refactor lift; M1.4b2 may extend.
+// Used by playEventVisuals's damage, heal, and status_tick branches.
+// Generalized in M1.4b2.1 from target-only (M1.4b1) to dual-axis return
+// to support heal='both' (decision-log 2026-05-06) and any future
+// 'both'-mode events.
 //
 // § 4.5 R1: ANCHOR_RULE design intent stays the predicate of record;
 // this helper does NOT re-derive "where does this event anchor" — it
@@ -19,30 +21,36 @@ export interface CanvasAnchor {
   readonly y: number;
 }
 
-/** Resolve a CombatEvent's target anchor in canvas-local coords.
- *
- *  Returns null when the event's ANCHOR_RULE mode doesn't populate a
- *  target anchor (combat_start, item_trigger, heal-via-mode='source',
- *  unanchored events, etc.). M1.4b1 production callers in
- *  playEventVisuals (damage, status_tick) are guaranteed non-null by
- *  the table — damage='both' and status_tick='target' both populate
- *  target — but the null-return path is the explicit contract for
- *  any future caller whose mode might not.
+export interface ResolvedCanvasAnchors {
+  readonly source: CanvasAnchor | null;
+  readonly target: CanvasAnchor | null;
+}
+
+/** Resolve a CombatEvent's source and target anchors in canvas-local
+ *  coords. Each axis returns null when the event's ANCHOR_RULE mode
+ *  doesn't populate that side:
+ *    - 'unanchored' (combat_start) → both null
+ *    - 'source' (item_trigger) → source populated, target null
+ *    - 'target' (status_tick, status_apply, stun_consumed, buff_*) → source null, target populated
+ *    - 'both' (damage, heal post-2026-05-06) → both populated
+ *    - 'portrait' (combat_end) → both populated (source=player portrait, target=ghost portrait)
  *
  *  Translation: canvas-local = screen-space − canvasBounds.{left,top}.
  *  In Phaser, this.scale.canvasBounds.{left,top} are the live DOM
  *  position of the canvas; screen-space === canvas-local when the
  *  canvas sits at the document origin. */
-export function resolveEventTargetAnchor(
+export function resolveEventAnchors(
   event: CombatEvent,
   bagLayout: BagLayout,
   canvasBounds: { readonly left: number; readonly top: number },
-): CanvasAnchor | null {
+): ResolvedCanvasAnchors {
   const resolved = resolveAnchor(event, bagLayout);
-  const target = resolved.target;
-  if (!target) return null;
   return {
-    x: target.x - canvasBounds.left,
-    y: target.y - canvasBounds.top,
+    source: resolved.source
+      ? { x: resolved.source.x - canvasBounds.left, y: resolved.source.y - canvasBounds.top }
+      : null,
+    target: resolved.target
+      ? { x: resolved.target.x - canvasBounds.left, y: resolved.target.y - canvasBounds.top }
+      : null,
   };
 }

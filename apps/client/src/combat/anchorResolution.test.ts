@@ -40,8 +40,8 @@ describe('ANCHOR_RULE — locked design intent (decision-log 2026-05-05)', () =>
   it('damage anchors at both source and target', () => {
     expect(ANCHOR_RULE.damage).toBe('both');
   });
-  it('heal anchors at source only', () => {
-    expect(ANCHOR_RULE.heal).toBe('source');
+  it('heal anchors at both source and target (decision-log 2026-05-06)', () => {
+    expect(ANCHOR_RULE.heal).toBe('both');
   });
   it('status_apply anchors at target', () => {
     expect(ANCHOR_RULE.status_apply).toBe('target');
@@ -91,7 +91,7 @@ describe('resolveAnchor — discriminator-respecting resolution', () => {
     });
   });
 
-  it('heal (mode=source) populates only source', () => {
+  it('heal (mode=both) populates source from itemAnchors and target from portraitAnchor', () => {
     const ev: CombatEvent = {
       tick: 7,
       type: 'heal',
@@ -100,7 +100,7 @@ describe('resolveAnchor — discriminator-respecting resolution', () => {
       amount: 2,
       newHp: 20,
     };
-    expect(resolveAnchor(ev, layout)).toEqual({ source: PLAYER_ITEM_B });
+    expect(resolveAnchor(ev, layout)).toEqual({ source: PLAYER_ITEM_B, target: PLAYER_PORTRAIT });
   });
 
   it('status_apply (mode=target) populates only target as portrait', () => {
