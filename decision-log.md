@@ -4,6 +4,72 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-05 — M1.4a: BagLayout handshake foundation closed
+
+**Branch**: `m1.4a-baglayout` → main (pending --no-ff merge)
+**Commit**: `f1a4f21` on `5cadc15` (M1.3.4 retro merge)
+**Scope**: Foundation for item-anchored VFX. Zero visual changes; no VFX consumption (M1.4b's job).
+
+### Delivered
+- `BagLayout` type + `computeBagLayout` pure helper in the bag/layout module
+- `ANCHOR_RULE` 10-row const map covering the full `CombatEvent` union: damage='both', heal='source', status_apply='target', status_tick='target', item_trigger='source', combat_end='portrait', combat_start='unanchored', stun_consumed='target', buff_apply='target', buff_remove='target'
+- `resolveAnchor` pure helper with switch cases for all 9 non-unanchored event types; default branch is documented dead code (combat_start uses unanchored early-return)
+- `PORTRAIT_X_RATIO_PLAYER` / `PORTRAIT_X_RATIO_GHOST` / `PORTRAIT_Y_RATIO` exported consts in CombatScene.ts; CombatOverlay measures canvas-container rect + applies ratios for screen-space portrait anchors
+- `bagContainerRef` plumbed through 5 files (BagBoard → DesktopRunScreen / MobileRunScreen → LazyCombatOverlay → CombatOverlay), prop-drilling pattern matching existing `onCombatDone`
+
+### Metrics
+- Files: 11 changed, 696 insertions, 36 deletions; 2 new (`anchorResolution.ts` + `anchorResolution.test.ts`)
+- Tests: workspace client 109 → 112 (+3)
+- Combat chunk: 1,506.43 / 348.98 KB raw / gz (byte-identical to pre-commit halt)
+- Mobile bundle: +0.05 KB raw / +0.02 KB gz (structural cost of bagContainerRef plumbing through MobileRunScreen.tsx; not a leak — see Ratification 3)
+- Pipeline: 25/25 green at commit
+
+### Ratifications (in-flight, all four resolved)
+
+1. **Portrait DOM mismatch → Option (a)**. Post-M1.3.4b portraits are Phaser GameObjects; no DOM refs available. Resolution: 0.25 / 0.75 / 0.5 ratios promoted to `PORTRAIT_X_RATIO_PLAYER` / `PORTRAIT_X_RATIO_GHOST` / `PORTRAIT_Y_RATIO` consts in CombatScene.ts (alongside the `DEAD_TIME_THRESHOLD_TICKS` / `LEAD_IN_TICKS` pattern from M1.3.4b architectural rule 2). CombatOverlay measures canvas-container rect + applies ratios for screen-space portrait anchors. Const substitution at the original render lines is permitted under audit-gate spirit ("render output unchanged"); this is § 4.5 R2 single-source hygiene, not a violation.
+
+2. **Bag DOM access → Option (i)**. BagBoard is sibling of CombatOverlay in the run-screen tree; no existing path. Resolution: bagContainerRef plumbed through 5 files. Pattern matches existing `onCombatDone` prop drilling. Considered-and-rejected: `document.querySelector` (fragile); RunContext-based publishing (rejected for explicit-data-flow readability).
+
+3. **Mobile bundle envelope correction**. The original prompt's "zero delta" expectation was wrong because option (i) explicitly modifies MobileRunScreen.tsx. Observed +0.05 KB raw / +0.02 KB gz is the structural cost of the ratification, not a leak. `anchorResolution.ts` + BagLayout types confirmed combat-chunk-only via sourcemap audit ('unanchored' string-presence: 2 hits in `CombatOverlay-*.js`, 0 in main, 0 in mobile).
+
+4. **§ 4.5 R1 trap caught at second ratification → Option B (close trap fully now)**. `ANCHOR_RULE.stun_consumed='target'` but `resolveAnchor`'s switch had no case for it — fell to default returning `{}`. Table named the intent; resolver returned wrong output. The "unanchored events return empty ResolvedAnchors" test asserted the defect with a name that no longer described what it tested. Resolution: switch cases for stun_consumed / buff_apply / buff_remove honor the table (lookup-then-fallback parallel to existing damage/heal/status_apply); "unanchored events" test reshaped to combat_start-only (renamed in place); 3 new resolution tests cover entity dispatch (stun_consumed), item direct-lookup (buff_apply), lookup-then-fallback end-to-end (buff_remove placement-absent).
+
+### Architectural patterns codified (carry forward beyond M1.4a)
+
+1. **Audit-gate spirit-vs-letter**. Const substitution at render-line literals is allowed under "zero visual changes" sub-phases when behavior is byte-identical. Spirit is "render output unchanged," not "source text unchanged." Pairs with § 4.5 R2 single-source hygiene.
+
+2. **10-row ANCHOR_RULE with per-row test discipline**. Each event type's mode value gets its own test. Table changes surface as exactly one failing test per change. Direct § 4.5 R1 enforcement; predicate-vs-name traps die at the table edit.
+
+3. **5-file plumbing pattern for sibling-DOM ref handoff**. When CombatOverlay needs DOM measurement of a sibling component, prop-drill the ref through the run-screen variant + lazy boundary. Idiomatic match to `onCombatDone`. Preferred over `document.querySelector` or RunContext-based publishing for explicit-data-flow readability.
+
+4. **PORTRAIT_*_RATIO consts pattern**. When scene-internal positions need projection to screen-space, promote ratios to exported consts at the scene module. Prevents drift between scene-local rendering and screen-space anchor resolution. Pairs with § 4.5 R2.
+
+### New carry-forwards
+
+**CF 26** — Source-side test discipline on 'both' promotion. If M1.4b (or any future phase) promotes any of stun_consumed / buff_apply / buff_remove from 'target' to 'both' in ANCHOR_RULE, the matching source-side resolution test must land in the same change. The switch cases already handle 'both' via conditional mode checks, but no current test asserts source population for these three events. The same § 4.5 R1 trap could re-open on the source side if a table change isn't paired with a source-side test. Predicate-vs-name discipline applies symmetrically across mode dimensions.
+
+**CF 27** — Extend `tech-architecture.md` § 4.5 R1 framing for cross-axis case. The two M1.4a R1 catches plus the M1.3.4 catches surface a previously-unnamed trap shape: **axis A is tested but axis B isn't, and axis B is one table-edit away from being live**. CF 26 is an instance of this shape. Defer the doc amendment to M1.4b or M1.5 retrospective rather than inline this milestone — pattern is well-evidenced from M1.3.4 / M1.4a but adding more cases from M1.4b will sharpen the rule's wording.
+
+### Pattern signal
+
+Four predicate-vs-name traps caught across M1.3.4 + M1.4a (M1.3.4: table-vs-skip-set, predicate-vs-net-state-delta; M1.4a: table-vs-resolver, test-name-vs-assertion). § 4.5 R3's closing-pass review discipline is load-bearing, not ceremonial. M1.5 relic state will multiply surfaces of this shape; the discipline must scale.
+
+### Out of scope (explicitly NOT in M1.4a)
+- VFX consumption layer (M1.4b)
+- item_trigger / stun_consumed / buff_apply / buff_remove VFX wiring (M1.4b)
+- Portrait hit-flash on portrait-target damage (M1.4b)
+- Low-HP portrait tint (deferred to M2 portrait art pass)
+- recipe_combine event VFX (deferred entirely — sim doesn't emit the event yet; revisit when it does)
+- MEANINGFUL_EVENT_TYPES updates (M1.4b lockstep with VFX wiring)
+- ANCHOR_RULE behavior changes (unchanged from first ratification)
+
+### Trap status at close
+- Predicate-vs-name (§ 4.5 R1) trap **closed** for stun_consumed / buff_apply / buff_remove
+- Table ↔ resolver ↔ test names aligned across all 10 ANCHOR_RULE rows
+- M1.4b's prompt only needs to add VFX consumption — anchor resolution already wired
+
+---
+
 ## 2026-05-05 — M1.3.4 retrospective: predicate hygiene and authority-layer rules
 
 Both Codex P1 catches in M1.3.4 (a-c8 reroll-cost UI authority; b-c7 zero-content event predicate) shared shape: a predicate or computation that looked correct but encoded the wrong invariant. Three principles ratified going forward, load-bearing for M1.5 relic state and any future ruleset-modifying systems:

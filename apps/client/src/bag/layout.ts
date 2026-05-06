@@ -10,6 +10,7 @@
 // contracts ship.
 
 import { DEFAULT_RULESET } from '@packbreaker/content'
+import type { BagDimensions, PlacementId } from '@packbreaker/content'
 import type { RarityKey } from '@packbreaker/ui-kit'
 import { ITEMS } from '../run/content'
 import type { BagItem, Cell, ItemId, RecipeMatch } from '../run/types'
@@ -287,5 +288,92 @@ export function combineAnchorPosition(
     transform: fallback.transform,
     direction: 'upper-right',
     fallback: true,
+  }
+}
+
+// ─── BagLayout handshake (M1.4a foundation; consumed by M1.4b VFX) ─────
+//
+// One-time React→Phaser layout handshake at combat mount per
+// tech-architecture.md § 2 + § 5.1: the orchestrator measures the bag
+// DOM (via getBoundingClientRect) and portrait positions, packs them
+// into a BagLayout, and passes it to CombatScene through
+// createCombatGame. The scene stores it (read-only after assignment);
+// at M1.4b combat/anchorResolution.ts reads from it to anchor
+// item-source VFX.
+//
+// Coordinate frame: all CellPosition values are SCREEN-SPACE (the same
+// space getBoundingClientRect returns: viewport-relative pixel coords).
+// CombatScene translates screen-space → canvas-local at consumption
+// time (M1.4b) by subtracting the canvas container's getBoundingClientRect.
+//
+// § 4.5 R2: computeBagLayout is the single authoritative source for
+// layout-from-state composition. Downstream consumers MUST NOT
+// recompute pixel positions from cellSize + dimensions independently.
+
+/** Pixel position, screen-space (matches getBoundingClientRect). */
+export interface CellPosition {
+  readonly x: number
+  readonly y: number
+}
+
+/** Per-side layout entry.
+ *
+ *  M1 ghost contract: ghost.itemAnchors is intentionally empty — there
+ *  is no ghost-bag DOM in M1, so ghost item-source events fall back to
+ *  ghost.portraitAnchor via resolveAnchor's lookup-then-fallback path
+ *  (combat/anchorResolution.ts). M2's ghost-storage rework is the
+ *  trigger to populate it. */
+export interface SideLayout {
+  readonly itemAnchors: ReadonlyMap<PlacementId, CellPosition>
+  readonly portraitAnchor: CellPosition
+}
+
+export interface BagLayout {
+  readonly cellSize: number
+  readonly dimensions: BagDimensions
+  readonly player: SideLayout
+  readonly ghost: SideLayout
+}
+
+export interface ComputeBagLayoutInput {
+  readonly playerBagItems: ReadonlyArray<BagItem>
+  readonly cellSize: number
+  /** Top-left of the player's bag in screen-space (from
+   *  getBoundingClientRect on the bag container). */
+  readonly playerBagOriginPx: CellPosition
+  readonly dimensions: BagDimensions
+  readonly playerPortraitAnchor: CellPosition
+  readonly ghostPortraitAnchor: CellPosition
+}
+
+/** Pure: no DOM, no time, no rng. Anchor convention: pixel center of
+ *  each item's anchor cell — (col + 0.5, row + 0.5) × cellSize, then
+ *  translated by playerBagOriginPx — NOT the center of the multi-cell
+ *  footprint. Matches combineAnchorPosition's frame (col * cellSize is
+ *  cell top-left x in bag-local) and gives M1.4b a consistent VFX
+ *  spawn point for single- and multi-cell items alike. Map keys are
+ *  the canonical PlacementId; client BagItem.uid is brand-cast per the
+ *  same impedance bridge clientBagToSimBag uses (run/sim-bridge.ts). */
+export function computeBagLayout(input: ComputeBagLayoutInput): BagLayout {
+  const itemAnchors = new Map<PlacementId, CellPosition>()
+  for (const item of input.playerBagItems) {
+    const cellCenterX = (item.col + 0.5) * input.cellSize
+    const cellCenterY = (item.row + 0.5) * input.cellSize
+    itemAnchors.set(item.uid as PlacementId, {
+      x: input.playerBagOriginPx.x + cellCenterX,
+      y: input.playerBagOriginPx.y + cellCenterY,
+    })
+  }
+  return {
+    cellSize: input.cellSize,
+    dimensions: input.dimensions,
+    player: {
+      itemAnchors,
+      portraitAnchor: input.playerPortraitAnchor,
+    },
+    ghost: {
+      itemAnchors: new Map(),
+      portraitAnchor: input.ghostPortraitAnchor,
+    },
   }
 }

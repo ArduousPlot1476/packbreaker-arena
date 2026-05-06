@@ -29,6 +29,7 @@
 
 import Phaser from 'phaser';
 import type { CombatEvent, EntityRef } from '@packbreaker/content';
+import type { BagLayout } from '../bag/layout';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -87,6 +88,19 @@ const DEAD_TIME_THRESHOLD_TICKS = 8;
 const LEAD_IN_TICKS = 2;
 
 // ─────────────────────────────────────────────────────────────────────
+// Canvas-relative portrait positions, layered into BagLayout via
+// canvas-rect projection in CombatOverlay (M1.4a). Exported so the
+// orchestrator computes screen-space portrait anchors against the
+// SAME ratios CombatScene renders against — § 4.5 R2 single-source
+// hygiene. M1.3.4b architectural rule 2 (named scene tunables) set the
+// precedent; spatial constants don't get the "tunable per telemetry"
+// tag but the export-and-name-it discipline is the same.
+// ─────────────────────────────────────────────────────────────────────
+export const PORTRAIT_X_RATIO_PLAYER = 0.25;
+export const PORTRAIT_X_RATIO_GHOST = 0.75;
+export const PORTRAIT_Y_RATIO = 0.5;
+
+// ─────────────────────────────────────────────────────────────────────
 // Texture keys generated programmatically in preload(). One palette of
 // geometric particles drawn via Graphics → generateTexture so combat
 // can scatter them without per-frame draw calls.
@@ -107,6 +121,10 @@ export interface CombatSceneInitData {
   ticksPerSecond: number;
   ghostClassLabel: string;
   playerClassLabel: string;
+  /** Item + portrait anchors in screen-space, computed by the
+   *  orchestrator at combat-phase entry. Stored on the scene at M1.4a;
+   *  consumed by M1.4b's item-anchored VFX via combat/anchorResolution.ts. */
+  bagLayout: BagLayout;
   onCombatEnd: () => void;
 }
 
@@ -134,6 +152,9 @@ export class CombatScene extends Phaser.Scene {
   private initialGhostHp = 30;
   private ghostClassLabel = 'Marauder';
   private playerClassLabel = 'Tinker';
+  // Stored read-only from init(); consumed by M1.4b's item-anchored
+  // VFX via combat/anchorResolution.ts. M1.4a writes but does not read.
+  private bagLayout!: BagLayout;
   private onCombatEnd: () => void = () => {};
 
   private currentTick = 0;
@@ -163,6 +184,8 @@ export class CombatScene extends Phaser.Scene {
     this.initialGhostHp = data.initialGhostHp;
     this.ghostClassLabel = data.ghostClassLabel;
     this.playerClassLabel = data.playerClassLabel;
+    this.bagLayout = data.bagLayout;
+    void this.bagLayout; // M1.4a stores; M1.4b reads via combat/anchorResolution.ts
     this.onCombatEnd = data.onCombatEnd;
 
     this.currentTick = 0;
@@ -188,8 +211,8 @@ export class CombatScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
-    this.playerRefs = this.makePortrait(width * 0.25, height * 0.5, 'YOU', this.playerClassLabel, PALETTE.accent, this.initialPlayerHp);
-    this.ghostRefs = this.makePortrait(width * 0.75, height * 0.5, 'GHOST', this.ghostClassLabel, PALETTE.textSecondary, this.initialGhostHp);
+    this.playerRefs = this.makePortrait(width * PORTRAIT_X_RATIO_PLAYER, height * PORTRAIT_Y_RATIO, 'YOU', this.playerClassLabel, PALETTE.accent, this.initialPlayerHp);
+    this.ghostRefs = this.makePortrait(width * PORTRAIT_X_RATIO_GHOST, height * PORTRAIT_Y_RATIO, 'GHOST', this.ghostClassLabel, PALETTE.textSecondary, this.initialGhostHp);
 
     this.headerLabel = this.add
       .text(width * 0.5, 32, '— COMBAT —', {

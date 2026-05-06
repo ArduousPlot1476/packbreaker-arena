@@ -1,10 +1,11 @@
 // Unit tests for combineAnchorPosition's four-direction first-fit
-// algorithm (M0 deferred item 1 closure). Covers each direction
-// winning, plus the dense-bag degenerate case where all four collide.
+// algorithm (M0 deferred item 1 closure) + computeBagLayout (M1.4a
+// BagLayout handshake foundation).
 
 import { describe, expect, it } from 'vitest';
+import type { BagDimensions, PlacementId } from '@packbreaker/content';
 import type { BagItem, ItemId } from '../run/types';
-import { combineAnchorPosition } from './layout';
+import { combineAnchorPosition, computeBagLayout } from './layout';
 
 function place(uid: string, itemId: ItemId, col: number, row: number): BagItem {
   return { uid, itemId, col, row, rot: 0 };
@@ -99,5 +100,90 @@ describe('combineAnchorPosition — four-direction first-fit', () => {
     const result = combineAnchorPosition(['a', 'b'], bag);
     expect(result?.fallback).toBe(true);
     expect(result?.direction).toBe('upper-right');
+  });
+});
+
+describe('computeBagLayout — M1.4a BagLayout handshake', () => {
+  const DIMS: BagDimensions = { width: 6, height: 4 };
+  const ORIGIN = { x: 100, y: 200 };
+  const PLAYER_PORTRAIT = { x: 320, y: 360 };
+  const GHOST_PORTRAIT = { x: 960, y: 360 };
+
+  function buildInput(playerBag: BagItem[], cellSize = 88) {
+    return {
+      playerBagItems: playerBag,
+      cellSize,
+      playerBagOriginPx: ORIGIN,
+      dimensions: DIMS,
+      playerPortraitAnchor: PLAYER_PORTRAIT,
+      ghostPortraitAnchor: GHOST_PORTRAIT,
+    };
+  }
+
+  it('places a single 1×1 item at the pixel center of its anchor cell + bag origin', () => {
+    const bag = [place('p1', HERB, 0, 0)];
+    const layout = computeBagLayout(buildInput(bag));
+    // Cell (0,0) center bag-local = (44, 44); + origin (100, 200) = (144, 244).
+    expect(layout.player.itemAnchors.get('p1' as PlacementId)).toEqual({ x: 144, y: 244 });
+  });
+
+  it('uses anchor-cell center for multi-cell items, NOT bbox center', () => {
+    // DAGGER's footprint is multi-cell; the item is anchored at (col=2,
+    // row=1). computeBagLayout reads (col, row) directly — anchor stays
+    // at the (2,1) cell center regardless of footprint. Bag-local
+    // anchor = (2.5 × 88, 1.5 × 88) = (220, 132); + origin = (320, 332).
+    const bag = [place('p2', DAGGER, 2, 1)];
+    const layout = computeBagLayout(buildInput(bag));
+    expect(layout.player.itemAnchors.get('p2' as PlacementId)).toEqual({ x: 320, y: 332 });
+  });
+
+  it('rotation does not move the anchor (rot is irrelevant to the anchor cell)', () => {
+    // Same item at (3, 2) with rot=90 — anchor still at cell (3,2) center.
+    // Bag-local = (3.5 × 88, 2.5 × 88) = (308, 220); + origin = (408, 420).
+    const bag = [place('p3', DAGGER, 3, 2)];
+    bag[0]!.rot = 90;
+    const layout = computeBagLayout(buildInput(bag));
+    expect(layout.player.itemAnchors.get('p3' as PlacementId)).toEqual({ x: 408, y: 420 });
+  });
+
+  it('matches combineAnchorPosition\'s frame: bag-local origin at (0,0) → cell (0,0) center is (cellSize/2, cellSize/2)', () => {
+    // Sanity-check: with origin at (0,0) and cellSize 88, cell (0,0)
+    // center sits at (44, 44) — same frame combineAnchorPosition computes
+    // against (col * cellSize for cell top-left x).
+    const bag = [place('p4', HERB, 0, 0)];
+    const layout = computeBagLayout({ ...buildInput(bag), playerBagOriginPx: { x: 0, y: 0 } });
+    expect(layout.player.itemAnchors.get('p4' as PlacementId)).toEqual({ x: 44, y: 44 });
+  });
+
+  it('ghost.itemAnchors is always empty (M1 contract — no ghost bag DOM)', () => {
+    const bag = [place('p5', HERB, 0, 0), place('p6', SPARK, 1, 1)];
+    const layout = computeBagLayout(buildInput(bag));
+    expect(layout.ghost.itemAnchors.size).toBe(0);
+  });
+
+  it('propagates cellSize, dimensions, and portrait anchors verbatim', () => {
+    const bag: BagItem[] = [];
+    const layout = computeBagLayout(buildInput(bag, 52));
+    expect(layout.cellSize).toBe(52);
+    expect(layout.dimensions).toBe(DIMS);
+    expect(layout.player.portraitAnchor).toEqual(PLAYER_PORTRAIT);
+    expect(layout.ghost.portraitAnchor).toEqual(GHOST_PORTRAIT);
+  });
+
+  it('is pure: same input → same output (deep-equal across two invocations)', () => {
+    const bag = [place('p7', HERB, 1, 2), place('p8', DAGGER, 4, 3)];
+    const layout1 = computeBagLayout(buildInput(bag));
+    const layout2 = computeBagLayout(buildInput(bag));
+    expect(layout1.cellSize).toBe(layout2.cellSize);
+    expect(Array.from(layout1.player.itemAnchors.entries())).toEqual(
+      Array.from(layout2.player.itemAnchors.entries()),
+    );
+  });
+
+  it('mobile cellSize (52) produces correctly-scaled anchor positions', () => {
+    const bag = [place('p9', HERB, 1, 1)];
+    const layout = computeBagLayout(buildInput(bag, 52));
+    // (1.5 × 52, 1.5 × 52) = (78, 78); + origin (100, 200) = (178, 278).
+    expect(layout.player.itemAnchors.get('p9' as PlacementId)).toEqual({ x: 178, y: 278 });
   });
 });

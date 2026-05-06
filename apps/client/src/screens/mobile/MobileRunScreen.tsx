@@ -8,7 +8,7 @@
 // level still uses PointerSensor only (covers mouse + falls back to
 // pointer-style touch); TouchSensor + tap-tap rotate land in commit 7.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -96,6 +96,11 @@ export function MobileRunScreen() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
   );
 
+  // Bag DOM ref for the M1.4a BagLayout handshake. Symmetric to
+  // DesktopRunScreen — CombatOverlay measures screen-space origin via
+  // getBoundingClientRect at combat-phase entry.
+  const bagContainerRef = useRef<HTMLDivElement>(null);
+
   return (
     <CellSizeProvider value={MOBILE_CELL_SIZE}>
       <DndContext
@@ -130,6 +135,7 @@ export function MobileRunScreen() {
               recipeMatches={recipes}
               onCombine={onCombine}
               compact
+              containerRef={bagContainerRef}
             />
           </div>
           {activeTab === 'shop' && (
@@ -152,7 +158,11 @@ export function MobileRunScreen() {
           <MobileTabBar active={activeTab} onTabChange={setActiveTab} />
           <MobileContinueCTA onContinue={onContinue} busy={state.combatActive} />
           {state.combatActive && (
-            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay
+              active={state.combatActive}
+              onDone={onCombatDone}
+              bagContainerRef={bagContainerRef}
+            />
           )}
         </div>
         <DragOverlay dropAnimation={null}>

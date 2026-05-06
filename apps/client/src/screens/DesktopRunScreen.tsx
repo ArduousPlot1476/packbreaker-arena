@@ -5,6 +5,7 @@
 // (lifted into <RunProvider> at the dispatcher level in M1.3.3
 // commit 10 to survive viewport-switch remounts — Codex P1 fix).
 
+import { useRef } from 'react';
 import { DndContext, DragOverlay, PointerSensor, pointerWithin, useSensor, useSensors } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { BagBoard } from '../bag/BagBoard';
@@ -68,6 +69,11 @@ export function DesktopRunScreen() {
   // prototype's intent — quick clicks shouldn't accidentally start a drag).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
+  // Bag DOM ref for the M1.4a BagLayout handshake. CombatOverlay reads
+  // it at combat-phase entry to measure screen-space origin via
+  // getBoundingClientRect; null until BagBoard mounts.
+  const bagContainerRef = useRef<HTMLDivElement>(null);
+
   return (
     <DndContext
       sensors={sensors}
@@ -95,6 +101,7 @@ export function DesktopRunScreen() {
               dimmed={state.combatActive}
               recipeMatches={recipes}
               onCombine={onCombine}
+              containerRef={bagContainerRef}
             />
           </div>
           <ShopPanel
@@ -105,7 +112,11 @@ export function DesktopRunScreen() {
             busy={state.combatActive}
           />
           {state.combatActive && (
-            <LazyCombatOverlay active={state.combatActive} onDone={onCombatDone} />
+            <LazyCombatOverlay
+              active={state.combatActive}
+              onDone={onCombatDone}
+              bagContainerRef={bagContainerRef}
+            />
           )}
         </div>
         <BottomPanel state={state.state} />

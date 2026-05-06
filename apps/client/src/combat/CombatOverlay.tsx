@@ -21,7 +21,7 @@
 // combat-only subgraph (combat.ts / status.ts / triggers.ts) rides
 // the same chunk via the M1.3.4a step 6 sim-bridge split.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type Phaser from 'phaser';
 import {
   TICKS_PER_SECOND,
@@ -34,7 +34,15 @@ import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
 import { clientBagToSimBag, emptyRelicSlots } from '../run/sim-bridge';
 import { runCombat } from './sim-bridge.combat';
-import { CombatScene, createCombatGame } from './CombatScene';
+import {
+  CombatScene,
+  createCombatGame,
+  PORTRAIT_X_RATIO_GHOST,
+  PORTRAIT_X_RATIO_PLAYER,
+  PORTRAIT_Y_RATIO,
+} from './CombatScene';
+import { computeBagLayout } from '../bag/layout';
+import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
 import { makeGhostForRound } from './ghost';
 
@@ -71,6 +79,11 @@ const MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']> = new Set([
 interface CombatOverlayProps {
   active: boolean;
   onDone: (payload: CombatDonePayload) => void;
+  /** Ref to the player bag's grid div, populated by BagBoard via the
+   *  `containerRef` prop in DesktopRunScreen / MobileRunScreen. Read at
+   *  combat-phase entry to measure screen-space origin for the M1.4a
+   *  BagLayout handshake. */
+  bagContainerRef: RefObject<HTMLDivElement>;
 }
 
 /** Builds a CombatInput from current run state. Pure construction —
@@ -100,32 +113,40 @@ function titleCase(s: string): string {
   return s.length > 0 ? s[0]!.toUpperCase() + s.slice(1) : s;
 }
 
-export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
+export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlayProps) {
   const ctx = useRunContext();
+  const cellSize = useCellSize();
 
   // Compute the combat result + initial HPs once at mount. Memoize
   // against (active, round, seed, bag) so the result is stable across
-  // renders within a single combat.
-  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId } = useMemo(() => {
-    if (!active) {
+  // renders within a single combat. Captures the bag snapshot + bag
+  // dimensions used at simulation time so the M1.4a BagLayout
+  // handshake measures against the same state the sim consumed.
+  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, bagSnapshot, bagDimensions } =
+    useMemo(() => {
+      if (!active) {
+        return {
+          result: null as CombatResult | null,
+          initialPlayerHp: 0,
+          initialGhostHp: 0,
+          ghostClassLabel: 'Marauder',
+          ghostId: null as GhostId | null,
+          bagSnapshot: ctx.state.bag,
+          bagDimensions: ctx.state.state.ruleset.bagDimensions,
+        };
+      }
+      const { input, ghostClass, ghostId: gid } = buildCombatInput(ctx.state.bag, ctx.state.state);
+      const r = runCombat(input);
       return {
-        result: null as CombatResult | null,
-        initialPlayerHp: 0,
-        initialGhostHp: 0,
-        ghostClassLabel: 'Marauder',
-        ghostId: null as GhostId | null,
+        result: r,
+        initialPlayerHp: input.player.startingHp,
+        initialGhostHp: input.ghost.startingHp,
+        ghostClassLabel: ghostClass,
+        ghostId: gid,
+        bagSnapshot: ctx.state.bag,
+        bagDimensions: ctx.state.state.ruleset.bagDimensions,
       };
-    }
-    const { input, ghostClass, ghostId: gid } = buildCombatInput(ctx.state.bag, ctx.state.state);
-    const r = runCombat(input);
-    return {
-      result: r,
-      initialPlayerHp: input.player.startingHp,
-      initialGhostHp: input.ghost.startingHp,
-      ghostClassLabel: ghostClass,
-      ghostId: gid,
-    };
-  }, [active, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag]);
+    }, [active, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
 
   // Damage attributable to player / ghost. result.finalHp is HP at the
   // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
@@ -176,6 +197,29 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
         }
       }
       if (cancelled) return;
+
+      // M1.4a BagLayout handshake — measure DOM positions in
+      // screen-space and pack into a BagLayout. § 4.5 R2: portrait
+      // anchors derive from CombatScene's PORTRAIT_*_RATIO consts so
+      // orchestrator and scene measure against the same authority.
+      // Static for the duration of combat per tech-architecture.md § 2.
+      const bagRect = bagContainerRef.current?.getBoundingClientRect();
+      const canvasRect = container.getBoundingClientRect();
+      const bagLayout = computeBagLayout({
+        playerBagItems: bagSnapshot,
+        cellSize,
+        playerBagOriginPx: { x: bagRect?.left ?? 0, y: bagRect?.top ?? 0 },
+        dimensions: bagDimensions,
+        playerPortraitAnchor: {
+          x: canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_PLAYER,
+          y: canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO,
+        },
+        ghostPortraitAnchor: {
+          x: canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_GHOST,
+          y: canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO,
+        },
+      });
+
       game = createCombatGame(container, {
         events: result.events,
         endedAtTick: result.endedAtTick,
@@ -184,6 +228,7 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
         ticksPerSecond: TICKS_PER_SECOND,
         ghostClassLabel,
         playerClassLabel: M1_PROTOTYPE_CLASS_LABEL,
+        bagLayout,
         onCombatEnd: () => setPhase('resolved'),
       });
       gameRef.current = game;
@@ -198,7 +243,7 @@ export function CombatOverlay({ active, onDone }: CombatOverlayProps) {
       else if (gameRef.current) gameRef.current.destroy(true);
       gameRef.current = null;
     };
-  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, phase]);
+  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
 
   const isWin = result?.outcome === 'player_win';
   const ruleset = ctx.state.state.ruleset;
