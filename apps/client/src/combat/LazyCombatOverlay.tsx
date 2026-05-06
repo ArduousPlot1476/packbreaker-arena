@@ -11,7 +11,7 @@
 // the main chunk while sim/combat.ts (and friends) ride the combat chunk
 // alongside CombatOverlay + ghost.ts.
 
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type RefObject } from 'react';
 import type { CombatDonePayload } from '../run/useRun';
 
 const CombatOverlayInner = lazy(() =>
@@ -21,13 +21,17 @@ const CombatOverlayInner = lazy(() =>
 interface LazyCombatOverlayProps {
   active: boolean;
   onDone: (payload: CombatDonePayload) => void;
+  /** Ref to the player bag's inner grid div (BagBoard's cell-origin
+   *  element). Read by CombatOverlay at combat-phase entry to measure
+   *  screen-space origin for the M1.4a BagLayout handshake. */
+  bagContainerRef: RefObject<HTMLDivElement>;
 }
 
-export function LazyCombatOverlay({ active, onDone }: LazyCombatOverlayProps) {
+export function LazyCombatOverlay({ active, onDone, bagContainerRef }: LazyCombatOverlayProps) {
   if (!active) return null;
   return (
     <Suspense fallback={<CombatLoadingFallback />}>
-      <CombatOverlayInner active={active} onDone={onDone} />
+      <CombatOverlayInner active={active} onDone={onDone} bagContainerRef={bagContainerRef} />
     </Suspense>
   );
 }

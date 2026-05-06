@@ -11,6 +11,7 @@
 // — total bag area must fit 240px at 52px cells × 4 rows + 32px
 // padding, no room for the desktop header/footer).
 
+import type { RefObject } from 'react';
 import type { BagItem, Cell, RecipeMatch } from '../run/types';
 import { BagCell } from './BagCell';
 import { useCellSize } from './CellSize';
@@ -32,6 +33,13 @@ interface BagBoardProps {
    * Default `false` (desktop layout).
    */
   compact?: boolean;
+  /**
+   * Ref attached to the inner grid `<div>` (cell-origin element). Used
+   * by CombatOverlay at combat-phase entry to measure the player bag's
+   * screen-space origin via getBoundingClientRect for the BagLayout
+   * handshake (M1.4a). Optional — non-combat callers can omit.
+   */
+  containerRef?: RefObject<HTMLDivElement>;
 }
 
 export function BagBoard({
@@ -42,6 +50,7 @@ export function BagBoard({
   recipeMatches,
   onCombine,
   compact = false,
+  containerRef,
 }: BagBoardProps) {
   const cellSize = useCellSize();
   const W = BAG_COLS * cellSize;
@@ -76,6 +85,7 @@ export function BagBoard({
         </div>
       )}
       <div
+        ref={containerRef}
         className={dimmed ? 'bag-dimmed' : ''}
         style={{
           width: W,

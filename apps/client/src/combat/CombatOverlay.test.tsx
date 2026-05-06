@@ -22,9 +22,15 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { RefObject } from 'react';
 import type { CombatResult, PlacementId } from '@packbreaker/content';
 import { CombatOverlay } from './CombatOverlay';
 import { RunProvider } from '../run/RunContext';
+
+// M1.4a: CombatOverlay requires bagContainerRef. Tests don't render a
+// real bag DOM, so a ref with current=null is sufficient — CombatOverlay
+// uses optional-chained getBoundingClientRect and falls back to {0,0}.
+const NULL_BAG_REF: RefObject<HTMLDivElement> = { current: null };
 
 // Case A fixture — events = [combat_start, combat_end] only. Matches
 // the failed M1.3.4b halt-gate scenario verbatim.
@@ -115,6 +121,12 @@ vi.mock('./sim-bridge.combat', () => ({
 vi.mock('./CombatScene', () => ({
   createCombatGame: mocks.createCombatGame,
   CombatScene: { KEY: 'MockedCombatScene' },
+  // M1.4a: CombatOverlay also imports the portrait ratio consts to
+  // project canvas-rect → screen-space portrait anchors. The mock
+  // returns the same numeric ratios so the projection math runs.
+  PORTRAIT_X_RATIO_PLAYER: 0.25,
+  PORTRAIT_X_RATIO_GHOST: 0.75,
+  PORTRAIT_Y_RATIO: 0.5,
 }));
 
 describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1 amendment)', () => {
@@ -125,7 +137,7 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
 
     render(
       <RunProvider>
-        <CombatOverlay active={true} onDone={onDone} />
+        <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
       </RunProvider>,
     );
 
@@ -163,7 +175,7 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
 
     render(
       <RunProvider>
-        <CombatOverlay active={true} onDone={onDone} />
+        <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
       </RunProvider>,
     );
 
