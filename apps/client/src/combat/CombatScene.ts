@@ -30,6 +30,7 @@
 import Phaser from 'phaser';
 import type { CombatEvent, EntityRef } from '@packbreaker/content';
 import type { BagLayout } from '../bag/layout';
+import { resolveEventTargetAnchor } from './eventAnchorResolver';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -334,23 +335,39 @@ export class CombatScene extends Phaser.Scene {
 
   private playEventVisuals(ev: CombatEvent): void {
     if (ev.type === 'damage') {
-      const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
-      this.spawnFloater(refs, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
-      this.spawnParticleBurst(refs, TEX.squareDmg, 5);
+      // M1.4b1: consume resolveAnchor + canvas-local translation.
+      // ANCHOR_RULE.damage='both' guarantees a target anchor; the
+      // null-guard is for future modes (e.g., a 'source'-only
+      // promotion) and is unreachable today.
+      const anchor = resolveEventTargetAnchor(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchor) {
+        this.spawnFloaterAt(anchor.x, anchor.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
+        this.spawnParticleBurstAt(anchor.x, anchor.y, TEX.squareDmg, 5);
+      }
     } else if (ev.type === 'heal') {
+      // UNTOUCHED — heal-anchor decision deferred to M1.4b2.
+      // ANCHOR_RULE.heal='source' contradicts the existing
+      // target-anchored render; resolving the divergence is the
+      // M1.4b2 gate, not a visual-no-op refactor.
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
       this.spawnFloater(refs, '+' + String(ev.amount), PALETTE_HEX.rarityUncommon);
       this.spawnParticleBurst(refs, TEX.plusHeal, 5);
     } else if (ev.type === 'status_apply') {
+      // UNTOUCHED — status_apply migration is M1.4b2 territory
+      // (uses pulsePortrait + refreshBurnPip which still need refs).
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
       const label = ev.status.toUpperCase() + ' ×' + String(ev.stacks);
       this.spawnFloater(refs, label, PALETTE_HEX.rarityLegendary, true);
       this.pulsePortrait(refs);
       this.refreshBurnPip(refs, this.burnStacks[ev.target]);
     } else if (ev.type === 'status_tick') {
-      const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
-      this.spawnFloater(refs, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
-      this.spawnParticleBurst(refs, TEX.squareStatus, 3);
+      // M1.4b1: consume resolveAnchor + canvas-local translation.
+      // ANCHOR_RULE.status_tick='target' guarantees a target anchor.
+      const anchor = resolveEventTargetAnchor(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchor) {
+        this.spawnFloaterAt(anchor.x, anchor.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
+        this.spawnParticleBurstAt(anchor.x, anchor.y, TEX.squareStatus, 3);
+      }
     } else if (ev.type === 'combat_end') {
       this.cameras.main.shake(SHAKE_DURATION_MS, SHAKE_INTENSITY);
       const koSide: EntityRef = ev.outcome === 'player_win' ? 'ghost' : 'player';
@@ -455,9 +472,9 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
-  private spawnFloater(refs: PortraitRefs, text: string, colorHex: string, small = false): void {
+  private spawnFloaterAt(x: number, y: number, text: string, colorHex: string, small = false): void {
     const t = this.add
-      .text(refs.centerX, refs.centerY - 20, text, {
+      .text(x, y - 20, text, {
         fontFamily: 'Inter, sans-serif',
         fontStyle: '700',
         fontSize: small ? '14px' : '20px',
@@ -470,7 +487,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: t,
-      y: refs.centerY - 20 - FLOATER_RISE_PX,
+      y: y - 20 - FLOATER_RISE_PX,
       alpha: 0,
       duration: FLOATER_LIFETIME_MS,
       ease: Phaser.Math.Easing.Quartic.Out,
@@ -478,18 +495,22 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
-  private spawnParticleBurst(refs: PortraitRefs, textureKey: string, count: number): void {
+  private spawnFloater(refs: PortraitRefs, text: string, colorHex: string, small = false): void {
+    this.spawnFloaterAt(refs.centerX, refs.centerY, text, colorHex, small);
+  }
+
+  private spawnParticleBurstAt(centerX: number, centerY: number, textureKey: string, count: number): void {
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
       const dist = 40 + Math.random() * 20;
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
-      const p = this.add.image(refs.centerX, refs.centerY, textureKey);
+      const p = this.add.image(centerX, centerY, textureKey);
       p.setAlpha(0.95);
       this.tweens.add({
         targets: p,
-        x: refs.centerX + dx,
-        y: refs.centerY + dy,
+        x: centerX + dx,
+        y: centerY + dy,
         alpha: 0,
         angle: (Math.random() - 0.5) * 90,
         duration: PARTICLE_LIFETIME_MS,
@@ -497,6 +518,10 @@ export class CombatScene extends Phaser.Scene {
         onComplete: () => p.destroy(),
       });
     }
+  }
+
+  private spawnParticleBurst(refs: PortraitRefs, textureKey: string, count: number): void {
+    this.spawnParticleBurstAt(refs.centerX, refs.centerY, textureKey, count);
   }
 
   private spawnKoFlash(refs: PortraitRefs): void {
