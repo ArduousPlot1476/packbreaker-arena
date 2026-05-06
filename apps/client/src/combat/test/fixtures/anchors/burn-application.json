@@ -1,0 +1,323 @@
+{
+  "$comment": "Frozen anchor coords pre-refactor. DO NOT regenerate without ratification. M1.4b1 visual-no-op assertion against post-refactor resolveAnchor output (canvas-local coords).",
+  "fixture": "burn-application",
+  "capturedAt": "pre-Phase-3",
+  "canvasWidth": 1280,
+  "canvasHeight": 720,
+  "anchors": [
+    {
+      "eventIndex": 0,
+      "eventType": "combat_start",
+      "target": null
+    },
+    {
+      "eventIndex": 1,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 2,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 3,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 4,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 5,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 6,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 7,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 8,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 9,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 10,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 11,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 12,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 13,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 14,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 15,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 16,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 17,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 18,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 19,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 20,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 21,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 22,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 23,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 24,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 25,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 26,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 27,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 28,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 29,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 30,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 31,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 32,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 33,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 34,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 35,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 36,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 37,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 38,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 39,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 40,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 41,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 42,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 43,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 44,
+      "eventType": "item_trigger",
+      "target": null
+    },
+    {
+      "eventIndex": 45,
+      "eventType": "status_apply",
+      "target": null
+    },
+    {
+      "eventIndex": 46,
+      "eventType": "damage",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 47,
+      "eventType": "status_tick",
+      "target": {
+        "x": 960,
+        "y": 360
+      }
+    },
+    {
+      "eventIndex": 48,
+      "eventType": "combat_end",
+      "target": null
+    }
+  ]
+}
