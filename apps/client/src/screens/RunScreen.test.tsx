@@ -6,6 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { RunScreen } from './RunScreen';
 
+// M1.4b1 Phase 2.5: stub the lazy-loaded MobileRunScreen module so the
+// dispatcher test doesn't race the real dynamic import + Suspense
+// flush under parallel-load conditions. The dispatcher is the unit
+// under test — MobileRunScreen content is incidental observable state.
+// The stub renders the same tab-label strings the real component
+// surfaces ('SHOP', 'CRAFTING', 'RELICS', 'LOG'); changing those
+// labels in production won't surface here, but coverage of the
+// labels lives in MobileTabBar.test.tsx (the dedicated tab-bar test).
+vi.mock('./mobile/MobileRunScreen', () => ({
+  MobileRunScreen: function MobileRunScreenStub() {
+    return <div>SHOP CRAFTING RELICS LOG</div>;
+  },
+}));
+
 interface FakeMediaQueryList {
   matches: boolean;
   media: string;
