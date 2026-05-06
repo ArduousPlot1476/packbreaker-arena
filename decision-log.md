@@ -4,6 +4,29 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-06 — Heal anchor locked to 'both'
+
+**Decision:** `ANCHOR_RULE.heal` moves from `'source'` (M1.4a-locked) to `'both'`. Heal events render a recipient-portrait floater + source-item flash, mirroring the damage=`'both'` convention.
+
+**Rationale:**
+1. Symmetry with damage=`'both'` — players already trained on the convention; heal doesn't introduce a separate pattern.
+2. Pillar alignment — readable-in-one-screen + mastery-from-synergy both favor double-channel feedback over a single anchor.
+3. Forcing-function for CF 26 — heal as the first `'both'` promotion lands source-side test discipline now, on a small well-understood asymmetry, rather than alongside three new event types when stun_consumed / buff_apply / buff_remove promote.
+
+**Trade-off accepted:** ~1 day extra M1.4b2 surface vs single-anchor options; CF 26 and likely CF 28 activate in scope. Heal visual fingerprint risks reading as negative-damage; M1.4b2 design + playtest review responsible for confirming color/icon distinction holds.
+
+**Activates in M1.4b2:**
+- CF 26 (source-side test discipline becomes load-bearing for heal's `'both'` resolution).
+- CF 28 (player-branch fixture coverage warranted once source/target asymmetry exists in the table) — likely.
+
+**ANCHOR_RULE.heal table edit (deferred to M1.4b2 implementation):** `'source'` → `'both'`. Single-row update at `apps/client/src/combat/anchorResolution.ts`. Code edit not landed under this entry; this log entry locks the design intent. Implementation lands inside M1.4b2 alongside the heal-render refactor and the new source-side resolution test.
+
+**Cross-reference:** § 4.5 R1 cross-axis test amendment (CF 27, deferred to M1.4b/M1.5 retro) — heal `'both'` promotion is the first concrete case the amendment will need to cover.
+
+**M1.4b2 scoping unblocked.** Heal-anchor decision was the primary M1.4b2 gate; CF 28 (player-branch fixture coverage) remains as a secondary scoping question, now sharpened: with heal as a `'both'` promotion, source/target asymmetry will exist in the live ANCHOR_RULE for the first time, making a player-branch fixture more defensible than under any single-anchor heal option.
+
+---
+
 ## 2026-05-06 — M1.4b1 closure (Phase 1 design + Phase 2 scaffold + Phase 2.5 flake hardening + Phase 3 refactor)
 
 ### Branch + commit topology
