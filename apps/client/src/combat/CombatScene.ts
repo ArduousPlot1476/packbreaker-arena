@@ -89,6 +89,20 @@ const DEAD_TIME_THRESHOLD_TICKS = 8;
 const LEAD_IN_TICKS = 2;
 
 // ─────────────────────────────────────────────────────────────────────
+// Portrait hit-flash tunables (M1.4b2.2). § 4.5 R2 named consts —
+// visual register per visual-direction.md § 7: short snappy window
+// with additive blend so the underlying portrait stays readable during
+// the flash. Smaller + shorter than spawnKoFlash (which is the terminal
+// KO event); larger movement than pulsePortrait (which is subtle
+// status-apply feedback). M1 starting values; tune via design review
+// or playtest if needed.
+// ─────────────────────────────────────────────────────────────────────
+const PORTRAIT_FLASH_DURATION_MS = 150;
+const PORTRAIT_FLASH_INITIAL_ALPHA = 0.45;
+const PORTRAIT_FLASH_SIZE_PX = 180; // matches portrait body width/height in makePortrait
+const PORTRAIT_FLASH_SCALE_END = 1.08;
+
+// ─────────────────────────────────────────────────────────────────────
 // Canvas-relative portrait positions, layered into BagLayout via
 // canvas-rect projection in CombatOverlay (M1.4a). Exported so the
 // orchestrator computes screen-space portrait anchors against the
@@ -335,14 +349,24 @@ export class CombatScene extends Phaser.Scene {
 
   private playEventVisuals(ev: CombatEvent): void {
     if (ev.type === 'damage') {
-      // M1.4b1 + M1.4b2.1: consume resolveEventAnchors. Damage='both'
-      // populates source AND target, but render today reads target only.
-      // Source-side render (portrait hit-flash on attacker) is M1.4b2.2
-      // (CF 29; catch #7 surfaced M1.4b2.1 Phase 1).
+      // M1.4b1 + M1.4b2.1 + M1.4b2.2: consume resolveEventAnchors.
+      // Damage='both' populates source AND target. M1.4b2.2 closes
+      // CF 29 by adding source-side particle burst (mirrors heal source-
+      // flash from M1.4b2.1) AND adds portrait hit-flash on the target
+      // side per Phase 1 Q3 (i): damage-target-only red flash. Heal
+      // target stays unflashed — visual differentiation per pillar
+      // (damage = "impact felt", heal = "passive reception"). flashPortrait
+      // takes a color so future event types or Q3 (ii) reopen can extend
+      // without primitive rewrites.
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
+        const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareDmg, 5);
+        this.flashPortrait(refs, PALETTE.lifeRed);
+      }
+      if (anchors.source) {
+        this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.squareDmg, 5);
       }
     } else if (ev.type === 'heal') {
       // M1.4b2.1: ANCHOR_RULE.heal flipped 'source' → 'both' per
@@ -539,6 +563,32 @@ export class CombatScene extends Phaser.Scene {
       alpha: 0,
       scale: 1.3,
       duration: 600,
+      ease: Phaser.Math.Easing.Quartic.Out,
+      onComplete: () => flash.destroy(),
+    });
+  }
+
+  /** Hit-flash overlay on a portrait. M1.4b2.2 primitive (Q4 Option B
+   *  ratified): mutation-free overlay-and-destroy; mirrors spawnKoFlash's
+   *  structure with smaller + shorter values via PORTRAIT_FLASH_* tunable
+   *  consts (no magic numbers per § 4.5 R2). Color is parameterized so
+   *  the same primitive can later cover heal-target (Q3 (ii) — currently
+   *  scoped out per (i)) or new event types without rewrites. */
+  private flashPortrait(refs: PortraitRefs, color: number): void {
+    const flash = this.add.rectangle(
+      refs.centerX,
+      refs.centerY,
+      PORTRAIT_FLASH_SIZE_PX,
+      PORTRAIT_FLASH_SIZE_PX,
+      color,
+      PORTRAIT_FLASH_INITIAL_ALPHA,
+    );
+    flash.setBlendMode(Phaser.BlendModes.SCREEN);
+    this.tweens.add({
+      targets: flash,
+      alpha: 0,
+      scale: PORTRAIT_FLASH_SCALE_END,
+      duration: PORTRAIT_FLASH_DURATION_MS,
       ease: Phaser.Math.Easing.Quartic.Out,
       onComplete: () => flash.destroy(),
     });
