@@ -4,6 +4,95 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-06 — M1.4b2.2 closure (VFX layer audit + portrait hit-flash + CF 29 closure)
+
+### Branch + commit topology
+
+Branch: `m1.4b2.2-vfx-layer-hit-flash` off main `33db4cc` (clean — no setup commits required).
+
+| SHA       | Sub-phase | Scope |
+|-----------|-----------|-------|
+| (no commit) | Phase 1 | Read-only investigation + design halt-gate; **CF 1 framing premise mismatch caught and surfaced** (prompt claimed CF 1 closes here; CF text says full event-type consumption is incomplete until M1.4b2.3 — ratified to track CF 1 → M1.4b2.3). Six-section halt-gate + six Q&A ratifications. |
+| `46cf35b` | Phase 2   | Implementation: 4 `PORTRAIT_FLASH_*` named consts + `flashPortrait` private method + damage-block dual-axis consumption (source particles + target portrait flash). Single file: `apps/client/src/combat/CombatScene.ts`. |
+
+### Phase 1 ratifications (chat-recorded; no commits)
+
+Six questions ratified pre-implementation. Halt-gate fired once on premise mismatch (prompt-vs-CF-text); resolved at ratification turn without scope renegotiation.
+
+- **Q1 (CF 1 closure timing).** **Premise mismatch caught.** Prompt deliverable claimed CF 1 closes in M1.4b2.2; CF 1 text in `project_milestone_state.md` describes progressive closure across M1.4a/.b1/.b2.1/.b2.2/.b2.3 contingent on full event-type render consumption. Ratified: CF 1 advances in M1.4b2.2 (damage source-render added — 1 of 5 remaining event types covered); CF 1 closes at M1.4b2.3 with item_trigger / status_apply / stun_consumed / buff_apply / buff_remove migration. No CF split into 1a/1b. **First halt-gate exercise across M1.4 phasing**; standing halt-when-premise-doesn't-match rule operating as intended (no new pattern, no new rule — pre-existing rule's first concrete test in M1.4).
+- **Q2 (VFX layer Container scope).** Option (c) audit-closed. No Container introduced; scene root sufficient. Phaser scene root IS the implicit VFX layer; introducing a named Container would add API surface (parenting + container.add() in spawn helpers + setDepth strategy) without observable benefit. § 4.5 R3 minimal-architecture preference. YAGNI rationale: 2 item-anchored sprites today (heal source-flash post-M1.4b2.1; damage source-flash post-M1.4b2.2) + 1 more in M1.4b2.3 (item_trigger render); none require batch operations or z-ordering that motivate a Container. Revisit only if perf or z-order issue surfaces.
+- **Q3 (portrait flash scope).** Option (i) damage-target-only red flash. Visual differentiation per pillar — damage = "impact felt" beat; heal = "passive reception" beat. Heal already at 3 visual events (M1.4b2.1 Q3 ratification: recipient floater + recipient particles + source flash); adding portrait flash would push heal to 4 events and pre-empt M1.4b2.1 Q3's design-review-on-subtraction caveat.
+- **Q4 (portrait flash primitive).** Option B (overlay rect with alpha+scale tween, mutation-free overlay-and-destroy). Mirrors `spawnKoFlash`'s structural pattern with smaller + shorter values. § 4.5 R2 named consts from the start; do NOT inherit `spawnKoFlash`'s magic-number anti-pattern (200×200, 0.55 alpha, 600ms, 1.3 scale all inline at line 535-544).
+- **Q5 (test surface).** Helper-level + fixture-reuse only. CF 11 precedent upheld (no direct CombatScene unit tests; `tickAdvancer.test.ts:14` documents the precedent). Visual playtest at .b2.2 close is the catch mechanism for render-consumer dispatch bugs. Vampire-fang fixture (M1.4b2.1) covers source-anchor RESOLUTION on damage events; render-side dispatch is 1-line consumer not test-warrant material per CF 11.
+- **Q6 (tunable consts).** `PORTRAIT_FLASH_DURATION_MS = 150`, `PORTRAIT_FLASH_INITIAL_ALPHA = 0.45`, `PORTRAIT_FLASH_SIZE_PX = 180` (matches portrait body w/h), `PORTRAIT_FLASH_SCALE_END = 1.08`. § 4.5 R2-compliant from the start.
+
+### Phase 2 — surface changes
+
+Single file: `apps/client/src/combat/CombatScene.ts` (54 insertions / 4 deletions).
+
+- **4 new tunable consts** at the top of the file alongside existing tick-timing consts (`FLOATER_LIFETIME_MS`, `PARTICLE_LIFETIME_MS`, etc.). Comment block documents § 4.5 R2 framing + visual register rationale + comparison to `spawnKoFlash` (terminal KO event, larger/longer) and `pulsePortrait` (subtle status pulse, smaller/yoyo).
+- **New `flashPortrait(refs: PortraitRefs, color: number): void`** private method between `spawnKoFlash` and `pulsePortrait`. Color parameterized so future event types or Q3 (ii) reopen extends without primitive rewrites. Mutation-free overlay-and-destroy: `this.add.rectangle` + `setBlendMode(SCREEN)` + alpha+scale tween + `destroy()` onComplete. All four PORTRAIT_FLASH_* consts consumed.
+- **Damage block in `playEventVisuals`** updated:
+  - Comment header amended to call out M1.4b2.2 + CF 29 + Q3 (i) ratification + parameterized color rationale.
+  - `if (anchors.target)` branch — adds `const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs` + `this.flashPortrait(refs, PALETTE.lifeRed)` after existing floater + particle burst.
+  - **NEW `if (anchors.source)` branch** — `this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.squareDmg, 5)`. Symmetric to heal's source-flash from M1.4b2.1; closes CF 29.
+
+### Test count delta
+
+**0 new tests.** Per Q5 ratification: helper-level + fixture-reuse stance preserves CF 11 precedent. Vampire-fang fixture (M1.4b2.1) already covers damage source-anchor RESOLUTION on 13 damage events (8 player→ghost + 5 ghost→player); render-side CONSUMPTION is 1-line dispatch, visually verified at playtest. Workspace test count: **210 across 22 files** (unchanged from M1.4b2.1 close — 183 client / 19 + 27 ui-kit / 3).
+
+### Architectural patterns codified through M1.4b2.2 (running list)
+
+1–6 unchanged from M1.4b2.1 closing. **No new patterns.** Halt-when-premise-doesn't-match was already standing rule; its first M1.4 trip is logged but not codified anew.
+
+### Predicate-vs-name catches (running tally — 7 through M1.4b2.2)
+
+Catches 1–7 unchanged from M1.4b2.1 closing. **No new catches in M1.4b2.2**; catch 7 (M1.4b2.1 — damage table-vs-render gap) closes structurally via this milestone's CF 29 closure, but the catch itself remains tallied as historical record.
+
+### Carry-forwards delta
+
+**CLOSED:**
+- **CF 29 (damage source-render gap)** — `playEventVisuals` damage branch now consumes `anchors.source` symmetric to heal source-flash from M1.4b2.1; `spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.squareDmg, 5)` gated on non-null. Catch 7 closes structurally (the table-vs-render asymmetry the catch named no longer exists for damage).
+
+**ADVANCED (still open):**
+- **CF 1 (item-anchored VFX consumption)** — damage source-render added; 1 of 5 remaining event types covered. CF 1 stays open; closes at M1.4b2.3 with item_trigger / status_apply / stun_consumed / buff_apply / buff_remove migration. Premise-mismatch correction logged here per Q1 ratification.
+
+**OPENED:** none.
+
+**Audit verdicts (no CF created/closed):**
+- VFX-layer Container question (Q2) — option (c) audit-closed. Phaser scene root sufficient as implicit VFX layer; YAGNI rationale recorded. Revisit only if perf or z-order issue surfaces.
+
+### Verification — Turbo pipeline (all `--force`, no cache replay)
+
+`pnpm turbo lint test build --force` (single chained invocation):
+- **19 successful, 0 cached, 45.2s.**
+- Schema-sync gate green.
+- 0 new tests; 0 test-count delta vs M1.4b2.1 close baseline.
+
+### Bundle envelope (vs M1.4b2.1 `33db4cc` baseline)
+
+- main: **243.36 KB raw / 75.97 KB gz** — unchanged.
+- combat chunk: **1,508.54 KB raw / 349.50 KB gz** — **+0.42 KB raw / +0.09 KB gz** vs M1.4b2.1. Source: 4 PORTRAIT_FLASH_* consts + flashPortrait method + damage block additions; combat-chunk-only.
+- mobile chunk: **14.07 KB raw / 3.51 KB gz** — unchanged.
+- 105 modules — unchanged.
+
+### Halt-gate exercise (M1.4b2.2 Phase 1)
+
+First halt-gate exercise across M1.4 phasing. Premise mismatch caught: prompt deliverable framed CF 1 as a discrete "VFX layer" closing in M1.4b2.2; CF 1 text in `project_milestone_state.md` describes progressive consumption-coverage closing at M1.4b2.3. Standing rule (`feedback_halt_when_inputs_missing.md`) operated correctly — surfaced the gap rather than re-deriving silently. Resolution at ratification turn (no scope renegotiation): CF 1 → M1.4b2.3; CF 29 closes here; VFX layer Container question handled as one-off design call (option (c) audit-closed), not a CF closure. **No new pattern or rule codified** — this is the existing halt-gate rule operating as designed.
+
+### Going-forward rules carried from M1.4b1+
+
+All in effect, unchanged:
+- Closing-log metric framing anchors explicitly to milestone-total or vs-N-baseline.
+- `--force` on verification runs.
+- Phase 2.5 interlude precedent (no Phase 2.5 needed in .b2.2; surface clean).
+
+### Locked answers cumulative through M1.4b2.2
+
+1–30 unchanged from M1.4b2.1 closing. **No new locked answers.**
+
+---
+
 ## 2026-05-06 — M1.4b2.1 closure (heal anchor 'both' refactor + CF 26 / CF 28 closure)
 
 ### Branch + commit topology
