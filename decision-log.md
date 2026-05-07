@@ -4,6 +4,17 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-07 — Pre-M1.4b2.3 ratification
+
+Four pre-conditions locked before M1.4b2.3 Phase 2 fires; canonical record matches Phase 2's pre-state.
+
+- **CF 4 split** into 4a (item_trigger; closes M1.4b2.3) + 4b (recipe_combine; remains open, sim-emission-blocked). Rationale: parallel render surfaces with distinct sim dependencies; cleaner than partial-CF lingering past M1.4.
+- **M1.4 retro treatment**: inline section nested in M1.4b2.3 closing entry per Phase 1 § 5 outline; escalation to separate doc only if heavyweight material surfaces (M1.3.4 `5cadc15` precedent). M1.4 has no `tech-architecture.md` amendments in scope; CF 27 deferred to M1.5 retro.
+- **Stale M1.1–M1.2.6 branches** cleared post-M1.4 close, pre-M1.5 scoping.
+- **`project_milestone_state.md` retired as canonical reference.** Not present at repo root; never created. Function carried by `decision-log.md` closing entries + `roadmap.md` + manual state-dump-on-resume. Memory purged. Prompts retargeted to cite `decision-log.md` closing entries for CF text verification.
+
+---
+
 ## 2026-05-06 — M1.4b2.2 closure (VFX layer audit + portrait hit-flash + CF 29 closure)
 
 ### Branch + commit topology
