@@ -155,6 +155,29 @@ interface PortraitRefs {
   centerY: number;
 }
 
+// M1 BuffableStat schema: 'damage' | 'cooldown_pct' | 'trigger_chance_pct'
+// (packages/content/src/schemas.ts § BuffableStat). statAbbr maps 'damage' →
+// 'DMG' explicitly; other stats use defensive uppercase fallback (e.g.,
+// 'cooldown_pct' → 'COOLDOWN_PCT'). Mana Potion / Stamina Tonic / Resonance
+// Crystal exercise the fallback in M1 today. M2 stat expansion: extend the
+// explicit map if shorter abbreviations land.
+function statAbbr(stat: string): string {
+  if (stat === 'damage') return 'DMG';
+  return stat.toUpperCase();
+}
+
+/** Format a signed amount with explicit sign prefix for buff floaters
+ *  (M1.4b2.3 Phase 2.5 / Catch 8). Uses U+2212 minus to match the damage
+ *  floater convention established at playEventVisuals.damage (see
+ *  PALETTE_HEX.lifeRed floater body). Single source of truth for sign
+ *  prefix on buff_apply / buff_remove labels — replaces the prior
+ *  hard-coded '+' / '−' prefixes that produced malformed strings like
+ *  '+-15 COOLDOWN_PCT' for negative ev.amount (Mana Potion / Stamina
+ *  Tonic / Resonance Crystal cooldown_pct emitters). */
+function formatSignedAmount(amount: number): string {
+  return (amount >= 0 ? '+' : '−') + Math.abs(amount);
+}
+
 export class CombatScene extends Phaser.Scene {
   static readonly KEY = 'CombatScene';
 
@@ -384,11 +407,19 @@ export class CombatScene extends Phaser.Scene {
         this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.plusHeal, 5);
       }
     } else if (ev.type === 'status_apply') {
-      // UNTOUCHED — status_apply migration is M1.4b2 territory
-      // (uses pulsePortrait + refreshBurnPip which still need refs).
+      // M1.4b2.3: floater migrates to anchor-based per Q1 closure
+      // criterion (heal precedent — at least one anchor-based call
+      // satisfies CF 1's "consumes resolveEventAnchors"). pulsePortrait
+      // + refreshBurnPip stay refs-based; they manipulate sprite-internal
+      // state (border scale tween + child container at portrait offset),
+      // not item-anchored. Byte-equivalent floater output by construction
+      // via PORTRAIT_*_RATIO single-source (Pattern #4, M1.4a).
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
       const label = ev.status.toUpperCase() + ' ×' + String(ev.stacks);
-      this.spawnFloater(refs, label, PALETTE_HEX.rarityLegendary, true);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.rarityLegendary, true);
+      }
       this.pulsePortrait(refs);
       this.refreshBurnPip(refs, this.burnStacks[ev.target]);
     } else if (ev.type === 'status_tick') {
@@ -399,15 +430,65 @@ export class CombatScene extends Phaser.Scene {
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
+    } else if (ev.type === 'item_trigger') {
+      // M1.4b2.3: brief "item activated" beat at the source anchor.
+      // ANCHOR_RULE.item_trigger='source'. Reuses TEX.lineHit (thin red
+      // line, previously unused) at count=2 for visual subordination
+      // vs damage/heal source flashes (count=5). Temporal stacking with
+      // co-tick damage/heal source flashes at the same anchor is
+      // intentional — reads as a synergy chain rather than collision
+      // (Q2 ratification). CF 4a closure.
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.source) {
+        this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 2);
+      }
+    } else if (ev.type === 'buff_apply') {
+      // M1.4b2.3: item-anchored "+stat" beat. ANCHOR_RULE.buff_apply='target'
+      // where target is an ItemRef (buff hops item-to-item; resolveItem
+      // returns item position with portrait fallback). Reuses TEX.plusHeal
+      // (positive feel) at count=3 (smaller than heal=5 for hierarchy).
+      // statAbbr handles M1 'damage' → 'DMG'; defensive uppercase fallback
+      // for M2 stat expansion (CF 25 closure).
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        const label = formatSignedAmount(ev.amount) + ' ' + statAbbr(ev.stat);
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.rarityUncommon, true);
+        this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.plusHeal, 3);
+      }
+    } else if (ev.type === 'buff_remove') {
+      // M1.4b2.3: floater-only "−stat" beat per Q3 override. NO particle
+      // burst — TEX.squareStatus would conflate with status_tick;
+      // TEX.lineHit at textSecondary would conflate with item_trigger.
+      // Floater-only creates clean buff_apply/buff_remove asymmetry
+      // mirroring gain/loss semantics (apply has the burst; remove
+      // doesn't). target is ItemRef, same resolution path as buff_apply.
+      // CF 25 closure.
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        const label = formatSignedAmount(-ev.amount) + ' ' + statAbbr(ev.stat);
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.textSecondary, true);
+      }
+    } else if (ev.type === 'stun_consumed') {
+      // M1.4b2.3: "missed action" beat. ANCHOR_RULE.stun_consumed='target'
+      // where target is the side whose pendingStun was consumed (EntityRef
+      // → portraitAnchor). Reuses pulsePortrait (subtle scale yoyo, same
+      // primitive used by status_apply) + a dim 'STUN' floater at the
+      // target portrait. No particle burst (would read as damage). CF 25
+      // closure.
+      const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, 'STUN', PALETTE_HEX.textSecondary, true);
+      }
+      this.pulsePortrait(refs);
     } else if (ev.type === 'combat_end') {
       this.cameras.main.shake(SHAKE_DURATION_MS, SHAKE_INTENSITY);
       const koSide: EntityRef = ev.outcome === 'player_win' ? 'ghost' : 'player';
       const refs = koSide === 'player' ? this.playerRefs : this.ghostRefs;
       this.spawnKoFlash(refs);
     }
-    // item_trigger / recipe_combine / buff_apply / buff_remove /
-    // stun_consumed: no scene-level VFX in M1.3.4b — those need item
-    // anchoring, deferred to M1.4 with the BagLayout handshake.
+    // All event types except recipe_combine consume resolveEventAnchors.
+    // CF 4b open, sim-emission-blocked (recipe_combine not in CombatEvent union).
   }
 
   // ─────────────────────────────────────────────────────────────────
