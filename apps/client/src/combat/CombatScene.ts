@@ -178,6 +178,24 @@ function formatSignedAmount(amount: number): string {
   return (amount >= 0 ? '+' : '−') + Math.abs(amount);
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Dev-mode playback state (CF 31). Module-level WeakMap keyed by scene
+// instance; production gets `null` here (no class fields, no instance
+// properties — byte-zero production guarantee per CF 31 ratification).
+// All consumer sites in CombatScene are gated by literal
+// `if (import.meta.env.DEV)` so Vite/esbuild DCE folds the entire feature
+// out at production build time. Pattern #7 candidate (do NOT codify yet
+// — codify on second dev-only-scene-state instance per standing
+// convention).
+// ─────────────────────────────────────────────────────────────────────
+interface DevPlaybackState {
+  paused: boolean;
+  stepRequested: boolean;
+}
+
+const DEV_PLAYBACK_STATE: WeakMap<CombatScene, DevPlaybackState> | null =
+  import.meta.env.DEV ? new WeakMap() : null;
+
 export class CombatScene extends Phaser.Scene {
   static readonly KEY = 'CombatScene';
 
@@ -261,6 +279,36 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
     this.headerLabel.setLetterSpacing(4);
+
+    // CF 31: dev-mode pause/step keybindings. Literal-gated so Vite DCE
+    // folds the entire block out of production. Space toggles pause;
+    // Right Arrow steps to next event-bearing tick (per Q1 — currentTick+1
+    // would bounce through dead-time intervals where nothing renders).
+    if (import.meta.env.DEV) {
+      DEV_PLAYBACK_STATE!.set(this, { paused: false, stepRequested: false });
+      this.input.keyboard?.on('keydown-SPACE', () => {
+        const state = DEV_PLAYBACK_STATE!.get(this);
+        if (!state) return;
+        state.paused = !state.paused;
+        // CF 31 Phase 2.5 / Catch 9: scene.update() early-return alone
+        // doesn't freeze the Phaser tween manager (independent update
+        // loop). Pause/resume the tween manager alongside the paused
+        // flag so HP-bar tweens, floaters, particles, KO flash, and
+        // portrait pulse all freeze at the inspected frame.
+        if (state.paused) {
+          this.tweens.pauseAll();
+        } else {
+          this.tweens.resumeAll();
+        }
+        console.log('[CombatScene] paused:', state.paused);
+      });
+      this.input.keyboard?.on('keydown-RIGHT', () => {
+        const state = DEV_PLAYBACK_STATE!.get(this);
+        if (!state || !state.paused) return; // strict gate per Q4
+        state.stepRequested = true;
+        console.log('[CombatScene] step requested at tick', this.currentTick);
+      });
+    }
   }
 
   update(_time: number, delta: number): void {
@@ -273,6 +321,32 @@ export class CombatScene extends Phaser.Scene {
         this.onCombatEnd();
       }
       return;
+    }
+
+    // CF 31: dev-mode pause/step gate. Literal-gated so Vite DCE folds
+    // the entire block out of production. Pause halts mid-combat
+    // playback; resolved-settle above is intentionally NOT gated (settle
+    // is a wait-and-fire-callback phase, not a render phase). Step =
+    // jump to next event-bearing tick + flush events; re-pauses next
+    // frame.
+    if (import.meta.env.DEV) {
+      const state = DEV_PLAYBACK_STATE!.get(this);
+      if (state?.paused) {
+        if (state.stepRequested) {
+          state.stepRequested = false;
+          const nextEventTick = findNextEventTick(this.combatEvents, this.nextEventIdx);
+          if (nextEventTick !== null) {
+            this.currentTick = nextEventTick;
+            this.flushEventsAtCurrentTick(); // spawns new tweens (auto-start)
+            // CF 31 Phase 2.5 / Catch 9: freeze including newly-spawned
+            // tweens. Synchronous JS execution guarantees pauseAll runs
+            // before any frame renders, so new tweens get paused at
+            // their initial state (frame-perfect freeze).
+            this.tweens.pauseAll();
+          }
+        }
+        return;
+      }
     }
 
     // Flush any pending events at currentTick before the helper decides

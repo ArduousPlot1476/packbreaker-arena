@@ -4,6 +4,103 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-07 — CF 31 closed (dev-mode scene pause/step keybinding)
+
+### Branch + commit topology
+
+Branch `cf-31-dev-pause-step` off main `125cfe4` (clean — M1.4 close + post-merge stale branch cleanup baseline).
+
+| SHA | Sub-phase | Scope |
+|-----|-----------|-------|
+| (no commit) | Phase 1 | Read-only investigation + design halt-gate. Five-section report covering tick architecture / existing input bindings / step-tick mechanism / feedback / bundle-zero verification plan. Six Q&A ratifications. Phase 2 tightening: literal-gated `if (import.meta.env.DEV)` at use sites for bulletproof DCE. |
+| `be29d56` | Phase 2   | Implementation: module-level `DEV_PLAYBACK_STATE` WeakMap (byte-zero pattern) + literal-gated `create()` keybinding registration + literal-gated `update()` pause/step gate. Two files: `apps/client/src/combat/CombatScene.ts` (+59) + new `apps/client/src/vite-env.d.ts` (+6). |
+
+### Implementation
+
+Pause/resume on Space; step-tick on Right Arrow per Q1 ratification (jump to next event-bearing tick via existing `findNextEventTick` helper, NOT `currentTick + 1` — would bounce through dead-time intervals where nothing renders, defeating frame-perfect render isolation intent).
+
+All state + handlers gated by literal `if (import.meta.env.DEV)` for guaranteed Vite/esbuild DCE. Module-level `DEV_PLAYBACK_STATE: WeakMap<CombatScene, DevPlaybackState> | null` holds dev state outside the class so production class has zero new instance properties — see byte-zero verification below.
+
+`console.log` feedback on pause toggle + step request per Phase 1 §4 recommendation (dev-only; users never see this; line-line ordering against playback events at same level useful for diff against rendered frame).
+
+Strict pause-gate on Right Arrow per Q4: only acts when `state.paused === true`. No auto-pause-and-step. Single-meaning per key.
+
+New file `apps/client/src/vite-env.d.ts`: `/// <reference types="vite/client" />` so `import.meta.env.DEV` typechecks. No prior code in client referenced `import.meta.env`; the d.ts addition surfaces during Phase 2 build, mirrors existing `vitest.d.ts` triple-slash precedent in the same dir.
+
+**Pattern #7 candidate (do NOT codify yet).** The "module-level WeakMap for byte-zero production gating of dev-only instance state on production classes" is a real pattern with broad applicability (future dev-mode debug overlays, test instrumentation, any instance-scoped dev tooling). One-instance data point. Per standing convention, codify on second instance. Pattern tally stays at 6 through CF 31 closure.
+
+### Bundle audit (load-bearing)
+
+Production bundle BYTE-IDENTICAL to `125cfe4` baseline (M1.4b2.3 close):
+- main: **243.36 KB raw / 75.97 KB gz** — unchanged.
+- combat: **1,509.65 KB raw / 349.67 KB gz** — unchanged.
+- mobile: **14.07 KB raw / 3.51 KB gz** — unchanged.
+- modules: **105** — unchanged.
+
+Vite + esbuild DCE worked as designed: `import.meta.env.DEV` literal at use sites substituted with `false` at production build time → `if (false)` blocks folded → module-level `const DEV_PLAYBACK_STATE = false ? new WeakMap() : null` folded to `null` → unused declaration tree-shaken entirely. Confirms the `if (import.meta.env.DEV)` literal-gate pattern works as documented (Phase 2 tightening over Phase 1's `if (DEV_PLAYBACK_STATE)` truthy-check pattern; original would likely have produced byte-identical too, but literal-gate is the recommended shape going forward).
+
+Dev bundle delta not directly measurable via `vite build --mode development` (DEV literal is tied to build command, not --mode flag; `vite build` always sets DEV to false). Source-inspection estimate: ~57 lines of dev-only code added (interface + WeakMap initialization + 2 keybinding handlers + update() gate + comments), minified to ~1-2 KB raw. Under the 5 KB raw halt-and-surface threshold per Q6.
+
+### Test count delta
+
+0 new tests; workspace **210 / 22** unchanged; sim **466 active + 1 manually-gated** unchanged. Per CF 11 + dev-only-tooling stance.
+
+### CF 31 closed
+
+Open count entering M1.5: **25 carry-forwards** (was 26 at M1.4 close; CF 31 closed). Specifically: CF 2/3/5–24 except closures + CF 4b + CF 27 + CF 30 (CF 31 dropped from open list).
+
+### No new patterns / catches / rules / locked answers
+
+- **Patterns**: 6 cumulative (no change). Pattern #7 candidate noted in Implementation section above.
+- **Catches**: 9 cumulative (Catch 9 in CF 31 Phase 2.5; see Phase 2.5 subsection below).
+- **Going-forward rules**: 3 cumulative (no change).
+- **Locked answers**: 30 cumulative (no change).
+
+### Visual playtest gate going forward
+
+Future milestones use Space-pause + Right-Arrow-step for frame-isolated render verification. M1.4b2.3's diff-inspection-clearance precedent remains a one-time concession; CF 11's helper-level + visual-playtest catch hierarchy returns to standard form for M1.5+.
+
+### Verification — Turbo pipeline (`--force`, no cache replay)
+
+`pnpm turbo lint test build --force` (single chained invocation): **19 successful, 0 cached, 42.2s.** Schema-sync gate green.
+
+### Phase 1 ratifications confirmed pre-Phase-2
+
+- **Q1 step-tick semantic**: next event-bearing tick (matches frame-perfect render isolation intent; `currentTick + 1` would bounce through dead time).
+- **Q2 module-level WeakMap pattern**: strict byte-zero confirmed (load-bearing). Class fields would leak two instance properties into production constructor.
+- **Q3 keybindings**: Space (pause/resume) + Right Arrow (step) — standard media-player UX.
+- **Q4 strict pause-gate on Right Arrow**: confirmed (no auto-pause-and-step).
+- **Q5 closing-log timing**: fresh dated entry per append-only discipline. M1.4b2.3 closing entry stays frozen as historical record at `537b2f5`.
+- **Q6 dev-build budget**: ≤5 KB raw soft cap; production byte-identity is load-bearing. Estimate well under cap.
+
+### Phase 2 tightening (over Phase 1 design)
+
+Direct literal `if (import.meta.env.DEV)` at use sites (not `if (DEV_PLAYBACK_STATE)` truthy-check on the WeakMap variable). Belt-and-suspenders for DCE: ensures Vite's documented constant-folding kicks in regardless of how aggressively esbuild propagates const-bindings. Module-level WeakMap pattern preserved (production gets `const DEV_PLAYBACK_STATE = null` — unused declaration tree-shaken). Net: bulletproof byte-zero, no semantic change from Phase 1's design.
+
+### CF 31 Phase 2.5 — Codex P2 catch + tween-pause fix
+
+#### Trigger
+
+PR #12 Codex automated review (2026-05-07) flagged P2: dev-mode pause via `update()` early-return doesn't freeze Phaser tween manager (independent update loop); pressed Right Arrow while paused renders new event for one frame and tweens keep animating during supposed pause; frame-perfect inspection — CF 31's whole purpose — doesn't work as built.
+
+#### Fix
+
+Added `this.tweens.pauseAll()` / `this.tweens.resumeAll()` calls inside the existing `import.meta.env.DEV`-gated blocks. Space toggle now pauses/resumes tween manager alongside the paused flag. Step handler calls `tweens.pauseAll()` AFTER `flushEventsAtCurrentTick` to freeze newly-spawned tweens at their initial state (synchronous JS execution guarantees pauseAll runs before any frame renders).
+
+#### Catch 9 (predicate-vs-name lineage)
+
+Same class as catches 5/6/7/8. Predicate: "early-return from `update()` = scene paused." Name: scene's tween manager has its own update loop independent of `scene.update()`. Caught by Codex automated review at PR time; halt-gate + Phase 1 design verification didn't surface it.
+
+#### Process learning
+
+Second consecutive PR where Codex external review catches a real architectural bug post-implementation (Catch 8 in M1.4b2.3 PR; Catch 9 in CF 31 PR). External review with full-codebase context catches what change-site-scoped halt-gate misses. Pattern surfacing: external automated review is becoming a load-bearing catch mechanism. Worth examining in pre-M1.5 retro.
+
+#### Verification
+
+Bundle: production BYTE-IDENTICAL to `125cfe4` (load-bearing constraint preserved; tween calls added inside existing gates). Dev: combat chunk +~0.1 KB raw. Tests: 210/22 unchanged. Visual playtest: user confirmed tween freeze works on Space press; Right Arrow advances and immediately freezes; Space resumes; frame-perfect inspection now functional as designed.
+
+---
+
 ## 2026-05-07 — M1.4b2.3 closed (net-new VFX surfaces + CF 1/4a/25 closure) + M1.4b2 closed + M1.4 closed
 
 ### Branch + commit topology
