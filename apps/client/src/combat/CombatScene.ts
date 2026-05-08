@@ -155,14 +155,27 @@ interface PortraitRefs {
   centerY: number;
 }
 
-/** Buff stat label abbreviation for buff_apply / buff_remove floaters
- *  (M1.4b2.3, Q6 ratified). M1: only 'damage' BuffableStat; abbreviation
- *  'DMG'. M2 stat expansion requires growing the abbreviation map (see
- *  content-schemas.ts BuffableStat). Defensive default: uppercase the
- *  raw stat name for any future stat unrecognized by this map. */
+// M1 BuffableStat schema: 'damage' | 'cooldown_pct' | 'trigger_chance_pct'
+// (packages/content/src/schemas.ts § BuffableStat). statAbbr maps 'damage' →
+// 'DMG' explicitly; other stats use defensive uppercase fallback (e.g.,
+// 'cooldown_pct' → 'COOLDOWN_PCT'). Mana Potion / Stamina Tonic / Resonance
+// Crystal exercise the fallback in M1 today. M2 stat expansion: extend the
+// explicit map if shorter abbreviations land.
 function statAbbr(stat: string): string {
   if (stat === 'damage') return 'DMG';
   return stat.toUpperCase();
+}
+
+/** Format a signed amount with explicit sign prefix for buff floaters
+ *  (M1.4b2.3 Phase 2.5 / Catch 8). Uses U+2212 minus to match the damage
+ *  floater convention established at playEventVisuals.damage (see
+ *  PALETTE_HEX.lifeRed floater body). Single source of truth for sign
+ *  prefix on buff_apply / buff_remove labels — replaces the prior
+ *  hard-coded '+' / '−' prefixes that produced malformed strings like
+ *  '+-15 COOLDOWN_PCT' for negative ev.amount (Mana Potion / Stamina
+ *  Tonic / Resonance Crystal cooldown_pct emitters). */
+function formatSignedAmount(amount: number): string {
+  return (amount >= 0 ? '+' : '−') + Math.abs(amount);
 }
 
 export class CombatScene extends Phaser.Scene {
@@ -438,7 +451,7 @@ export class CombatScene extends Phaser.Scene {
       // for M2 stat expansion (CF 25 closure).
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
-        const label = '+' + String(ev.amount) + ' ' + statAbbr(ev.stat);
+        const label = formatSignedAmount(ev.amount) + ' ' + statAbbr(ev.stat);
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.rarityUncommon, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.plusHeal, 3);
       }
@@ -452,7 +465,7 @@ export class CombatScene extends Phaser.Scene {
       // CF 25 closure.
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
-        const label = '−' + String(ev.amount) + ' ' + statAbbr(ev.stat);
+        const label = formatSignedAmount(-ev.amount) + ' ' + statAbbr(ev.stat);
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.textSecondary, true);
       }
     } else if (ev.type === 'stun_consumed') {

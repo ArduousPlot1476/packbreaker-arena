@@ -57,9 +57,9 @@ Floater-only preserves a clean buff_apply/buff_remove **asymmetry** mirroring th
 
 1–6 unchanged from M1.4b2.1 closing. **No new patterns in M1.4b2.3.**
 
-### Predicate-vs-name catches (running tally — 7 through M1.4b2.3)
+### Predicate-vs-name catches (running tally — 8 through M1.4b2.3)
 
-Catches 1–7 unchanged. **No new catches in M1.4b2.3** — Phase 1 halt-gate cleared without surfacing premise mismatches.
+Catches 1–7 unchanged from prior closings. **Catch 8 added in M1.4b2.3 Phase 2.5** (Codex P2 review at PR time; buff label sign-prefix format vs signed `ev.amount`; closed structurally with `formatSignedAmount` helper). Phase 1 halt-gate cleared without surfacing premise mismatches; Catch 8 was caught at PR-time external review. See Phase 2.5 subsection below.
 
 ### Carry-forwards delta
 
@@ -135,12 +135,13 @@ All in effect, unchanged. **No new rules in M1.4b2.3.**
 
 (All 6 patterns originate within M1.4; cumulative pre-M1.4 was 0. See §6 deviation note for attribution-correction history.)
 
-#### Predicate-vs-name catches caught — 3 new in M1.4 (running total 7)
+#### Predicate-vs-name catches caught — 4 new in M1.4 (running total 8)
 
 - **Catch 5 (M1.4b1 Phase 1):** ANCHOR_RULE.heal='source' design vs heal-at-target render. Closed structurally M1.4b2.1 (heal flipped to 'both' + source-side render added).
 - **Catch 6 (M1.4b1 Phase 3 → Phase 2.5):** "pipeline green" predicate vs cache-replayed reality. Closed structurally Phase 2.5 + `--force` rule.
 - **Catch 7 (M1.4b2.1 Phase 1):** ANCHOR_RULE.damage='both' table vs target-only render. Closed structurally M1.4b2.2 (CF 29 closure adds source-side damage render).
-- **No new catches in M1.4b2.2 or M1.4b2.3.**
+- **Catch 8 (M1.4b2.3 PR review — Codex automated review):** buff_apply / buff_remove label format hard-codes sign prefix; `ev.amount` can be negative under M1 BuffableStat schema (cooldown_pct emitters); produced malformed labels `'+-15 COOLDOWN_PCT'`. Closed structurally M1.4b2.3 Phase 2.5 (`formatSignedAmount` helper). See Phase 2.5 subsection below.
+- **No new catches in M1.4b2.2; Catch 8 in M1.4b2.3 Phase 2.5.**
 
 #### Going-forward rules codified — 3 new in M1.4
 
@@ -208,6 +209,49 @@ All originate M1.4b1 closing (`86d729e`, 2026-05-06):
   31. **CF 31 (NEW M1.4b2.3)** — Dev-mode scene pause/step keybinding for visual playtest tooling. Pre-M1.5 ride-along commit, ~15-20 LOC, dev-only. Surfaced by M1.4b2.3 visual playtest attempt.
 
 Open count entering M1.5: **26 carry-forwards** (CF 2/3/5–24 except closures + CF 4b + CF 27 + CF 30 + CF 31).
+
+### M1.4b2.3 Phase 2.5 — Codex P2 catch + buff sign-handling fix
+
+#### Trigger
+
+PR #11 Codex automated review (2026-05-07) flagged P2: `buff_apply` / `buff_remove` label format hard-codes sign prefix; `ev.amount` can be negative under M1 BuffableStat schema; produces malformed labels like `'+-15 COOLDOWN_PCT'` (apply) / `'−-15 COOLDOWN_PCT'` (remove). Three M1 production items affected: **Mana Potion** (`packages/content/src/items.ts:218-230`, `cooldown_pct` -15), **Stamina Tonic** (`packages/content/src/items.ts:397-409`, `cooldown_pct` -25), **Resonance Crystal** (`packages/content/src/items.ts:637-652`, `cooldown_pct` -10).
+
+#### Fix
+
+New `formatSignedAmount` helper at module level in `CombatScene.ts`, alongside `statAbbr`:
+
+```typescript
+function formatSignedAmount(amount: number): string {
+  return (amount >= 0 ? '+' : '−') + Math.abs(amount);
+}
+```
+
+`buff_apply` branch uses `formatSignedAmount(ev.amount)`; `buff_remove` branch uses `formatSignedAmount(-ev.amount)` (inverse — buff lifted means the player loses the buff that was applied). U+2212 minus matches damage floater convention. Single source of truth for sign convention; mirrors `statAbbr` helper pattern.
+
+#### Truth-table verification
+
+- `buff_apply` +1 dmg → `+1 DMG`
+- `buff_apply` −15 cdr → `−15 COOLDOWN_PCT`
+- `buff_remove` +1 lifted → `−1 DMG`
+- `buff_remove` −15 lifted → `+15 COOLDOWN_PCT`
+
+#### Catch 8 (predicate-vs-name lineage)
+
+Same class as catches 5/6/7. Predicate (hard-coded sign prefix in label format) didn't match data shape (signed `ev.amount`). Caught by Codex automated review at PR time; halt-gate + Phase 1 design-verification chain didn't surface it. Process learning: PR-time external review (automated or human) catches a class of bugs the internal halt-gate process can miss. The pre-paste-check + halt-gate + Phase 1 design verification chain is necessary but not sufficient; PR-time external review (Codex or human) catches the residual. Closes structurally with this Phase 2.5 commit.
+
+#### Phase 1 §2 epistemic failure (two axes documented for process tightening)
+
+**Axis A — line-citation drift.** Phase 1 §2 cited `decision-log.md:1116` for BuffableStat scope claim. Line 1116 today references unrelated content (boss-relic threshold asymmetry from M1.2.6 closing). Decision-log is newest-at-top append-only; line numbers shift on every append. **Going-forward discipline (effective 2026-05-07):** cite decision-log entries by date + section header (e.g., `decision-log.md 2026-04-30 § M1.2.6 boss-relic coverage residual gap`), NOT by raw line number. **First exercise within hours of codification:** at Phase 2.5 continuation prompt's Addition 2 substitution, the bundled-comment-fix sentence cited `CombatScene.ts:165-169` (raw line numbers, axis A violation; also off-by-7 since actual location is lines 158-162 — concrete instance of the predicted line-shift failure mode the rule was authored to prevent). Caught by Claude Code halt-gate; corrected to `CombatScene.ts § statAbbr docblock` pre-commit.
+
+**Axis B — content-side evidence gap.** Phase 1 §2 asserted "M1 content uses 'damage' only (whetstone redundant fixture)" by verifying the `BuffableStat` schema union but NOT grepping `packages/content/` for actual emissions. Reality: `BuffableStat` schema is `'damage' | 'cooldown_pct' | 'trigger_chance_pct'` (`packages/content/src/schemas.ts:170`); `items.ts` emits all three. The "M1 only emits 'damage'" claim was a narrative invention not supported by the cited evidence. **Going-forward discipline candidate** (one-instance data point; codify on second instance per standing pattern): schema-vs-content claims require BOTH schema-side AND content-side evidence. One grep `schemas/`, one grep `content/`, before asserting scope. Bundled with this Phase 2.5 commit: statAbbr's docblock at CombatScene.ts § statAbbr docblock amended to reflect actual M1 scope (mapped 'damage' explicitly + defensive fallback for cooldown_pct / trigger_chance_pct), removing the factually-false 'M1: only 'damage' BuffableStat' framing.
+
+#### Visual playtest gate
+
+Maintained at diff-inspection clearance per CF 31 framing. Truth-table-verifiable change with no new render primitives or dispatch logic. Fix reuses the diff-inspection-clearance precedent established earlier in M1.4b2.3. No new event types; `formatSignedAmount` is a 2-line pure helper called only at the two updated label sites; truth-table covers all four sign × event-type combinations.
+
+#### Verification
+
+`pnpm turbo lint test build --force` (single chained invocation): **19 successful, 0 cached, 35.1s.** Workspace tests **210 across 22 files** unchanged; sim **466 active + 1 manually-gated** unchanged; **0 new tests** (per CF 11 stance + truth-table verification). Bundle delta vs `537b2f5` (M1.4b2.3 Phase 2 close): combat chunk **+0.04 KB raw / +0.02 KB gz** (1,509.61 → 1,509.65 raw; 349.65 → 349.67 gz); main + mobile unchanged; **105 modules unchanged** (`formatSignedAmount` inlined into existing CombatScene.ts module). CF count entering M1.5: **26 unchanged** (no CF changes from this fix; Catch 8 amends running tally only).
 
 ---
 
