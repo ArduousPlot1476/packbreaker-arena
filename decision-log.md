@@ -52,7 +52,7 @@ Open count entering M1.5: **25 carry-forwards** (was 26 at M1.4 close; CF 31 clo
 ### No new patterns / catches / rules / locked answers
 
 - **Patterns**: 6 cumulative (no change). Pattern #7 candidate noted in Implementation section above.
-- **Catches**: 8 cumulative (no change).
+- **Catches**: 9 cumulative (Catch 9 in CF 31 Phase 2.5; see Phase 2.5 subsection below).
 - **Going-forward rules**: 3 cumulative (no change).
 - **Locked answers**: 30 cumulative (no change).
 
@@ -76,6 +76,28 @@ Future milestones use Space-pause + Right-Arrow-step for frame-isolated render v
 ### Phase 2 tightening (over Phase 1 design)
 
 Direct literal `if (import.meta.env.DEV)` at use sites (not `if (DEV_PLAYBACK_STATE)` truthy-check on the WeakMap variable). Belt-and-suspenders for DCE: ensures Vite's documented constant-folding kicks in regardless of how aggressively esbuild propagates const-bindings. Module-level WeakMap pattern preserved (production gets `const DEV_PLAYBACK_STATE = null` — unused declaration tree-shaken). Net: bulletproof byte-zero, no semantic change from Phase 1's design.
+
+### CF 31 Phase 2.5 — Codex P2 catch + tween-pause fix
+
+#### Trigger
+
+PR #12 Codex automated review (2026-05-07) flagged P2: dev-mode pause via `update()` early-return doesn't freeze Phaser tween manager (independent update loop); pressed Right Arrow while paused renders new event for one frame and tweens keep animating during supposed pause; frame-perfect inspection — CF 31's whole purpose — doesn't work as built.
+
+#### Fix
+
+Added `this.tweens.pauseAll()` / `this.tweens.resumeAll()` calls inside the existing `import.meta.env.DEV`-gated blocks. Space toggle now pauses/resumes tween manager alongside the paused flag. Step handler calls `tweens.pauseAll()` AFTER `flushEventsAtCurrentTick` to freeze newly-spawned tweens at their initial state (synchronous JS execution guarantees pauseAll runs before any frame renders).
+
+#### Catch 9 (predicate-vs-name lineage)
+
+Same class as catches 5/6/7/8. Predicate: "early-return from `update()` = scene paused." Name: scene's tween manager has its own update loop independent of `scene.update()`. Caught by Codex automated review at PR time; halt-gate + Phase 1 design verification didn't surface it.
+
+#### Process learning
+
+Second consecutive PR where Codex external review catches a real architectural bug post-implementation (Catch 8 in M1.4b2.3 PR; Catch 9 in CF 31 PR). External review with full-codebase context catches what change-site-scoped halt-gate misses. Pattern surfacing: external automated review is becoming a load-bearing catch mechanism. Worth examining in pre-M1.5 retro.
+
+#### Verification
+
+Bundle: production BYTE-IDENTICAL to `125cfe4` (load-bearing constraint preserved; tween calls added inside existing gates). Dev: combat chunk +~0.1 KB raw. Tests: 210/22 unchanged. Visual playtest: user confirmed tween freeze works on Space press; Right Arrow advances and immediately freezes; Space resumes; frame-perfect inspection now functional as designed.
 
 ---
 

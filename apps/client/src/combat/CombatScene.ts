@@ -290,6 +290,16 @@ export class CombatScene extends Phaser.Scene {
         const state = DEV_PLAYBACK_STATE!.get(this);
         if (!state) return;
         state.paused = !state.paused;
+        // CF 31 Phase 2.5 / Catch 9: scene.update() early-return alone
+        // doesn't freeze the Phaser tween manager (independent update
+        // loop). Pause/resume the tween manager alongside the paused
+        // flag so HP-bar tweens, floaters, particles, KO flash, and
+        // portrait pulse all freeze at the inspected frame.
+        if (state.paused) {
+          this.tweens.pauseAll();
+        } else {
+          this.tweens.resumeAll();
+        }
         console.log('[CombatScene] paused:', state.paused);
       });
       this.input.keyboard?.on('keydown-RIGHT', () => {
@@ -327,7 +337,12 @@ export class CombatScene extends Phaser.Scene {
           const nextEventTick = findNextEventTick(this.combatEvents, this.nextEventIdx);
           if (nextEventTick !== null) {
             this.currentTick = nextEventTick;
-            this.flushEventsAtCurrentTick();
+            this.flushEventsAtCurrentTick(); // spawns new tweens (auto-start)
+            // CF 31 Phase 2.5 / Catch 9: freeze including newly-spawned
+            // tweens. Synchronous JS execution guarantees pauseAll runs
+            // before any frame renders, so new tweens get paused at
+            // their initial state (frame-perfect freeze).
+            this.tweens.pauseAll();
           }
         }
         return;
