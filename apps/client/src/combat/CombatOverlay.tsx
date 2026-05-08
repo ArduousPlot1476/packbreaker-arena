@@ -60,17 +60,21 @@ const M1_PROTOTYPE_CLASS_LABEL = 'Tinker';
 // to see. Switching the check to event-content protects against that.
 //
 // `recipe_combine` is intentionally absent: it is not a member of the
-// CombatEvent union (only listed in CombatScene.ts:337 as a future
-// type). `stun_consumed` / `buff_apply` / `buff_remove` are intentionally
-// absent too — the scene currently renders no VFX for them, so mounting
-// Phaser to play one of those alone would re-introduce a "scene appears
-// frozen" halt-gate. Add them here once their VFX lands (M1.4+).
+// CombatEvent union (sim doesn't emit; CF 4b open, deferred until M2
+// content sweep). `combat_start` / `combat_end` are also absent as
+// universal (every combat emits one of each, so they're uninformative
+// for the "is this combat worth mounting Phaser for" predicate). Net
+// coverage: 8 of 10 CombatEvent['type'] members, post-M1.4b2.3 lockstep
+// with the new render paths in CombatScene.playEventVisuals.
 const MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']> = new Set([
   'damage',
   'heal',
   'status_apply',
   'status_tick',
   'item_trigger',
+  'stun_consumed',
+  'buff_apply',
+  'buff_remove',
 ]);
 // Phaser RESIZE mode adapts to the actual parent size after the first
 // layout tick; createCombatGame falls back to safe non-zero defaults
