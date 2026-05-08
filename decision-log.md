@@ -4,6 +4,213 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-07 — M1.4b2.3 closed (net-new VFX surfaces + CF 1/4a/25 closure) + M1.4b2 closed + M1.4 closed
+
+### Branch + commit topology
+
+Branch: `m1.4b2.3-net-new-vfx` off main `5722839` (clean — 2026-05-07 pre-M1.4b2.3 ratification setup commit; docs-only, functionally identical to M1.4b2.2 baseline at `936e2339`).
+
+| SHA       | Sub-phase | Scope |
+|-----------|-----------|-------|
+| (no commit) | Phase 1 | Read-only investigation + design halt-gate. Six-section report covering 12 tasks; eight Q&A ratifications; no premise mismatches surfaced. |
+| `4a29152` | Phase 2   | Implementation: 4 new event-type render branches (item_trigger / buff_apply / buff_remove / stun_consumed) + status_apply floater migration + statAbbr helper + stale-comment cleanup + MEANINGFUL_EVENT_TYPES lockstep. Two files: `CombatScene.ts` (+76/-4) + `CombatOverlay.tsx` (+11/-3); 83 insertions / 11 deletions total. |
+
+### Phase 1 ratifications
+
+Eight questions ratified pre-implementation (Q4 ratified by 2026-05-07 setup commit `5722839`; remaining 7 ratified inline). Two prompt-rec overrides: Q3 (buff_remove → floater-only) and the implicit reconfirmation that no new tests/fixtures land per CF 11.
+
+- **Q1 (CF 1 closure interpretation):** at-least-one-anchor-based-call satisfies CF 1 (heal precedent from M1.4b2.1 Q3). status_apply migration limited to floater; pulsePortrait + refreshBurnPip stay refs-based for portrait-internal manipulation.
+- **Q2 (item_trigger render):** `spawnParticleBurstAt(source, TEX.lineHit, 2)`. Reuses unused TEX.lineHit; count=2 (vs damage/heal=5) for visual subordination; temporal stacking with co-tick damage/heal source flashes is intentional — reads as synergy chain.
+- **Q3 (buff_remove render):** **OVERRIDE** of Phase 1 recommendation. Floater-only; NO particle burst. Rationale: TEX.squareStatus would conflate with status_tick; TEX.lineHit at textSecondary would conflate with item_trigger. Floater-only creates clean buff_apply/buff_remove asymmetry mirroring gain/loss semantics (apply has the burst; remove doesn't).
+- **Q4 (M1.4 retro structure):** inline section nested in M1.4b2.3 closing entry; single closing-log commit. Confirmed by setup commit `5722839` entry text 2026-05-07.
+- **Q5 (phasing):** single Phase 2 commit. No internal sub-phase split.
+- **Q6 (floater labels):** `'+1 DMG'` / `'−1 DMG'` for buff_apply / buff_remove. statAbbr helper (M1: `'damage'` → `'DMG'`; defensive uppercase fallback for M2 stat expansion).
+- **Q7 (particle counts):** inline counts per existing damage=5 / heal=5 / status_tick=3 style. NO const promotion. **CF 30 opened** (deferred — see Carry-forwards delta).
+- **Q8 (comment cleanup):** stale comment at end of `playEventVisuals` replaced with `// All event types except recipe_combine consume resolveEventAnchors. // CF 4b open, sim-emission-blocked (recipe_combine not in CombatEvent union).`
+
+### Phase 2 — surface changes
+
+Two files: `apps/client/src/combat/CombatScene.ts` (+76/-4) + `apps/client/src/combat/CombatOverlay.tsx` (+11/-3). 83 insertions / 11 deletions total.
+
+- **`CombatScene.ts`**: new module-level `statAbbr` helper (between PortraitRefs interface and CombatScene class declaration); status_apply branch migrated (floater anchor-based; pulsePortrait + refreshBurnPip stay refs-based per Q1); 4 new event branches inserted between status_tick and combat_end (item_trigger / buff_apply / buff_remove / stun_consumed in stale-comment listing order); end-of-`playEventVisuals` stale comment replaced per Q8.
+- **`CombatOverlay.tsx`**: MEANINGFUL_EVENT_TYPES Set extended with 3 entries (`stun_consumed`, `buff_apply`, `buff_remove`); comment block (lines 62-67) restructured to drop "absent too" framing and document post-M1.4b2.3 coverage (8 of 10 CombatEvent['type'] members; combat_start/combat_end excluded as universal/uninformative for the predicate; CF 4b cited for recipe_combine's continued absence).
+
+### Test count delta
+
+**0 new tests.** Workspace **210 across 22 files** unchanged from M1.4b2.2 close baseline. Per Q5/CF 11 ratification: helper-level + fixture-reuse only; visual playtest is the catch mechanism for render-consumer dispatch bugs (with M1.4b2.3 diff-inspection precedent — see "M1.4b2.3 visual playtest gate" subsection below). Existing per-row resolution tests in `anchorResolution.test.ts` (lines 201-236 cover stun_consumed / buff_apply / buff_remove) and vampire-fang anchor fixture (M1.4b2.1, 11 item_trigger events with source byte-equality) cover the resolver layer.
+
+Sim **466 active + 1 manually-gated** unchanged (no new sim fixtures; existing M1.2.3b-locked DO-NOT-REGENERATE fixtures suffice — burn-application + poison-persistence + stun-consumption + buff-duration-expiry + whetstone-redundant + on-hit-vampire-fang collectively cover all 5 target event types).
+
+### Q2 temporal-stacking tradeoff
+
+item_trigger renders a small particle burst (count=2) at the source anchor. For sim emission ordering where `item_trigger` precedes its effect-event at the same tick (e.g., iron-sword: tick T `item_trigger` at p1 → tick T `damage` from p1), both render in the same `playEventVisuals` flush at the same source anchor. Visual stack is intentional — reads as a synergy chain ("the item activated and then dealt damage"), reinforcing the mastery-from-synergy pillar. Count differential (2 vs 5) keeps item_trigger visually subordinate so it doesn't compete with the effect's own beat.
+
+### Q3 buff_remove floater-only rationale
+
+buff_remove renders only a floater (`'−1 DMG'` in textSecondary), no particle burst. Rejected primitives:
+- **TEX.squareStatus** — visually conflates with status_tick (same texture, color, semantic register).
+- **TEX.lineHit at textSecondary** — visually conflates with item_trigger (same texture, dim color).
+
+Floater-only preserves a clean buff_apply/buff_remove **asymmetry** mirroring the gain/loss semantics: buff_apply has visible burst (the gain is felt); buff_remove has just the floater (the loss is passive, like an expired effect ticking off the timeline). Pattern transfers naturally if M2 introduces other buff durations.
+
+### Architectural patterns codified through M1.4b2.3 (running list)
+
+1–6 unchanged from M1.4b2.1 closing. **No new patterns in M1.4b2.3.**
+
+### Predicate-vs-name catches (running tally — 7 through M1.4b2.3)
+
+Catches 1–7 unchanged. **No new catches in M1.4b2.3** — Phase 1 halt-gate cleared without surfacing premise mismatches.
+
+### Carry-forwards delta
+
+**CLOSED:**
+- **CF 1 (item-anchored VFX consumption)** — all 5 named event types (item_trigger, status_apply, stun_consumed, buff_apply, buff_remove) now consume `resolveEventAnchors` per Q1 closure criterion (at-least-one-anchor-based-call). Heal precedent (M1.4b2.1 Q3) cited explicitly: portrait-internal primitives (pulsePortrait, refreshBurnPip) staying refs-based satisfies the criterion when the event type's floater migrates anchor-based. Full coverage matrix: damage (M1.4b1+M1.4b2.2), heal (M1.4b2.1), status_apply (M1.4b2.3), status_tick (M1.4b1), item_trigger (M1.4b2.3), stun_consumed (M1.4b2.3), buff_apply (M1.4b2.3), buff_remove (M1.4b2.3); combat_start (unanchored; out of CF 1 scope) + combat_end (portrait mode; refs ≡ portraitAnchor by PORTRAIT_*_RATIO single-source; out of CF 1's 5-event-type scope).
+- **CF 4** — split per 2026-05-07 ratification entry. **CF 4a (item_trigger) closes**; render block lands at `playEventVisuals` item_trigger branch. **CF 4b (recipe_combine) remains open**, sim-emission-blocked: recipe_combine not in `CombatEvent` union; deferred until M2 content sweep when sim emits the event. CF 4b inherits CF 4's documentation ancestry.
+- **CF 25 (status / buff event VFX — `stun_consumed`, `buff_apply`, `buff_remove`)** — all 3 enumerated events render via `resolveEventAnchors`. Coverage complete.
+
+**OPENED:**
+- **CF 30 (NEW M1.4b2.3) — Particle-count consts promotion (§ 4.5 R2 spirit-extension sweep).** Status: deferred to M1.5 polish or M2 telemetry-driven tuning. Rationale: particle counts (damage=5, heal=5, status_tick=3, item_trigger=2, buff_apply=3) sit on R2's spirit boundary — R2's letter is fast-forward thresholds (M1.3.4b Locked Answer #22). Promoting mid-milestone exceeds .b2.3 scope; revisit when telemetry surfaces a tuning need or a designer flags visual-density issues.
+- **CF 31 (NEW M1.4b2.3) — Dev-mode scene pause/step keybinding for visual playtest tooling.** Status: deferred to pre-M1.5 scoping (small ride-along commit, ~15-20 LOC). Rationale: real-time combat playback with no pause/step makes frame-perfect render-path isolation difficult during visual playtest gates. CF 11's visual-playtest catch mechanism degrades under this constraint. Scope: Phaser `scene.pause()`/`resume()` + keybindings (Space pause, Right Arrow step one tick); gated by `import.meta.env.DEV` (no production impact). Surfaced by M1.4b2.3 visual playtest attempt; see precedent subsection below.
+
+**Audit verdicts (no CF created/closed):**
+- Anchor fixture coverage — vampire-fang (M1.4b2.1) covers 11 item_trigger source byte-equality assertions; per-row resolution tests in `anchorResolution.test.ts` cover stun_consumed / buff_apply / buff_remove resolution. No new fixtures needed (per Q5/CF 11 stance).
+
+### M1.4b2.3 visual playtest gate — diff-inspection clearance (precedent)
+
+User attempted Scenario A frame capture; surfaced real-time-playback constraint (multiple events fire same-tick and stack visually at shared anchors; single-frame screenshots can't reliably isolate render paths). Single captured frame partially verified status_apply migration (BURN floater + burn pip at ghost portrait), damage target render, and source-side stack at item position consistent with item_trigger + damage co-tick spec.
+
+Gate cleared on diff-inspection grounds for M1.4b2.3 specifically:
+
+- **Q3 override** (buff_remove no particle burst) structurally guaranteed by diff — `spawnParticleBurstAt` not called in buff_remove branch (verified Phase 2 §1).
+- **Q6 label format** (`+N DMG` / `−N DMG`) guaranteed by `statAbbr` helper diff (M1: `'damage'` → `'DMG'`; defensive uppercase fallback).
+- **Helper-level anchor resolution** covered by `anchorResolution.test.ts` lines 201-236 per-row tests for stun_consumed / buff_apply / buff_remove.
+- **Implementation surface** (~80 LOC across 2 files) reviewable in entirety by inspection.
+
+One-time concession scoped to M1.4b2.3. Future milestones use dev-mode pause/step tooling per CF 31. CF 11's helper-level + fixture-reuse + visual-playtest catch hierarchy remains the standing rule; M1.4b2.3 sets the precedent that diff-inspection can substitute for visual playtest when implementation surface is small AND spec-divergence checks are diff-verifiable AND tooling gap blocks reliable visual capture.
+
+### Verification — Turbo pipeline (all `--force`, no cache replay)
+
+`pnpm turbo lint test build --force` (single chained invocation):
+- **19 successful, 0 cached, 41.4s.**
+- Schema-sync gate green.
+- 0 test-count delta vs M1.4b2.2 close baseline.
+
+### Bundle envelope (vs M1.4b2.2 `936e2339` baseline)
+
+- main: **243.36 KB raw / 75.97 KB gz** — unchanged.
+- combat chunk: **1,509.61 KB raw / 349.65 KB gz** — **+1.07 KB raw / +0.15 KB gz** vs M1.4b2.2. Source: 4 new render branches + statAbbr helper + comment expansion; combat-chunk-only. Sourcemap audit confirms Phaser stays in combat chunk exclusively (main + mobile byte-identical).
+- mobile chunk: **14.07 KB raw / 3.51 KB gz** — unchanged.
+- 105 modules — unchanged.
+
+### Going-forward rules carried from M1.4b1+
+
+All in effect, unchanged. **No new rules in M1.4b2.3.**
+
+### Locked answers cumulative through M1.4b2.3
+
+1–30 unchanged from M1.4b2.1 closing. **No new locked answers.**
+
+---
+
+### M1.4 milestone closure + retrospective (inline)
+
+#### Milestone summary
+
+**M1.4 closes here.** Comprises 5 sub-phase merges over 2026-05-05 → 2026-05-07:
+- **M1.4a** (`148916e`, 2026-05-05) — BagLayout handshake foundation. `BagLayout` type + `computeBagLayout` + `ANCHOR_RULE` 10-row table + `resolveAnchor` pure helper + `PORTRAIT_*_RATIO` consts + 5-file `bagContainerRef` plumbing. Zero visual changes.
+- **M1.4b1** (`fb24765`, 2026-05-06) — Visual-no-op refactor lift. damage + status_tick branches consume `resolveAnchor` via new `eventAnchorResolver.resolveEventTargetAnchor`; canvas-local translation through `this.scale.canvasBounds`. Heal descoped to M1.4b2.
+- **M1.4b2.1** (`33db4cc`, 2026-05-06) — Heal anchor 'both' refactor + CF 26 + CF 28 closure. ANCHOR_RULE.heal flipped 'source' → 'both'; helper renamed → `resolveEventAnchors` with dual-axis return. New vampire-fang anchor fixture (43 events).
+- **M1.4b2.2** (`936e2339`, 2026-05-06) — Portrait hit-flash + CF 29 closure. flashPortrait primitive + damage source-render parity. First M1.4 halt-gate exercise (CF 1 framing premise mismatch).
+- **M1.4b2.3** (Phase 2 `4a29152`; merge SHA assigned at PR merge time, 2026-05-07) — Net-new VFX surfaces + CF 1/4a/25 closure + this milestone closure + retrospective.
+
+#### Architectural patterns codified — 6 new in M1.4 (running total 6)
+
+- **Pattern #1 (M1.4a):** audit-gate spirit-vs-letter.
+- **Pattern #2 (M1.4a):** 10-row ANCHOR_RULE per-row test discipline.
+- **Pattern #3 (M1.4a):** 5-file plumbing pattern for sibling-DOM ref handoff.
+- **Pattern #4 (M1.4a):** PORTRAIT_*_RATIO consts pattern.
+- **Pattern #5 (M1.4b1):** verbatim-mirror discipline for legacy-extraction scaffolding.
+- **Pattern #6 (M1.4b2.1):** compute-via-production-helper-and-freeze fixture pattern.
+- **No new patterns in M1.4b2.2 or M1.4b2.3.**
+
+(All 6 patterns originate within M1.4; cumulative pre-M1.4 was 0. See §6 deviation note for attribution-correction history.)
+
+#### Predicate-vs-name catches caught — 3 new in M1.4 (running total 7)
+
+- **Catch 5 (M1.4b1 Phase 1):** ANCHOR_RULE.heal='source' design vs heal-at-target render. Closed structurally M1.4b2.1 (heal flipped to 'both' + source-side render added).
+- **Catch 6 (M1.4b1 Phase 3 → Phase 2.5):** "pipeline green" predicate vs cache-replayed reality. Closed structurally Phase 2.5 + `--force` rule.
+- **Catch 7 (M1.4b2.1 Phase 1):** ANCHOR_RULE.damage='both' table vs target-only render. Closed structurally M1.4b2.2 (CF 29 closure adds source-side damage render).
+- **No new catches in M1.4b2.2 or M1.4b2.3.**
+
+#### Going-forward rules codified — 3 new in M1.4
+
+All originate M1.4b1 closing (`86d729e`, 2026-05-06):
+- Closing-log metric framing anchors explicitly to milestone-total or vs-N-baseline.
+- `--force` on verification runs (no cache-replay as proof-of-green for new work).
+- Phase 2.5 interlude precedent (out-of-scope items shifting reproduction profile mid-milestone escalate to in-scope; sub-phase numbering accommodates).
+
+#### Halt-gate exercises — 1 across M1.4
+
+- **M1.4b2.2 Phase 1** — CF 1 framing premise mismatch (prompt deliverable framed CF 1 closing in .b2.2; CF text said .b2.3). Standing rule (`feedback_halt_when_inputs_missing.md`) operating as designed; no new pattern or rule codified. First concrete M1.4 trip; rule's continued utility logged.
+
+#### CF dispositions across M1.4
+
+- **CF 1 closed (M1.4b2.3)** — full event-type consumption coverage; heal precedent extended to status_apply.
+- **CF 4 split (M1.4b2.3 pre-ratification, 2026-05-07 entry):**
+  - **CF 4a closed (M1.4b2.3)** — item_trigger event VFX.
+  - **CF 4b open** — recipe_combine event VFX; sim-emission-blocked (recipe_combine not in CombatEvent union); deferred until M2 content sweep.
+- **CF 25 closed (M1.4b2.3)** — status/buff event VFX (stun_consumed + buff_apply + buff_remove all landed).
+- **CF 26 closed (M1.4b2.1)** — source-side test discipline on 'both' promotion (vampire-fang fixture's per-event source byte-equality + per-row resolution test).
+- **CF 27 deferred to M1.5 retro** — § 4.5 R1 cross-axis amendment (sharpened by catches 5/6/7; no `tech-architecture.md` amendment in M1.4 scope per 2026-05-07 ratification entry).
+- **CF 28 closed (M1.4b2.1)** — player-branch fixture coverage gap (vampire-fang fixture covers player-branch dispatch on 12 events: 7 heal + 5 damage targeting player).
+- **CF 29 closed (M1.4b2.2)** — damage source-render gap (catch 7 closure structural mechanism).
+- **CF 30 opened (M1.4b2.3)** — particle-count consts promotion deferred per Q7 lock.
+- **CF 31 opened (M1.4b2.3)** — dev-mode scene pause/step keybinding for visual playtest tooling; surfaced by M1.4b2.3 visual playtest attempt; deferred to pre-M1.5 ride-along.
+
+#### Pillar-alignment retrospective
+
+- **Readable in one screen.** Hierarchy enforced via primitive + count differentiation across event types: damage/heal use count=5 bursts (top-tier impact); status_tick uses count=3 (mid-tier); item_trigger uses count=2 (subordinate "the item fired" beat). Color-coding reinforces semantic register: red for damage; green for heal/buff_apply gain; legendary-amber for status; gray (textSecondary) for stun_consumed and buff_remove (negative/passive register). Floater-vs-particle vs portrait-flash differentiates event type at a glance.
+- **Mastery from synergy.** Item-anchored VFX makes synergy chains visible. Vampire-fang at p2 flashes on its own item_trigger, then heal source-flash on the same anchor when the heal event fires same-tick — player sees "the fang activated, healed me." Iron-sword + spark-stone: iron-sword fires (item_trigger at p1), damages ghost (target floater at ghost portrait + source particles at p1), spark-stone reacts (item_trigger at p2), applies burn (target floater at ghost portrait). Visible chain.
+- **Snappy.** All primitives ≤600ms (KO flash, terminal event); most ≤200ms — portrait hit-flash 150ms (M1.4b2.2), status pulse 140ms (M1.3.4b carryover), particle bursts 500ms PARTICLE_LIFETIME_MS, floaters 600ms FLOATER_LIFETIME_MS. Tunable consts at top of `CombatScene.ts` per § 4.5 R2.
+
+#### Open carry-forwards entering M1.5 (enumerated, no consolidation)
+
+  1. ~~CF 1 — item-anchored VFX consumption~~ (CLOSED M1.4b2.3).
+  2. **Real character art in portraits** → M2.
+  3. **Real particle sprite sheets** → post-M1.
+  4. ~~CF 4 (split)~~: **CF 4a item_trigger** (CLOSED M1.4b2.3); **CF 4b recipe_combine** → open, sim-emission-blocked; deferred until M2 content sweep emits the event.
+  5. **Music + SFX integration** → post-M2.
+  6. **Custom cubic-bezier easing function** → M2 if designer flags.
+  7. **BitmapText / pre-rasterized font atlas** → post-M1 if floater spawn rate saturates Phaser glyph cache.
+  8. **`>>` fast-forward indicator visual styling** → M2 polish.
+  9. **Telemetry event for "fast-forward triggered"** → if telemetry-plan.md § 4 surfaces need.
+  10. **Configurable per-user playback speed** → M2+.
+  11. **SKIP scene-level direct unit test coverage** → CF 11 precedent reaffirmed M1.4b2.2 / M1.4b2.3; revisit if SKIP regresses.
+  12. **Combat chunk Vite build non-determinism** (~0.75 KB raw drift) → tracked.
+  13. **Generation-side ghost-loadout filter** → M2 ghost storage rework.
+  14. **Codex P1 regression test for UI-vs-reducer affordability under non-default rulesets** → M1.5.
+  15. **`opponentClassId` on `RunHistoryEntry`** → M1.5.
+  16. **Server-side ghost record** → M2.
+  17. **Auto-rearrange hint affordance** → M3.
+  18. **Per-round trophy schedule + contract modifiers + win-streak multipliers** → M2.
+  19. **`RarityGem` for shop rarity dot** → carries from M1.3.2.
+  20. **`apps/client/src/index.css` `.glow-*` rgba palette derivatives** → carries.
+  21. **Run-end detection (hearts === 0 → eliminated screen)** → M1.5.
+  22. **State-driven bag dimensions through pure helpers** → M2.
+  23. **Real-device drag-state screenshot capture** → still carried.
+  24. **Player portrait dying-state visual feedback** — M1.4b2.2 partial closure (damage portrait hit-flash); progressive HP-curve tint still absent.
+  25. ~~CF 25~~ (CLOSED M1.4b2.3).
+  26. ~~CF 26~~ (CLOSED M1.4b2.1).
+  27. **Extend `tech-architecture.md` § 4.5 R1 framing for cross-axis case** → deferred to M1.5 retro; sharpened by M1.4b1 catches 5/6 + M1.4b2.1 catch 7.
+  28. ~~CF 28~~ (CLOSED M1.4b2.1).
+  29. ~~CF 29~~ (CLOSED M1.4b2.2).
+  30. **CF 30 (NEW M1.4b2.3)** — Particle-count consts promotion (§ 4.5 R2 spirit-extension sweep). Deferred to M1.5 polish or M2 telemetry-driven tuning.
+  31. **CF 31 (NEW M1.4b2.3)** — Dev-mode scene pause/step keybinding for visual playtest tooling. Pre-M1.5 ride-along commit, ~15-20 LOC, dev-only. Surfaced by M1.4b2.3 visual playtest attempt.
+
+Open count entering M1.5: **26 carry-forwards** (CF 2/3/5–24 except closures + CF 4b + CF 27 + CF 30 + CF 31).
+
+---
+
 ## 2026-05-07 — Pre-M1.4b2.3 ratification
 
 Four pre-conditions locked before M1.4b2.3 Phase 2 fires; canonical record matches Phase 2's pre-state.
