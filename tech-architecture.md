@@ -143,6 +143,12 @@ Examples:
 - "Did anything meaningful happen this combat" by net-HP-delta is a proxy. Mutual-burn and offset-by-heal stalemates net to zero damage but contain meaningful events. Correct predicate checks event content directly.
 - "Item is purchasable" by gold ≥ baseCost is a proxy. The reducer-side affordability check considers ruleset overrides, relic effects, contract mutators. UI must consume the reducer's affordability output, not duplicate the gold check.
 
+**Cross-axis extension.** When a design-side artifact (rule table, schema declaration, configuration value) names an outcome, and the implementation-side predicate-evaluation (render path, execution semantics, content emission) lives on a different axis, Phase 1 halt-gate discipline requires examining both axes — the side authoring the name and the side evaluating the predicate. Single-axis examination is necessary but not sufficient.
+
+Precedent: catches 5 and 7 (M1.4b1 § Phase 1, M1.4b2.1 § Phase 1). ANCHOR_RULE table values ('source', 'both') named outcomes that the render path did not honor at the time of authoring. Halt-gate fired in both cases because both axes were in Phase 1 scope. The amendment formalizes the practice rather than leaving it incidental to the work.
+
+Cross-axis shapes that fall outside Phase 1's authority (e.g., catch 6's CI-status-vs-execution-semantics) are bucket B per pre-M1.5 retro Topic 1 — caught by Phase 2.5 interlude pattern, not this rule.
+
 **Rule 2 — Consumers do not reimplement sim-side arithmetic.**
 Any value the sim computes (cost, affordability, eligibility, threshold, derived stat) is read from a sim-exported helper or a reducer-derived state field. UI-side recomputation is a defect, not an optimization, even when the formulas incidentally agree under default ruleset values.
 

@@ -4,6 +4,81 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-08 — Pre-M1.5 retrospective
+
+Retro covering M1.4 → CF 31 process-level findings. Outputs: 2 new going-forward rules, 1 architecture amendment (CF 27 closure), 1 pattern deferral, 1 chat-drift practice reaffirmation.
+
+### Topic 1 — catch lineage 5/6/7/8/9: three-bucket framing
+
+Catch class splits into three buckets, not two:
+
+- **Bucket A — change-site contradiction.** Both surfaces inside Phase 1 authoring scope. Halt-gate is the antidote, working as designed. Catches 5 (M1.4b1 § Phase 1) and 7 (M1.4b2.1 § Phase 1) precedent — ANCHOR_RULE table values vs. render path.
+- **Bucket B — process-artifact-vs-execution.** Surfaces span infrastructure layers Phase 1 doesn't authoritatively own. Phase 2.5 interlude pattern is the antidote. Catch 6 (M1.4b1 § Phase 2.5) precedent — pipeline-green vs. cache-replay.
+- **Bucket C — non-local context.** Splits further:
+  - **C1 — content-side evidence gap.** Schema claim invalidated by content-side fact. Structurally catchable in Phase 1 with content-grep discipline. Catch 8 (M1.4b2.3 § Phase 1 §2) precedent. Antidote codified as rule #5 (Topic 4).
+  - **C2 — framework-internal architecture gap.** Hard to catch in Phase 1 without expert framework knowledge. External review load-bearing. Catch 9 (CF 31 § PR review) precedent. Antidote codified as rule #4 (Topic 3).
+
+Frame: Phase 1 halt-gate scope is contradiction-between-surfaces-Phase-1-authoritatively-owns. Don't over-extend halt-gate to attempt C2 coverage; route to rule #4 (external review) instead. C1 closes in Phase 1 via rule #5.
+
+### Topic 3 — Codex external-review structuring: rule #4
+
+Going-forward rule #4 codified. Convention met (second instance — catches 8, 9). Option (b)-reframed selected from a/b/c/d.
+
+> **Going-forward rule #4.** External review (Codex on PR) is a load-bearing catch step for framework-internal architectural assumptions (catch class C2 per pre-M1.5 retro Topic 1). Phase 2.5 sub-phase is the structural response when external review surfaces a P2 finding pre-merge — three precedents: M1.4b1 § Phase 3, M1.4b2.3 § PR #11, CF 31 § PR #12. Halt-gate stays scoped to class A (change-site contradiction); do not over-extend halt-gate to attempt C2 coverage.
+
+Codifies four things in one rule: (1) external review not optional — load-bearing; (2) catch class it covers (C2); (3) Phase 2.5 as structural response on P2 findings; (4) halt-gate scope discipline.
+
+### Topic 6 — CF 27 closure via § 4.5 Rule 1 cross-axis amendment
+
+CF 27 closed via tech-architecture.md § 4.5 Rule 1 cross-axis extension. Amendment scoped to catches 5/7 (bucket A per Topic 1); catch 6 documented under bucket B (Phase 2.5 caught), not inside Rule 1. Original CF cited 5/6/7 together; Topic 1's bucket structure refined the scope. Amendment text landed in tech-architecture.md § 4.5 Rule 1 — see that section for canonical content.
+
+### Topic 4 — Axis B codification: rule #5
+
+Going-forward rule #5 codified. Standing convention (codify-on-second-instance) bent at one instance.
+
+> **Going-forward rule #5.** Phase 1 investigations claiming content-scope facts (e.g., "M1 content only emits X", "no item triggers on Y") require content-side evidence: at minimum one targeted grep of packages/content/ for the actual emission / trigger / value being scoped. Schema-side evidence alone (BuffableStat union check, enum membership) is insufficient — schema permits a superset of what content exercises. Catch 8 (M1.4b2.3 § Phase 1 §2) is precedent.
+
+Convention bent on grounds of: (1) generic failure mode (any schema-vs-content scope claim has the shape); (2) low-burden discipline (single targeted grep); (3) M1.5 predictable surface (relic content, LocalSaveV1 schema-vs-state); (4) complement to rule #4 (rule #5 closes C1 in Phase 1, rule #4 closes C2 via external review).
+
+### Topic 5 — Pattern #7 deferral
+
+Pattern #7 (module-level WeakMap for byte-zero dev-state) deferred to second-instance per standing convention. Pattern shape is narrow (production-class-needs-dev-only-instance-state); literal `if (import.meta.env.DEV)` use-site discipline is potentially Vite-tree-shaking-specific and would be sharpened by second-instance comparison. CF 31 § Phase 2.5 closing-log + this entry are the canonical record until next instance.
+
+Trigger: any M1.5 work surfacing production-class-with-dev-only-instance-state (debug overlay against existing scene/system, test-only state grafted onto production class, etc.) re-opens Topic 5 mid-milestone.
+
+### Topic 2 — master-developer chat-side drift practice
+
+Drift classification (5 instances across M1.4 → CF 31):
+
+- **Shape A — coverage gap in rule #10's existing categories.** Drifts 1 (bundle baseline), 2 (CF arithmetic), 4 (PR body bare-#N).
+- **Shape B — compose-and-violate within single artifact.** Drifts 3 (axis-A self-violation), 5 (sloppy instruction).
+
+Reaffirmation: rule #10 (4 categories + enumeration-required) held as currently framed. Failure mode is operational, not structural. Phase 2.5 halt-gate acknowledged as load-bearing for Shape B (parallel to rule #4 for C2). No rule #10 reframing.
+
+Trigger: 2+ similar-shape drifts in M1.5 mid-milestone re-opens Topic 2 for operational tightening.
+
+### Closing tally
+
+| Counter | Through CF 31 | After retro |
+|---|---|---|
+| Architectural patterns | 6 | 6 |
+| Predicate-vs-name catches | 9 | 9 |
+| Locked answers | 30 | 30 |
+| Going-forward rules | 3 | 5 |
+| Halt-gate exercises (M1.4) | 1 | 1 |
+| Master-dev chat drifts | 5 | 5 |
+| Open carry-forwards | 25 | 24 |
+
+CF 27 closes via § 4.5 Rule 1 cross-axis amendment.
+
+### Post-retro sequence
+
+- M1.5 scoping in fresh chat (clean-context-for-forward-planning convention).
+- M1.5 scope: relic state machinery + class-select screen + run-end detection + LocalSaveV1 persistence + Codex P1 ruleset regression test (CF 14). Likely 5a/5b split given full-stack scope.
+- Rules #4 + #5 + § 4.5 Rule 1 amendment + this retro entry are the canonical baseline for M1.5 discipline.
+
+---
+
 ## 2026-05-07 — CF 31 closed (dev-mode scene pause/step keybinding)
 
 ### Branch + commit topology
