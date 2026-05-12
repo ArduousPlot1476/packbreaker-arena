@@ -191,8 +191,8 @@ Both classes share the default 6×4 bag in M1. Differentiation is item pool weig
 A **relic** is a passive run-long modifier. Three slots:
 
 - **Starter relic**: chosen at run start, class-filtered.
-- **Mid-run relic**: awarded after round 5 (1 of 3 choice).
-- **Boss relic**: awarded for defeating the boss — bragging rights only in M1, persists into ladder cosmetics in M2.
+- **Mid-run relic**: awarded after round 5 (1 of N choice, where N is constrained by available class-eligible mid relics — currently 2 per class; CF 32 expands to 3 for full 1-of-3 pattern realization).
+- **Boss relic**: awarded for defeating the boss — bragging rights only in M1, persists into ladder cosmetics in M2. M1 graybox presents the single class-eligible boss relic as "earned" rather than 1-of-N selection; CF 32 enables 1-of-3 pattern on content expansion.
 
 Relics never occupy bag cells. They sit on the left rail.
 

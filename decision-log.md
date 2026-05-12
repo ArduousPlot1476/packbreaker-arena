@@ -4,6 +4,63 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-11 — M1.5a Phase 1 design take-2 ratification (3 new Bucket A surfaces resolved + 12 lean-confirms)
+
+Take 2 cleared §1 fast-verify and §3/§4/§5 design proposals; halted in §2 on three new Bucket A surfaces emerging from the take-1 ratification triple against shipped sim state. Plus one Bucket C1 doc/content mismatch.
+
+Bucket A surfaces resolved:
+
+- A.1 lazy-boundary regression (§2a): sim's state.ts statically imports simulateCombat; main-chunk import of createRun would drag combat sim subgraph into main, regressing tech-architecture.md § 10 lazy-load. RESOLVED option 1 (dynamic-import deferral in useRun). Combat chunk shifts from first-combat to Begin-run-click load moment. Phase 2.5 sourcemap audit confirms post-implementation. CF 33 opens for M2 architectural cleanup via sim-side state.ts refactor (option 2 deferred).
+
+- A.2 sim-state-advancement gap (§2c): the take-1 ratification triple (sim authoritative for run-state + combat continues through simulateCombat bridge + grantRelic phase gates hold) is jointly unsatisfiable against shipped grantRelic gates. RESOLVED option 2 (additive sim API). New method simRun.applyCombatOutcome(...) extracted from runCombatInternal:716-738 records combat outcome (hearts/history/phase/telemetry) without re-running combat. New 'apply_combat_outcome' action variant. CF 15 (opponentClassId on RunHistoryEntry) closes as ride-along.
+
+- A.3 derived field exposure gap (§2d): sim's RunController.derived is private; CF 14 fix requires consumers read extraRerollsPerRound from derived, not Ruleset. RESOLVED: extend RunState with derived: DerivedModifiers (schema v0.6 additive). Client mirrors via sync_from_sim; EXTRA_REROLLS_PER_ROUND placeholder const removed from sim-bridge.ts.
+
+Bucket C1 resolved:
+
+- gdd.md § 9 mid-relic "1 of 3 choice" wording vs shipped 2-per-class content. Amend § 9 to "1 of N, N constrained by available class-eligible mid relics (currently 2; CF 32 expands)" + parallel boss-relic disposition note. Docs-only commit (this commit).
+
+12 lean-confirms from §6e (Q1–Q11 + Q13): all locked as stated. Highlights: RunController via useRef in useRun (Q1); startingRelicId default starterRelicPool[0] (Q2); reroll routes through simRun.rerollShop (Q3); read-only after run-end via sim throws + try/catch wrap (Q4); relic-offer generators in own module relicOffer.ts (Q5); RELIC_OFFER_STRIDE = 65519 (Q6); sync_from_sim single full snapshot (Q9); single-emit relic_granted telemetry (Q10); ContractId('neutral') graybox default (Q11); client-owned trophy for 5a (Q13).
+
+5a structural revision: three PRs.
+- PR 1 (5a sim API prep): additive — applyCombatOutcome + apply_combat_outcome action + RunState.derived + RunHistoryEntry.opponentClassId. Closes CF 15.
+- PR 2 (5a.0): client sim RunController integration foundation (dynamic-import + sync_from_sim + mutation-path replacement + EXTRA_REROLLS_PER_ROUND removal).
+- PR 3 (5a.1 + 5a.2 + 5a.3): relic state surfacing + run-end detection + CF 14 regression test. Closes CF 14 + CF 21 (detection-side).
+
+Each PR branches off clean main, --no-ff merge, Codex external review per rule 4. Phase 2.5 interludes per PR on Codex findings. Phase 3 polish + close at PR 3 merge.
+
+M1.5a effort estimate revised: 7.5–8 days (was 5–6; +2 for sim API prep PR splitting + restructure overhead). M1.5 total: ~12.5–14 days.
+
+CF 33 (NEW) — Sim state.ts combat-coupling refactor for cleaner lazy-boundary. Currently state.ts statically imports simulateCombat, forcing main-chunk importers to dynamic-defer. Option 2 (split run-state methods from combat-invoking methods, or constructor-inject simulateCombat) is the architecturally cleaner long-term shape. Deferred to M2 architectural cleanup or later when sim consumer count motivates the refactor. M1.5a accepts implementation-side dynamic-import workaround.
+
+Phase 1 design considered complete at this ratification. Take-2 §2–§5 IS the design for each sub-phase; no further Phase 1 prompts. Phase 2 implementation prompts produced per PR.
+
+Open CFs: 25 → 26.
+
+---
+
+## 2026-05-11 — M1.5a Phase 1 design halt-gate take-1 ratification (5 mismatches resolved)
+
+Take 1 halted at §1.5. Five mismatches ratified:
+
+- A: sim 'ended' RunPhase + RunOutcome shipped M1.2.4 (decision-log.md 2026-04-29 § M1.2.4 Run-state machine). §3 narrows to client-side detection mirroring shipped semantic.
+- B: grantRelic phase gates shipped M1.2.6 (decision-log.md 2026-04-30 § M1.2.6 closed). §2 narrows to client-side phase awareness + sim.grantRelic dispatch; sim contract untouched.
+- C: starter-relic is pre-createRun input via CreateRunInput.startingRelicId. §2 narrows to mid + boss beats; starter is 5b.1 deliverable.
+- D: client has zero sim RunController integration today. M1.5a adopts option (2): minimal surfacing. Sim authoritative for run-state (hearts / gold / round / phase / relics / outcome / history); client reducer becomes cache mirror via sync_from_sim action. Bag + shop mutations stay client-parallel for 5a (revisit at 5b.3 if LocalSaveV1 reveals need). Migration toward option (1) (full sim authority) deferred to M2/M3.
+- E: rule 5 content-side catch — relic counts 3 starter + 2 mid + 1 boss per class. 2-card mid offer + 1-card boss earned-presentation for M1 graybox. CF 32 opens.
+
+5a re-scoped internally: 5a.0 sim RunController integration foundation; 5a.1 relic state surfacing (mid/boss offer generators + grant dispatch); 5a.2 client-side run-end detection (mirrors sim's shipped semantic); 5a.3 CF 14 regression test. Single Phase 1 design pass (take 2) covers all four. Phase 2 splits: 5a.0 own PR for Codex external review checkpoint (rule 4); 5a.1+5a.2+5a.3 second PR. Mirrors M1.4b b1→b2.x cadence.
+
+M1.5a effort estimate revised: 5–6 days (was 3–4).
+
+Topic 2 master-dev chat drift counter: 5 → 6. New drift shape: prompt premises vs shipped sim state. Rule 10's 4 categories don't cover; hold codification per second-instance convention; log + watch.
+
+CF 32 (NEW) — Expand mid/boss relic content to 3+ per class per slot enabling consistent "pick 1 of 3" UI pattern across all three relic-grant beats. Current content: 3 starter / 2 mid / 1 boss per class (relics.ts grep verified). M1 graybox ships 2-card mid + 1-card boss as graceful degradation. → M1.6+ content fill or M2 polish.
+
+Open CFs: 24 → 25.
+
+---
+
 ## 2026-05-08 — Pre-M1.5 retrospective
 
 Retro covering M1.4 → CF 31 process-level findings. Outputs: 2 new going-forward rules, 1 architecture amendment (CF 27 closure), 1 pattern deferral, 1 chat-drift practice reaffirmation.
