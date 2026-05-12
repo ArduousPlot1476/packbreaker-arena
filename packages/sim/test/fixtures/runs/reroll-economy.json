@@ -41,6 +41,11 @@
       "sellRecoveryBp": 5000,
       "mutators": []
     },
+    "derived": {
+      "extraRerollsPerRound": 1,
+      "itemCostDelta": 0,
+      "bonusGoldOnWin": 0
+    },
     "startedAt": "2025-01-01T00:00:00.000Z",
     "hearts": 3,
     "gold": 3,

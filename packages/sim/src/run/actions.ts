@@ -24,7 +24,7 @@ import type {
   Rotation,
   SimSeed,
 } from '@packbreaker/content';
-import type { RunController } from './state';
+import type { ApplyCombatOutcomeInput, RunController } from './state';
 
 export type RunControllerAction =
   | {
@@ -63,6 +63,7 @@ export type RunControllerAction =
     }
   | { readonly type: 'start_combat'; readonly ghost: Combatant }
   | { readonly type: 'start_combat_from_ghost_build'; readonly ghost: GhostBuild }
+  | { readonly type: 'apply_combat_outcome'; readonly payload: ApplyCombatOutcomeInput }
   | { readonly type: 'advance_phase' };
 
 /** Pure dispatcher — maps each variant to its corresponding RunController
@@ -108,6 +109,9 @@ export function applyAction(
       return;
     case 'start_combat_from_ghost_build':
       controller.startCombatFromGhostBuild(action.ghost);
+      return;
+    case 'apply_combat_outcome':
+      controller.applyCombatOutcome(action.payload);
       return;
     case 'advance_phase':
       controller.advancePhase();

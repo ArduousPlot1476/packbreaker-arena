@@ -151,6 +151,11 @@
       "sellRecoveryBp": 5000,
       "mutators": []
     },
+    "derived": {
+      "extraRerollsPerRound": 1,
+      "itemCostDelta": 0,
+      "bonusGoldOnWin": 0
+    },
     "startedAt": "2025-01-01T00:00:00.000Z",
     "hearts": 3,
     "gold": 19,
@@ -196,7 +201,8 @@
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
-        "opponentGhostId": null
+        "opponentGhostId": null,
+        "opponentClassId": "tinker"
       },
       {
         "round": 2,
@@ -204,7 +210,8 @@
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
-        "opponentGhostId": null
+        "opponentGhostId": null,
+        "opponentClassId": "tinker"
       },
       {
         "round": 3,
@@ -212,7 +219,8 @@
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
-        "opponentGhostId": null
+        "opponentGhostId": null,
+        "opponentClassId": "tinker"
       }
     ],
     "outcome": "in_progress"

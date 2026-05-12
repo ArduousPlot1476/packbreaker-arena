@@ -23,7 +23,12 @@ import {
   type TelemetryEvent,
   type Trigger,
 } from '@packbreaker/content';
-import { createRun, type CreateRunInput } from '../src/run';
+import {
+  applyAction,
+  createRun,
+  type ApplyCombatOutcomeInput,
+  type CreateRunInput,
+} from '../src/run';
 import { simulateCombat } from '../src/combat';
 
 const TINKER = ClassId('tinker');
@@ -1272,5 +1277,118 @@ describe('grantRelic', () => {
     ctrl.advancePhase();
     expect(ctrl.getState().currentRound).toBe(7);
     expect(ctrl.getState().shop.slots).toHaveLength(6);
+  });
+});
+
+// ─── applyCombatOutcome (M1.5a PR 1) ───────────────────────────────
+//
+// Direct-action path coverage for the new 'apply_combat_outcome' variant.
+// Path A (Case A) covers non-null opponentGhostId + opponentClassId fields;
+// Path B (Case B) covers the null/omitted opponent normalization. The third
+// case asserts byte-equivalence between direct method invocation and action
+// dispatch — proving the action variant is a faithful wrapper. The internal
+// start_combat path's Pattern 5 byte-identity against the pre-PR-1 inline
+// block is covered by the 224 DO-NOT-REGENERATE determinism fixtures
+// (000-223), which replay byte-stable through the harness.
+
+describe('applyCombatOutcome (M1.5a PR 1)', () => {
+  it("Case A — 'apply_combat_outcome' with non-null opponentGhostId + opponentClassId populates history entry fields", () => {
+    const ctrl = createRun(baseInput());
+    applyAction(ctrl, {
+      type: 'apply_combat_outcome',
+      payload: {
+        outcome: 'player_win',
+        damageDealt: 30,
+        damageTaken: 0,
+        endedAtTick: 10,
+        opponentGhostId: GhostId('ghost-A'),
+        opponentClassId: MARAUDER,
+      },
+    });
+    const state = ctrl.getState();
+    expect(state.history).toHaveLength(1);
+    const entry = state.history[0]!;
+    expect(entry.opponentGhostId).toBe(GhostId('ghost-A'));
+    expect(entry.opponentClassId).toBe(MARAUDER);
+    expect(entry.outcome).toBe('win');
+    expect(entry.damageDealt).toBe(30);
+    expect(entry.damageTaken).toBe(0);
+    expect(entry.round).toBe(1);
+    // Win bonus: ruleset.winBonusGold (1) + derived.bonusGoldOnWin (0 for
+    // Tinker + Apprentice's Loop). Round 1 income (4g) was credited at
+    // construction.
+    expect(entry.goldEarnedThisRound).toBe(1);
+    expect(state.hearts).toBe(3); // win — no decrement
+    expect(state.gold).toBe(5); // 4 income + 1 win bonus
+    expect(ctrl.getPhase()).toBe('resolution');
+  });
+
+  it("Case B — 'apply_combat_outcome' with null opponentGhostId + omitted opponentClassId normalizes both to null via ?? null", () => {
+    const ctrl = createRun(baseInput());
+    applyAction(ctrl, {
+      type: 'apply_combat_outcome',
+      payload: {
+        outcome: 'ghost_win',
+        damageDealt: 5,
+        damageTaken: 30,
+        endedAtTick: 15,
+        opponentGhostId: null,
+        // opponentClassId omitted — ?? null normalization applies.
+      },
+    });
+    const state = ctrl.getState();
+    expect(state.history).toHaveLength(1);
+    const entry = state.history[0]!;
+    expect(entry.opponentGhostId).toBeNull();
+    expect(entry.opponentClassId).toBeNull();
+    expect(entry.outcome).toBe('loss');
+    expect(entry.goldEarnedThisRound).toBe(0);
+    expect(state.hearts).toBe(2); // 3 starting − 1 loss decrement
+    expect(state.gold).toBe(4); // no win bonus on loss
+    expect(ctrl.getPhase()).toBe('resolution');
+  });
+
+  it("byte-equivalence — direct controller.applyCombatOutcome() and applyAction({type: 'apply_combat_outcome'}) produce byte-identical RunState", () => {
+    const payload: ApplyCombatOutcomeInput = {
+      outcome: 'player_win',
+      damageDealt: 20,
+      damageTaken: 10,
+      endedAtTick: 12,
+      opponentGhostId: GhostId('g-byte-eq'),
+      opponentClassId: TINKER,
+    };
+    const ctrlDirect = createRun(baseInput());
+    ctrlDirect.applyCombatOutcome(payload);
+    const ctrlAction = createRun(baseInput());
+    applyAction(ctrlAction, { type: 'apply_combat_outcome', payload });
+    // Full RunState deep-equality: hearts, gold, history (with opponentClassId
+    // + opponentGhostId), derived (M1.5a PR 1 schema v0.6 addition), phase
+    // observable via getPhase. The action dispatch is a thin pass-through —
+    // no validation, no transformation, no extra side effects.
+    expect(ctrlAction.getState()).toEqual(ctrlDirect.getState());
+    expect(ctrlAction.getPhase()).toBe(ctrlDirect.getPhase());
+  });
+
+  it("start_combat internal path populates RunHistoryEntry.opponentClassId from ghost.classId (CF 15 closure)", () => {
+    // Pre-PR-1, history.push hardcoded opponentClassId absent (the field
+    // didn't exist); post-PR-1, runCombatInternal calls applyCombatOutcome
+    // with `opponentClassId: ghost.classId`. Verifies the internal path
+    // wires the new field correctly.
+    const ctrl = createRun(baseInput());
+    const ghost = emptyGhost(1, MARAUDER); // Marauder ghost, low HP — player wins
+    const oneShot = defineTestItem(
+      'test-one-shot',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 100, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items: Record<ItemId, Item> = { [oneShot.id]: oneShot };
+    const ctrl2 = createRun(baseInput({ itemsRegistry: items }));
+    ctrl2.buyItem(0);
+    ctrl2.placeItem(oneShot.id, { col: 0, row: 0 }, 0);
+    ctrl2.startCombat(ghost);
+    const entry = ctrl2.getState().history[0]!;
+    expect(entry.opponentClassId).toBe(MARAUDER);
+    expect(entry.opponentGhostId).toBeNull(); // internal path passes null
+    void ctrl;
   });
 });

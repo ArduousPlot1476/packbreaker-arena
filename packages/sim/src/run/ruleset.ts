@@ -17,26 +17,17 @@ import {
   RELICS,
   type ClassId,
   type Contract,
+  type DerivedModifiers,
   type Relic,
   type RelicId,
   type RelicSlots,
   type Ruleset,
 } from '@packbreaker/content';
 
-/** Run-side derived modifiers from class + relics. Combat-side modifiers
- *  (bonusBaseDamage, lifestealPct, recipeBonusPct) are NOT here — combat.ts
- *  pulls those from Combatant.classId / .relics directly. */
-export interface DerivedModifiers {
-  /** Free rerolls per round before paid rerolls kick in. Apprentice's Loop
-   *  contributes 1. Locked answer 12. */
-  readonly extraRerollsPerRound: number;
-  /** Flat per-item cost delta. Merchant's Mark contributes -1.
-   *  effectiveCost = max(0, item.cost + itemCostDelta). */
-  readonly itemCostDelta: number;
-  /** Class.passive.bonusGoldOnWin + sum of RelicModifiers.bonusGoldOnWin.
-   *  Credited on top of ruleset.winBonusGold when a round is won. */
-  readonly bonusGoldOnWin: number;
-}
+// DerivedModifiers canonical declaration migrated to @packbreaker/content
+// (content-schemas.ts § 10) in schema v0.6 / M1.5a PR 1. Re-exported here so
+// existing sim-side imports continue to resolve.
+export type { DerivedModifiers };
 
 /** Effective ruleset + derived run-side modifiers. The starting gold credit
  *  is exposed separately because it's a one-time initialization, not part of
