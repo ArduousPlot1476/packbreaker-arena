@@ -4,6 +4,52 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-13 — M1.5a PR 2 Phase 1 design halt-gate ratified
+
+Phase 1 read-only investigation (HEAD 5b56539) returned clean against PR 1 surface (verified: ApplyCombatOutcomeInput at state.ts:102-109, RunState.derived + DerivedModifiers at schemas.ts:537-566, RunHistoryEntry at schemas.ts:509-517, apply_combat_outcome action variant at actions.ts:29-67, barrel re-exports at packages/sim/src/{run,}/index.ts, requirePhase('combat','applyCombatOutcome') at state.ts:713). Master-dev chat ratifies Q1–Q7 dispositions for PR 2 Phase 2 implementation.
+
+Q1 — phase transition path: option (a). New `enter_combat_phase` action variant + `RunController.enterCombatPhase(): void` method. `requirePhase('arranging', 'enterCombatPhase')` as first executable statement; JSDoc precondition encoding. Test helper `setControllerPhaseToCombat` at run.test.ts:79-97 deletes; 4 invocations across 3 tests (L1319, L1351, L1385, L1388 — byte-equivalence test invokes the helper twice on two distinct controllers) migrate to `ctrl.enterCombatPhase()` or action-dispatch. New `describe('enter_combat_phase', ...)` block with 3 regression cases (arranging→success, combat→throw, resolution→throw) + parallel action-dispatch case in the byte-equivalence test. Catch 10 lineage explicit. Rule 7 barrel sweep is a no-op pass (method extends existing `RunController` interface; action variant extends existing `RunControllerAction` union; no new public types added).
+
+Q2 — sync_from_sim payload: full sim RunState snapshot via `simRun.getState()` (single-snapshot granularity, take-2 locked). Sim-authoritative on sync (reducer overwrites client): `runId`, `seed`, `classId`, `contractId`, `ruleset`, `derived`, `hearts`, `currentRound` (→client.round), `trophiesAtStart` (→client.trophy), `history`, `relics`, `outcome`. Client-authoritative for M1.5a (reducer IGNORES sim value on sync): `gold`, `rerollCount`, `bag`, `shop`. AMENDMENT from Phase 1 report's "gold sim-authoritative" recommendation — PR 2's narrow routing scope (only reroll + apply_combat_outcome route to sim, NOT buy/sell) means sim's gold diverges from client mid-round by `sum(buy_costs) − sum(sell_proceeds)`; overwriting would lose in-round shop transactions. Gold migration to sim-authoritative deferred to 5b/LocalSaveV1 alongside buy/sell mirror routing (CF 34). `startedAt` sim-authoritative but not surfaced in client (M2 carry).
+
+ClientRunState type expansion: new fields `derived: DerivedModifiers`, `outcome: RunOutcome`, `relics: RelicSlots`, `runId: RunId`, `classId: ClassId`, `contractId: ContractId`. Overwrites of existing fields on sync: `ruleset`, `seed`, `hearts`, `round` (←currentRound), `trophy` (←trophiesAtStart), `history`. Preserved client-authoritative: `gold`, `rerollCount`, `maxHearts`, `totalRounds`, `className`, `contractName`, `contractText`.
+
+Q3 — dynamic-import boundary: target = `@packbreaker/sim` root barrel (only `createRun` is deferred; existing static imports of `createRng` + `generateShop` stay — they don't transitively pull combat.ts; Vite chunk-splits cleanly today). Suspense boundary placement: RunProvider (apps/client/src/run/RunContext.tsx). Fallback: reuse `MobileFallback` affordance pattern from RunScreen.tsx (full-viewport `var(--bg-deep)` div). React-pattern choice (useEffect+null vs use()+thenable vs custom lazy hook) deferred to Phase 2 implementation — take-2's "one render of `simRun: null` before resolve" language admits useEffect+null. Sourcemap audit + bundle delta verification deferred to Phase 2.5 per take-2.
+
+Q4 — bag/shop reducer mutation parallelism: option (c). No client→sim mirror for bag/shop in PR 2. Aligns with Q2 Amendment A. Migration to sim authority at 5b/LocalSaveV1 (CF 34).
+
+Q5 — error handling: option (a). Trust sim invariants; no try/catch around `simRun` dispatches; React error boundary catches phase-guard throws. Phase 2 Step 0 verifies client reducer ordering satisfies sim's phase guards (reroll in arranging; enterCombatPhase before client-side simulateCombat; apply_combat_outcome after). Rule 8 codification candidate at PR 2 close if Codex flags ordering divergence.
+
+Q6 — onTelemetryEvent: option (b). PR 2 `createRun` construction stubs `onTelemetryEvent: () => {}`. Real wire-up to client telemetry pipeline deferred to M1.5b (CF 35).
+
+Q7 — opponentClassId optionality reconciliation: option (a). Tighten `ApplyCombatOutcomeInput.opponentClassId?: ClassId | null` to required-nullable `opponentClassId: ClassId | null` (matches RunHistoryEntry shape at schemas.ts:516). Phase 2 Step 0 sweeps all 5 ApplyCombatOutcomeInput construction sites: 1 production (state.ts:848-855 — `runCombatInternal`'s call to `this.applyCombatOutcome`, which already passes `opponentClassId: ghost.classId`) + 4 test fixtures (3 in the `applyCombatOutcome (M1.5a PR 1)` describe block at run.test.ts L1317-1396: Case A inline payload, Case B inline payload at L1361 which currently relies on `?? null` for the omitted field and gets explicit `opponentClassId: null` added, byte-equivalence `const payload: ApplyCombatOutcomeInput` literal; plus 1 in the phase-guard regression Test 5 at L1421-1440 inline payload). CombatOverlay `onDone` payload (apps/client/src/combat/CombatOverlay.tsx) extends with `opponentClassId` from context; `CombatDonePayload` interface at useRun.ts:20-25 adds the field. Sim's `?? null` normalization at state.ts:742 stays as defensive on the now-explicit `ClassId | null` input.
+
+### Carry-forwards opened
+
+- **CF 34 (NEW)** — Gold/rerollCount/bag/shop authority migration: client → sim at M1.5b/LocalSaveV1. Currently bifurcated post-PR-2 (sim owns hearts/history/derived/relics/outcome/ruleset/currentRound/trophy; client owns gold/bag/shop/rerollCount). Migration includes buy_item/sell_item client→sim mirror routing + sync_from_sim consuming gold field. Bag/shop authority migration timeline coupled to LocalSaveV1 persistence shape decisions.
+- **CF 35 (NEW)** — onTelemetryEvent wire-up: M1.5b telemetry milestone wires sim's emit surface (~16 telemetry event types per CreateRunInput's onTelemetryEvent callback) to client's PostHog pipeline. PR 2 ships with `() => {}` stub. Sessionid + tsClient enrichment at client side per state.ts:18-19 design comment.
+
+### Counters entering Phase 2
+
+| Counter | Post-PR-1 close | Post-Phase-1 ratify |
+|---|---|---|
+| Architectural patterns | 6 | 6 |
+| Predicate-vs-name catches | 10 | 10 |
+| Locked answers | 30 | 30 |
+| Going-forward rules | 7 | 7 |
+| Master-dev chat drifts | 8 | 8 |
+| Open carry-forwards | 25 | 27 |
+
+### Phase 2 prompt carry-context
+
+- **Evidence-quality refinements from Phase 1 investigation**: (1) reducer action union is `RunAction` (NOT `RunReducerAction`) at apps/client/src/run/RunController.ts:100-117; (2) test helper `setControllerPhaseToCombat` spans run.test.ts:79-97 (3-line body L95-97 + 16-line JSDoc L79-94), with 4 invocations across 3 tests.
+- **Rule 6 + Rule 7 in force**: Phase 2 prompt's Step 0 surface verification must include type-signature-fidelity check against shipped types (Rule 6). Any new public types/functions added in PR 2 must include barrel-export parity sweep before Phase 2 commit (Rule 7) — though Q1 disposition produces no new public types, the discipline applies to sync_from_sim reducer action if any new public type is added.
+- **Codex re-engagement on Phase 2.5 cycles**: if PR 2 incurs a Phase 2.5 interlude, expect Codex will NOT auto-re-review on subsequent push (PR 1 empirical finding). Plan to explicitly re-request via PR comment or UI gear icon after pushing the Phase 2.5 fix.
+- **§ 4.5 R2 enactment**: PR 2 is the milestone where R2 ("no consumer-side recomputation of hearts/history/phase") materializes for the client. Hearts/history/derived now sim-authoritative on sync.
+- **§ 4.5 R1 cross-axis halt-gate**: existing pattern applies — if Phase 2 surfaces a contradiction between Q1-Q7 dispositions and shipped sim/client shapes, halt at master-dev chat per Rule 6.
+
+---
+
 ## 2026-05-13 — M1.5a PR 1 closed (sim API prep)
 
 ### Branch + commit topology
