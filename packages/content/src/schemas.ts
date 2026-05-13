@@ -18,6 +18,29 @@
  *  - telemetry-plan.md — full event taxonomy
  *
  * Changelog
+ *  v0.6 (2026-05-12) — M1.5a PR 1 schema additions.
+ *   - Added `derived: DerivedModifiers` field to RunState (§ 10). Canonical
+ *     declaration of DerivedModifiers moved into § 10 of this file;
+ *     packages/sim/src/run/ruleset.ts now re-exports the type from
+ *     @packbreaker/content. Eliminates dual-declaration drift surface.
+ *     Consumed by PR 2's client-side sync_from_sim cache mirror and by
+ *     CF 14 regression test (PR 3) reading extraRerollsPerRound from
+ *     authoritative sim state.
+ *   - Added `opponentClassId: ClassId | null` field to RunHistoryEntry
+ *     (§ 10). Populated by RunController.applyCombatOutcome via the new
+ *     'apply_combat_outcome' action variant; internal start_combat path
+ *     populates via ghost.classId (Combatant.classId / GhostBuild.classId).
+ *     Closes CF 15.
+ *   - Both fields are additive; the 224 DO-NOT-REGENERATE fixtures replay
+ *     byte-stable because runCombatInternal's refactored call into
+ *     applyCombatOutcome preserves the prior post-simulateCombat block
+ *     semantics. opponentClassId is newly populated from ghost.classId on
+ *     the start_combat path (was hardcoded null on history.push pre-PR).
+ *   - Pre-PR-1, schema versioning was changelog-comment-only (no
+ *     SCHEMA_VERSION constant); v0.5 was inline-referenced at M1.2.6's
+ *     relic_granted telemetry variant without a formal changelog block.
+ *     v0.6 is the first formal post-v0.4 changelog entry; retroactive v0.5
+ *     block skipped (M1.2.6 sealed historical state).
  *  v0.4 (2026-04-29) — M1.2.4 recipeBonusPct routing.
  *   - Added optional `recipeBornPlacementIds` to Combatant (§ 11) — the run
  *     controller materializes this list at combat start from placements that
@@ -490,6 +513,7 @@ export interface RunHistoryEntry {
   readonly damageTaken: number
   readonly goldEarnedThisRound: number
   readonly opponentGhostId: GhostId | null
+  readonly opponentClassId: ClassId | null
 }
 
 /** Snapshot of the shop at a given round. Regenerated each round. */
@@ -501,12 +525,34 @@ export interface ShopState {
 
 export type RunOutcome = 'in_progress' | 'won' | 'eliminated' | 'abandoned'
 
+/**
+ * Run-side derived modifiers from class + relics. Combat-side modifiers
+ * (bonusBaseDamage, lifestealPct, recipeBonusPct) are NOT here — combat.ts
+ * pulls those from Combatant.classId / .relics directly via deriveSideStats.
+ *
+ * Canonical declaration site as of schema v0.6 (M1.5a PR 1). Prior to v0.6
+ * this type lived in packages/sim/src/run/ruleset.ts; the sim-side module now
+ * re-exports from @packbreaker/content to eliminate dual-declaration drift.
+ */
+export interface DerivedModifiers {
+  /** Free rerolls per round before paid rerolls kick in. Apprentice's Loop
+   *  contributes 1. Locked answer 12. */
+  readonly extraRerollsPerRound: number
+  /** Flat per-item cost delta. Merchant's Mark contributes -1.
+   *  effectiveCost = max(0, item.cost + itemCostDelta). */
+  readonly itemCostDelta: number
+  /** Class.passive.bonusGoldOnWin + sum of RelicModifiers.bonusGoldOnWin.
+   *  Credited on top of ruleset.winBonusGold when a round is won. */
+  readonly bonusGoldOnWin: number
+}
+
 export interface RunState {
   readonly runId: RunId
   readonly seed: SimSeed
   readonly classId: ClassId
   readonly contractId: ContractId
   readonly ruleset: Ruleset
+  readonly derived: DerivedModifiers
   readonly startedAt: IsoTimestamp
   readonly hearts: number
   readonly gold: number

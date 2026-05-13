@@ -65,6 +65,7 @@ export type { SimulateCombatOptions } from './combat';
 export { simulateCombat } from './combat';
 
 export type {
+  ApplyCombatOutcomeInput,
   CreateRunInput,
   RunController,
   RunPhase,

@@ -23,7 +23,14 @@ import {
   type TelemetryEvent,
   type Trigger,
 } from '@packbreaker/content';
-import { createRun, type CreateRunInput } from '../src/run';
+import {
+  applyAction,
+  createRun,
+  type ApplyCombatOutcomeInput,
+  type CreateRunInput,
+  type RunController,
+  type RunPhase,
+} from '../src/run';
 import { simulateCombat } from '../src/combat';
 
 const TINKER = ClassId('tinker');
@@ -67,6 +74,26 @@ function baseInput(overrides: Partial<CreateRunInput> = {}): CreateRunInput {
     startingRelicId: APPRENTICES_LOOP,
     ...overrides,
   };
+}
+
+/** Test-only escape hatch for transient `'combat'` phase. The `'combat'`
+ *  phase is unobservable from outside the controller via public API — only
+ *  `startCombat` sets it, and `startCombat` synchronously transitions through
+ *  `'combat'` → `'resolution'` in a single frame. Tests that exercise
+ *  `applyCombatOutcome` directly (without running real combat) need a way
+ *  to establish the phase precondition.
+ *
+ *  Master-dev chat ratified (M1.5a PR 1 Phase 2.5) this Option A over the
+ *  rejected Option B (no viable public-API path exists today) and the
+ *  variant of adding a test-affordance method to the public sim surface
+ *  (would violate Rule 4 / catch class C2 cleanliness). Helper is scoped
+ *  to this test file; not exported; not part of sim public surface.
+ *
+ *  1-PR bridge: PR 2 introduces a public phase-transition path
+ *  (e.g., `enter_combat_phase` action) and tests 1+2+3 migrate to that real
+ *  path. Helper deletes at PR 2 close — flagged as PR 2 carry-context. */
+function setControllerPhaseToCombat(ctrl: RunController): void {
+  (ctrl as unknown as { phase: RunPhase }).phase = 'combat';
 }
 
 /** Builds a 1g-cost variant of a real item — multi-item test scenarios in
@@ -1272,5 +1299,143 @@ describe('grantRelic', () => {
     ctrl.advancePhase();
     expect(ctrl.getState().currentRound).toBe(7);
     expect(ctrl.getState().shop.slots).toHaveLength(6);
+  });
+});
+
+// ─── applyCombatOutcome (M1.5a PR 1) ───────────────────────────────
+//
+// Direct-action path coverage for the new 'apply_combat_outcome' variant.
+// Path A (Case A) covers non-null opponentGhostId + opponentClassId fields;
+// Path B (Case B) covers the null/omitted opponent normalization. The third
+// case asserts byte-equivalence between direct method invocation and action
+// dispatch — proving the action variant is a faithful wrapper. The internal
+// start_combat path's Pattern 5 byte-identity against the pre-PR-1 inline
+// block is covered by the 224 DO-NOT-REGENERATE determinism fixtures
+// (000-223), which replay byte-stable through the harness.
+
+describe('applyCombatOutcome (M1.5a PR 1)', () => {
+  it("Case A — 'apply_combat_outcome' with non-null opponentGhostId + opponentClassId populates history entry fields", () => {
+    const ctrl = createRun(baseInput());
+    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
+    applyAction(ctrl, {
+      type: 'apply_combat_outcome',
+      payload: {
+        outcome: 'player_win',
+        damageDealt: 30,
+        damageTaken: 0,
+        endedAtTick: 10,
+        opponentGhostId: GhostId('ghost-A'),
+        opponentClassId: MARAUDER,
+      },
+    });
+    const state = ctrl.getState();
+    expect(state.history).toHaveLength(1);
+    const entry = state.history[0]!;
+    expect(entry.opponentGhostId).toBe(GhostId('ghost-A'));
+    expect(entry.opponentClassId).toBe(MARAUDER);
+    expect(entry.outcome).toBe('win');
+    expect(entry.damageDealt).toBe(30);
+    expect(entry.damageTaken).toBe(0);
+    expect(entry.round).toBe(1);
+    // Win bonus: ruleset.winBonusGold (1) + derived.bonusGoldOnWin (0 for
+    // Tinker + Apprentice's Loop). Round 1 income (4g) was credited at
+    // construction.
+    expect(entry.goldEarnedThisRound).toBe(1);
+    expect(state.hearts).toBe(3); // win — no decrement
+    expect(state.gold).toBe(5); // 4 income + 1 win bonus
+    expect(ctrl.getPhase()).toBe('resolution');
+  });
+
+  it("Case B — 'apply_combat_outcome' with null opponentGhostId + omitted opponentClassId normalizes both to null via ?? null", () => {
+    const ctrl = createRun(baseInput());
+    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
+    applyAction(ctrl, {
+      type: 'apply_combat_outcome',
+      payload: {
+        outcome: 'ghost_win',
+        damageDealt: 5,
+        damageTaken: 30,
+        endedAtTick: 15,
+        opponentGhostId: null,
+        // opponentClassId omitted — ?? null normalization applies.
+      },
+    });
+    const state = ctrl.getState();
+    expect(state.history).toHaveLength(1);
+    const entry = state.history[0]!;
+    expect(entry.opponentGhostId).toBeNull();
+    expect(entry.opponentClassId).toBeNull();
+    expect(entry.outcome).toBe('loss');
+    expect(entry.goldEarnedThisRound).toBe(0);
+    expect(state.hearts).toBe(2); // 3 starting − 1 loss decrement
+    expect(state.gold).toBe(4); // no win bonus on loss
+    expect(ctrl.getPhase()).toBe('resolution');
+  });
+
+  it("byte-equivalence — direct controller.applyCombatOutcome() and applyAction({type: 'apply_combat_outcome'}) produce byte-identical RunState", () => {
+    const payload: ApplyCombatOutcomeInput = {
+      outcome: 'player_win',
+      damageDealt: 20,
+      damageTaken: 10,
+      endedAtTick: 12,
+      opponentGhostId: GhostId('g-byte-eq'),
+      opponentClassId: TINKER,
+    };
+    const ctrlDirect = createRun(baseInput());
+    setControllerPhaseToCombat(ctrlDirect); // Phase 2.5 phase-guard precondition.
+    ctrlDirect.applyCombatOutcome(payload);
+    const ctrlAction = createRun(baseInput());
+    setControllerPhaseToCombat(ctrlAction); // Phase 2.5 phase-guard precondition.
+    applyAction(ctrlAction, { type: 'apply_combat_outcome', payload });
+    // Full RunState deep-equality: hearts, gold, history (with opponentClassId
+    // + opponentGhostId), derived (M1.5a PR 1 schema v0.6 addition), phase
+    // observable via getPhase. The action dispatch is a thin pass-through —
+    // no validation, no transformation, no extra side effects.
+    expect(ctrlAction.getState()).toEqual(ctrlDirect.getState());
+    expect(ctrlAction.getPhase()).toBe(ctrlDirect.getPhase());
+  });
+
+  it("start_combat internal path populates RunHistoryEntry.opponentClassId from ghost.classId (CF 15 closure)", () => {
+    // Pre-PR-1, history.push hardcoded opponentClassId absent (the field
+    // didn't exist); post-PR-1, runCombatInternal calls applyCombatOutcome
+    // with `opponentClassId: ghost.classId`. Verifies the internal path
+    // wires the new field correctly.
+    const ctrl = createRun(baseInput());
+    const ghost = emptyGhost(1, MARAUDER); // Marauder ghost, low HP — player wins
+    const oneShot = defineTestItem(
+      'test-one-shot',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 100, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items: Record<ItemId, Item> = { [oneShot.id]: oneShot };
+    const ctrl2 = createRun(baseInput({ itemsRegistry: items }));
+    ctrl2.buyItem(0);
+    ctrl2.placeItem(oneShot.id, { col: 0, row: 0 }, 0);
+    ctrl2.startCombat(ghost);
+    const entry = ctrl2.getState().history[0]!;
+    expect(entry.opponentClassId).toBe(MARAUDER);
+    expect(entry.opponentGhostId).toBeNull(); // internal path passes null
+    void ctrl;
+  });
+
+  it("'apply_combat_outcome' action throws when dispatched outside 'combat' phase", () => {
+    // Phase 2.5 phase-guard regression. New requirePhase('combat',
+    // 'applyCombatOutcome') in the method body throws when dispatched from
+    // 'arranging' (fresh-controller default) or 'resolution' (post-combat).
+    // Mirrors state.ts:677's pattern: `${op}: requires phase '${expected}'
+    // (current: '${this.phase}')`.
+    const ctrl = createRun(baseInput()); // phase = 'arranging'
+    expect(() =>
+      applyAction(ctrl, {
+        type: 'apply_combat_outcome',
+        payload: {
+          outcome: 'player_win',
+          damageDealt: 0,
+          damageTaken: 0,
+          endedAtTick: 1,
+          opponentGhostId: null,
+        },
+      }),
+    ).toThrow(/applyCombatOutcome.*requires phase 'combat'/);
   });
 });

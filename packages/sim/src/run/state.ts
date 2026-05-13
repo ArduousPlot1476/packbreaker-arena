@@ -32,12 +32,14 @@ import {
   type ClassId,
   type CombatEvent,
   type CombatInput,
+  type CombatOutcome,
   type CombatResult,
   type Combatant,
   type Contract,
   type ContractId,
   type ContractMutator,
   type GhostBuild,
+  type GhostId,
   type Item,
   type ItemId,
   type PlacementId,
@@ -75,6 +77,36 @@ import {
 } from './shop';
 
 export type RunPhase = 'arranging' | 'combat' | 'resolution' | 'ended';
+
+/** Input shape for `RunController.applyCombatOutcome`. Carries the
+ *  post-simulateCombat data needed to record a combat outcome into run-state
+ *  (hearts decrement on loss, history append, phase → 'resolution', combat_end
+ *  + round_end telemetry emit). The 'apply_combat_outcome' action variant in
+ *  RunControllerAction carries this same shape.
+ *
+ *  Used by two paths:
+ *    1. Internal — RunController.runCombatInternal calls this immediately
+ *       after `simulateCombat`. Pre-PR-1, the post-simulateCombat block was
+ *       inlined; extracted into a method as of schema v0.6 / M1.5a PR 1 so
+ *       client-side callers can record an externally-computed combat outcome
+ *       without re-running combat.
+ *    2. External — client-side combat-bridge path. Client runs simulateCombat
+ *       through its own lazy-boundary-aware bridge, then dispatches
+ *       'apply_combat_outcome' to the run controller carrying the outcome
+ *       fields. Avoids importing state.ts → combat.ts subgraph into main
+ *       chunk (resolves M1.5a §2a lazy-boundary risk).
+ *
+ *  opponentGhostId nullability matches RunHistoryEntry.opponentGhostId
+ *  (GhostId | null). opponentClassId is optional in the input; `?? null`
+ *  normalization writes the history entry's opponentClassId field. */
+export interface ApplyCombatOutcomeInput {
+  readonly outcome: CombatOutcome;
+  readonly damageDealt: number;
+  readonly damageTaken: number;
+  readonly endedAtTick: number;
+  readonly opponentGhostId: GhostId | null;
+  readonly opponentClassId?: ClassId | null;
+}
 
 export interface CreateRunInput {
   readonly seed: SimSeed;
@@ -126,6 +158,26 @@ export interface RunController {
    *  subsequent shop generations and combats; the CURRENT round's shop is NOT
    *  regenerated. Fires `relic_granted` telemetry on success only. */
   grantRelic(slot: 'mid' | 'boss', relicId: RelicId): void;
+  /** Records a combat outcome into run-state without running simulateCombat.
+   *  Authoritative post-combat state mutator — decrements hearts on loss,
+   *  credits winBonusGold + derived.bonusGoldOnWin on win, appends a
+   *  RunHistoryEntry (with opponentClassId normalized via ?? null), transitions
+   *  phase to 'resolution', and emits combat_end + round_end telemetry.
+   *
+   *  Extracted from runCombatInternal in schema v0.6 / M1.5a PR 1 to support
+   *  the client-side combat-bridge path (caller runs simulateCombat externally
+   *  + dispatches 'apply_combat_outcome'). § 4.5 R2 binding — this is the
+   *  single authoritative post-combat state mutator; no consumer-side
+   *  recomputation of hearts/history/phase. Requires phase === 'combat'
+   *  (runCombatInternal's call site transitions arranging → combat before
+   *  invoking simulateCombat; external callers must establish the same
+   *  precondition via a yet-to-be-added phase-transition entrypoint in
+   *  later PRs OR by invoking start_combat first and using this method only
+   *  for the post-simulateCombat path).
+   *
+   *  No re-entrancy guarantees on direct invocation paths beyond what
+   *  start_combat already provides. */
+  applyCombatOutcome(input: ApplyCombatOutcomeInput): void;
   startCombat(ghost: Combatant): CombatResult;
   /** Runs combat against a `GhostBuild` from `@packbreaker/content`. The
    *  controller derives the ghost's `Combatant` (passiveStats-summed startingHp,
@@ -258,6 +310,11 @@ class RunControllerImpl implements RunController {
       classId: this.classId,
       contractId: this.contractId,
       ruleset: this.contract.ruleset,
+      derived: {
+        extraRerollsPerRound: this.derived.extraRerollsPerRound,
+        itemCostDelta: this.derived.itemCostDelta,
+        bonusGoldOnWin: this.derived.bonusGoldOnWin,
+      },
       startedAt: this.startedAt,
       hearts: this.hearts,
       gold: this.gold,
@@ -644,6 +701,72 @@ class RunControllerImpl implements RunController {
     });
   }
 
+  applyCombatOutcome(input: ApplyCombatOutcomeInput): void {
+    // Phase guard (Codex P1 review finding on PR 13 / Phase 2.5 interlude):
+    // applyCombatOutcome is legal only in 'combat' phase. The start_combat
+    // path satisfies this via runCombatInternal's `this.phase = 'combat'` at
+    // line 791 (pre-simulateCombat). The 'apply_combat_outcome' action
+    // variant requires the dispatcher to first transition the controller
+    // into 'combat' phase. Without this guard, dispatch from 'arranging' or
+    // 'resolution' would corrupt run-state (duplicate history append,
+    // erroneous reward credit/debit) on repeat invocations.
+    this.requirePhase('combat', 'applyCombatOutcome');
+
+    // Resolution-phase entry: credit win bonus, push history entry, decrement
+    // hearts on loss. Phase transitions to 'resolution'.
+    //
+    // Pattern 5 verbatim-mirror discipline (M1.5a PR 1): body extracted
+    // byte-identical-in-semantics from runCombatInternal's pre-PR-1 post-
+    // simulateCombat block (lines 715-760 of the pre-PR-1 state.ts). The
+    // start_combat path's call site passes input fields derived from the
+    // CombatResult that simulateCombat just produced; the direct
+    // 'apply_combat_outcome' action variant lets external callers (client
+    // combat-bridge) supply the same inputs from their own simulateCombat
+    // invocation.
+    const roundOutcome: RoundOutcome = input.outcome === 'player_win' ? 'win' : 'loss';
+    let goldEarnedThisRound = 0;
+    if (roundOutcome === 'win') {
+      goldEarnedThisRound =
+        this.effectiveRuleset.winBonusGold + this.derived.bonusGoldOnWin;
+      this.gold += goldEarnedThisRound;
+    } else {
+      this.hearts = Math.max(0, this.hearts - 1);
+    }
+    this.history.push({
+      round: this.currentRound,
+      outcome: roundOutcome,
+      damageDealt: input.damageDealt,
+      damageTaken: input.damageTaken,
+      goldEarnedThisRound,
+      opponentGhostId: input.opponentGhostId,
+      opponentClassId: input.opponentClassId ?? null,
+    });
+
+    this.phase = 'resolution';
+
+    this.emit({
+      tsClient: this.startedAt,
+      sessionId: this.sessionId,
+      name: 'combat_end',
+      runId: this.runId,
+      round: this.currentRound,
+      outcome: input.outcome,
+      endedAtTick: input.endedAtTick,
+      damageDealt: input.damageDealt,
+      damageTaken: input.damageTaken,
+    });
+    this.emit({
+      tsClient: this.startedAt,
+      sessionId: this.sessionId,
+      name: 'round_end',
+      runId: this.runId,
+      round: this.currentRound,
+      outcome: roundOutcome,
+      damageDealt: input.damageDealt,
+      damageTaken: input.damageTaken,
+    });
+  }
+
   startCombat(ghost: Combatant): CombatResult {
     return this.runCombatInternal(ghost, []);
   }
@@ -710,53 +833,25 @@ class RunControllerImpl implements RunController {
     });
 
     const result = simulateCombat(combatInput, { items: this.items, mutators });
+    // Q2 disposition (M1.5a PR 1): lastCombatResult is sim-internal scratch
+    // state read by getEvents(); kept on the start_combat path only.
+    // applyCombatOutcome does NOT set this field — direct 'apply_combat_outcome'
+    // callers are responsible for retaining the CombatResult on their own
+    // side if they need the event stream post-call.
     this.lastCombatResult = result;
 
-    // Compute damage stats for telemetry / history.
+    // Compute damage stats from the events stream. Done HERE on the
+    // start_combat path so applyCombatOutcome can take pre-computed damage
+    // figures via input (avoids events dependency on the direct-action path).
     const { damageDealt, damageTaken } = computeDamageStats(result.events);
 
-    // Resolution-phase entry: credit win bonus, push history entry, decrement
-    // hearts on loss. Phase transitions to 'resolution'.
-    const roundOutcome: RoundOutcome = result.outcome === 'player_win' ? 'win' : 'loss';
-    let goldEarnedThisRound = 0;
-    if (roundOutcome === 'win') {
-      goldEarnedThisRound =
-        this.effectiveRuleset.winBonusGold + this.derived.bonusGoldOnWin;
-      this.gold += goldEarnedThisRound;
-    } else {
-      this.hearts = Math.max(0, this.hearts - 1);
-    }
-    this.history.push({
-      round: this.currentRound,
-      outcome: roundOutcome,
-      damageDealt,
-      damageTaken,
-      goldEarnedThisRound,
-      opponentGhostId: null,
-    });
-
-    this.phase = 'resolution';
-
-    this.emit({
-      tsClient: this.startedAt,
-      sessionId: this.sessionId,
-      name: 'combat_end',
-      runId: this.runId,
-      round: this.currentRound,
+    this.applyCombatOutcome({
       outcome: result.outcome,
+      damageDealt,
+      damageTaken,
       endedAtTick: result.endedAtTick,
-      damageDealt,
-      damageTaken,
-    });
-    this.emit({
-      tsClient: this.startedAt,
-      sessionId: this.sessionId,
-      name: 'round_end',
-      runId: this.runId,
-      round: this.currentRound,
-      outcome: roundOutcome,
-      damageDealt,
-      damageTaken,
+      opponentGhostId: null,
+      opponentClassId: ghost.classId,
     });
     return result;
   }

@@ -337,6 +337,12 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         damageTaken: action.damageTaken,
         goldEarnedThisRound: goldEarned,
         opponentGhostId: action.opponentGhostId,
+        // M1.5a PR 1 schema v0.6 — opponentClassId additive on RunHistoryEntry.
+        // Client reducer is parallel-state for M1.5a (PR 2 dissolves into
+        // sync_from_sim mirror); pre-PR-2 client path has no class-derivation
+        // hook for the ghost. Wired to null here as the placeholder; PR 2's
+        // sync_from_sim populates from authoritative sim history.
+        opponentClassId: null,
       };
       const nextRound = round + 1;
       // Generate next round's shop deterministically from the run seed.
