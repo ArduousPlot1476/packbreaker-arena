@@ -4,6 +4,119 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-13 — M1.5a PR 1 closed (sim API prep)
+
+### Branch + commit topology
+
+Branch: `m1.5a-sim-prep` off main `ec5c1f6` (post-docs-commit baseline; pre-M1.5 retro + § 4.5 R1 cross-axis amendment + take-1 + take-2 ratifications + gdd § 9 amendment all landed pre-PR-1).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| (no commit) | Phase 1 (chat-level milestone-level design) | Take-1 + take-2 ratifications (decision-log.md 2026-05-12 § M1.5a Phase 1 design take-1 ratification + § M1.5a Phase 1 design take-2 ratification) — design for all 3 PRs locked at chat level. No prompt cycles needed at PR-level Phase 1 since milestone-level design covered scope. |
+| (no commit) | Phase 2 Step 0 + pre-Step-3 halt | 5 Pattern 5 quirks Q1–Q5 surfaced + dispositioned at master-dev chat. Catch 9 codification trigger (opponentGhostId type-signature drift). Working tree zero-mutation at halt; ratification turn produced disposition deltas applied at Steps 1-9 of Phase 2. |
+| `47cdf51` | Phase 2 (implementation) | applyCombatOutcome extracted from runCombatInternal lines 715-760 byte-identical; RunState.derived exposed (readonly); RunHistoryEntry.opponentClassId additive; DerivedModifiers canonicalized in content with sim re-exporting; 'apply_combat_outcome' action variant + applyAction dispatch; 4 new run.test.ts tests; v0.6 schema bump (changelog-header-only versioning; no SCHEMA_VERSION constant exists); 1 mechanical 6-line client touch in apps/client/src/run/RunController.ts (Bucket A schema-required surface; dissolves in PR 2). 224 .jsonl determinism fixtures byte-stable; 6 .json hand-authored fixtures regenerated (snapshot-only; action streams byte-identical). |
+| `9ea5a2b` | Phase 2.5 (Codex P1 findings) | Codex automated review on PR 13 surfaced two P1 findings on Phase 2 HEAD: (1) ApplyCombatOutcomeInput not re-exported from sim barrels — Catch class C2 caught per Rule 4 — Rule 7 codified; (2) applyCombatOutcome lacked combat-phase guard despite documented predicate — Catch 10 codified (predicate-vs-name lineage extending 5-9). Phase 2.5 commit: barrel re-exports from packages/sim/src/{run/index.ts, index.ts}; this.requirePhase('combat', 'applyCombatOutcome') as first executable statement of method body; new Test 5 regression for the phase guard; Option A test-only helper setControllerPhaseToCombat at packages/sim/test/run.test.ts:79-96 (1-PR bridge to PR 2's public phase-transition path). Bundle byte-identical to Phase 2 (same chunk hashes). Phase 2.5 interlude precedent inherited from M1.4b2.3. |
+| `5b67070` | Phase 3 merge | `--no-ff` merge of m1.5a-sim-prep into main. |
+
+### What landed (load-bearing surface summary)
+
+- `RunController.applyCombatOutcome(input: ApplyCombatOutcomeInput): void` — sim-authoritative post-combat state mutator. Byte-identical extraction from runCombatInternal lines 715-760 (telemetry emits included); Pattern 5 discipline held. § 4.5 R2 authority binding — single authoritative post-combat state mutator; no consumer-side recomputation of hearts/history/phase. Phase guard: requires phase === 'combat'; throws otherwise.
+- `'apply_combat_outcome'` action variant in RunControllerAction union; applyAction dispatches to controller.applyCombatOutcome (pure dispatch).
+- `RunState.derived: DerivedModifiers` (readonly snapshot exposure) for PR 2 sync_from_sim consumer reads.
+- `RunHistoryEntry.opponentClassId: ClassId | null` — additive field; populated by applyCombatOutcome. CF 15 closes.
+- `DerivedModifiers` canonical declaration in content-schemas.ts + packages/content/src/schemas.ts; packages/sim/src/run/ruleset.ts re-exports. Eliminates dual-declaration drift surface. check-schemas-sync gate covers content ↔ content byte-identity.
+- Schema bump v0.5 → v0.6 (additive only, changelog-header entry only; no SCHEMA_VERSION constant exists — versioning is purely changelog comments per Q4 disposition).
+- 5 new direct-action unit tests in packages/sim/test/run.test.ts (67 → 72 tests): non-null field passthrough, null normalization, direct-vs-action-dispatch byte equivalence, start_combat opponentClassId regression (CF 15), and phase-guard regression (Catch 10).
+- Both sim package barrels re-export ApplyCombatOutcomeInput (Rule 7 first instance).
+- 1-PR bridge: setControllerPhaseToCombat test helper; deletes at PR 2.
+
+### Pattern + catch + rule codification
+
+- **Pattern 6 unchanged** (no new pattern in PR 1).
+- **Catch 9 (NEW)** — opponentGhostId type-signature drift between Phase 2 prompt's ApplyCombatOutcomeInput.opponentGhostId: string vs shipped RunHistoryEntry.opponentGhostId: GhostId | null. Caught at Phase 2 pre-Step-3 halt-gate by Step 0 surface verification + Pattern 5 extraction discipline. Closed structurally via Q1 disposition.
+- **Catch 10 (NEW)** — applyCombatOutcome phase-guard predicate-vs-name. Interface JSDoc at state.ts:171 documented "Requires phase === 'combat'" since the method was authored at Phase 2; impl never enforced via requirePhase. Lineage extends Catches 5-9 (design-contract vs implementation-reality). Caught by Codex automated review at PR-time per Rule 4. Closed structurally via Phase 2.5 guard at state.ts:702+ (first executable statement of method body, mirroring state.ts:790 pattern).
+- **Rule 6 (NEW)** — Phase 2 prompt premises with type signatures or specific values must be re-derived from shipped state in Step 0 surface verification scope; ratified dispositions encoded in resume instructions must not be silently reverted in implementation. Second-instance codification per standing convention. Instances:
+  - #1 — take-1 §2/§3 task-language-vs-reframing-note self-contradiction (M1.5a Phase 1 design, 2026-05-11).
+  - #2 — Phase 2 prompt's ApplyCombatOutcomeInput.opponentGhostId: string vs shipped RunHistoryEntry.opponentGhostId: GhostId | null (PR 1 Phase 2 pre-Step-3 halt, 2026-05-12).
+  - #3 (reinforcing) — Phase 2 ratification's opponentClassId: ClassId | null (required-nullable) vs Phase 2 implementation's opponentClassId?: ClassId | null (optional) (PR 1 Phase 2 closing report drift; functionally neutral but procedurally documented).
+- **Rule 7 (NEW)** — Barrel-export parity sweep on new public types/functions added to packages/*/src/<module>/...; verify re-export from <module>/index.ts AND packages/<package>/src/index.ts (package root barrel) before Phase 2 commit. First-instance codification per codification-bend convention: (a) failure shape structurally generic ✓ (any new public type addition); (b) discipline low-burden ✓ (single grep + 1-line edit per barrel); (c) predictable upcoming surface ✓ (PR 3 relicOffer.ts adds public functions requiring same sweep). Caught by Codex automated review at PR-time on Phase 2 commit (PR 13 finding 1); closed structurally via Phase 2.5 barrel additions to packages/sim/src/run/index.ts:4 and packages/sim/src/index.ts:68.
+
+### Process learnings (uncodified; logged for second-instance watch)
+
+- **Test-only TS private-cast helper pattern** (setControllerPhaseToCombat at packages/sim/test/run.test.ts): 1-PR bridge for transient phase invariants when no public-API path exists. PR 2 dissolves. Watch for second instance before codifying as a Pattern.
+- **Predicate-vs-name design-contract-vs-impl divergence on new methods**: JSDoc-encoded preconditions need impl-side enforcement. Phase 2's Step 0 surface verification scope could include "for any new public method, search the JSDoc for documented preconditions and verify impl enforces them." Codification candidate at PR 2 close if a second instance fires.
+- **Codex automated review re-engagement pattern on subsequent pushes within a PR**: empirically, Codex did NOT auto-re-review on the Phase 2.5 push to PR 13. Re-engagement required explicit re-request via PR comment trigger (Option 2 of master-dev chat's three-path framing; Option 1 UI re-request was attempted in parallel). Codex re-review on 9ea5a2b returned clean ("Didn't find any major issues. Hooray!"). Implication for Rule 4: when a PR has Phase 2.5 cycles, the structural response is not auto-reviewed by Codex; explicit re-request is required to satisfy the Rule 4 gate. Watch for second instance on PR 2/PR 3 before codifying as a Rule.
+
+### CF dispositions
+
+- **CF 15 closes (PR 1 Phase 2)** — opponentClassId on RunHistoryEntry.
+- **CF 14** — queued PR 3 (regression test for ruleset-modifier reroll cost authority under non-default rulesets; tests UI affordability vs sim's computeRerollCost across reroll cycles).
+- **CF 21 detection-side** — queued PR 3 (mirrorsSimShouldEndRun helper); summary-side stays open for 5b.2.
+- **CF 30** — open (particle-count consts promotion; deferred to M2 telemetry-driven tuning).
+- **CF 32** — open (mid/boss relic content expansion to 3+ per class for full 1-of-3 UI pattern; → M1.6+ or M2 polish).
+- **CF 33** — open (sim state.ts combat-coupling refactor for cleaner lazy-boundary; → M2 architectural cleanup. M1.5a accepts implementation-side dynamic-import workaround in PR 2 scope).
+
+### Counters at PR 1 close
+
+| Counter | Pre-PR-1 | Post-PR-1 |
+|---|---|---|
+| Architectural patterns | 6 | 6 |
+| Predicate-vs-name catches | 8 | 10 |
+| Locked answers | 30 | 30 |
+| Going-forward rules | 5 | 7 |
+| Master-dev chat drifts (Topic 2 counter) | 6 | 8 |
+| Open carry-forwards | 26 | 25 |
+
+### Verification (Phase 2.5 final state, supersedes Phase 2 verification)
+
+```
+pnpm turbo lint test build --force
+Tasks:    19 successful, 19 total
+Cached:    0 cached, 19 total
+Time:    52.184s
+
+pnpm check-schemas-sync
+check-schemas-sync: OK (content-schemas.ts and packages/content/src/schemas.ts byte-identical)
+```
+
+Sim test count: 467 → 470 (Phase 2 +3 + actions.test +1 from action variant dispatch) → 471 (Phase 2.5 +1 phase-guard regression). Wait — recount per Phase 2.5 verification output: "test/run.test.ts (72 tests)" + harness 231 + others = sim total 471 passed + 1 skipped. Workspace test count: 214 passed across 19 files. 224 .jsonl determinism fixtures (000-223) replay byte-stable across Phase 2 + Phase 2.5; 6 .json hand-authored fixtures regenerated at Phase 2 (snapshot-only, action streams byte-identical) and unchanged at Phase 2.5.
+
+### Bundle delta
+
+Combat chunk byte-identical to M1.4b2.3 Phase 2.5 close (1,509.65 KB raw / 349.67 KB gz; same hash CombatOverlay-BGbedATT.js across all of M1.4b2.3 Phase 2.5, M1.5a PR 1 Phase 2, and M1.5a PR 1 Phase 2.5). Main + mobile chunks also byte-identical across Phase 2 and Phase 2.5 (same hashes). Sim-side additive + sim-side fix; no client-render surface impact.
+
+### Codex external review
+
+PR 13 received 2 P1 findings on Phase 2 commit `47cdf51` (barrel re-export gap + phase-guard absence) → both resolved structurally via Phase 2.5 commit `9ea5a2b` → Codex re-review on `9ea5a2b` returned clean ("Didn't find any major issues. Hooray!") after explicit re-request via PR comment trigger.
+
+Rule 4 (codified M1.4b2.3 retro) catch checkpoint satisfied. Catches 8 → 10 (Codex P1 catches both surfaced and closed within PR 1; Catch 10 specifically caught by Codex per Rule 4 framing).
+
+### What's NOT in PR 1 (deferred to PR 2 / PR 3)
+
+- Client integration foundation (useRun, sync_from_sim, dynamic-import boundary per A.1, EXTRA_REROLLS_PER_ROUND removal) — PR 2.
+- Public phase-transition path for client-side combat (e.g., enter_combat_phase action) — PR 2 design scope; gates setControllerPhaseToCombat test-helper deletion.
+- Relic offer generators (generateMidRelicOffer / generateBossRelicOffer in packages/sim/src/run/relicOffer.ts) — PR 3.
+- Client-side run-end detection (mirrorsSimShouldEndRun helper) — PR 3.
+- CF 14 regression test in apps/client/src/shop/ShopController.test.ts — PR 3.
+- UI read-site updates (LeftRail.tsx, RelicsTab.tsx) — PR 3.
+- Particle-count consts promotion (CF 30) — M2.
+
+### PR 2 fresh-chat carry-context pre-flags
+
+1. **Phase transition design**: PR 2's client combat_done routing through simRun.applyCombatOutcome(...) requires sim's phase = 'combat' at dispatch time. Today's sim has no public path to enter 'combat' without running internal combat (start_combat does both synchronously). PR 2 design options: (a) new minimal action `enter_combat_phase`; (b) start_combat with client-driven flag skipping internal simulateCombat; (c) other. Disposition at PR 2 Phase 1 design.
+2. **Test helper migration**: PR 1 Phase 2.5 introduced setControllerPhaseToCombat at packages/sim/test/run.test.ts:79-96 as a 1-PR bridge. PR 2's public phase-transition path must include a migration step in its "done" criteria: update Tests 1+2+3 in run.test.ts to use the real path; delete the helper.
+3. **Rule 6 + Rule 7 in force**: PR 2 Phase 2 prompt's Step 0 surface verification must include type-signature-fidelity check against shipped types (Rule 6). Any new public types/functions added in PR 2 must include barrel-export parity sweep before Phase 2 commit (Rule 7).
+4. **opponentClassId optionality reconciliation**: Phase 2 implementation drifted to optional `opponentClassId?: ClassId | null` against ratification's required-nullable. PR 2's client passes real ClassId values; PR 3 may exercise both. If consistency matters for Codex review on PR 2/3, switch to required-nullable then; otherwise let it ride.
+5. **Codex re-engagement on Phase 2.5 cycles**: if PR 2 incurs a Phase 2.5 interlude, expect Codex will NOT auto-re-review on subsequent push. Plan to explicitly re-request via PR comment (or UI gear icon) after pushing the Phase 2.5 fix.
+
+### Next moves
+
+1. PR 2 fresh chat opens with carry-context (similar pattern to PR 1 chat-open). Carry-context document compiled from this closing-log entry + roadmap.md current-state.
+2. PR 2 Phase 1: design phase-transition path + sync_from_sim shape + Suspense boundary structure for dynamic-import deferral.
+3. PR 2 Phase 2 prompt: built with Rule 6 + Rule 7 in force; Step 0 surface verification includes type-signature-fidelity + barrel-export parity check on any new public types.
+
+---
+
 ## 2026-05-11 — M1.5a Phase 1 design take-2 ratification (3 new Bucket A surfaces resolved + 12 lean-confirms)
 
 Take 2 cleared §1 fast-verify and §3/§4/§5 design proposals; halted in §2 on three new Bucket A surfaces emerging from the take-1 ratification triple against shipped sim state. Plus one Bucket C1 doc/content mismatch.
