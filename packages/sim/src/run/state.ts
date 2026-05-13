@@ -702,6 +702,16 @@ class RunControllerImpl implements RunController {
   }
 
   applyCombatOutcome(input: ApplyCombatOutcomeInput): void {
+    // Phase guard (Codex P1 review finding on PR 13 / Phase 2.5 interlude):
+    // applyCombatOutcome is legal only in 'combat' phase. The start_combat
+    // path satisfies this via runCombatInternal's `this.phase = 'combat'` at
+    // line 791 (pre-simulateCombat). The 'apply_combat_outcome' action
+    // variant requires the dispatcher to first transition the controller
+    // into 'combat' phase. Without this guard, dispatch from 'arranging' or
+    // 'resolution' would corrupt run-state (duplicate history append,
+    // erroneous reward credit/debit) on repeat invocations.
+    this.requirePhase('combat', 'applyCombatOutcome');
+
     // Resolution-phase entry: credit win bonus, push history entry, decrement
     // hearts on loss. Phase transitions to 'resolution'.
     //

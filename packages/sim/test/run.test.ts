@@ -28,6 +28,8 @@ import {
   createRun,
   type ApplyCombatOutcomeInput,
   type CreateRunInput,
+  type RunController,
+  type RunPhase,
 } from '../src/run';
 import { simulateCombat } from '../src/combat';
 
@@ -72,6 +74,26 @@ function baseInput(overrides: Partial<CreateRunInput> = {}): CreateRunInput {
     startingRelicId: APPRENTICES_LOOP,
     ...overrides,
   };
+}
+
+/** Test-only escape hatch for transient `'combat'` phase. The `'combat'`
+ *  phase is unobservable from outside the controller via public API — only
+ *  `startCombat` sets it, and `startCombat` synchronously transitions through
+ *  `'combat'` → `'resolution'` in a single frame. Tests that exercise
+ *  `applyCombatOutcome` directly (without running real combat) need a way
+ *  to establish the phase precondition.
+ *
+ *  Master-dev chat ratified (M1.5a PR 1 Phase 2.5) this Option A over the
+ *  rejected Option B (no viable public-API path exists today) and the
+ *  variant of adding a test-affordance method to the public sim surface
+ *  (would violate Rule 4 / catch class C2 cleanliness). Helper is scoped
+ *  to this test file; not exported; not part of sim public surface.
+ *
+ *  1-PR bridge: PR 2 introduces a public phase-transition path
+ *  (e.g., `enter_combat_phase` action) and tests 1+2+3 migrate to that real
+ *  path. Helper deletes at PR 2 close — flagged as PR 2 carry-context. */
+function setControllerPhaseToCombat(ctrl: RunController): void {
+  (ctrl as unknown as { phase: RunPhase }).phase = 'combat';
 }
 
 /** Builds a 1g-cost variant of a real item — multi-item test scenarios in
@@ -1294,6 +1316,7 @@ describe('grantRelic', () => {
 describe('applyCombatOutcome (M1.5a PR 1)', () => {
   it("Case A — 'apply_combat_outcome' with non-null opponentGhostId + opponentClassId populates history entry fields", () => {
     const ctrl = createRun(baseInput());
+    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
     applyAction(ctrl, {
       type: 'apply_combat_outcome',
       payload: {
@@ -1325,6 +1348,7 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
 
   it("Case B — 'apply_combat_outcome' with null opponentGhostId + omitted opponentClassId normalizes both to null via ?? null", () => {
     const ctrl = createRun(baseInput());
+    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
     applyAction(ctrl, {
       type: 'apply_combat_outcome',
       payload: {
@@ -1358,8 +1382,10 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
       opponentClassId: TINKER,
     };
     const ctrlDirect = createRun(baseInput());
+    setControllerPhaseToCombat(ctrlDirect); // Phase 2.5 phase-guard precondition.
     ctrlDirect.applyCombatOutcome(payload);
     const ctrlAction = createRun(baseInput());
+    setControllerPhaseToCombat(ctrlAction); // Phase 2.5 phase-guard precondition.
     applyAction(ctrlAction, { type: 'apply_combat_outcome', payload });
     // Full RunState deep-equality: hearts, gold, history (with opponentClassId
     // + opponentGhostId), derived (M1.5a PR 1 schema v0.6 addition), phase
@@ -1390,5 +1416,26 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
     expect(entry.opponentClassId).toBe(MARAUDER);
     expect(entry.opponentGhostId).toBeNull(); // internal path passes null
     void ctrl;
+  });
+
+  it("'apply_combat_outcome' action throws when dispatched outside 'combat' phase", () => {
+    // Phase 2.5 phase-guard regression. New requirePhase('combat',
+    // 'applyCombatOutcome') in the method body throws when dispatched from
+    // 'arranging' (fresh-controller default) or 'resolution' (post-combat).
+    // Mirrors state.ts:677's pattern: `${op}: requires phase '${expected}'
+    // (current: '${this.phase}')`.
+    const ctrl = createRun(baseInput()); // phase = 'arranging'
+    expect(() =>
+      applyAction(ctrl, {
+        type: 'apply_combat_outcome',
+        payload: {
+          outcome: 'player_win',
+          damageDealt: 0,
+          damageTaken: 0,
+          endedAtTick: 1,
+          opponentGhostId: null,
+        },
+      }),
+    ).toThrow(/applyCombatOutcome.*requires phase 'combat'/);
   });
 });
