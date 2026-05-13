@@ -105,7 +105,7 @@ export interface ApplyCombatOutcomeInput {
   readonly damageTaken: number;
   readonly endedAtTick: number;
   readonly opponentGhostId: GhostId | null;
-  readonly opponentClassId?: ClassId | null;
+  readonly opponentClassId: ClassId | null;
 }
 
 export interface CreateRunInput {
@@ -158,6 +158,13 @@ export interface RunController {
    *  subsequent shop generations and combats; the CURRENT round's shop is NOT
    *  regenerated. Fires `relic_granted` telemetry on success only. */
   grantRelic(slot: 'mid' | 'boss', relicId: RelicId): void;
+  /** Transitions phase 'arranging' → 'combat' without running combat.
+   *  Counterpart to applyCombatOutcome for the client-driven combat path:
+   *  client invokes enterCombatPhase, side-runs simulateCombat externally,
+   *  dispatches apply_combat_outcome with the result.
+   *
+   *  Requires phase === 'arranging'; throws otherwise. */
+  enterCombatPhase(): void;
   /** Records a combat outcome into run-state without running simulateCombat.
    *  Authoritative post-combat state mutator — decrements hearts on loss,
    *  credits winBonusGold + derived.bonusGoldOnWin on win, appends a
@@ -699,6 +706,11 @@ class RunControllerImpl implements RunController {
       relicId,
       round: this.currentRound,
     });
+  }
+
+  enterCombatPhase(): void {
+    this.requirePhase('arranging', 'enterCombatPhase');
+    this.phase = 'combat';
   }
 
   applyCombatOutcome(input: ApplyCombatOutcomeInput): void {

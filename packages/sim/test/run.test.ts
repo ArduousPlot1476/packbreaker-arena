@@ -28,8 +28,6 @@ import {
   createRun,
   type ApplyCombatOutcomeInput,
   type CreateRunInput,
-  type RunController,
-  type RunPhase,
 } from '../src/run';
 import { simulateCombat } from '../src/combat';
 
@@ -74,26 +72,6 @@ function baseInput(overrides: Partial<CreateRunInput> = {}): CreateRunInput {
     startingRelicId: APPRENTICES_LOOP,
     ...overrides,
   };
-}
-
-/** Test-only escape hatch for transient `'combat'` phase. The `'combat'`
- *  phase is unobservable from outside the controller via public API — only
- *  `startCombat` sets it, and `startCombat` synchronously transitions through
- *  `'combat'` → `'resolution'` in a single frame. Tests that exercise
- *  `applyCombatOutcome` directly (without running real combat) need a way
- *  to establish the phase precondition.
- *
- *  Master-dev chat ratified (M1.5a PR 1 Phase 2.5) this Option A over the
- *  rejected Option B (no viable public-API path exists today) and the
- *  variant of adding a test-affordance method to the public sim surface
- *  (would violate Rule 4 / catch class C2 cleanliness). Helper is scoped
- *  to this test file; not exported; not part of sim public surface.
- *
- *  1-PR bridge: PR 2 introduces a public phase-transition path
- *  (e.g., `enter_combat_phase` action) and tests 1+2+3 migrate to that real
- *  path. Helper deletes at PR 2 close — flagged as PR 2 carry-context. */
-function setControllerPhaseToCombat(ctrl: RunController): void {
-  (ctrl as unknown as { phase: RunPhase }).phase = 'combat';
 }
 
 /** Builds a 1g-cost variant of a real item — multi-item test scenarios in
@@ -1316,7 +1294,7 @@ describe('grantRelic', () => {
 describe('applyCombatOutcome (M1.5a PR 1)', () => {
   it("Case A — 'apply_combat_outcome' with non-null opponentGhostId + opponentClassId populates history entry fields", () => {
     const ctrl = createRun(baseInput());
-    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
+    ctrl.enterCombatPhase();
     applyAction(ctrl, {
       type: 'apply_combat_outcome',
       payload: {
@@ -1346,9 +1324,9 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
     expect(ctrl.getPhase()).toBe('resolution');
   });
 
-  it("Case B — 'apply_combat_outcome' with null opponentGhostId + omitted opponentClassId normalizes both to null via ?? null", () => {
+  it("Case B — 'apply_combat_outcome' with explicit null opponentGhostId + opponentClassId preserves both as null through dispatch (?? null defensive post Q7 tighten)", () => {
     const ctrl = createRun(baseInput());
-    setControllerPhaseToCombat(ctrl); // Phase 2.5 phase-guard precondition.
+    ctrl.enterCombatPhase();
     applyAction(ctrl, {
       type: 'apply_combat_outcome',
       payload: {
@@ -1357,7 +1335,10 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
         damageTaken: 30,
         endedAtTick: 15,
         opponentGhostId: null,
-        // opponentClassId omitted — ?? null normalization applies.
+        // opponentClassId now required by type system post-Q7 tighten;
+        // explicit null preserved through dispatch. The ?? null normalization
+        // at state.ts:742 is now a defensive no-op on the input shape.
+        opponentClassId: null,
       },
     });
     const state = ctrl.getState();
@@ -1382,10 +1363,13 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
       opponentClassId: TINKER,
     };
     const ctrlDirect = createRun(baseInput());
-    setControllerPhaseToCombat(ctrlDirect); // Phase 2.5 phase-guard precondition.
+    ctrlDirect.enterCombatPhase();
     ctrlDirect.applyCombatOutcome(payload);
     const ctrlAction = createRun(baseInput());
-    setControllerPhaseToCombat(ctrlAction); // Phase 2.5 phase-guard precondition.
+    // Byte-equivalence now covers both enter_combat_phase paths AND
+    // apply_combat_outcome paths (method-call on ctrlDirect; action-dispatch
+    // on ctrlAction).
+    applyAction(ctrlAction, { type: 'enter_combat_phase' });
     applyAction(ctrlAction, { type: 'apply_combat_outcome', payload });
     // Full RunState deep-equality: hearts, gold, history (with opponentClassId
     // + opponentGhostId), derived (M1.5a PR 1 schema v0.6 addition), phase
@@ -1434,8 +1418,47 @@ describe('applyCombatOutcome (M1.5a PR 1)', () => {
           damageTaken: 0,
           endedAtTick: 1,
           opponentGhostId: null,
+          opponentClassId: null,
         },
       }),
     ).toThrow(/applyCombatOutcome.*requires phase 'combat'/);
+  });
+});
+
+describe('enter_combat_phase action + enterCombatPhase() method', () => {
+  it("transitions phase 'arranging' → 'combat' via method call", () => {
+    const ctrl = createRun(baseInput());
+    expect(ctrl.getPhase()).toBe('arranging');
+    ctrl.enterCombatPhase();
+    expect(ctrl.getPhase()).toBe('combat');
+  });
+
+  it("throws when invoked twice (double-enter from 'combat')", () => {
+    const ctrl = createRun(baseInput());
+    ctrl.enterCombatPhase();
+    expect(() => ctrl.enterCombatPhase()).toThrow(
+      /enterCombatPhase: requires phase 'arranging' \(current: 'combat'\)/,
+    );
+  });
+
+  it("throws when dispatched as action from 'resolution' phase (post-combat)", () => {
+    // Mirror Test 4's fixture pattern (defineTestItem + emptyGhost + startCombat)
+    // to drive a real arranging → combat → resolution transition. Ghost has
+    // startingHp=1 + a one-shot 100-damage trigger on round_start, so combat
+    // ends with player_win on tick 1; controller exits combat at 'resolution'.
+    const oneShot = defineTestItem(
+      'test-one-shot',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 100, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items: Record<ItemId, Item> = { [oneShot.id]: oneShot };
+    const ctrl = createRun(baseInput({ itemsRegistry: items }));
+    ctrl.buyItem(0);
+    ctrl.placeItem(oneShot.id, { col: 0, row: 0 }, 0);
+    ctrl.startCombat(emptyGhost(1, MARAUDER));
+    expect(ctrl.getPhase()).toBe('resolution');
+    expect(() => applyAction(ctrl, { type: 'enter_combat_phase' })).toThrow(
+      /enterCombatPhase: requires phase 'arranging' \(current: 'resolution'\)/,
+    );
   });
 });

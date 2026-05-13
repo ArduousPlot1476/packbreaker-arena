@@ -63,6 +63,7 @@ export type RunControllerAction =
     }
   | { readonly type: 'start_combat'; readonly ghost: Combatant }
   | { readonly type: 'start_combat_from_ghost_build'; readonly ghost: GhostBuild }
+  | { readonly type: 'enter_combat_phase' }
   | { readonly type: 'apply_combat_outcome'; readonly payload: ApplyCombatOutcomeInput }
   | { readonly type: 'advance_phase' };
 
@@ -109,6 +110,9 @@ export function applyAction(
       return;
     case 'start_combat_from_ghost_build':
       controller.startCombatFromGhostBuild(action.ghost);
+      return;
+    case 'enter_combat_phase':
+      controller.enterCombatPhase();
       return;
     case 'apply_combat_outcome':
       controller.applyCombatOutcome(action.payload);
