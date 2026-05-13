@@ -3,7 +3,14 @@
 
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { DEFAULT_RULESET, type SimSeed } from '@packbreaker/content';
+import {
+  DEFAULT_RULESET,
+  type ClassId,
+  type ContractId,
+  type RunId,
+  type RunOutcome,
+  type SimSeed,
+} from '@packbreaker/content';
 import type { RunState } from '../../../run/types';
 import { RelicsTab } from './RelicsTab';
 
@@ -19,6 +26,12 @@ const TEST_RUN_STATE: RunState = {
   contractName: 'Neutral',
   contractText: 'No modifiers',
   ruleset: DEFAULT_RULESET,
+  runId: 'test-run' as RunId,
+  classId: 'tinker' as ClassId,
+  contractId: 'neutral' as ContractId,
+  derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+  relics: { starter: null, mid: null, boss: null },
+  outcome: 'in_progress' as RunOutcome,
   seed: 12345 as SimSeed,
   history: [],
 };

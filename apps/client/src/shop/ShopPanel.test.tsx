@@ -5,7 +5,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DndContext } from '@dnd-kit/core';
 import { render, screen } from '@testing-library/react';
-import { DEFAULT_RULESET, type SimSeed } from '@packbreaker/content';
+import {
+  DEFAULT_RULESET,
+  type ClassId,
+  type ContractId,
+  type RunId,
+  type RunOutcome,
+  type SimSeed,
+} from '@packbreaker/content';
 import type { ItemId, RunState, ShopSlot } from '../run/types';
 import { ShopPanel } from './ShopPanel';
 
@@ -23,6 +30,12 @@ const TEST_RUN_STATE: RunState = {
   contractName: 'Neutral',
   contractText: 'No modifiers',
   ruleset: DEFAULT_RULESET,
+  runId: 'test-run' as RunId,
+  classId: 'tinker' as ClassId,
+  contractId: 'neutral' as ContractId,
+  derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+  relics: { starter: null, mid: null, boss: null },
+  outcome: 'in_progress' as RunOutcome,
   seed: TEST_SEED,
   history: [],
 };

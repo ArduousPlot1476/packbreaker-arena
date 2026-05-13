@@ -21,14 +21,20 @@ import {
   DEFAULT_RULESET,
   type ClassId,
   type CombatResult,
+  type ContractId,
   type GhostId,
   type RoundNumber,
   type RunHistoryEntry,
+  type RunId,
+  type RunOutcome,
+  type RunState as SimRunState,
 } from '@packbreaker/content';
 
 // M1.3.4a: hardcoded class for the prototype run. Class-select screen
 // (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
-const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
+// Exported for useRun.ts's createRun input construction (M1.5a PR 2
+// Phase 2b-1 dynamic-import wiring).
+export const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
 import { generateInitialShop, generateShop } from '../shop/ShopController';
 import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
 import { ITEMS } from './content';
@@ -79,6 +85,17 @@ export function createInitialState(): ClientRunState {
       contractName: 'Neutral',
       contractText: 'No modifiers',
       ruleset,
+      // Placeholders for the 6 sim-derived fields (M1.5a PR 2 Phase 2b-1).
+      // Written here so the type checks before RunProvider's
+      // init_from_sim dispatch overwrites them on mount; consumers never
+      // observe these placeholders because RunProvider conditionally
+      // renders RunBootFallback until simRun resolves.
+      runId: '' as RunId,
+      classId: M1_PROTOTYPE_CLASS,
+      contractId: 'neutral' as ContractId,
+      derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+      relics: emptyRelicSlots(),
+      outcome: 'in_progress' as RunOutcome,
       seed,
       history: [],
     },
@@ -114,7 +131,55 @@ export type RunAction =
       opponentGhostId: GhostId | null;
       damageDealt: number;
       damageTaken: number;
-    };
+    }
+  | { type: 'init_from_sim'; snapshot: SimRunState }
+  | { type: 'sync_from_sim'; snapshot: SimRunState };
+
+/** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
+ *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
+ *  authoritative for hearts/history/derived/relics/outcome/ruleset/round/
+ *  trophy/runId/classId/contractId/seed; client is authoritative for
+ *  gold/rerollCount/bag/shop in M1.5a (sim only sees reroll +
+ *  apply_combat_outcome routing in PR 2, so its gold tracking diverges
+ *  from client's mid-round by sum(buy_costs) − sum(sell_proceeds);
+ *  overwriting gold on sync would lose in-round shop transactions).
+ *
+ *  `includeGold` distinguishes init from sync:
+ *    - init_from_sim (run-start): includeGold=true. Client and sim
+ *      gold haven't diverged yet — sim's gold IS the source of truth.
+ *    - sync_from_sim (mid-run): includeGold=false. Sim's gold is stale;
+ *      client's gold is the live value. CF 34 migrates this to full
+ *      sim-authoritative gold at M1.5b/LocalSaveV1.
+ *
+ *  bag + shop are NOT touched by either init or sync — they're nested
+ *  on ClientRunState (not state.state) and remain client-authoritative
+ *  for M1.5a. className/contractName/contractText/maxHearts/totalRounds
+ *  also untouched — they're derived placeholders the client owns. */
+function applySimSnapshot(
+  state: ClientRunState,
+  snapshot: SimRunState,
+  includeGold: boolean,
+): ClientRunState {
+  return {
+    ...state,
+    state: {
+      ...state.state,
+      runId: snapshot.runId,
+      seed: snapshot.seed,
+      classId: snapshot.classId,
+      contractId: snapshot.contractId,
+      ruleset: snapshot.ruleset,
+      derived: snapshot.derived,
+      hearts: snapshot.hearts,
+      round: snapshot.currentRound,
+      trophy: snapshot.trophiesAtStart,
+      relics: snapshot.relics,
+      outcome: snapshot.outcome,
+      history: snapshot.history.slice(),
+      ...(includeGold ? { gold: snapshot.gold } : {}),
+    },
+  };
+}
 
 // Pure helper: computes placement of the combine output. Returns the new
 // bag with the output placed, or null if no placement fits.
@@ -364,6 +429,12 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         },
       };
     }
+
+    case 'init_from_sim':
+      return applySimSnapshot(state, action.snapshot, /* includeGold */ true);
+
+    case 'sync_from_sim':
+      return applySimSnapshot(state, action.snapshot, /* includeGold */ false);
 
     default: {
       const _exhaustive: never = action;

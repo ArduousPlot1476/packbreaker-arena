@@ -5,14 +5,20 @@
 // the only window-level event handler that remains: dnd-kit doesn't
 // manage non-drag keyboard concerns.
 
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type {
   DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { CombatResult, GhostId } from '@packbreaker/content';
+import type { CombatResult, ContractId, GhostId } from '@packbreaker/content';
+import { CLASSES } from '@packbreaker/content';
+// Type-only import — does NOT pull sim/state.ts → combat.ts into the
+// main bundle (TS elides type-only imports at compile time; Vite
+// chunk-splits only on runtime imports). The runtime createRun call
+// goes through the dynamic import in the useEffect below.
+import type { RunController as SimRunController } from '@packbreaker/sim';
 
 /** Payload CombatOverlay forwards to the reducer's combat_done action.
  *  Damage values are pre-computed against the player's / ghost's
@@ -28,9 +34,11 @@ import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
   INITIAL_CLIENT_STATE,
+  M1_PROTOTYPE_CLASS,
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
+import { makeRunSeed } from './sim-bridge';
 import type { Recipe } from './types';
 
 function makeUid(prefix: 'b' | 's'): string {
@@ -39,6 +47,38 @@ function makeUid(prefix: 'b' | 's'): string {
 
 export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
+
+  // Sim RunController instance — dynamic-imported on mount per Q3
+  // disposition (M1.5a PR 2 Phase 1, A.1 lazy-boundary preservation).
+  // Static import of createRun would drag sim/state.ts → combat.ts
+  // into the main bundle, regressing tech-architecture.md § 10's
+  // "title screen ships React + bag UI only" promise. RunProvider
+  // renders RunBootFallback while this is null so consumers never
+  // observe the placeholder INITIAL_CLIENT_STATE fields.
+  const [simRun, setSimRun] = useState<SimRunController | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void import('@packbreaker/sim').then(({ createRun }) => {
+      if (cancelled) return;
+      const controller = createRun({
+        seed: makeRunSeed(),
+        classId: M1_PROTOTYPE_CLASS,
+        contractId: 'neutral' as ContractId,
+        startingRelicId: CLASSES[M1_PROTOTYPE_CLASS]!.starterRelicPool[0]!,
+        onTelemetryEvent: () => {
+          // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
+          // wires sim's emit surface to the client's PostHog pipeline
+          // (CF 35). Currently a no-op to satisfy the optional callback.
+        },
+      });
+      setSimRun(controller);
+      dispatch({ type: 'init_from_sim', snapshot: controller.getState() });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const recipes = useMemo(() => detectRecipes(state.bag), [state.bag]);
 
@@ -148,6 +188,7 @@ export function useRun() {
 
   return {
     state,
+    simRun,
     recipes,
     scoutedRecipes,
     handleDragStart,

@@ -26,8 +26,24 @@ type RunContextValue = ReturnType<typeof useRun>;
 
 const RunContext = createContext<RunContextValue | null>(null);
 
+/** Full-viewport placeholder rendered while useRun's dynamic-imported
+ *  sim RunController is still resolving (one render of simRun: null
+ *  per Q3 disposition, M1.5a PR 2 Phase 1). Mirrors the MobileFallback
+ *  affordance in apps/client/src/screens/RunScreen.tsx — same
+ *  `var(--bg-deep)` full-viewport div so the boot transition is
+ *  visually indistinguishable from app-load → first-paint. */
+function RunBootFallback() {
+  return (
+    <div
+      data-testid="run-boot-fallback"
+      style={{ width: '100%', minHeight: '100vh', background: 'var(--bg-deep)' }}
+    />
+  );
+}
+
 export function RunProvider({ children }: { children: ReactNode }) {
   const value = useRun();
+  if (value.simRun === null) return <RunBootFallback />;
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }
 
