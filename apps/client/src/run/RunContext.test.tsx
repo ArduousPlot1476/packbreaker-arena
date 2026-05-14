@@ -182,6 +182,25 @@ describe('RunProvider — RunBootFallback + dynamic-import (M1.5a PR 2 Phase 2b-
     });
     expect(getByTestId('a')).toBeInTheDocument();
   });
+
+  it('init_from_sim populates top-level shop from sim snapshot', async () => {
+    // Phase 2.5b — Codex P2 fix on PR #14. Pre-2.5b, RunProvider's init
+    // left state.shop pointing at the client's module-import-time
+    // generateInitialShop output (seeded by a different makeRunSeed()
+    // call than sim's createRun seed). Post-2.5b, init_from_sim
+    // overwrites state.shop with sim's authoritative shop.slots so
+    // the visible shop matches sim's deterministic round-1 shop.
+    //
+    // Q-2.5b.1 adapter: client ShopSlot[] wraps each sim ItemId in
+    // { uid, itemId }; the load-bearing assertion is the itemId list
+    // matches sim's slots in order. uid construction detail is
+    // covered by adapter shape (s${round}-${rerolls}-${i}); not
+    // re-asserted here to avoid brittle coupling.
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    const simSlots = ctx.simRun!.getState().shop.slots;
+    expect(ctx.state.shop.map((s) => s.itemId)).toEqual([...simSlots]);
+  });
 });
 
 describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', () => {
@@ -255,7 +274,7 @@ describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', 
     expect(next.state.outcome).toBe('eliminated');
   });
 
-  it('init_from_sim + sync_from_sim leave bag and shop client-authoritative (top-level fields, not nested in state.state)', () => {
+  it('init_from_sim + sync_from_sim leave bag client-authoritative; sync_from_sim leaves shop client-authoritative (top-level fields, not nested in state.state)', () => {
     const snapshot = makeSimSnapshot();
     const fixture = {
       ...INITIAL_CLIENT_STATE,
@@ -266,7 +285,10 @@ describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', 
     };
     const afterInit = clientRunReducer(fixture, { type: 'init_from_sim', snapshot });
     expect(afterInit.bag).toEqual(fixture.bag);
-    expect(afterInit.shop).toEqual(fixture.shop);
+    // Post-Phase-2.5b: init_from_sim bootstraps shop from sim's snapshot
+    // (shape-adapted ItemId[] → ShopSlot[]). Coverage of that bootstrap
+    // lives in the dedicated "init_from_sim populates top-level shop
+    // from sim snapshot" test in the dynamic-import describe block.
     const afterSync = clientRunReducer(fixture, { type: 'sync_from_sim', snapshot });
     expect(afterSync.bag).toEqual(fixture.bag);
     expect(afterSync.shop).toEqual(fixture.shop);

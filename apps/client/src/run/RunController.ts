@@ -153,10 +153,12 @@ export type RunAction =
  *      client's gold is the live value. CF 34 migrates this to full
  *      sim-authoritative gold at M1.5b/LocalSaveV1.
  *
- *  bag + shop are NOT touched by either init or sync — they're nested
- *  on ClientRunState (not state.state) and remain client-authoritative
- *  for M1.5a. className/contractName/contractText/maxHearts/totalRounds
- *  also untouched — they're derived placeholders the client owns. */
+ *  bag is NOT touched by either init or sync — remains client-
+ *  authoritative for M1.5a. shop is bootstrapped from sim's snapshot
+ *  at the init_from_sim reducer arm post-applySimSnapshot (Phase 2.5b
+ *  Codex response); sync continues to leave shop client-authoritative.
+ *  className/contractName/contractText/maxHearts/totalRounds also
+ *  untouched — they're derived placeholders the client owns. */
 function applySimSnapshot(
   state: ClientRunState,
   snapshot: SimRunState,
@@ -415,7 +417,13 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
     }
 
     case 'init_from_sim':
-      return applySimSnapshot(state, action.snapshot, /* includeGold */ true);
+      return {
+        ...applySimSnapshot(state, action.snapshot, /* includeGold */ true),
+        shop: action.snapshot.shop.slots.map((itemId, i) => ({
+          uid: `s${action.snapshot.currentRound}-${action.snapshot.shop.rerollsThisRound}-${i}`,
+          itemId: itemId as ItemId,
+        })),
+      };
 
     case 'sync_from_sim':
       return applySimSnapshot(state, action.snapshot, /* includeGold */ false);
