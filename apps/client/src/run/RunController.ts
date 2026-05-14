@@ -23,8 +23,6 @@ import {
   type CombatResult,
   type ContractId,
   type GhostId,
-  type RoundNumber,
-  type RunHistoryEntry,
   type RunId,
   type RunOutcome,
   type RunState as SimRunState,
@@ -41,7 +39,6 @@ import { ITEMS } from './content';
 import {
   computeRerollCost,
   emptyRelicSlots,
-  EXTRA_REROLLS_PER_ROUND,
   makeRunSeed,
 } from './sim-bridge';
 import type { BagItem, Cell, ItemId, RecipeMatch, RunState, ShopSlot } from './types';
@@ -109,10 +106,13 @@ export function createInitialState(): ClientRunState {
  *  state at first render matches what tests observe. */
 export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState();
 
-// EXTRA_REROLLS_PER_ROUND + computeRerollCost are imported from
-// run/sim-bridge.ts so the reducer's spend-deduction and ShopPanel /
-// ShopTab affordability state share one authoritative source. See
-// sim-bridge.ts for the Codex P1 context.
+// computeRerollCost is imported from run/sim-bridge.ts so the reducer's
+// spend-deduction and ShopPanel / ShopTab affordability state share one
+// authoritative source. The 4th arg (extraRerollsPerRound) now reads
+// from state.derived.extraRerollsPerRound, populated by sync_from_sim
+// (M1.5a PR 2 Phase 2b-2; EXTRA_REROLLS_PER_ROUND placeholder deleted).
+// See sim-bridge.ts for the Codex P1 context on shared-formula
+// discipline.
 
 export type RunAction =
   | { type: 'pickup_bag'; uid: string; itemId: ItemId; rot: number }
@@ -129,8 +129,10 @@ export type RunAction =
       type: 'combat_done';
       result: CombatResult;
       opponentGhostId: GhostId | null;
+      opponentClassId: ClassId | null;
       damageDealt: number;
       damageTaken: number;
+      goldDelta: number;
     }
   | { type: 'init_from_sim'; snapshot: SimRunState }
   | { type: 'sync_from_sim'; snapshot: SimRunState };
@@ -343,7 +345,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         state.state.rerollCount,
         ruleset.rerollCostStart,
         ruleset.rerollCostIncrement,
-        EXTRA_REROLLS_PER_ROUND,
+        state.state.derived.extraRerollsPerRound,
       );
       if (state.state.gold < cost) return state;
       const newSlots = generateShop(
@@ -375,57 +377,39 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return { ...state, combatActive: true };
 
     case 'combat_done': {
-      // Resolve the round: append a RunHistoryEntry + apply hearts /
-      // gold / trophy deltas based on outcome. Sim's CombatResult is
-      // authoritative for outcome and finalHp; the action carries the
-      // pre-computed damage values so the reducer doesn't need to
-      // import combat/ghost.ts (which would defeat the lazy split).
+      // M1.5a PR 2 Phase 2b-2 active routing cutover: all sim-authoritative
+      // fields (hearts/history/round/derived/relics/outcome/trophy) were
+      // mirrored by the prior sync_from_sim dispatch in onCombatDone.
+      // state.state.round here is ALREADY the new (post-advancePhase) round
+      // from that sync. Gold-delta is precomputed by the handler via
+      // before/after sim.gold observation (β disposition — sim is single
+      // source of truth for gold-mutation math; see useRun.ts onCombatDone).
       //
-      // M1.3.4a economic rules:
-      //   - Win: +winBonusGold, +18 trophy, hearts unchanged.
-      //   - Loss: +0 gold, +0 trophy, hearts -1 (clamped to 0).
-      //   - Draw: treated as loss for hearts; trophy / gold neutral.
-      //
-      // M1.5+ adds run-end detection (hearts === 0 → eliminated +
-      // game-over screen) + per-round goldPerRound passive sums +
-      // multi-round trophy schedule from the contract.
-      const ruleset = state.state.ruleset;
-      const isWin = action.result.outcome === 'player_win';
-      const hearts = isWin ? state.state.hearts : Math.max(0, state.state.hearts - 1);
-      const goldEarned = isWin ? ruleset.winBonusGold : 0;
-      const trophyEarned = isWin ? 18 : 0;
-      const round = state.state.round;
-      const historyEntry: RunHistoryEntry = {
-        round: round as RoundNumber,
-        outcome: isWin ? 'win' : 'loss',
-        damageDealt: action.damageDealt,
-        damageTaken: action.damageTaken,
-        goldEarnedThisRound: goldEarned,
-        opponentGhostId: action.opponentGhostId,
-        // M1.5a PR 1 schema v0.6 — opponentClassId additive on RunHistoryEntry.
-        // Client reducer is parallel-state for M1.5a (PR 2 dissolves into
-        // sync_from_sim mirror); pre-PR-2 client path has no class-derivation
-        // hook for the ghost. Wired to null here as the placeholder; PR 2's
-        // sync_from_sim populates from authoritative sim history.
-        opponentClassId: null,
-      };
-      const nextRound = round + 1;
-      // Generate next round's shop deterministically from the run seed.
-      const nextShop = generateShop(state.state.seed, nextRound, M1_PROTOTYPE_CLASS, ruleset, 0);
-      // Empty relic slots (M1.3.4a — relic state machinery is M1.5).
-      void emptyRelicSlots;
+      // Bag + shop stay client-authoritative for M1.5a per Q2 Amendment A.
+      // If sim's advancePhase didn't end the run, regenerate next round's
+      // shop deterministically from the run seed at the new round. If the
+      // run ended (sim's shouldEndRun fired → outcome != 'in_progress'),
+      // shop is left as-is (run-end UX is M1.5+; CF 34/M1.5b reworks).
+      const runEnded = state.state.outcome !== 'in_progress';
+      const nextShop = runEnded
+        ? state.shop
+        : generateShop(
+            state.state.seed,
+            state.state.round,
+            state.state.classId,
+            state.state.ruleset,
+            0,
+          );
       return {
         ...state,
         combatActive: false,
         shop: nextShop,
+        drag: null,
+        hover: null,
         state: {
           ...state.state,
-          hearts,
-          gold: state.state.gold + goldEarned,
-          trophy: state.state.trophy + trophyEarned,
-          round: nextRound,
+          gold: state.state.gold + action.goldDelta,
           rerollCount: 0,
-          history: [...state.state.history, historyEntry],
         },
       };
     }

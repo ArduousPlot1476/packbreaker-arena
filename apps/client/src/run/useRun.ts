@@ -12,7 +12,7 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { CombatResult, ContractId, GhostId } from '@packbreaker/content';
+import type { ClassId, CombatResult, ContractId, GhostId } from '@packbreaker/content';
 import { CLASSES } from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
@@ -22,10 +22,13 @@ import type { RunController as SimRunController } from '@packbreaker/sim';
 
 /** Payload CombatOverlay forwards to the reducer's combat_done action.
  *  Damage values are pre-computed against the player's / ghost's
- *  startingHp + result.finalHp so the reducer doesn't need ghost.ts. */
+ *  startingHp + result.finalHp so the reducer doesn't need ghost.ts.
+ *  opponentClassId added M1.5a PR 2 Phase 2b-2 (Q7 — threaded from
+ *  ghost build for sim's applyCombatOutcome). */
 export interface CombatDonePayload {
   result: CombatResult;
   opponentGhostId: GhostId | null;
+  opponentClassId: ClassId | null;
   damageDealt: number;
   damageTaken: number;
 }
@@ -38,7 +41,7 @@ import {
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
-import { makeRunSeed } from './sim-bridge';
+import { computeRerollCost, makeRunSeed } from './sim-bridge';
 import type { Recipe } from './types';
 
 function makeUid(prefix: 'b' | 's'): string {
@@ -164,27 +167,82 @@ export function useRun() {
   }, []);
 
   const onReroll = useCallback(() => {
-    // The reroll action carries no payload as of M1.3.4a — ShopController
-    // generates the new shop using state.seed + round + rerollCount inside
-    // the reducer, so makeUid for slot ids is no longer needed here.
+    if (simRun === null) return;
+    // Client-side gold gate (Amendment A: client owns gold).
+    const ruleset = state.state.ruleset;
+    const cost = computeRerollCost(
+      state.state.rerollCount,
+      ruleset.rerollCostStart,
+      ruleset.rerollCostIncrement,
+      state.state.derived.extraRerollsPerRound,
+    );
+    if (state.state.gold < cost) return;
+
+    // Sim-side mirror — α disposition. Sim's rerollShop throws on its
+    // own gold check (state.ts:518-522). Under Amendment A's bifurcation,
+    // sim.gold goes stale after client buys/sells; catch the specific
+    // insufficient-gold throw and degrade to client-only mutation (no
+    // sync_from_sim — sim is provably stale on gold). Other throws
+    // re-propagate per Q5 (trust invariants).
+    let simMirrored = false;
+    try {
+      simRun.rerollShop();
+      simMirrored = true;
+    } catch (err) {
+      if (err instanceof Error && err.message.startsWith('rerollShop: insufficient gold')) {
+        console.warn(
+          '[useRun] sim/client gold divergence on reroll; client proceeds without sim mirror:',
+          err.message,
+        );
+      } else {
+        throw err;
+      }
+    }
+
+    if (simMirrored) {
+      dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+    }
     dispatch({ type: 'reroll' });
-  }, []);
+  }, [simRun, state.state.derived.extraRerollsPerRound, state.state.gold, state.state.rerollCount, state.state.ruleset]);
 
   const onCombine = useCallback((match: RecipeMatch) => {
     dispatch({ type: 'combine', match, newUid: makeUid('b') });
   }, []);
 
   const onContinue = useCallback(() => {
+    if (simRun === null) return;
+    // Sim phase 'arranging' → 'combat'. No sync_from_sim: enterCombatPhase
+    // only mutates phase, which is NOT in ClientRunState (Q2 disposition).
+    simRun.enterCombatPhase();
     dispatch({ type: 'continue_to_combat' });
-  }, []);
+  }, [simRun]);
 
-  // CombatOverlay computes damageDealt / damageTaken / opponentGhostId
-  // at combat-end (it has the input + result on hand) and forwards them
-  // to the reducer so the round-resolution branch doesn't need to
-  // import combat/ghost.ts (which would defeat the lazy chunk split).
+  // CombatOverlay computes damageDealt / damageTaken / opponentGhostId /
+  // opponentClassId at combat-end (it has the input + result on hand)
+  // and forwards them to onCombatDone.
   const onCombatDone = useCallback((payload: CombatDonePayload) => {
-    dispatch({ type: 'combat_done', ...payload });
-  }, []);
+    if (simRun === null) return;
+    // β disposition (Phase 2b-2 ratification): capture sim.gold before
+    // bundled mutations. The reducer applies the sim-computed delta
+    // (winBonus on win + baseIncomeForRound on advance, shouldEndRun-
+    // guarded at sim state.ts:357-360). § 4.5 R2 strict enactment —
+    // client recomputes nothing; sim is single source of truth for the
+    // gold-delta math.
+    const goldBefore = simRun.getState().gold;
+    simRun.applyCombatOutcome({
+      outcome: payload.result.outcome,
+      damageDealt: payload.damageDealt,
+      damageTaken: payload.damageTaken,
+      endedAtTick: payload.result.endedAtTick,
+      opponentGhostId: payload.opponentGhostId,
+      opponentClassId: payload.opponentClassId,
+    });
+    simRun.advancePhase();
+    const snapshot = simRun.getState();
+    const goldDelta = snapshot.gold - goldBefore;
+    dispatch({ type: 'sync_from_sim', snapshot });
+    dispatch({ type: 'combat_done', goldDelta, ...payload });
+  }, [simRun]);
 
   return {
     state,

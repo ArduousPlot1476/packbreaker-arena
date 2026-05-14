@@ -21,8 +21,15 @@
 // resolves. Existing tests await the resolve; new tests cover
 // init_from_sim / sync_from_sim reducer cases (Q2 Amendment A
 // bifurcated gold authority).
+//
+// M1.5a PR 2 Phase 2b-2: active routing cutover. Existing state-
+// preservation test math updated for derived.extraRerollsPerRound=1
+// (Apprentice's Loop, default starter relic for Tinker). New tests
+// cover useRun handler routing (onReroll α catch, onContinue
+// enterCombatPhase, onCombatDone capture-delta + Bucket A dissolution
+// via opponentClassId flowing through sync_from_sim).
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type {
   ClassId,
@@ -97,22 +104,20 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
       expect(queryByTestId('run-boot-fallback')).toBeNull();
     });
 
-    // Initial state — gold = DEFAULT_RULESET.baseGoldPerRound (4 in M1.3.4a's
-    // round-1 fresh-start; was 8 pre-M1.3.4a when SEED_BAG/SEED_SHOP seeded
-    // a mid-run mock at round 4). rerollCount starts at 0.
+    // Initial state. With sim's createRun (M1.5a PR 2 Phase 2b-1+), the
+    // run starts with Tinker + Apprentice's Loop (default starterRelicPool[0]),
+    // which contributes extraRerollsPerRound: 1 to DerivedModifiers.
+    // init_from_sim populates state.derived from sim's compose; gold = 4.
     const initialGold = parseInt(getByTestId('a-gold').textContent ?? '', 10);
     expect(initialGold).toBeGreaterThan(0);
     expect(getByTestId('a-reroll-count').textContent).toBe('0');
 
-    // Mutate state via reroll: cost = computeRerollCost(0, 1, 1, 0) = 1
-    // (default ruleset: rerollCostStart=1, rerollCostIncrement=1,
-    // EXTRA_REROLLS_PER_ROUND=0), so gold decrements by 1 and
-    // rerollCount increments to 1.
+    // First reroll: cost = computeRerollCost(0, 1, 1, 1) = 0 (the free
+    // reroll from Apprentice's Loop). Gold unchanged; rerollCount → 1.
     act(() => {
       fireEvent.click(getByTestId('a-reroll'));
     });
-    const goldAfterFirstReroll = initialGold - 1;
-    expect(getByTestId('a-gold').textContent).toBe(String(goldAfterFirstReroll));
+    expect(getByTestId('a-gold').textContent).toBe(String(initialGold));
     expect(getByTestId('a-reroll-count').textContent).toBe('1');
 
     // Swap children — analog of dispatcher swapping Desktop ↔ Mobile
@@ -121,18 +126,19 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
     rerender(<Wrapper child="B" />);
 
     // The leaving child is unmounted; the new child mounts and reads
-    // the preserved context value.
+    // the preserved context value. rerollCount=1 proves state survived
+    // the swap even though gold did not change on the first reroll.
     expect(queryByTestId('a')).toBeNull();
-    expect(getByTestId('b-gold').textContent).toBe(String(goldAfterFirstReroll));
+    expect(getByTestId('b-gold').textContent).toBe(String(initialGold));
     expect(getByTestId('b-reroll-count').textContent).toBe('1');
 
-    // Mutate again from the new child — the same reducer instance
-    // continues to advance the state. Second reroll cost = 2, so gold
-    // decrements by 2.
+    // Second reroll: cost = computeRerollCost(1, 1, 1, 1) = 1 + (1-1)*1
+    // = 1g. Gold decrements by 1; rerollCount → 2. This iteration
+    // demonstrates state mutation persists across the swap.
     act(() => {
       fireEvent.click(getByTestId('b-reroll'));
     });
-    expect(getByTestId('b-gold').textContent).toBe(String(goldAfterFirstReroll - 2));
+    expect(getByTestId('b-gold').textContent).toBe(String(initialGold - 1));
     expect(getByTestId('b-reroll-count').textContent).toBe('2');
   });
 
@@ -264,5 +270,221 @@ describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', 
     const afterSync = clientRunReducer(fixture, { type: 'sync_from_sim', snapshot });
     expect(afterSync.bag).toEqual(fixture.bag);
     expect(afterSync.shop).toEqual(fixture.shop);
+  });
+});
+
+// ─── M1.5a PR 2 Phase 2b-2 — useRun handler routing tests ─────────────
+//
+// These tests render RunProvider with the real sim (no module mock),
+// wait for the dynamic-import to resolve, then capture the context value
+// and use vi.spyOn(simRun, '...') to inject failures or observe calls.
+// This avoids the heavyweight vi.mock @packbreaker/sim setup while
+// still verifying the active routing cutover end-to-end.
+
+function CaptureContext({ onCtx }: { onCtx: (ctx: ReturnType<typeof useRunContext>) => void }) {
+  const ctx = useRunContext();
+  onCtx(ctx);
+  return <div data-testid="capture-ready">ready</div>;
+}
+
+function CaptureWrapper({ onCtx }: { onCtx: (ctx: ReturnType<typeof useRunContext>) => void }) {
+  return (
+    <RunProvider>
+      <CaptureContext onCtx={onCtx} />
+    </RunProvider>
+  );
+}
+
+async function renderAndCapture(): Promise<{
+  getCtx: () => ReturnType<typeof useRunContext>;
+}> {
+  let latest: ReturnType<typeof useRunContext> | null = null;
+  const onCtx = (c: ReturnType<typeof useRunContext>) => {
+    latest = c;
+  };
+  render(<CaptureWrapper onCtx={onCtx} />);
+  // RunProvider gates children on simRun !== null; onCtx fires only after
+  // the dynamic-import resolves. Assert latest is populated AND its simRun
+  // is non-null (the `not.toBeNull()` matcher distinguishes null but
+  // accepts undefined — explicit truthiness check is required).
+  await waitFor(() => {
+    expect(latest).not.toBeNull();
+    expect(latest!.simRun).not.toBeNull();
+  });
+  return { getCtx: () => latest! };
+}
+
+describe('useRun onReroll — sim mirror + α catch (M1.5a PR 2 Phase 2b-2)', () => {
+  it('routes through simRun.rerollShop on success; dispatches sync_from_sim then reroll', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    expect(ctx.simRun).not.toBeNull();
+    const rerollShopSpy = vi.spyOn(ctx.simRun!, 'rerollShop');
+    const rerollCountBefore = ctx.state.state.rerollCount;
+    act(() => {
+      ctx.onReroll();
+    });
+    expect(rerollShopSpy).toHaveBeenCalledOnce();
+    // The reducer's reroll dispatch fired — observable via rerollCount.
+    await waitFor(() => {
+      expect(getCtx().state.state.rerollCount).toBe(rerollCountBefore + 1);
+    });
+  });
+
+  it('α catch — insufficient-gold throw is swallowed; reroll still dispatches', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    const rerollCountBefore = ctx.state.state.rerollCount;
+    const goldBefore = ctx.state.state.gold;
+    // Inject the specific α throw on rerollShop.
+    vi.spyOn(ctx.simRun!, 'rerollShop').mockImplementation(() => {
+      throw new Error('rerollShop: insufficient gold (have 0, need 1)');
+    });
+    // Suppress the warn that the catch logs.
+    const originalWarn = console.warn;
+    console.warn = vi.fn();
+    try {
+      // Must not throw — α catch swallows.
+      expect(() => act(() => ctx.onReroll())).not.toThrow();
+    } finally {
+      console.warn = originalWarn;
+    }
+    // Client-side reducer still ran (rerollCount + gold mutated locally).
+    await waitFor(() => {
+      expect(getCtx().state.state.rerollCount).toBe(rerollCountBefore + 1);
+    });
+    // Gold decremented by the client-side reducer per its own cost calc
+    // (free first reroll because derived.extraRerollsPerRound=1; goldBefore preserved).
+    expect(getCtx().state.state.gold).toBe(goldBefore);
+  });
+
+  it('non-α errors from rerollShop re-propagate per Q5 (trust invariants)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    vi.spyOn(ctx.simRun!, 'rerollShop').mockImplementation(() => {
+      throw new Error('rerollShop: requires phase \'arranging\' (current: \'combat\')');
+    });
+    expect(() => act(() => ctx.onReroll())).toThrow(/requires phase 'arranging'/);
+  });
+});
+
+describe('useRun onContinue — enterCombatPhase routing (M1.5a PR 2 Phase 2b-2)', () => {
+  it('calls simRun.enterCombatPhase then dispatches continue_to_combat (combatActive=true)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    expect(ctx.state.combatActive).toBe(false);
+    const enterCombatPhaseSpy = vi.spyOn(ctx.simRun!, 'enterCombatPhase');
+    act(() => {
+      ctx.onContinue();
+    });
+    expect(enterCombatPhaseSpy).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(getCtx().state.combatActive).toBe(true);
+    });
+  });
+});
+
+describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (M1.5a PR 2 Phase 2b-2)', () => {
+  it('routes through applyCombatOutcome + advancePhase; goldDelta computed from sim.gold before/after observation', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    // Transition sim to 'combat' phase first (handler precondition mirrors
+    // the real onContinue → onCombatDone flow).
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const applyOutcomeSpy = vi.spyOn(ctx.simRun!, 'applyCombatOutcome');
+    const advancePhaseSpy = vi.spyOn(ctx.simRun!, 'advancePhase');
+
+    const goldBefore = getCtx().state.state.gold;
+    const roundBefore = getCtx().state.state.round;
+
+    // Construct a CombatResult with player_win — sim's applyCombatOutcome
+    // will credit winBonusGold + bonusGoldOnWin; advancePhase will then
+    // credit baseIncomeForRound(2, DEFAULT_RULESET) = 4g.
+    const playerWinResult = {
+      events: [],
+      outcome: 'player_win' as const,
+      finalHp: { player: 30, ghost: 0 },
+      endedAtTick: 5,
+    };
+
+    act(() => {
+      ctx.onCombatDone({
+        result: playerWinResult,
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 30,
+        damageTaken: 6,
+      });
+    });
+
+    // Verify sim routing.
+    expect(applyOutcomeSpy).toHaveBeenCalledOnce();
+    expect(applyOutcomeSpy.mock.calls[0]![0]).toMatchObject({
+      outcome: 'player_win',
+      damageDealt: 30,
+      damageTaken: 6,
+      endedAtTick: 5,
+      opponentGhostId: null,
+      opponentClassId: 'marauder',
+    });
+    expect(advancePhaseSpy).toHaveBeenCalledOnce();
+    // applyCombatOutcome must be called before advancePhase (order matters
+    // for sim's phase guards). The order is implicit in spy call indices
+    // when both are inspected via mock.invocationCallOrder.
+    expect(applyOutcomeSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      advancePhaseSpy.mock.invocationCallOrder[0]!,
+    );
+
+    // Wait for the reducer dispatches to settle.
+    await waitFor(() => {
+      expect(getCtx().state.combatActive).toBe(false);
+    });
+
+    // sync_from_sim populated sim-authoritative fields. round advanced.
+    expect(getCtx().state.state.round).toBe(roundBefore + 1);
+
+    // Gold delta matches sim's actual mutation (winBonusGold=1 + bonusGoldOnWin=0
+    // for Tinker + Apprentice's Loop + baseIncomeForRound(2)=4 → delta = 5).
+    // Client.gold = goldBefore + 5.
+    expect(getCtx().state.state.gold).toBe(goldBefore + 5);
+  });
+
+  it('Bucket A dissolution — history.opponentClassId populated from payload via sim sync (no hardcoded null)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const lossResult = {
+      events: [],
+      outcome: 'ghost_win' as const,
+      finalHp: { player: 0, ghost: 12 },
+      endedAtTick: 3,
+    };
+
+    act(() => {
+      ctx.onCombatDone({
+        result: lossResult,
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 18,
+        damageTaken: 30,
+      });
+    });
+
+    await waitFor(() => {
+      expect(getCtx().state.combatActive).toBe(false);
+    });
+
+    // sync_from_sim populated history with the sim-authoritative entry,
+    // which carries opponentClassId from applyCombatOutcome's Q7-tightened
+    // input. The pre-Phase-2b-2 hardcoded null at the old combat_done
+    // history-construction site is gone — proof of Bucket A dissolution.
+    const history = getCtx().state.state.history;
+    expect(history).toHaveLength(1);
+    expect(history[0]!.opponentClassId).toBe('marauder');
+    expect(history[0]!.outcome).toBe('loss');
   });
 });

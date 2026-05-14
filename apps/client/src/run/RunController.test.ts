@@ -146,34 +146,38 @@ describe('clientRunReducer', () => {
     expect(noOp).toBe(next); // identity-equal: no state change
   });
 
-  it('combat_done (win) advances round + grants reward + appends history', () => {
+  // M1.5a PR 2 Phase 2b-2 active routing cutover: combat_done's reducer
+  // contract collapsed. sim-authoritative fields (hearts/history/round/
+  // derived/relics/outcome/trophy) flow exclusively via sync_from_sim
+  // (dispatched by onCombatDone BEFORE combat_done). The reducer's
+  // combat_done now only applies the precomputed goldDelta (β —
+  // sim-computed via before/after observation in onCombatDone),
+  // resets combatActive + rerollCount, and regenerates next round's
+  // shop locally (client-authoritative bag/shop per Q2 Amendment A).
+  it('combat_done applies action.goldDelta + resets combatActive (β capture-delta)', () => {
     const initial = freshInitial();
     const inCombat: ClientRunState = { ...initial, combatActive: true };
     const next = clientRunReducer(inCombat, {
       type: 'combat_done',
       result: STUB_COMBAT_RESULT,
       opponentGhostId: null,
+      opponentClassId: null,
       damageDealt: 30,
       damageTaken: 6,
+      goldDelta: 5, // sim's winBonus + roundIncome captured by handler
     });
     expect(next.combatActive).toBe(false);
-    expect(next.state.round).toBe(initial.state.round + 1);
-    expect(next.state.gold).toBe(initial.state.gold + 1);
-    expect(next.state.trophy).toBe(initial.state.trophy + 18);
-    expect(next.state.hearts).toBe(initial.state.hearts);
+    expect(next.state.gold).toBe(initial.state.gold + 5);
     expect(next.state.rerollCount).toBe(0);
-    expect(next.state.history).toHaveLength(1);
-    expect(next.state.history[0]).toMatchObject({
-      round: initial.state.round,
-      outcome: 'win',
-      damageDealt: 30,
-      damageTaken: 6,
-      goldEarnedThisRound: 1,
-      opponentGhostId: null,
-    });
+    // Hearts/history/round NOT mutated by combat_done (sync_from_sim
+    // populates those upstream). Asserting absence proves the reducer's
+    // pre-2b-2 arithmetic block is gone.
+    expect(next.state.hearts).toBe(initial.state.hearts);
+    expect(next.state.history).toHaveLength(0);
+    expect(next.state.round).toBe(initial.state.round);
   });
 
-  it('combat_done (loss) decrements hearts + grants no reward', () => {
+  it('combat_done with goldDelta=0 leaves gold unchanged (loss-no-advance path)', () => {
     const initial = freshInitial();
     const inCombat: ClientRunState = { ...initial, combatActive: true };
     const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
@@ -181,37 +185,34 @@ describe('clientRunReducer', () => {
       type: 'combat_done',
       result: lossResult,
       opponentGhostId: null,
+      opponentClassId: null,
       damageDealt: 12,
       damageTaken: 30,
+      goldDelta: 0, // sim's shouldEndRun fired → no advancePhase credit
     });
     expect(next.combatActive).toBe(false);
-    expect(next.state.round).toBe(initial.state.round + 1);
     expect(next.state.gold).toBe(initial.state.gold);
-    expect(next.state.trophy).toBe(initial.state.trophy);
-    expect(next.state.hearts).toBe(initial.state.hearts - 1);
-    expect(next.state.history).toHaveLength(1);
-    expect(next.state.history[0]).toMatchObject({
-      outcome: 'loss',
-      goldEarnedThisRound: 0,
-      damageTaken: 30,
-    });
+    expect(next.state.rerollCount).toBe(0);
+    // Hearts/history/round still NOT mutated by combat_done — that's
+    // sync_from_sim's job in the real handler flow.
+    expect(next.state.hearts).toBe(initial.state.hearts);
+    expect(next.state.history).toHaveLength(0);
   });
 
-  it('combat_done (loss at 0 hearts) clamps hearts at zero', () => {
+  it('combat_done with goldDelta=3 (loss + advance, base income only) increments gold by exactly 3', () => {
     const initial = freshInitial();
-    const inCombat: ClientRunState = {
-      ...initial,
-      combatActive: true,
-      state: { ...initial.state, hearts: 0 },
-    };
+    const inCombat: ClientRunState = { ...initial, combatActive: true };
     const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
     const next = clientRunReducer(inCombat, {
       type: 'combat_done',
       result: lossResult,
       opponentGhostId: null,
+      opponentClassId: null,
       damageDealt: 0,
       damageTaken: 30,
+      goldDelta: 3, // sim's advancePhase round income (no win bonus on loss)
     });
-    expect(next.state.hearts).toBe(0);
+    expect(next.state.gold).toBe(initial.state.gold + 3);
+    expect(next.combatActive).toBe(false);
   });
 });

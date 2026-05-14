@@ -71,7 +71,7 @@ describe('ShopPanel', () => {
 
     // Reroll button cost via sim's computeRerollCost — for the default
     // ruleset (rerollCostStart=1, rerollCostIncrement=1,
-    // EXTRA_REROLLS_PER_ROUND=0) at rerollCount=0, the cost is 1.
+    // state.derived.extraRerollsPerRound=0) at rerollCount=0, the cost is 1.
     // Codex P1 fix on PR #6 routed UI affordability through the same
     // formula the reducer charges from; previous "rerollCount + 1"
     // happened to agree on default values.

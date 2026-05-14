@@ -169,11 +169,17 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       damageTaken: number;
       result: CombatResult;
       opponentGhostId: unknown;
+      opponentClassId: unknown;
     };
     expect(payload.damageDealt).toBe(0);
     expect(payload.damageTaken).toBe(0);
     expect(payload.result.outcome).toBe('draw');
     expect(payload.result.finalHp).toEqual({ player: 30, ghost: 30 });
+    // M1.5a PR 2 Phase 2b-2 Q7: opponentClassId now threaded from the
+    // ghost build (makeGhostForRound returns ClassId 'marauder' on odd
+    // rounds, 'tinker' on even rounds). At round 1 (fresh run), ghost
+    // is Marauder; assert opponentClassId is the deterministic value.
+    expect(payload.opponentClassId).toBe('marauder');
   });
 
   it('Case B — does NOT bypass when events contain damage + heal that net to zero (Codex P1 regression)', async () => {

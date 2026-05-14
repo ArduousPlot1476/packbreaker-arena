@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type Phaser from 'phaser';
 import {
   TICKS_PER_SECOND,
+  type ClassId,
   type CombatEvent,
   type CombatInput,
   type CombatResult,
@@ -95,7 +96,7 @@ interface CombatOverlayProps {
 function buildCombatInput(
   bag: ReturnType<typeof useRunContext>['state']['bag'],
   state: ReturnType<typeof useRunContext>['state']['state'],
-): { input: CombatInput; ghostClass: string; ghostId: GhostId } {
+): { input: CombatInput; ghostClass: string; ghostId: GhostId; ghostClassId: ClassId } {
   const playerBag = clientBagToSimBag(bag, state.ruleset.bagDimensions);
   const ghost = makeGhostForRound(state.seed, state.round, state.ruleset.bagDimensions);
   const input: CombatInput = {
@@ -110,7 +111,7 @@ function buildCombatInput(
     },
     ghost: ghost.combatant,
   };
-  return { input, ghostClass: titleCase(ghost.classId), ghostId: ghost.id };
+  return { input, ghostClass: titleCase(ghost.classId), ghostId: ghost.id, ghostClassId: ghost.classId };
 }
 
 function titleCase(s: string): string {
@@ -126,7 +127,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   // renders within a single combat. Captures the bag snapshot + bag
   // dimensions used at simulation time so the M1.4a BagLayout
   // handshake measures against the same state the sim consumed.
-  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, bagSnapshot, bagDimensions } =
+  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, ghostClassId, bagSnapshot, bagDimensions } =
     useMemo(() => {
       if (!active) {
         return {
@@ -135,11 +136,12 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           initialGhostHp: 0,
           ghostClassLabel: 'Marauder',
           ghostId: null as GhostId | null,
+          ghostClassId: null as ClassId | null,
           bagSnapshot: ctx.state.bag,
           bagDimensions: ctx.state.state.ruleset.bagDimensions,
         };
       }
-      const { input, ghostClass, ghostId: gid } = buildCombatInput(ctx.state.bag, ctx.state.state);
+      const { input, ghostClass, ghostId: gid, ghostClassId: gcid } = buildCombatInput(ctx.state.bag, ctx.state.state);
       const r = runCombat(input);
       return {
         result: r,
@@ -147,6 +149,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         initialGhostHp: input.ghost.startingHp,
         ghostClassLabel: ghostClass,
         ghostId: gid,
+        ghostClassId: gcid as ClassId | null,
         bagSnapshot: ctx.state.bag,
         bagDimensions: ctx.state.state.ruleset.bagDimensions,
       };
@@ -266,6 +269,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       onDone({
         result,
         opponentGhostId: ghostId,
+        opponentClassId: ghostClassId,
         damageDealt,
         damageTaken,
       });

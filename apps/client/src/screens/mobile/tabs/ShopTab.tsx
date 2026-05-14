@@ -13,7 +13,7 @@
 
 import type { RunState, ShopSlot as ShopSlotData } from '../../../run/types';
 import { CoinGlyph } from '../../../icons/icons';
-import { computeRerollCost, EXTRA_REROLLS_PER_ROUND } from '../../../run/sim-bridge';
+import { computeRerollCost } from '../../../run/sim-bridge';
 import { SellZone } from '../../../shop/SellZone';
 import { ShopSlot } from '../../../shop/ShopSlot';
 
@@ -29,7 +29,7 @@ export function ShopTab({ state, shop, onReroll, busy }: ShopTabProps) {
     state.rerollCount,
     state.ruleset.rerollCostStart,
     state.ruleset.rerollCostIncrement,
-    EXTRA_REROLLS_PER_ROUND,
+    state.derived.extraRerollsPerRound,
   );
   const canReroll = state.gold >= rerollCost && !busy;
 
