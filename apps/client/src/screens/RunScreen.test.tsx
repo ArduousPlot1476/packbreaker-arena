@@ -57,11 +57,18 @@ describe('RunScreen branch dispatcher', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders DesktopRunScreen synchronously when matchMedia is false', () => {
+  it('renders DesktopRunScreen when matchMedia is false (post RunBootFallback resolve)', async () => {
     matchesValue = false;
     const { container } = render(<RunScreen />);
-    // Desktop renders BAG · 6×4 header (compact mode is OFF by default)
-    // and renders synchronously — no Suspense fallback path involved.
+    // M1.5a PR 2 Phase 2b-1: RunProvider now dynamic-imports sim's
+    // createRun on mount and renders RunBootFallback until simRun
+    // resolves. Desktop branch (matchMedia false) does NOT go through
+    // the mobile Suspense lazy-load path; once the boot fallback
+    // clears, DesktopRunScreen renders directly (no Suspense fallback).
+    await waitFor(() => {
+      expect(container.querySelector('[data-testid="run-boot-fallback"]')).toBeNull();
+    });
+    // Desktop renders BAG · 6×4 header (compact mode is OFF by default).
     expect(container.textContent).toContain('BAG · 6×4');
     expect(container.querySelector('[data-testid="mobile-suspense-fallback"]')).toBeNull();
   });

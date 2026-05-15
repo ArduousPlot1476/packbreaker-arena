@@ -46,13 +46,6 @@ import type { BagItem, ItemId, ShopSlot } from './types';
  *  authoritative formula from sim. */
 export { computeRerollCost } from '@packbreaker/sim';
 
-/** Relic-driven extra-rerolls-per-round allowance (Apprentice's Loop +
- *  similar). M1.3.4a doesn't model relic state, so the allowance is
- *  always zero. Hoisted here (was a local const in RunController) so
- *  ShopPanel + ShopTab + the reducer all read the same placeholder
- *  value; replace with a relic-state derived value at M1.5. */
-export const EXTRA_REROLLS_PER_ROUND = 0;
-
 /** Build a sim Rng from a base SimSeed. Identical inputs always produce
  *  identical sequences (mulberry32, integer-only) — that's the determinism
  *  contract sim's fixture suite enforces. */

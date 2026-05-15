@@ -21,21 +21,24 @@ import {
   DEFAULT_RULESET,
   type ClassId,
   type CombatResult,
+  type ContractId,
   type GhostId,
-  type RoundNumber,
-  type RunHistoryEntry,
+  type RunId,
+  type RunOutcome,
+  type RunState as SimRunState,
 } from '@packbreaker/content';
 
 // M1.3.4a: hardcoded class for the prototype run. Class-select screen
 // (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
-const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
+// Exported for useRun.ts's createRun input construction (M1.5a PR 2
+// Phase 2b-1 dynamic-import wiring).
+export const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
 import { generateInitialShop, generateShop } from '../shop/ShopController';
 import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
 import { ITEMS } from './content';
 import {
   computeRerollCost,
   emptyRelicSlots,
-  EXTRA_REROLLS_PER_ROUND,
   makeRunSeed,
 } from './sim-bridge';
 import type { BagItem, Cell, ItemId, RecipeMatch, RunState, ShopSlot } from './types';
@@ -79,6 +82,17 @@ export function createInitialState(): ClientRunState {
       contractName: 'Neutral',
       contractText: 'No modifiers',
       ruleset,
+      // Placeholders for the 6 sim-derived fields (M1.5a PR 2 Phase 2b-1).
+      // Written here so the type checks before RunProvider's
+      // init_from_sim dispatch overwrites them on mount; consumers never
+      // observe these placeholders because RunProvider conditionally
+      // renders RunBootFallback until simRun resolves.
+      runId: '' as RunId,
+      classId: M1_PROTOTYPE_CLASS,
+      contractId: 'neutral' as ContractId,
+      derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+      relics: emptyRelicSlots(),
+      outcome: 'in_progress' as RunOutcome,
       seed,
       history: [],
     },
@@ -92,10 +106,13 @@ export function createInitialState(): ClientRunState {
  *  state at first render matches what tests observe. */
 export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState();
 
-// EXTRA_REROLLS_PER_ROUND + computeRerollCost are imported from
-// run/sim-bridge.ts so the reducer's spend-deduction and ShopPanel /
-// ShopTab affordability state share one authoritative source. See
-// sim-bridge.ts for the Codex P1 context.
+// computeRerollCost is imported from run/sim-bridge.ts so the reducer's
+// spend-deduction and ShopPanel / ShopTab affordability state share one
+// authoritative source. The 4th arg (extraRerollsPerRound) now reads
+// from state.derived.extraRerollsPerRound, populated by sync_from_sim
+// (M1.5a PR 2 Phase 2b-2; EXTRA_REROLLS_PER_ROUND placeholder deleted).
+// See sim-bridge.ts for the Codex P1 context on shared-formula
+// discipline.
 
 export type RunAction =
   | { type: 'pickup_bag'; uid: string; itemId: ItemId; rot: number }
@@ -112,9 +129,67 @@ export type RunAction =
       type: 'combat_done';
       result: CombatResult;
       opponentGhostId: GhostId | null;
+      opponentClassId: ClassId | null;
       damageDealt: number;
       damageTaken: number;
-    };
+      goldDelta: number;
+    }
+  | { type: 'init_from_sim'; snapshot: SimRunState }
+  | { type: 'sync_from_sim'; snapshot: SimRunState };
+
+/** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
+ *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
+ *  authoritative for hearts/history/derived/relics/outcome/ruleset/round/
+ *  runId/classId/contractId/seed; client is authoritative for
+ *  gold/rerollCount/bag/shop/trophy in M1.5a (sim only sees reroll +
+ *  apply_combat_outcome routing in PR 2, so its gold tracking diverges
+ *  from client's mid-round by sum(buy_costs) − sum(sell_proceeds);
+ *  overwriting gold on sync would lose in-round shop transactions).
+ *
+ *  `includeGold` distinguishes init from sync:
+ *    - init_from_sim (run-start): includeGold=true. Client and sim
+ *      gold haven't diverged yet — sim's gold IS the source of truth.
+ *    - sync_from_sim (mid-run): includeGold=false. Sim's gold is stale;
+ *      client's gold is the live value. CF 34 migrates this to full
+ *      sim-authoritative gold at M1.5b/LocalSaveV1.
+ *
+ *  bag is NOT touched by either init or sync — remains client-
+ *  authoritative for M1.5a. shop is bootstrapped from sim's snapshot
+ *  at the init_from_sim reducer arm post-applySimSnapshot (Phase 2.5b
+ *  Codex response); sync continues to leave shop client-authoritative.
+ *  className/contractName/contractText/maxHearts/totalRounds also
+ *  untouched — they're derived placeholders the client owns.
+ *
+ *  trophy is locked client-authoritative for M1.5a per decision-log.md
+ *  2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13; sim's
+ *  snapshot.trophiesAtStart is between-runs cumulative state for M2
+ *  (// M2 concern. at sim's getState L336) and is ignored by both init
+ *  and sync. The +18-per-win accumulator lives in the combat_done
+ *  reducer arm (Phase 2.5h Codex Finding 4 restore). */
+function applySimSnapshot(
+  state: ClientRunState,
+  snapshot: SimRunState,
+  includeGold: boolean,
+): ClientRunState {
+  return {
+    ...state,
+    state: {
+      ...state.state,
+      runId: snapshot.runId,
+      seed: snapshot.seed,
+      classId: snapshot.classId,
+      contractId: snapshot.contractId,
+      ruleset: snapshot.ruleset,
+      derived: snapshot.derived,
+      hearts: snapshot.hearts,
+      round: snapshot.currentRound,
+      relics: snapshot.relics,
+      outcome: snapshot.outcome,
+      history: snapshot.history.slice(),
+      ...(includeGold ? { gold: snapshot.gold } : {}),
+    },
+  };
+}
 
 // Pure helper: computes placement of the combine output. Returns the new
 // bag with the output placed, or null if no placement fits.
@@ -278,7 +353,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         state.state.rerollCount,
         ruleset.rerollCostStart,
         ruleset.rerollCostIncrement,
-        EXTRA_REROLLS_PER_ROUND,
+        state.state.derived.extraRerollsPerRound,
       );
       if (state.state.gold < cost) return state;
       const newSlots = generateShop(
@@ -310,60 +385,65 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return { ...state, combatActive: true };
 
     case 'combat_done': {
-      // Resolve the round: append a RunHistoryEntry + apply hearts /
-      // gold / trophy deltas based on outcome. Sim's CombatResult is
-      // authoritative for outcome and finalHp; the action carries the
-      // pre-computed damage values so the reducer doesn't need to
-      // import combat/ghost.ts (which would defeat the lazy split).
+      // M1.5a PR 2 Phase 2b-2 active routing cutover: all sim-authoritative
+      // fields (hearts/history/round/derived/relics/outcome/trophy) were
+      // mirrored by the prior sync_from_sim dispatch in onCombatDone.
+      // state.state.round here is ALREADY the new (post-advancePhase) round
+      // from that sync. Gold-delta is precomputed by the handler via
+      // before/after sim.gold observation (β disposition — sim is single
+      // source of truth for gold-mutation math; see useRun.ts onCombatDone).
       //
-      // M1.3.4a economic rules:
-      //   - Win: +winBonusGold, +18 trophy, hearts unchanged.
-      //   - Loss: +0 gold, +0 trophy, hearts -1 (clamped to 0).
-      //   - Draw: treated as loss for hearts; trophy / gold neutral.
-      //
-      // M1.5+ adds run-end detection (hearts === 0 → eliminated +
-      // game-over screen) + per-round goldPerRound passive sums +
-      // multi-round trophy schedule from the contract.
-      const ruleset = state.state.ruleset;
-      const isWin = action.result.outcome === 'player_win';
-      const hearts = isWin ? state.state.hearts : Math.max(0, state.state.hearts - 1);
-      const goldEarned = isWin ? ruleset.winBonusGold : 0;
-      const trophyEarned = isWin ? 18 : 0;
-      const round = state.state.round;
-      const historyEntry: RunHistoryEntry = {
-        round: round as RoundNumber,
-        outcome: isWin ? 'win' : 'loss',
-        damageDealt: action.damageDealt,
-        damageTaken: action.damageTaken,
-        goldEarnedThisRound: goldEarned,
-        opponentGhostId: action.opponentGhostId,
-        // M1.5a PR 1 schema v0.6 — opponentClassId additive on RunHistoryEntry.
-        // Client reducer is parallel-state for M1.5a (PR 2 dissolves into
-        // sync_from_sim mirror); pre-PR-2 client path has no class-derivation
-        // hook for the ghost. Wired to null here as the placeholder; PR 2's
-        // sync_from_sim populates from authoritative sim history.
-        opponentClassId: null,
-      };
-      const nextRound = round + 1;
-      // Generate next round's shop deterministically from the run seed.
-      const nextShop = generateShop(state.state.seed, nextRound, M1_PROTOTYPE_CLASS, ruleset, 0);
-      // Empty relic slots (M1.3.4a — relic state machinery is M1.5).
-      void emptyRelicSlots;
+      // Bag + shop stay client-authoritative for M1.5a per Q2 Amendment A.
+      // If sim's advancePhase didn't end the run, regenerate next round's
+      // shop deterministically from the run seed at the new round. If the
+      // run ended (sim's shouldEndRun fired → outcome != 'in_progress'),
+      // shop is left as-is (run-end UX is M1.5+; CF 34/M1.5b reworks).
+      const runEnded = state.state.outcome !== 'in_progress';
+      const nextShop = runEnded
+        ? state.shop
+        : generateShop(
+            state.state.seed,
+            state.state.round,
+            state.state.classId,
+            state.state.ruleset,
+            0,
+          );
+      // Trophy is client-authoritative for M1.5a per decision-log.md
+      // 2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13.
+      // Read the just-pushed history entry (sync_from_sim populated
+      // history before combat_done dispatched) to derive win/loss; +18
+      // per win is the M0-placeholder per decision-log.md 2026-05-02
+      // § M1.3.4a ratification 5 (M2 trophy-curve work owns the real
+      // schedule). Optional-chain defends against future refactors
+      // where history could be empty at dispatch time.
+      const lastHistoryEntry = state.state.history[state.state.history.length - 1];
+      const trophyEarned = lastHistoryEntry?.outcome === 'win' ? 18 : 0;
       return {
         ...state,
         combatActive: false,
         shop: nextShop,
+        drag: null,
+        hover: null,
         state: {
           ...state.state,
-          hearts,
-          gold: state.state.gold + goldEarned,
+          gold: state.state.gold + action.goldDelta,
           trophy: state.state.trophy + trophyEarned,
-          round: nextRound,
           rerollCount: 0,
-          history: [...state.state.history, historyEntry],
         },
       };
     }
+
+    case 'init_from_sim':
+      return {
+        ...applySimSnapshot(state, action.snapshot, /* includeGold */ true),
+        shop: action.snapshot.shop.slots.map((itemId, i) => ({
+          uid: `s${action.snapshot.currentRound}-${action.snapshot.shop.rerollsThisRound}-${i}`,
+          itemId: itemId as ItemId,
+        })),
+      };
+
+    case 'sync_from_sim':
+      return applySimSnapshot(state, action.snapshot, /* includeGold */ false);
 
     default: {
       const _exhaustive: never = action;

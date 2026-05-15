@@ -12,7 +12,18 @@
 // only items with inline-SVG renderings reach the UI; that filter is the
 // transitional constraint, not the type.
 
-import type { Rarity, RunHistoryEntry, Ruleset, SimSeed } from '@packbreaker/content';
+import type {
+  ClassId,
+  ContractId,
+  DerivedModifiers,
+  Rarity,
+  RelicSlots,
+  RunHistoryEntry,
+  RunId,
+  RunOutcome,
+  Ruleset,
+  SimSeed,
+} from '@packbreaker/content';
 
 export type { ItemId } from '@packbreaker/content';
 import type { ItemId } from '@packbreaker/content';
@@ -87,6 +98,15 @@ export interface RunState {
   contractName: string;
   contractText: string;
   ruleset: Ruleset;
+  // Sim-derived metadata fields (M1.5a PR 2 Phase 2b-1). Populated by
+  // init_from_sim on RunProvider boot; refreshed by sync_from_sim post
+  // reroll + combat (Phase 2b-2 enacts).
+  runId: RunId;
+  classId: ClassId;
+  contractId: ContractId;
+  derived: DerivedModifiers;
+  relics: RelicSlots;
+  outcome: RunOutcome;
   seed: SimSeed;
   history: RunHistoryEntry[];
 }

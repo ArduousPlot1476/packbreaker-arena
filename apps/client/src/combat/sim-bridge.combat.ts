@@ -23,11 +23,12 @@
 
 import type { CombatInput, CombatResult } from '@packbreaker/content';
 import { simulateCombat } from '@packbreaker/sim';
+import { SHOP_POOL_ITEMS } from '../run/content';
 
 /** Run a combat. Pure delegation to sim's simulateCombat — the only
  *  client-side concern is constructing the CombatInput from client-shape
  *  state (handled at the call site in CombatOverlay; this bridge just
  *  forwards). */
 export function runCombat(input: CombatInput): CombatResult {
-  return simulateCombat(input);
+  return simulateCombat(input, { items: SHOP_POOL_ITEMS });
 }

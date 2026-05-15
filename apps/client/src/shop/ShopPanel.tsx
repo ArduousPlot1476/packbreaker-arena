@@ -9,7 +9,7 @@
 // game-rule arithmetic — see run/sim-bridge.ts for context.
 
 import { type RunState, type ShopSlot as ShopSlotData } from '../run/types';
-import { computeRerollCost, EXTRA_REROLLS_PER_ROUND } from '../run/sim-bridge';
+import { computeRerollCost } from '../run/sim-bridge';
 import { SellZone } from './SellZone';
 import { ShopSlot } from './ShopSlot';
 
@@ -26,7 +26,7 @@ export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanel
     state.rerollCount,
     state.ruleset.rerollCostStart,
     state.ruleset.rerollCostIncrement,
-    EXTRA_REROLLS_PER_ROUND,
+    state.derived.extraRerollsPerRound,
   );
   const canReroll = state.gold >= rerollCost && !busy;
 

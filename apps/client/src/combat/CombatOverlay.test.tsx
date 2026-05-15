@@ -130,7 +130,7 @@ vi.mock('./CombatScene', () => ({
 }));
 
 describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1 amendment)', () => {
-  it('Case A — bypasses Phaser mount when events are only combat_start + combat_end (canonical empty stalemate)', () => {
+  it('Case A — bypasses Phaser mount when events are only combat_start + combat_end (canonical empty stalemate)', async () => {
     mocks.runCombat.mockReturnValue(ZERO_CONTENT_RESULT);
     mocks.createCombatGame.mockClear();
     const onDone = vi.fn();
@@ -140,6 +140,14 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
         <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
       </RunProvider>,
     );
+
+    // M1.5a PR 2 Phase 2b-1: RunProvider dynamic-imports sim's createRun
+    // on mount and renders RunBootFallback until simRun resolves. Wait
+    // for the fallback to disappear before asserting CombatOverlay-side
+    // render behavior.
+    await waitFor(() => {
+      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+    });
 
     // Phaser canvas container is NOT rendered — the option-2 branch
     // initializes phase to 'resolved' on first render.
@@ -161,11 +169,17 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       damageTaken: number;
       result: CombatResult;
       opponentGhostId: unknown;
+      opponentClassId: unknown;
     };
     expect(payload.damageDealt).toBe(0);
     expect(payload.damageTaken).toBe(0);
     expect(payload.result.outcome).toBe('draw');
     expect(payload.result.finalHp).toEqual({ player: 30, ghost: 30 });
+    // M1.5a PR 2 Phase 2b-2 Q7: opponentClassId now threaded from the
+    // ghost build (makeGhostForRound returns ClassId 'marauder' on odd
+    // rounds, 'tinker' on even rounds). At round 1 (fresh run), ghost
+    // is Marauder; assert opponentClassId is the deterministic value.
+    expect(payload.opponentClassId).toBe('marauder');
   });
 
   it('Case B — does NOT bypass when events contain damage + heal that net to zero (Codex P1 regression)', async () => {
@@ -178,6 +192,12 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
         <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
       </RunProvider>,
     );
+
+    // M1.5a PR 2 Phase 2b-1: wait for RunProvider to resolve the
+    // dynamic-import of sim before asserting CombatOverlay render.
+    await waitFor(() => {
+      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+    });
 
     // Phaser canvas container IS rendered — phase initializes to
     // 'combat' because hasNoMeaningfulEvents is false (damage + heal
