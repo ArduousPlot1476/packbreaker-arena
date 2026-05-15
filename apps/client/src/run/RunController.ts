@@ -140,8 +140,8 @@ export type RunAction =
 /** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
  *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
  *  authoritative for hearts/history/derived/relics/outcome/ruleset/round/
- *  trophy/runId/classId/contractId/seed; client is authoritative for
- *  gold/rerollCount/bag/shop in M1.5a (sim only sees reroll +
+ *  runId/classId/contractId/seed; client is authoritative for
+ *  gold/rerollCount/bag/shop/trophy in M1.5a (sim only sees reroll +
  *  apply_combat_outcome routing in PR 2, so its gold tracking diverges
  *  from client's mid-round by sum(buy_costs) − sum(sell_proceeds);
  *  overwriting gold on sync would lose in-round shop transactions).
@@ -158,7 +158,14 @@ export type RunAction =
  *  at the init_from_sim reducer arm post-applySimSnapshot (Phase 2.5b
  *  Codex response); sync continues to leave shop client-authoritative.
  *  className/contractName/contractText/maxHearts/totalRounds also
- *  untouched — they're derived placeholders the client owns. */
+ *  untouched — they're derived placeholders the client owns.
+ *
+ *  trophy is locked client-authoritative for M1.5a per decision-log.md
+ *  2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13; sim's
+ *  snapshot.trophiesAtStart is between-runs cumulative state for M2
+ *  (// M2 concern. at sim's getState L336) and is ignored by both init
+ *  and sync. The +18-per-win accumulator lives in the combat_done
+ *  reducer arm (Phase 2.5h Codex Finding 4 restore). */
 function applySimSnapshot(
   state: ClientRunState,
   snapshot: SimRunState,
@@ -176,7 +183,6 @@ function applySimSnapshot(
       derived: snapshot.derived,
       hearts: snapshot.hearts,
       round: snapshot.currentRound,
-      trophy: snapshot.trophiesAtStart,
       relics: snapshot.relics,
       outcome: snapshot.outcome,
       history: snapshot.history.slice(),
@@ -402,6 +408,16 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
             state.state.ruleset,
             0,
           );
+      // Trophy is client-authoritative for M1.5a per decision-log.md
+      // 2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13.
+      // Read the just-pushed history entry (sync_from_sim populated
+      // history before combat_done dispatched) to derive win/loss; +18
+      // per win is the M0-placeholder per decision-log.md 2026-05-02
+      // § M1.3.4a ratification 5 (M2 trophy-curve work owns the real
+      // schedule). Optional-chain defends against future refactors
+      // where history could be empty at dispatch time.
+      const lastHistoryEntry = state.state.history[state.state.history.length - 1];
+      const trophyEarned = lastHistoryEntry?.outcome === 'win' ? 18 : 0;
       return {
         ...state,
         combatActive: false,
@@ -411,6 +427,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
         state: {
           ...state.state,
           gold: state.state.gold + action.goldDelta,
+          trophy: state.state.trophy + trophyEarned,
           rerollCount: 0,
         },
       };

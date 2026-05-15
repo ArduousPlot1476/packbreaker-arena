@@ -283,13 +283,18 @@ describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', 
       trophiesAtStart: 50,
       outcome: 'eliminated' as RunOutcome,
     });
+    const trophyBefore = INITIAL_CLIENT_STATE.state.trophy;
     const next = clientRunReducer(INITIAL_CLIENT_STATE, {
       type: 'sync_from_sim',
       snapshot,
     });
     expect(next.state.hearts).toBe(1);
     expect(next.state.round).toBe(7);
-    expect(next.state.trophy).toBe(50);
+    // Phase 2.5h: trophy is locked client-authoritative for M1.5a per
+    // decision-log.md 2026-05-11 § M1.5a Phase 1 design take-2
+    // ratification §6e Q13. sync_from_sim no longer writes trophy from
+    // snapshot.trophiesAtStart — client trophy preserved across sync.
+    expect(next.state.trophy).toBe(trophyBefore);
     expect(next.state.outcome).toBe('eliminated');
   });
 
@@ -527,6 +532,97 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
     expect(history).toHaveLength(1);
     expect(history[0]!.opponentClassId).toBe('marauder');
     expect(history[0]!.outcome).toBe('loss');
+  });
+});
+
+describe('useRun onCombatDone — trophy client-authoritative accumulation (M1.5a PR 2 Phase 2.5h Codex Finding 4 restore)', () => {
+  // Phase 2.5g audit (TROPHY-SHAPED-LOCKED for `trophy`) confirmed sim
+  // never mutates trophiesAtStart — getState returns hardcoded 0 at
+  // sim state.ts:336 with // M2 concern. comment. PR 2 Phase 2b-2's
+  // combat_done collapse delegated trophy to sync_from_sim's overwrite
+  // path (snapshot.trophiesAtStart === 0 always), dropping the pre-PR-2
+  // +18-per-win accumulator and producing the TopBar trophy-stuck-at-zero
+  // gap Codex flagged as Finding 4. Phase 2.5h restores client-side
+  // accumulation per decision-log.md 2026-05-11 § M1.5a Phase 1 design
+  // take-2 ratification §6e Q13 ("client-owned trophy for 5a").
+
+  it('win path increments trophy by +18 (M0-placeholder per M1.3.4a ratification 5)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const trophyBefore = getCtx().state.state.trophy;
+    const playerWinResult = {
+      events: [],
+      outcome: 'player_win' as const,
+      finalHp: { player: 30, ghost: 0 },
+      endedAtTick: 5,
+    };
+    act(() => {
+      ctx.onCombatDone({
+        result: playerWinResult,
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 30,
+        damageTaken: 6,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    expect(getCtx().state.state.trophy).toBe(trophyBefore + 18);
+  });
+
+  it('loss path leaves trophy unchanged', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const trophyBefore = getCtx().state.state.trophy;
+    const lossResult = {
+      events: [],
+      outcome: 'ghost_win' as const,
+      finalHp: { player: 0, ghost: 12 },
+      endedAtTick: 3,
+    };
+    act(() => {
+      ctx.onCombatDone({
+        result: lossResult,
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 18,
+        damageTaken: 30,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    expect(getCtx().state.state.trophy).toBe(trophyBefore);
+  });
+
+  it('three consecutive wins accumulate +54 trophy (confirms sync_from_sim does not clobber accumulator between dispatches)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    const trophyBefore = getCtx().state.state.trophy;
+    const playerWinResult = {
+      events: [],
+      outcome: 'player_win' as const,
+      finalHp: { player: 30, ghost: 0 },
+      endedAtTick: 5,
+    };
+    for (let i = 0; i < 3; i++) {
+      act(() => ctx.onContinue());
+      await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+      act(() => {
+        ctx.onCombatDone({
+          result: playerWinResult,
+          opponentGhostId: null,
+          opponentClassId: 'marauder' as ClassId,
+          damageDealt: 30,
+          damageTaken: 0,
+        });
+      });
+      await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    }
+    expect(getCtx().state.state.trophy).toBe(trophyBefore + 54);
   });
 });
 
