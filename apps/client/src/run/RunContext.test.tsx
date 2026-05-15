@@ -46,6 +46,7 @@ import type {
 import { DEFAULT_RULESET } from '@packbreaker/content';
 import { RunProvider, useRunContext } from './RunContext';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
+import { SHOP_POOL_ITEMS } from './content';
 
 function GoldDisplay({ testId }: { testId: string }) {
   const { state, onReroll } = useRunContext();
@@ -200,6 +201,24 @@ describe('RunProvider — RunBootFallback + dynamic-import (M1.5a PR 2 Phase 2b-
     const ctx = getCtx();
     const simSlots = ctx.simRun!.getState().shop.slots;
     expect(ctx.state.shop.map((s) => s.itemId)).toEqual([...simSlots]);
+  });
+
+  it('init_from_sim populates shop only with SHOP_POOL_ITEMS members (Phase 2.5f Codex Finding 3 fix)', async () => {
+    // Pre-2.5f, useRun's createRun call omitted itemsRegistry; sim
+    // fell back to canonical 45-item ITEMS and emitted non-iconned
+    // itemIds (wooden-club, hand-axe, iron-mace, etc.) into shop.slots.
+    // Post-2.5f, createRun receives `itemsRegistry: SHOP_POOL_ITEMS`,
+    // constraining sim's internal makeShop pool to the 12 iconned IDs.
+    // Asserted on both surfaces — sim's authoritative slots AND the
+    // client's adapted shop — so a future refactor that decouples
+    // client.shop from sim.shop.slots cannot regress either side.
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    const simSlots = ctx.simRun!.getState().shop.slots;
+    expect(simSlots.every((id) => id in SHOP_POOL_ITEMS)).toBe(true);
+    expect(
+      ctx.state.shop.every((s) => s.itemId !== null && s.itemId in SHOP_POOL_ITEMS),
+    ).toBe(true);
   });
 });
 

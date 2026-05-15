@@ -32,7 +32,7 @@ export interface CombatDonePayload {
   damageDealt: number;
   damageTaken: number;
 }
-import { ITEMS } from './content';
+import { ITEMS, SHOP_POOL_ITEMS } from './content';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
@@ -69,6 +69,7 @@ export function useRun() {
         classId: M1_PROTOTYPE_CLASS,
         contractId: 'neutral' as ContractId,
         startingRelicId: CLASSES[M1_PROTOTYPE_CLASS]!.starterRelicPool[0]!,
+        itemsRegistry: SHOP_POOL_ITEMS,
         onTelemetryEvent: () => {
           // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
           // wires sim's emit surface to the client's PostHog pipeline
