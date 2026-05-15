@@ -510,3 +510,107 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
     expect(history[0]!.outcome).toBe('loss');
   });
 });
+
+// ─── M1.5a PR 2 Phase 2.5d — terminal-outcome handler no-op guards ────
+//
+// Codex re-review on baafab6 surfaced a P1 crash: onContinue calls
+// simRun.enterCombatPhase() unconditionally, but enterCombatPhase
+// throws when sim phase != 'arranging' (Q1). After advancePhase's
+// endRun path, phase = 'ended' and outcome ∈ {'won', 'eliminated',
+// 'abandoned'} → handler throws → React error boundary catches →
+// user-visible crash. Phase 2.5c audit confirmed onReroll has the
+// same arranging-only phase guard (re-propagated by α; second P1
+// path); onCombatDone is transitively unreachable from terminal
+// state but receives a defense-in-depth guard.
+//
+// Drive mechanism: render real sim, enter combat phase, mock the
+// next CombatDone's sim mutations + getState to forge a snapshot
+// whose `outcome` is the target terminal literal; trigger
+// onCombatDone so the sync_from_sim dispatch flips client state to
+// terminal. Restore mocks before the per-test assertion spy so spy
+// call counts reflect only post-drive activity.
+
+describe('useRun handlers — terminal-outcome no-op guards (M1.5a PR 2 Phase 2.5d)', () => {
+  async function setupTerminalState(
+    outcome: 'won' | 'eliminated' | 'abandoned',
+  ): Promise<() => ReturnType<typeof useRunContext>> {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    // Enter combat so applyCombatOutcome's phase guard would normally
+    // pass — mocks below short-circuit before that check fires.
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'advancePhase').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      outcome,
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => {
+      expect(getCtx().state.state.outcome).toBe(outcome);
+    });
+
+    // Restore mocks so the per-test assertion spy starts at zero
+    // calls. simRun instance persists across renders (Phase 2b-1
+    // useState design), so re-spying with vi.spyOn rebinds the same
+    // method properties for fresh observation.
+    vi.restoreAllMocks();
+    return getCtx;
+  }
+
+  for (const outcome of ['won', 'eliminated', 'abandoned'] as const) {
+    it(`onContinue no-ops when state.state.outcome === '${outcome}' (P1 crash repro from PR #14 Codex re-review)`, async () => {
+      const getCtx = await setupTerminalState(outcome);
+      const ctx = getCtx();
+      const enterSpy = vi.spyOn(ctx.simRun!, 'enterCombatPhase');
+      act(() => ctx.onContinue());
+      expect(enterSpy).not.toHaveBeenCalled();
+    });
+
+    it(`onReroll no-ops when state.state.outcome === '${outcome}' (audit-revealed second P1 path)`, async () => {
+      const getCtx = await setupTerminalState(outcome);
+      const ctx = getCtx();
+      const rerollSpy = vi.spyOn(ctx.simRun!, 'rerollShop');
+      act(() => ctx.onReroll());
+      expect(rerollSpy).not.toHaveBeenCalled();
+    });
+
+    it(`onCombatDone no-ops when state.state.outcome === '${outcome}' (defense-in-depth; transitively unreachable post-onContinue-guard)`, async () => {
+      const getCtx = await setupTerminalState(outcome);
+      const ctx = getCtx();
+      const applySpy = vi.spyOn(ctx.simRun!, 'applyCombatOutcome');
+      act(() => {
+        ctx.onCombatDone({
+          result: {
+            outcome: 'player_win',
+            events: [],
+            finalHp: { player: 30, ghost: 0 },
+            endedAtTick: 5,
+          },
+          opponentGhostId: null,
+          opponentClassId: null,
+          damageDealt: 30,
+          damageTaken: 0,
+        });
+      });
+      expect(applySpy).not.toHaveBeenCalled();
+    });
+  }
+});

@@ -168,6 +168,7 @@ export function useRun() {
 
   const onReroll = useCallback(() => {
     if (simRun === null) return;
+    if (state.state.outcome !== 'in_progress') return;
     // Client-side gold gate (Amendment A: client owns gold).
     const ruleset = state.state.ruleset;
     const cost = computeRerollCost(
@@ -203,7 +204,7 @@ export function useRun() {
       dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
     }
     dispatch({ type: 'reroll' });
-  }, [simRun, state.state.derived.extraRerollsPerRound, state.state.gold, state.state.rerollCount, state.state.ruleset]);
+  }, [simRun, state.state.derived.extraRerollsPerRound, state.state.gold, state.state.rerollCount, state.state.ruleset, state.state.outcome]);
 
   const onCombine = useCallback((match: RecipeMatch) => {
     dispatch({ type: 'combine', match, newUid: makeUid('b') });
@@ -211,17 +212,19 @@ export function useRun() {
 
   const onContinue = useCallback(() => {
     if (simRun === null) return;
+    if (state.state.outcome !== 'in_progress') return;
     // Sim phase 'arranging' → 'combat'. No sync_from_sim: enterCombatPhase
     // only mutates phase, which is NOT in ClientRunState (Q2 disposition).
     simRun.enterCombatPhase();
     dispatch({ type: 'continue_to_combat' });
-  }, [simRun]);
+  }, [simRun, state.state.outcome]);
 
   // CombatOverlay computes damageDealt / damageTaken / opponentGhostId /
   // opponentClassId at combat-end (it has the input + result on hand)
   // and forwards them to onCombatDone.
   const onCombatDone = useCallback((payload: CombatDonePayload) => {
     if (simRun === null) return;
+    if (state.state.outcome !== 'in_progress') return;
     // β disposition (Phase 2b-2 ratification): capture sim.gold before
     // bundled mutations. The reducer applies the sim-computed delta
     // (winBonus on win + baseIncomeForRound on advance, shouldEndRun-
@@ -242,7 +245,7 @@ export function useRun() {
     const goldDelta = snapshot.gold - goldBefore;
     dispatch({ type: 'sync_from_sim', snapshot });
     dispatch({ type: 'combat_done', goldDelta, ...payload });
-  }, [simRun]);
+  }, [simRun, state.state.outcome]);
 
   return {
     state,
