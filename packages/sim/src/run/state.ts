@@ -177,10 +177,11 @@ export interface RunController {
    *  single authoritative post-combat state mutator; no consumer-side
    *  recomputation of hearts/history/phase. Requires phase === 'combat'
    *  (runCombatInternal's call site transitions arranging → combat before
-   *  invoking simulateCombat; external callers must establish the same
-   *  precondition via a yet-to-be-added phase-transition entrypoint in
-   *  later PRs OR by invoking start_combat first and using this method only
-   *  for the post-simulateCombat path).
+   *  invoking simulateCombat; external callers establish the same
+   *  precondition by invoking the `enterCombatPhase` action (added at
+   *  M1.5a PR 2 Phase 2a, commit 00abda3) before the client-side
+   *  simulateCombat call, OR by invoking start_combat first and using
+   *  this method only for the post-simulateCombat path).
    *
    *  No re-entrancy guarantees on direct invocation paths beyond what
    *  start_combat already provides. */

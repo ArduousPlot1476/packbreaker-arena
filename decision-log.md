@@ -4,6 +4,181 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-15 § M1.5a PR 2 closed
+
+Merge commit `574d74b956ef89c7ffac6d5e333c1772cda8d473` on `main`. PR #14 closed (8-commit feature branch + merge). M1.5a PR 2 ships the client sim RunController integration foundation (Phase 2a + 2b-1 + 2b-2 + 4 reactive Phase 2.5 sub-phases + 1 halt-in-inspection sub-phase). Codex Finding 5 deferred to CF 38.
+
+### Phase chain
+
+| Commit | Phase | Summary |
+|---|---|---|
+| 574d74b | merge | --no-ff merge into main (PR #14 close) |
+| 8eba201 | 2.5h | Codex Finding 4 fix — trophy client-authoritative restore |
+| 10de04e | 2.5f | Codex Finding 3 fix — explicit `SHOP_POOL_ITEMS` on `createRun` + `simulateCombat` |
+| 7cacdac | 2.5d | Codex Finding 2 fix — terminal-outcome handler guards |
+| baafab6 | 2.5b | Codex Finding 1 fix — init bootstrap shop overwrite |
+| f6ccd5b | 2b-2 | active sim routing cutover |
+| cb2ae0f | 2b-1 | sim instance + sync infrastructure |
+| 00abda3 | 2a | `enter_combat_phase` action + `opponentClassId` tighten (5 construction sites swept) |
+| 7b03672 | 1 | design halt-gate ratified (docs, pre-branch on local main) |
+| 5b56539 | — | BASE (PR 1 closing log) |
+
+Phase 2.5g: comprehensive pre-merge meta-audit per standing agreement (4th in-PR Codex finding); no commit (audit findings folded into Phase 2.5h). Phase 2.5i: halt-in-inspection sub-phase on Codex Finding 5; no commit (three structural resolution paths × three UX semantic directions entangled; surface refused plumbing-only character; deferred to CF 38).
+
+### What landed (cross-references to Phase 1 dispositions)
+
+Phase 1 design halt-gate Q1–Q7 ratifications at `decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 design halt-gate ratified` (commit 7b03672, on main pre-branch). Implementation map:
+
+- **Q1** (enter_combat_phase action) → Phase 2a: action ID added to `packages/sim/src/run/actions.ts`; `RunController.enterCombatPhase()` method added; phase transition delegated to sim per ratification
+- **Q2 Amendment A** (sync_from_sim bifurcated authority) → Phase 2b-1/2: client-authoritative fields (gold / rerollCount / bag / shop) on ignore-list in `applySync()`; sim-authoritative fields (hearts / history / derived / relics / outcome / etc.) flow through. **Load-bearing disposition; whole PR turned on this.**
+- **Q3** (dynamic-import createRun via @packbreaker/sim root barrel) → Phase 2b-1: Suspense boundary in RunProvider; MobileFallback-pattern fallback. Bundle split surfaces in `combat-deferred` chunk
+- **Q4** (bag/shop client→sim mirror deferred to 5b) → out of PR 2 scope; CF 34
+- **Q5** (trust sim invariants; no try/catch around simRun dispatches) → Phase 2b-2 α exception ratified: `rerollShop` insufficient-gold try/catch on client side (sim throws; client preserves trophy floor). Sim-side untouched
+- **Q6** (onTelemetryEvent stubbed) → stub-only in PR 2; CF 35
+- **Q7** (`ApplyCombatOutcomeInput.opponentClassId` required-nullable) → Phase 2a Step 0: 5 construction sites swept; type tightened
+
+α + β (Phase 2b-2): α = client-side `rerollShop` try/catch (above). β = combat-done gold capture-delta — sim-side authority via before/after observation of `state.gold` across `simulateCombat` call, captured into `goldDelta` per `packages/sim/src/run/state.ts:363`. Phase 2.5h reaffirmed trophy is α-shape (client-side preservation; sim has no `trophiesAtStart` field).
+
+### Codex iteration recap
+
+5 findings total over PR 2:
+
+| Finding | Severity | Closed by | Pattern |
+|---|---|---|---|
+| 1 | P2 | Phase 2.5b | init bootstrap shop overwrite (reducer arm missing) |
+| 2 | P2 | Phase 2.5d | terminal-outcome handler guards (RunOutcome literal: actual is `'won'`, Codex wrote `'completed'` — architectural intent preserved, symbol wrong) |
+| 3 | P2 | Phase 2.5f | content-equality test missed pool-validity orthogonal divergence (Codex invented helper names — `BASE_POOL_ITEMS` / `filterDocumented` / `applyClientLanguageDocLayer` — actual chain: `ICONNED_ITEM_IDS` → `ICONNED_SET` → `SHOP_POOL_ITEMS`) |
+| 4 | P2 | Phase 2.5h | trophy stuck-at-zero (triggered standing-agreement comprehensive Phase 2.5g audit) |
+| 5 | P2 | **deferred to CF 38** | resolution panel reward display sync (Class D co-drift, see below) |
+
+3 reactive iterations were tolerable; the 4th (Phase 2.5h) triggered the comprehensive Phase 2.5g pre-merge meta-audit per standing agreement. The 5th finding (Codex Finding 5) was a new pattern shape (Class D co-drift on UI display axis, not Phase-1-extrapolation chain) — didn't bite the same-pattern-iteration ceiling, but surfaced a Phase 2.5g audit-scope hole (covered field-authority dimension; missed display-mutation-source-currency dimension). Codified as audit-pattern sharpening for future 4th-finding triggers (see Catch 11 below).
+
+Codex symbol-invention pattern noted across Findings 2 + 3: architectural intent correct, specific symbol names invented. Two-incident pattern; not codified (audit discipline handles it; specifics-accuracy variable enough that pattern won't sharpen at codification cost).
+
+### Locked answers
+
+**Locked answer 31 — init bootstrap (init_from_sim) overwrite semantics.** `init_from_sim` may overwrite client-authoritative fields when no player action has occurred. Bootstrap surface: gold (includeGold=true) + shop (Phase 2.5b reducer arm). Distinct from `sync_from_sim` semantics (Amendment A ignore-list intact). Counter 30 → 31.
+
+**Locked answer 32 — trophy authority disposition (M1.5a).** Trophy is client-owned for M1.5a per Q13 lean-confirm at `decision-log.md 2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e`. Phase 2.5g Capture 7 verified: sim has no `this.trophiesAtStart` field at all — class field block at `packages/sim/src/run/state.ts:L233–241` omits it; `getState()` returns hardcoded 0 with `// M2 concern.` comment; none of `applyCombatOutcome` / `advancePhase` / `endRun` mutates it. Trophy authority migration is CF 34 / M1.5b scope (sim must ADD the field, not extend stubbed tracking). Counter 31 → 32.
+
+### Pattern / catch / rule codification
+
+**Catch 11 — Class D co-drift (NEW bucket).** Regression test or display surface co-authored with implementation; one fix didn't propagate the other. Doesn't fit A/B/C1/C2 cleanly — those are all extrapolation-failure shapes (Phase 1 spec didn't extend to all surfaces); Class D is non-propagating-change shape across co-authored surfaces. 4 instances within PR 2:
+
+1. Codex Finding 3 — content-equality test missing pool-validity orthogonal divergence
+2. Phase 2.5h `RunContext.test.tsx:292` directly asserting drifted impl `trophy=50` sync behavior (regression test co-authored with the very impl drift it should have caught)
+3. Codex Finding 5 — `CombatOverlay` reward display vs. PR 2 β `goldDelta` mutation source migration
+4. Latent — `apps/client/src/combat/CombatOverlay.tsx:258` trophy display hardcoded `+18` matching Phase 2.5h reducer-side `+18` by coincidence; M2 trophy schedule surfaces same shape on trophy axis
+
+Counter 10 → 11. Counter label "Predicate-vs-name catches" now subsumes a non-predicate-vs-name class — flagged for footnote at this entry; rename to "Investigation-failure catches" (or similar) deferred until a second non-predicate-vs-name class lands.
+
+**Rule 8 — Plumbing-fix prompt structure (NEW).** Prompts framed as plumbing-only / mechanical-fix include a Step 1 inspection phase that precedes any mutation, with explicit halt-and-surface authority on any inspection finding that refutes the plumbing-only framing. Phase 2.5i precedent: structural resolution paths (three) + UX semantic ambiguity (three reward-vs-income directions) surfaced at Step 1 inspection; halt fired; zero code mutation. First-instance codification per bend-second-instance-convention criteria (failure shape structurally generic; discipline low-burden; upcoming milestones have predictable plumbing-style surface). Counter 7 → 8.
+
+**Rule 10 — emergent category 5 (Step 1 verbatim-diff discipline).** Folded into existing Rule 10 (pre-paste verification, master-developer chat) as fifth category: Step 1 reports include verbatim diff bytes / tool output, not structural summary. Reviewer scans Step 1 verbatim output presence before ratification. Two-instance precedent within Phase 2.5b/d/f (Phase 2.5f demonstrated self-correction). Folded rather than forked; same shape as the existing emergent category 5 line in carry-context.
+
+Rule 10 categories after fold:
+1. CF closure-claim text vs decision-log
+2. Quantitative baselines vs latest closing entry
+3. Summary arithmetic vs current enumeration
+4. Bare-#N auto-link scan in PR bodies
+5. **Verbatim output presence vs structural summary in Step 1 reports** (folded here)
+
+Patterns held: Pattern 7 (module-WeakMap dev-state) remains one-instance; second-instance convention holds. No new pattern codified at PR 2 close. Counter 6 → 6.
+
+### Disposition-drift watch (mechanism callout, not codified)
+
+First instance within M1.5a: `decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 design halt-gate ratified` Q2 Amendment A overwrite list listed trophy as sim-authoritative, contradicting `decision-log.md 2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e` Q13 lean-confirm (client-owned trophy for 5a). PR 2 implementation followed the 2026-05-13 drift, not the 2026-05-11 lean-confirm; drift surfaced only at Phase 2.5g Capture 7 + Phase 2.5h investigation.
+
+**Mechanism:** closing-entry-disposition-text drifted from prior-Phase-1-lean-confirm at write-time; Rule 10's 4 (now 5) pre-paste verification categories don't cover closing-entry-disposition vs prior-Phase-1-lean-confirm cross-check. Future closing entries should be authored with cross-check awareness on dispositions that span multiple Phase 1 design entries. Log + watch; codify as Rule 10 category 6 or new rule on second instance.
+
+### Carry-forwards opened during PR 2
+
+**CF 34** — Authority migration of client-authoritative fields (gold / rerollCount / bag / shop / trophy) to sim-side. Scope: M1.5b or LocalSaveV1. Opened at Phase 1 Q2 Amendment A ratification.
+
+**CF 35** — `onTelemetryEvent` client-pipeline wire-up. Scope: M1.5b. Opened at Phase 1 Q6 ratification.
+
+**CF 36** — `enterCombatPhase` consolidation surface (multiple call sites in `useRun.ts` post-Phase-2b-2). Scope: opportunistic during M1.5b client refactor. Opened during Phase 2b-2 inspection.
+
+**CF 37** — `recipesRegistry` sim-default vs client-filter divergence. `createRun.recipesRegistry` defaults to canonical RECIPES at sim controller constructor (`packages/sim/src/run/state.ts:257`); client uses its own filtered RECIPES from `apps/client/src/content.ts:L79–87` for combine detection. Latent divergence — not load-bearing currently (client owns combine detection). Revisit at M1.5b alongside CF 34 if combine detection moves sim-side.
+
+**CF 38** — Resolution panel reward display sync with post-PR-2 mutation sources (gold + trophy axes). `apps/client/src/combat/CombatOverlay.tsx:255-258` locally computes reward values from M1.3.4a-era pre-PR-2 assumptions. PR 2's β gold-capture-delta migration shifted mutation source to sim's captured `goldDelta` (including winBonus + `derived.bonusGoldOnWin` + `baseIncomeForRound(round+1)`) per `packages/sim/src/run/state.ts:363`. Display emits `isWin ? winBonusGold : 0`; result: TopBar gold jumps by full `goldDelta`, panel announces only winBonus. Trophy display at same site emits `isWin ? 18 : 0` matching Phase 2.5h reducer-side `+18` by coincidence (both M0-placeholder per `decision-log.md 2026-05-02 § M1.3.4a ratification 5`); M2 per-round trophy schedule surfaces same Class D co-drift on trophy axis. Surfaced by Codex Finding 5 on PR #14 commit 8eba201; Phase 2.5i inspection halted on three structural resolution paths each violating a load-bearing invariant (β disposition / NEXT-click commit semantic / resolution UX shape) × three valid UX directions for reward-vs-income semantic (display-authoritative / TopBar-authoritative / split-row panel) entangled with structural call. Disposition target: M1.5b or M2 polish. Graybox-acceptable. Counter 29 → 30 open CFs.
+
+### Counter delta
+
+| Counter | Pre-PR-2 | Post-PR-2 |
+|---|---|---|
+| Architectural patterns | 6 | 6 |
+| Investigation-failure catches (formerly "predicate-vs-name") | 10 | **11** (Catch 11 — Class D co-drift) |
+| Locked answers | 30 | **32** (LA 31 init bootstrap; LA 32 trophy client-authoritative for M1.5a) |
+| Going-forward rules | 7 | **8** (Rule 8 — plumbing-fix prompt structure); Rule 10 folded category 5 (no counter change) |
+| Open carry-forwards | 25 | **30** (CF 34/35/36/37/38) |
+| Master-dev chat drifts (Topic 2) | 8 | **11** (Phase 2.5g spec-over-specification + Phase 3 BASE-equality drift + roadmap.md CF-tracking-surface assumption surfaced by Step 1e Rule 8 halt on this docs commit; closing-entry-disposition drift logged as mechanism callout, not counted) |
+
+### Verification artifacts
+
+**Test counts at merge (HEAD 574d74b):**
+- Client: 210 (was 190 pre-PR-2; +20 net)
+- Sim: 474 passed + 1 skipped (was 471+1; +3 from Phase 2a)
+- Workspace: ~684/+ across 19 files
+- Turbo pipeline 19/19 green
+
+Trajectory:
+
+| Phase | Client | Sim |
+|---|---|---|
+| Pre-PR-2 | 190 | 471+1 |
+| 2a | 190 | 474+1 (+3) |
+| 2b-1/2 | 196 | 474+1 |
+| 2.5b | 197 | 474+1 |
+| 2.5d | 206 | 474+1 |
+| 2.5f | 207 | 474+1 |
+| 2.5h | 210 | 474+1 |
+| 2.5i | 210 | 474+1 (halt — no delta) |
+
+**Bundle baselines at HEAD 574d74b** (Phase 2.5f → 2.5h byte-identical CombatOverlay confirms sim-untouched in 2.5h):
+- main: 247.18 → 247.27 KB / 77.33 → 77.36 KB gz (+0.09 / +0.03 from Phase 2.5f)
+- CombatOverlay: 1498.62 KB / 346.16 KB gz (byte-identical to Phase 2.5f)
+- combat-deferred: 10.61 KB / 3.52 KB gz (unchanged)
+- MobileRunScreen: 14.09 KB / 3.52 KB gz (unchanged)
+- index small: 17.01 KB / 5.23 KB gz (unchanged)
+- CSS: 10.65 KB / 3.09 KB gz (unchanged)
+
+Sub-KB delta from Phase 2.5h JSDoc + reducer-arm logic only.
+
+**Merge execution clean.** Step 0 verification: HEAD 8eba201, branch m1.5a-client-integration, clean tree, push parity, merge-base = origin/main BASE (5b56539). Step 1 BASE-equality drift surfaced cleanly per halt-gate discipline: local main was 1 commit ahead of origin/main (7b03672 Phase 1 docs commit landed direct on local main pre-branch-cut, per docs-commit-on-main repo convention); merge-base equality is the actual invariant, not literal HEAD equality; no halt. Step 2 merge --no-ff: ort strategy, 18 files, +1107/-169, zero conflicts. Step 3 push: `5b56539..574d74b main -> main` (single push published both docs commit and merge commit). Step 4: branch tip 8eba201 fully reachable from origin/main (`git log origin/main..8eba201` empty); PR auto-close fires server-side. Step 5: feature branch deleted local + remote. Step 6: clean.
+
+### Not in PR 2 (explicit non-scope)
+
+- LocalSaveV1 persistence (CF 14 / M1.5b)
+- Run-end detection client-side (M1.5a PR 3)
+- Mid/boss relic offer generators + grant dispatch (M1.5a PR 3)
+- onTelemetryEvent client-pipeline wire-up (CF 35 / M1.5b)
+- bag/shop client → sim mirror (CF 34 / M1.5b)
+- Class-select screen wire-through (M1.5a PR 3)
+- Resolution panel reward display sync (CF 38)
+- Stale-doc JSDoc on `state.ts:161-179` `applyCombatOutcome` interface (bundled into this docs commit)
+
+### Process learnings (uncodified, log only)
+
+**Step 0 spec-tightening.** Phase 3 merge prompt's Step 1 expected literal HEAD == BASE post-pull; reality had local main 1 commit ahead of origin/main due to Phase 1 docs commit on local main pre-branch-cut. Claude Code's halt-gate discipline surfaced the discrepancy transparently and proceeded after invariant verification (merge-base equality is the actual guard). Future merge specs phrase as "local main is ancestor of or equal to origin/main" rather than literal equality. Log + carry; not a new pattern.
+
+**5th-finding-ceiling nuance.** Standing agreement on 4th-finding-triggers-comprehensive-audit ceiling was framed around same-pattern reactive iteration. 5th finding on a different-pattern axis (Class D co-drift on UI display, vs Phase-1-extrapolation chain 1–4) doesn't bite the same-pattern ceiling but does trigger audit-scope-hole reflection. Codified in Catch 11 commentary; not a new rule.
+
+**`setupTerminalState` test primitive.** Lives at `apps/client/src/run/RunContext.test.tsx:L553` (correction from earlier carry-context which cited L513). Introduced at Phase 2.5d for terminal-outcome handler guards; reusable for future test authors needing terminal-outcome state drives.
+
+**roadmap.md CF tracking-surface assumption (3rd master-dev drift this PR).** Original docs-commit prompt's Step 3 plan assumed roadmap.md contained a CF count line + enumeration block. Step 1e inspection refuted: roadmap.md is the M0-era milestone-prose doc with no CF tracking surface; CF tracking lives entirely in decision-log.md per project convention. Rule 8 halt fired cleanly on the inspection-vs-assumption mismatch. Resolution: roadmap.md edit dropped from this commit; commit covers decision-log.md + state.ts only. Going-forward consideration: Rule 10 category 6 candidate — "file-edit-scope assertions in prompts cross-checked against current file structure (light grep or sample-read) before prompt drafting." Held at first-instance per second-instance convention; codify if second instance lands. Recursive note: this drift surfaced on the very commit codifying Rule 8 + Rule 10 cat 5; Rule 8 + Rule 10's existing categories did not prevent it but Rule 8's halt-gate caught it post-prompt.
+
+### M1.5a PR 3 fresh-chat pre-flags
+
+After this docs commit lands, fresh master-developer chat for PR 3 scoping. Scope per take-2 ratification:
+- 5a.1 — relic state surfacing (mid/boss offer generators + grant dispatch)
+- 5a.2 — client-side run-end detection mirroring sim's shipped semantic
+- 5a.3 — CF 14 regression test
+
+Closes CF 14 + CF 21 (detection-side). Branches off main at 574d74b. Effort: ~3–4 days to M1.5a close. Phase 1 design already locked at chat level (take-2 §6e); no new milestone-level design pass needed; PR-level Phase 2 prompt suffices.
+
+---
+
 ## 2026-05-13 — M1.5a PR 2 Phase 1 design halt-gate ratified
 
 Phase 1 read-only investigation (HEAD 5b56539) returned clean against PR 1 surface (verified: ApplyCombatOutcomeInput at state.ts:102-109, RunState.derived + DerivedModifiers at schemas.ts:537-566, RunHistoryEntry at schemas.ts:509-517, apply_combat_outcome action variant at actions.ts:29-67, barrel re-exports at packages/sim/src/{run,}/index.ts, requirePhase('combat','applyCombatOutcome') at state.ts:713). Master-dev chat ratifies Q1–Q7 dispositions for PR 2 Phase 2 implementation.
