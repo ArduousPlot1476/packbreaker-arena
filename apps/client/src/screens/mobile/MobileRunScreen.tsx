@@ -27,6 +27,8 @@ import { LazyCombatOverlay } from '../../combat/LazyCombatOverlay';
 import { ICONS } from '../../icons/icons';
 import { MobileTopBar } from '../../hud/mobile/MobileTopBar';
 import { useRunContext } from '../../run/RunContext';
+import { RelicOfferModal } from '../../run/RelicOfferModal';
+import { RunEndOverlay } from '../../run/RunEndOverlay';
 import { MobileContinueCTA } from './MobileContinueCTA';
 import { MobileTabBar, type MobileTab } from './MobileTabBar';
 import { CraftingTab } from './tabs/CraftingTab';
@@ -164,6 +166,8 @@ export function MobileRunScreen() {
               bagContainerRef={bagContainerRef}
             />
           )}
+          <RelicOfferModal />
+          <RunEndOverlay />
         </div>
         <DragOverlay dropAnimation={null}>
           {state.drag ? <DragPreview itemId={state.drag.itemId} rot={state.drag.rot} /> : null}

@@ -12,13 +12,15 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { ClassId, CombatResult, ContractId, GhostId } from '@packbreaker/content';
+import type { ClassId, CombatResult, ContractId, GhostId, RelicId } from '@packbreaker/content';
 import { CLASSES } from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
 // chunk-splits only on runtime imports). The runtime createRun call
 // goes through the dynamic import in the useEffect below.
 import type { RunController as SimRunController } from '@packbreaker/sim';
+import { generateMidRelicOffer } from '@packbreaker/sim';
+import { mirrorsSimShouldEndRun } from './runEnd';
 
 /** Payload CombatOverlay forwards to the reducer's combat_done action.
  *  Damage values are pre-computed against the player's / ghost's
@@ -220,6 +222,72 @@ export function useRun() {
     dispatch({ type: 'continue_to_combat' });
   }, [simRun, state.state.outcome]);
 
+  // ─── M1.5a PR 3 Phase 2b — relic offer + run-end detection ────────
+  //
+  // Mid-relic offer detection (boss carved out to PR 3 part 2; sim's
+  // grant_relic boss-phase gate requires 'resolution' phase, which
+  // onCombatDone collapses through atomically — surfacing boss needs
+  // an onCombatDone restructure that's its own ratification point).
+  //
+  // Sim's mid-grant gate (packages/sim/src/run/state.ts:676):
+  //   phase === 'arranging' && currentRound >= 6 && relics.mid === null
+  //
+  // Client-observable equivalent — sim's RunState has NO phase field
+  // (RunPhase lives only on RunController via getPhase(), not in
+  // getState()'s snapshot; verified against content-schemas.ts
+  // § RunState at PR 3 Phase 2b). The client tracks combatActive as
+  // the stand-in for sim's 'arranging' window: sim is in 'arranging'
+  // whenever !combatActive holds during an in-progress run (combat
+  // and the collapsed resolution gap both fall inside the combatActive
+  // bracket inside onCombatDone). Round + relics + outcome flow from
+  // sim via sync_from_sim, so the predicate fires the moment sim
+  // transitions to round 6+ arranging.
+  //
+  // useMemo for render stability — generateMidRelicOffer is pure +
+  // deterministic over (runSeed, classId), so a re-render that didn't
+  // change those inputs returns the same array reference and the modal
+  // doesn't reshuffle its card display. Eligibility predicate is part
+  // of the same memo so detection + cards stay in lockstep.
+  const pendingRelicOffer = useMemo<
+    | { readonly slot: 'mid' | 'boss'; readonly cards: ReadonlyArray<RelicId> }
+    | null
+  >(() => {
+    if (simRun === null) return null;
+    if (state.state.outcome !== 'in_progress') return null;
+    if (state.combatActive) return null;
+    if (state.state.round < 6) return null;
+    if (state.state.relics.mid !== null) return null;
+    const cards = generateMidRelicOffer(state.state.seed, state.state.classId);
+    return { slot: 'mid', cards };
+  }, [
+    simRun,
+    state.state.outcome,
+    state.combatActive,
+    state.state.round,
+    state.state.relics.mid,
+    state.state.seed,
+    state.state.classId,
+  ]);
+
+  const isRunEnded = mirrorsSimShouldEndRun({ outcome: state.state.outcome });
+
+  // Dispatches sim's grantRelic + sync_from_sim. Sim's M1.2.6 phase
+  // gates are authoritative — client does NOT re-validate against the
+  // offer (M1 trust model parity with grantRelic's slot/phase-only
+  // validation; the modal's pendingRelicOffer-gated render is the
+  // client-side containment). Signature accepts 'mid' | 'boss' for
+  // forward-compat with PR 3 part 2; Phase 2b only ever surfaces 'mid'
+  // via pendingRelicOffer detection.
+  const grantSelectedRelic = useCallback(
+    (slot: 'mid' | 'boss', relicId: RelicId) => {
+      if (simRun === null) return;
+      if (state.state.outcome !== 'in_progress') return;
+      simRun.grantRelic(slot, relicId);
+      dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+    },
+    [simRun, state.state.outcome],
+  );
+
   // CombatOverlay computes damageDealt / damageTaken / opponentGhostId /
   // opponentClassId at combat-end (it has the input + result on hand)
   // and forwards them to onCombatDone.
@@ -261,5 +329,8 @@ export function useRun() {
     onCombine,
     onContinue,
     onCombatDone,
+    pendingRelicOffer,
+    isRunEnded,
+    grantSelectedRelic,
   };
 }

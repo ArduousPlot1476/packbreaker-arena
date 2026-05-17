@@ -729,3 +729,125 @@ describe('useRun handlers — terminal-outcome no-op guards (M1.5a PR 2 Phase 2.
     });
   }
 });
+
+// ─── M1.5a PR 3 Phase 2b — relic offer + run-end detection ──────────
+//
+// Drives the client through a forged sync_from_sim (mock onCombatDone's
+// inner getState) to simulate the sim arriving at the round/relic
+// states that trigger pendingRelicOffer / isRunEnded predicates.
+// Mid-only this phase: boss-offer detection is deferred to PR 3 part 2
+// (requires restructuring onCombatDone's atomic applyCombatOutcome →
+// advancePhase to expose sim's resolution-phase boss-grant window).
+
+describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detection', () => {
+  async function driveSyncWithSnapshot(
+    overrides: Partial<SimRunState>,
+  ): Promise<() => ReturnType<typeof useRunContext>> {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'advancePhase').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      ...overrides,
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => {
+      expect(getCtx().state.combatActive).toBe(false);
+    });
+    return getCtx;
+  }
+
+  it('pendingRelicOffer fires for mid when sim transitions to round 6 with mid slot empty', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    const ctx = getCtx();
+    expect(ctx.pendingRelicOffer).not.toBeNull();
+    expect(ctx.pendingRelicOffer!.slot).toBe('mid');
+    // Tinker mid pool — 2 eligible relics per balance-bible.md § 12
+    // (resonant-anchor + catalyst). Order is seed-shuffled by
+    // generateMidRelicOffer; assert count + membership only.
+    expect(ctx.pendingRelicOffer!.cards).toHaveLength(2);
+    expect(new Set(ctx.pendingRelicOffer!.cards)).toEqual(
+      new Set(['resonant-anchor', 'catalyst']),
+    );
+  });
+
+  it('pendingRelicOffer is null when round < 6 (mid gate)', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 5 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+  });
+
+  it('pendingRelicOffer clears when sim mid slot is filled', async () => {
+    // Round 6 with mid already set — sim has already granted the relic,
+    // so the offer must not re-surface (else duplicate grant attempts).
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+  });
+
+  it('isRunEnded fires when sim outcome transitions to won', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'won' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it('isRunEnded fires when sim outcome transitions to eliminated', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'eliminated' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it('isRunEnded is false while outcome remains in_progress', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'in_progress' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(false);
+  });
+
+  it('pendingRelicOffer is null when outcome is terminal (offer suppressed at run-end)', async () => {
+    // Defense in depth: even if round/relic predicates would otherwise
+    // fire, a terminal outcome suppresses the offer.
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'won' as RunOutcome,
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+});

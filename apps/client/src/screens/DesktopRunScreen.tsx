@@ -19,6 +19,8 @@ import { LeftRail } from '../hud/LeftRail';
 import { BottomPanel } from '../hud/BottomPanel';
 import { ShopPanel } from '../shop/ShopPanel';
 import { useRunContext } from '../run/RunContext';
+import { RelicOfferModal } from '../run/RelicOfferModal';
+import { RunEndOverlay } from '../run/RunEndOverlay';
 
 function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   const def = ITEMS[itemId];
@@ -120,6 +122,8 @@ export function DesktopRunScreen() {
           )}
         </div>
         <BottomPanel state={state.state} />
+        <RelicOfferModal />
+        <RunEndOverlay />
       </div>
       <DragOverlay dropAnimation={null}>
         {state.drag ? <DragPreview itemId={state.drag.itemId} rot={state.drag.rot} /> : null}
