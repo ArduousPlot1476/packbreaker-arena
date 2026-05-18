@@ -20,16 +20,17 @@
 // destroyed on every swap.
 
 import { createContext, useContext, type ReactNode } from 'react';
+import { ClassSelectScreen } from '../screens/ClassSelectScreen';
 import { useRun } from './useRun';
 
 type RunContextValue = ReturnType<typeof useRun>;
 
 const RunContext = createContext<RunContextValue | null>(null);
 
-/** Full-viewport placeholder rendered while useRun's dynamic-imported
- *  sim RunController is still resolving (one render of simRun: null
- *  per Q3 disposition, M1.5a PR 2 Phase 1). Mirrors the MobileFallback
- *  affordance in apps/client/src/screens/RunScreen.tsx — same
+/** Full-viewport placeholder rendered between class-select confirm and
+ *  sim's createRun resolving — that race is short (one dynamic-import
+ *  microtask), so the fallback is rarely visible in practice. Mirrors
+ *  the MobileFallback in apps/client/src/screens/RunScreen.tsx — same
  *  `var(--bg-deep)` full-viewport div so the boot transition is
  *  visually indistinguishable from app-load → first-paint. */
 function RunBootFallback() {
@@ -43,7 +44,12 @@ function RunBootFallback() {
 
 export function RunProvider({ children }: { children: ReactNode }) {
   const value = useRun();
-  if (value.simRun === null) return <RunBootFallback />;
+  if (value.simRun === null) {
+    if (value.pendingRunInput === null) {
+      return <ClassSelectScreen onConfirm={value.beginRun} />;
+    }
+    return <RunBootFallback />;
+  }
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }
 
