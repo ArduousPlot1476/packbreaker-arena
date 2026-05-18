@@ -12,7 +12,7 @@ Pillars from `concept-brief.md` apply: **readable in one screen**, **mastery fro
 
 These rules hold across every screen and asset:
 
-- **Bag is always center-stage.** The bag never shrinks below 60% of the screen's smaller dimension.
+- **Bag is always center-stage on in-run screens.** On screens that include the bag (run, shop, combat resolution), it never shrinks below 60% of the screen's smaller dimension. Pre-run screens (class-select, future title) are exempt — their composition rules are screen-specific.
 - **Rarity is dual-coded.** Frame color AND a corner gem shape (`◆` Common / `■` Uncommon / `▲` Rare / `★` Epic / `✦` Legendary). Color-blind safety is non-negotiable. (`gdd.md` § 14.)
 - **Recipe-ready glow visible without hover.** Pulsing outline on participating cells. Static screenshot must communicate "this is a recipe."
 - **Mobile target: 390-wide vertical.** Anything that requires hover, dense tooltips, or fine pointer precision fails this test.
