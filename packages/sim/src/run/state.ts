@@ -317,7 +317,15 @@ class RunControllerImpl implements RunController {
       seed: this.seed,
       classId: this.classId,
       contractId: this.contractId,
-      ruleset: this.contract.ruleset,
+      // Effective ruleset (post-composeRuleset: contract base + class
+      // passives + relic modifiers). Phase 2.5ii / Codex P2 #2 fix: prior
+      // alias `this.contract.ruleset` leaked the BASE ruleset, so
+      // resonant-anchor's shopSize+1 modifier never reached client
+      // consumers reading state.state.ruleset.shopSize. snapshot.shop
+      // already uses effective via makeShop, so the snapshot is now
+      // internally consistent. Base ruleset remains accessible via
+      // contractId → CONTRACTS lookup if any consumer needs it.
+      ruleset: this.effectiveRuleset,
       derived: {
         extraRerollsPerRound: this.derived.extraRerollsPerRound,
         itemCostDelta: this.derived.itemCostDelta,
