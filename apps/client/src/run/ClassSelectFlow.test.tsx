@@ -65,8 +65,11 @@ describe('RunProvider → ClassSelectScreen → init_from_sim flow (F.3)', () =>
       </RunProvider>,
     );
 
-    // Stage 1: class cards visible.
-    expect(getByTestId('class-card-marauder')).toBeInTheDocument();
+    // RunProvider lazy-imports ClassSelectScreen — wait for the
+    // dynamic-import to resolve before driving class-select clicks.
+    await waitFor(() => {
+      expect(getByTestId('class-card-marauder')).toBeInTheDocument();
+    });
     expect(getByTestId('begin-run-cta')).toBeDisabled();
 
     // Pick Marauder → stage 2 with Marauder starter pool.
@@ -103,6 +106,9 @@ describe('RunProvider → ClassSelectScreen → init_from_sim flow (F.3)', () =>
       </RunProvider>,
     );
 
+    await waitFor(() => {
+      expect(getByTestId('class-card-tinker')).toBeInTheDocument();
+    });
     fireEvent.click(getByTestId('class-card-tinker'));
     fireEvent.click(getByTestId('relic-card-apprentices-loop'));
     fireEvent.click(getByTestId('begin-run-cta'));

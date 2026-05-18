@@ -19,9 +19,20 @@
 // the dispatch boundary. State below the dispatcher's swap point is
 // destroyed on every swap.
 
-import { createContext, useContext, type ReactNode } from 'react';
-import { ClassSelectScreen } from '../screens/ClassSelectScreen';
+import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react';
 import { useRun } from './useRun';
+
+// Lazy-import the class-select screen so its atoms + Desktop + Mobile
+// components ship in a dedicated chunk rather than the main bundle.
+// Honors the tech-architecture.md § 10 lazy-load discipline (M1.5b PR 1
+// bundle-delta budget). The RunBootFallback rendered during the
+// lazy-import microtask is visually identical to the createRun-in-flight
+// fallback, so the transition is seamless.
+const ClassSelectScreen = lazy(() =>
+  import('../screens/ClassSelectScreen').then((m) => ({
+    default: m.ClassSelectScreen,
+  })),
+);
 
 type RunContextValue = ReturnType<typeof useRun>;
 
@@ -46,7 +57,11 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const value = useRun();
   if (value.simRun === null) {
     if (value.pendingRunInput === null) {
-      return <ClassSelectScreen onConfirm={value.beginRun} />;
+      return (
+        <Suspense fallback={<RunBootFallback />}>
+          <ClassSelectScreen onConfirm={value.beginRun} />
+        </Suspense>
+      );
     }
     return <RunBootFallback />;
   }

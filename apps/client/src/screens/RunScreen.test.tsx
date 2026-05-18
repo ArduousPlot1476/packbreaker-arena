@@ -79,16 +79,16 @@ describe('RunScreen branch dispatcher', () => {
   it('renders DesktopRunScreen when matchMedia is false (post RunBootFallback resolve)', async () => {
     matchesValue = false;
     const { container } = render(<RunScreen />);
-    // M1.5a PR 2 Phase 2b-1: RunProvider now dynamic-imports sim's
-    // createRun on mount and renders RunBootFallback until simRun
-    // resolves. Desktop branch (matchMedia false) does NOT go through
-    // the mobile Suspense lazy-load path; once the boot fallback
-    // clears, DesktopRunScreen renders directly (no Suspense fallback).
+    // M1.5b PR 1: RunProvider's class-select boundary is lazy + the
+    // stub-ClassSelectScreen's useEffect setPendingRunInput races sim's
+    // dynamic-import. The DOM transitions through multiple intermediate
+    // states (Suspense fallback → stub mounted → RunBootFallback →
+    // DesktopRunScreen). Wait directly for the desktop content marker
+    // rather than the fallback-absence (which holds transiently between
+    // intermediate renders).
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="run-boot-fallback"]')).toBeNull();
+      expect(container.textContent).toContain('BAG · 6×4');
     });
-    // Desktop renders BAG · 6×4 header (compact mode is OFF by default).
-    expect(container.textContent).toContain('BAG · 6×4');
     expect(container.querySelector('[data-testid="mobile-suspense-fallback"]')).toBeNull();
   });
 

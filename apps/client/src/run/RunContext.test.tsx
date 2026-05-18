@@ -123,12 +123,13 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
   it('preserves state when the provider child subtree swaps', async () => {
     const { rerender, getByTestId, queryByTestId } = render(<Wrapper child="A" />);
 
-    // M1.5a PR 2 Phase 2b-1: RunProvider initially renders
-    // RunBootFallback while sim's createRun resolves via dynamic-
-    // import. Wait for the fallback to disappear and the consumer
-    // tree to mount before asserting state.
+    // M1.5b PR 1: the class-select gate adds an extra render cycle —
+    // Suspense(stub-ClassSelectScreen) → stub mounts (null) → stub effect
+    // fires beginRun → RunBootFallback → sim resolves → consumer mounts.
+    // Wait for the consumer marker directly rather than fallback-absence,
+    // because the stub-mounted-but-sim-pending state also has no fallback.
     await waitFor(() => {
-      expect(queryByTestId('run-boot-fallback')).toBeNull();
+      expect(queryByTestId('a')).toBeInTheDocument();
     });
 
     // Initial state. With sim's createRun (M1.5a PR 2 Phase 2b-1+), the

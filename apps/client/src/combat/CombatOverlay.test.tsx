@@ -162,12 +162,14 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       </RunProvider>,
     );
 
-    // M1.5a PR 2 Phase 2b-1: RunProvider dynamic-imports sim's createRun
-    // on mount and renders RunBootFallback until simRun resolves. Wait
-    // for the fallback to disappear before asserting CombatOverlay-side
-    // render behavior.
+    // M1.5b PR 1: the lazy class-select Suspense fallback shares the
+    // run-boot-fallback testid with the non-Suspense createRun-in-flight
+    // fallback. Wait for the combat overlay's resolution panel itself
+    // (DEFEAT header from the zero-content bypass) rather than fallback-
+    // absence — the brief stub-mounted state would also satisfy the
+    // negation but doesn't have the consumer mounted yet.
     await waitFor(() => {
-      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+      expect(screen.getByText(/DEFEAT/)).toBeInTheDocument();
     });
 
     // Phaser canvas container is NOT rendered — the option-2 branch
@@ -214,17 +216,11 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       </RunProvider>,
     );
 
-    // M1.5a PR 2 Phase 2b-1: wait for RunProvider to resolve the
-    // dynamic-import of sim before asserting CombatOverlay render.
+    // M1.5b PR 1: wait for combat-canvas-container directly (not
+    // fallback-absence — see Case A note for the rationale).
     await waitFor(() => {
-      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+      expect(screen.getByTestId('combat-canvas-container')).toBeInTheDocument();
     });
-
-    // Phaser canvas container IS rendered — phase initializes to
-    // 'combat' because hasNoMeaningfulEvents is false (damage + heal
-    // events present), so isZeroContent is false and the bypass does
-    // not fire.
-    expect(screen.getByTestId('combat-canvas-container')).toBeInTheDocument();
     expect(screen.getByTestId('combat-skip')).toBeInTheDocument();
 
     // createCombatGame is invoked from useEffect's start() — the call
