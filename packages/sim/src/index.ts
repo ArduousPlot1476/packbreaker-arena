@@ -85,4 +85,7 @@ export {
   effectiveItemCost,
   sellValueOf,
   applyAction,
+  RELIC_OFFER_STRIDE,
+  generateMidRelicOffer,
+  generateBossRelicOffer,
 } from './run';

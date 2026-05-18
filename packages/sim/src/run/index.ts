@@ -21,3 +21,9 @@ export { replayCombat } from './replay';
 
 export type { RunControllerAction } from './actions';
 export { applyAction } from './actions';
+
+export {
+  RELIC_OFFER_STRIDE,
+  generateMidRelicOffer,
+  generateBossRelicOffer,
+} from './relicOffer';

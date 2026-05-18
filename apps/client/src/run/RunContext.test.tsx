@@ -36,8 +36,10 @@ import type {
   ContractId,
   DerivedModifiers,
   IsoTimestamp,
+  RelicId,
   RelicSlots,
   RoundNumber,
+  RunHistoryEntry,
   RunId,
   RunOutcome,
   RunState as SimRunState,
@@ -728,4 +730,421 @@ describe('useRun handlers — terminal-outcome no-op guards (M1.5a PR 2 Phase 2.
       expect(applySpy).not.toHaveBeenCalled();
     });
   }
+});
+
+// ─── M1.5a PR 3 Phase 2b — relic offer + run-end detection ──────────
+//
+// Drives the client through a forged sync_from_sim (mock onCombatDone's
+// inner getState) to simulate the sim arriving at the round/relic
+// states that trigger pendingRelicOffer / isRunEnded predicates.
+// Mid-only this phase: boss-offer detection is deferred to PR 3 part 2
+// (requires restructuring onCombatDone's atomic applyCombatOutcome →
+// advancePhase to expose sim's resolution-phase boss-grant window).
+
+describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detection', () => {
+  async function driveSyncWithSnapshot(
+    overrides: Partial<SimRunState>,
+  ): Promise<() => ReturnType<typeof useRunContext>> {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'advancePhase').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      ...overrides,
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => {
+      expect(getCtx().state.combatActive).toBe(false);
+    });
+    return getCtx;
+  }
+
+  it('pendingRelicOffer fires for mid when sim transitions to round 6 with mid slot empty', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    const ctx = getCtx();
+    expect(ctx.pendingRelicOffer).not.toBeNull();
+    expect(ctx.pendingRelicOffer!.slot).toBe('mid');
+    // Tinker mid pool — 2 eligible relics per balance-bible.md § 12
+    // (resonant-anchor + catalyst). Order is seed-shuffled by
+    // generateMidRelicOffer; assert count + membership only.
+    expect(ctx.pendingRelicOffer!.cards).toHaveLength(2);
+    expect(new Set(ctx.pendingRelicOffer!.cards)).toEqual(
+      new Set(['resonant-anchor', 'catalyst']),
+    );
+  });
+
+  it('pendingRelicOffer is null when round < 6 (mid gate)', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 5 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+  });
+
+  it('pendingRelicOffer clears when sim mid slot is filled', async () => {
+    // Round 6 with mid already set — sim has already granted the relic,
+    // so the offer must not re-surface (else duplicate grant attempts).
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      outcome: 'in_progress',
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+  });
+
+  it('isRunEnded fires when sim outcome transitions to won', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'won' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it('isRunEnded fires when sim outcome transitions to eliminated', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'eliminated' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it('isRunEnded is false while outcome remains in_progress', async () => {
+    const getCtx = await driveSyncWithSnapshot({
+      outcome: 'in_progress' as RunOutcome,
+    });
+    expect(getCtx().isRunEnded).toBe(false);
+  });
+
+  it('pendingRelicOffer is null when outcome is terminal (offer suppressed at run-end)', async () => {
+    // Defense in depth: even if round/relic predicates would otherwise
+    // fire, a terminal outcome suppresses the offer.
+    const getCtx = await driveSyncWithSnapshot({
+      currentRound: 6 as RoundNumber,
+      relics: { starter: 'apprentices-loop', mid: null, boss: null } as RelicSlots,
+      outcome: 'won' as RunOutcome,
+    });
+    expect(getCtx().pendingRelicOffer).toBeNull();
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  // ─── M1.5a PR 3 Phase 2d — boss offer + onCombatDone defer ──────
+  //
+  // Cases (a)-(d) per take-2 § Q6. Self-contained per-test setup (not
+  // driveSyncWithSnapshot) chosen for the same reason as Phase 2.5d
+  // setupTerminalState: each test needs distinct mock surfaces
+  // (case (b) mocks grantRelic + getPhase; case (c) overrides
+  // combatOutcome to ghost_win; case (a) asserts advancePhase NOT
+  // called and needs spy access). Extending the existing helper to
+  // cover all permutations would break the 7 existing Phase 2b call
+  // sites' destructure shape. New variant helper would add net code
+  // for ~4 tests' worth of reuse. Self-contained per-test is the
+  // lower-overhead path.
+
+  it('pendingRelicOffer fires for boss when sim history records round-11 player_win and boss slot empty', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    const advancePhaseSpy = vi
+      .spyOn(ctx0.simRun!, 'advancePhase')
+      .mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      currentRound: 11 as RoundNumber,
+      outcome: 'in_progress' as RunOutcome,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      history: [
+        {
+          round: 11 as RoundNumber,
+          outcome: 'win',
+          damageDealt: 30,
+          damageTaken: 0,
+          goldEarnedThisRound: 5,
+          opponentGhostId: null,
+          opponentClassId: null,
+        },
+      ] as ReadonlyArray<RunHistoryEntry>,
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+
+    const offer = getCtx().pendingRelicOffer;
+    expect(offer).not.toBeNull();
+    expect(offer!.slot).toBe('boss');
+    // Tinker boss pool: worldforge-seed (1 relic per balance-bible.md § 12).
+    expect(offer!.cards).toHaveLength(1);
+    // advancePhase NOT called by onCombatDone on round-11-win-boss-empty defer.
+    expect(advancePhaseSpy).not.toHaveBeenCalled();
+  });
+
+  it("grantSelectedRelic('boss', ...) clears the offer, resumes advancePhase, and transitions sim outcome to 'won' + phase to 'ended'", async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    const preGrantSnapshot: SimRunState = {
+      ...baseSnapshot,
+      currentRound: 11 as RoundNumber,
+      outcome: 'in_progress' as RunOutcome,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      history: [
+        {
+          round: 11 as RoundNumber,
+          outcome: 'win',
+          damageDealt: 30,
+          damageTaken: 0,
+          goldEarnedThisRound: 5,
+          opponentGhostId: null,
+          opponentClassId: null,
+        },
+      ] as ReadonlyArray<RunHistoryEntry>,
+    };
+    const postGrantSnapshot: SimRunState = {
+      ...preGrantSnapshot,
+      outcome: 'won' as RunOutcome,
+      relics: {
+        ...preGrantSnapshot.relics,
+        boss: 'worldforge-seed' as RelicId,
+      } as RelicSlots,
+    };
+
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    const advancePhaseSpy = vi
+      .spyOn(ctx0.simRun!, 'advancePhase')
+      .mockImplementation(() => {});
+    const grantRelicSpy = vi
+      .spyOn(ctx0.simRun!, 'grantRelic')
+      .mockImplementation(() => {});
+    // Pre-grant: sim is left at 'resolution' phase by onCombatDone's
+    // defer. Post-grant: getPhase still returns 'resolution' (grantRelic
+    // doesn't transition phase); the resume call to advancePhase fires
+    // (mocked no-op here; sim's real advancePhase would transition to
+    // 'ended').
+    vi.spyOn(ctx0.simRun!, 'getPhase').mockReturnValue('resolution');
+    const getStateSpy = vi.spyOn(ctx0.simRun!, 'getState');
+    getStateSpy.mockReturnValue(preGrantSnapshot);
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+
+    // Boss offer live; defer held.
+    expect(getCtx().pendingRelicOffer?.slot).toBe('boss');
+    expect(advancePhaseSpy).not.toHaveBeenCalled();
+
+    // Re-mock getState for the resume path (sync_from_sim post-grant).
+    getStateSpy.mockReturnValue(postGrantSnapshot);
+
+    act(() => {
+      getCtx().grantSelectedRelic('boss', 'worldforge-seed' as RelicId);
+    });
+
+    expect(grantRelicSpy).toHaveBeenCalledOnce();
+    expect(grantRelicSpy).toHaveBeenCalledWith('boss', 'worldforge-seed');
+    // advancePhase resumed via phase-conditional check (Q1.b).
+    expect(advancePhaseSpy).toHaveBeenCalledOnce();
+
+    await waitFor(() => {
+      expect(getCtx().state.state.outcome).toBe('won');
+    });
+    // Offer cleared (outcome guard + relics.boss now set).
+    expect(getCtx().pendingRelicOffer).toBeNull();
+    // RunEndOverlay would render (outcome !== 'in_progress').
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it("pendingRelicOffer is null on round-11 player_loss (no boss path); onCombatDone advances sim immediately to outcome 'eliminated'", async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    const preLossSnapshot: SimRunState = {
+      ...baseSnapshot,
+      currentRound: 11 as RoundNumber,
+      outcome: 'in_progress' as RunOutcome,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      history: [
+        {
+          round: 11 as RoundNumber,
+          outcome: 'loss',
+          damageDealt: 18,
+          damageTaken: 30,
+          goldEarnedThisRound: 0,
+          opponentGhostId: null,
+          opponentClassId: null,
+        },
+      ] as ReadonlyArray<RunHistoryEntry>,
+    };
+    const postAdvanceSnapshot: SimRunState = {
+      ...preLossSnapshot,
+      outcome: 'eliminated' as RunOutcome,
+    };
+
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    const advancePhaseSpy = vi
+      .spyOn(ctx0.simRun!, 'advancePhase')
+      .mockImplementation(() => {});
+    // First two calls (goldBefore + postApply) see pre-loss; subsequent
+    // (snapshot after advancePhase fires + any later) see post-advance.
+    vi.spyOn(ctx0.simRun!, 'getState')
+      .mockReturnValueOnce(preLossSnapshot)
+      .mockReturnValueOnce(preLossSnapshot)
+      .mockReturnValue(postAdvanceSnapshot);
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'ghost_win',
+          events: [],
+          finalHp: { player: 0, ghost: 12 },
+          endedAtTick: 3,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 18,
+        damageTaken: 30,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+
+    // No defer: advancePhase called by onCombatDone (loss path).
+    expect(advancePhaseSpy).toHaveBeenCalledOnce();
+    // No boss offer (last.outcome !== 'win').
+    expect(getCtx().pendingRelicOffer).toBeNull();
+    // Sim outcome → 'eliminated' (sim's endRun map for round-11 loss).
+    expect(getCtx().state.state.outcome).toBe('eliminated');
+    expect(getCtx().isRunEnded).toBe(true);
+  });
+
+  it('pendingRelicOffer for mid still fires on round 6-10 win (Phase 2b regression)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    const postCombatSnapshot: SimRunState = {
+      ...baseSnapshot,
+      currentRound: 6 as RoundNumber,
+      outcome: 'in_progress' as RunOutcome,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: null,
+        boss: null,
+      } as RelicSlots,
+      history: [
+        {
+          round: 6 as RoundNumber,
+          outcome: 'win',
+          damageDealt: 25,
+          damageTaken: 5,
+          goldEarnedThisRound: 5,
+          opponentGhostId: null,
+          opponentClassId: null,
+        },
+      ] as ReadonlyArray<RunHistoryEntry>,
+    };
+
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    const advancePhaseSpy = vi
+      .spyOn(ctx0.simRun!, 'advancePhase')
+      .mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue(postCombatSnapshot);
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 25,
+        damageTaken: 5,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+
+    // Mid offer fires (round 6 + mid empty, last.round=6 NOT 11).
+    const offer = getCtx().pendingRelicOffer;
+    expect(offer).not.toBeNull();
+    expect(offer!.slot).toBe('mid');
+    // Tinker mid pool: resonant-anchor + catalyst (2 relics).
+    expect(offer!.cards).toHaveLength(2);
+    // advancePhase fired normally — boss predicate fails on round 6.
+    expect(advancePhaseSpy).toHaveBeenCalledOnce();
+  });
 });
