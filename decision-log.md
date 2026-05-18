@@ -4,6 +4,128 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-17 — M1.5a PR 3 closed (relic offers + run-end detection + CF 14 regression test)
+
+### Branch + commit topology
+
+Branch: `m1.5a-pr3-relics-and-runend` off main `92159f9` (post-PR-2 close baseline). Six branch commits + `--no-ff` merge commit `d3f2409` (two-parent topology: 92159f9 + a45f746).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `b569f65` | Phase 2a — sim-side generators | `generateMidRelicOffer` + `generateBossRelicOffer` + `RELIC_OFFER_STRIDE = 65519` in `packages/sim/src/run/relicOffer.ts`. Slot multipliers `MID = 1` / `BOSS = 2` (locked answer 15 sub-decision under §6e Q6). Pure: `(seed, classId) → ReadonlyArray<RelicId>`. Sim test count 474+1 → 487+1 (+13). Rule 7 barrel sweep on commit (sim/run/index.ts + sim/src/index.ts). |
+| `edd668e` | Phase 2b — client wire + mid offer + run-end | `pendingRelicOffer` useMemo in `apps/client/src/run/useRun.ts` (slot literal forward-compat `'mid' \| 'boss'`; mid branch shipped, boss carved to Phase 2d per Catch 12 resolution); `grantSelectedRelic` useCallback; `mirrorsSimShouldEndRun` helper in `apps/client/src/run/runEnd.ts` (structural narrow `{ outcome: RunOutcome }`); `RelicOfferModal` + `RunEndOverlay` components; +7 RunContext.test.tsx integration cases; +1 RelicOfferModal.test.tsx forward-compat boss-render test. Client test count 210 → 226 (+16). Bundle main +3.43 KB raw / +0.89 KB gz vs Phase 2a; CombatOverlay byte-identical. **Catch 12 (NEW, Class A)** surfaced via Rule 6 + Rule 8 halt-gate; closed structurally by scope cut. **CF 21 detection-side closes.** |
+| `1c810ed` | Phase 2c — CF 14 regression test | `apps/client/src/shop/ShopController.test.ts`: Case A Apprentice's Loop chain + non-default Ruleset levers (`rerollCostStart = 5`, `rerollCostIncrement = 2`); Case B default sanity. Client test count 226 → 228 (+2). **Catch 13 (NEW, Class A)** surfaced via Rule 6 Step 0 — prompt premise "ShopController reads `extraRerollsPerRound`" contradicted shipped consumer chain (RunController + useRun + ShopPanel + ShopTab); `rerollCostDelta` premise drift (RelicModifiers, not DerivedModifiers). Closed structurally by Phase 2c scope clarification + Case A redesign. **CF 14 closes.** |
+| `fed341d` | Phase 2d — boss offer + onCombatDone defer | Phase 1 take-1 + take-2 halt-gates ratified Q1-Q7 design. Unified `pendingRelicOffer` useMemo extended with boss-precedence branch (Phase 2b mid body byte-identical per Pattern 5; deps extended with `state.state.relics.boss` + `state.state.history.length` witness — `getState()` returns `this.history.slice()` so the array reference is unstable; `.length` is primitive and content-stable per sim's append-only invariant). Inline three-line defer predicate in `onCombatDone` (mirrors useMemo boss gate); phase-conditional `simRun.advancePhase()` resume in `grantSelectedRelic` via `simRun.getPhase() === 'resolution'` (NOT `getState().phase` per Catch 15 closure). +4 RunContext.test.tsx integration cases; self-contained per-test setup (existing `driveSyncWithSnapshot` helper doesn't expose advancePhase spy handles; extending would force signature change at 7 call sites; Phase 2.5d `setupTerminalState` precedent at RunContext.test.tsx:649). RelicOfferModal.test.tsx 3rd test comment polish. Class D zero-delta axes verified: `RunContext.tsx` + `RunController.ts` + `RelicOfferModal.tsx` (component) untouched. Client test count 228 → 232 (+4). Bundle main +0.59 KB raw / +0.15 KB gz vs Phase 2b; CombatOverlay byte-identical. **Catch 14 (NEW, Class A)** + **Catch 15 (NEW, Class A)** surfaced at Phase 1 take-1 + take-2 respectively; closed structurally via amended Q1/Q1.b dispositions. |
+| `f446fc5` | Phase 2.5i — Codex P2 #1 (barrel lazy boundary) | Codex automated review on PR #15 (Phase 2d HEAD) surfaced P2: static barrel import of `generateMidRelicOffer` + `generateBossRelicOffer` from `@packbreaker/sim` coupled `useRun`'s main-chunk membership to the root barrel's tree-shake behavior — structurally regressible against future barrel composition changes. **Catch 16 (NEW, Bucket C2 — Rule 4 instance).** Fix: Path B workspace-source subpath `@packbreaker/sim/src/run/relicOffer` (1-line import change + 9-line explanatory comment). Path A (exports field addition) rejected on cost grounds (~5-8 line cross-package contract vs 1-line). Bundle envelope post-fix: all 5 chunks byte-identical raw including content hashes — reveals barrel tree-shake was already effective in practice; fix is pure structural hygiene removing the regressibility surface without altering current runtime behavior. relicOffer.ts transitive imports verified clean at Step 0 (only `@packbreaker/content` types + `../rng`; zero `state.ts` coupling). |
+| `a45f746` | Phase 2.5ii — Codex P2 #2 (effective ruleset flowthrough) | Codex re-review of f446fc5 surfaced P2 #2: `RunController.getState().ruleset` aliased `this.contract.ruleset` (base) instead of `this.effectiveRuleset` (composed post-grantRelic). Client shop regenerator (`combat_done` arm) + reroll arm read `state.state.ruleset.shopSize` → resonant-anchor's `shopSize + 1` modifier silently lost (recorded in `relics.mid` but no extra shop slot). Snapshot's `shop` field was already effective (`makeShop` uses `effectiveRuleset` internally), so the snapshot was internally inconsistent. **Catch 17 (NEW, Bucket C2 lineage extension to sim-API contract surfaces — Rule 4 instance).** Fix: Option A 1-line sim change at `state.ts:320` `ruleset: this.contract.ruleset` → `ruleset: this.effectiveRuleset` + 8-line explanatory comment. Zero client changes; zero test updates needed (Step 0 audit found zero class-(a) tests pinning on base ruleset semantics). Determinism fixtures byte-stable (action variants serialize pure inputs; no snapshot in stream). Options B' (client consumes snapshot.shop) and D (extend DerivedModifiers with shopSize) rejected per halt-gate Step 1 — B' tangles take-1 D scope; D reintroduces dual-declaration drift surface that DerivedModifiers' v0.6 canonical-declaration migration closed. Iron-will (Marauder starter, `bonusHearts + 1`) surfaced as Rule 5 expansion second instance per halt-gate S0.9; fingerprint conclusion (b) — Marauder unreachable at HEAD (`M1_PROTOTYPE_CLASS = 'tinker'`), bug latent. **CF 39 opens.** Bundle envelope: all 5 chunks byte-identical raw; main gz shrank by 10 bytes (minified field-name compression noise); CombatOverlay byte-identical raw + gz. |
+| `d3f2409` | Merge | `--no-ff` merge of m1.5a-pr3-relics-and-runend into main. Two-parent topology (92159f9 + a45f746). Auto-closes PR #15 server-side. |
+
+### What landed (load-bearing surface summary)
+
+- **Sim-side relic offer generators** at `packages/sim/src/run/relicOffer.ts`: pure, deterministic, content-pool-filtered by class eligibility. Slot multipliers MID = 1, BOSS = 2 × `RELIC_OFFER_STRIDE = 65519`. Re-exported through both sim package barrels per Rule 7.
+- **Unified client offer detection** via `pendingRelicOffer` useMemo with boss-precedence (round-11 win + boss slot empty gate before round-6+ mid gate). Recomputes on dep change; no useEffect mount-side hook required. Phase 2b's forward-compat slot literal type was the foundation Phase 2d extended without restructure.
+- **onCombatDone hard defer** on round-11 win + boss slot empty branch. Sim's `outcome` stays `'in_progress'` through the boss-claim window. Inline three-line predicate mirrors useMemo boss gate.
+- **grantSelectedRelic phase-conditional resume**: calls `simRun.advancePhase()` when post-grant `simRun.getPhase() === 'resolution'` (boss-claim resume; mid grant skips). Uses `getPhase()` controller method, not the non-existent `getState().phase` snapshot field.
+- **Client run-end detection** via `mirrorsSimShouldEndRun(state)` helper at `runEnd.ts`. Structural-narrow predicate `state.outcome !== 'in_progress'`. Drives `RunEndOverlay` render-gate.
+- **Mutual exclusion** between offer modal and run-end overlay: modal renders iff `outcome === 'in_progress'`; overlay renders iff `outcome !== 'in_progress'`. Hard defer keeps outcome at `'in_progress'` through the claim window; no both-render state.
+- **Sim API contract correction (Phase 2.5ii)**: `RunController.getState().ruleset` aliases `this.effectiveRuleset` (composed). All four downstream client consumers of `state.state.ruleset` (combat_done generateShop, reroll arm generateShop, useRun.onReroll computeRerollCost, ShopPanel/ShopTab affordability) pick up effective values automatically. Base contract ruleset accessible via `contractId → CONTRACTS` lookup if any consumer needs it.
+- **CF 14 regression test** at `apps/client/src/shop/ShopController.test.ts`: Apprentice's Loop chain + non-default Ruleset levers stress-tested.
+
+### Pattern + catch + rule codification
+
+- **No new patterns** in PR 3. Pattern candidate #8 (workspace-source subpath imports for fine-grained boundary control against barrel composition fragility) held for second-instance per standing convention; Phase 2.5i Path B is the first instance, M1.4b1 Phase 2.5 cache-replay precedent shape doesn't match. Watch in M2 for any new main-chunk file importing sim/content/ui-kit at static-link tier.
+- **Catches 12–17 (NEW)** — 6 new predicate-vs-name catches across PR 3. Lineage:
+  - Catch 12 (Class A) — Phase 2b boss-grant phase gate scope cut. Closed structurally by scope cut (mid + run-end ship; boss carves to Phase 2d).
+  - Catch 13 (Class A) — Phase 2c CF 14 consumer chain + derived-vs-source field drift. Closed structurally by Case A redesign.
+  - Catch 14 (Class A) — Phase 2d Phase 1 take-1 ClientRunState tier extrapolation. Closed structurally via amended Q1 useMemo disposition.
+  - Catch 15 (Class A) — Phase 2d Phase 1 take-2 `getState().phase` field-presence drift. Non-halting; closed structurally via Phase 2 prompt input checklist + implementation.
+  - Catch 16 (Bucket C2 — Rule 4 instance) — Phase 2.5i barrel lazy-boundary regressibility. Closed structurally via Path B workspace-source subpath.
+  - Catch 17 (Bucket C2 lineage extension — Rule 4 instance) — Phase 2.5ii §4.5 R2 authority binding violation in sim-API contract surface (snapshot.ruleset alias). Closed structurally via Option A. Bucket C2 scope expanded to cover sim-API contract surfaces in addition to framework-internal architecture.
+- **No new rules.** Rule 5 + Rule 6 amendments codified below.
+
+### Amendments codified at PR 3 close
+
+**Rule 5 amendment** (second-instance threshold met).
+
+> **Going-forward rule #5 (amended at M1.5a PR 3 close).** Phase 1 investigations claiming content-scope facts OR architectural-tier scope claims about which surfaces stay client-parallel / sim-authoritative / etc., require content-side evidence: at minimum one targeted grep of `packages/content/` enumerating which content (relics, items, contracts) mutates the surface in question. Schema-side evidence alone is insufficient — schema permits a superset of what content exercises.
+
+Instances:
+- #1 (original, M1.4b2.3 § Phase 1 §2 BuffableStat case, 2026-05-07; pre-M1.5 retro Topic 4 ratification 2026-05-08).
+- #2 (M1.5a Phase 1 design take-1 D ratification 2026-05-11): "Bag + shop mutations stay client-parallel for 5a" claim without enumerating ruleset-modifying relics. Phase 2.5ii halt-gate S0.9 (2026-05-17) surfaced resonant-anchor (Tinker mid, `shopSize + 1`) + iron-will (Marauder starter, `bonusHearts + 1`) independently of the Codex finding's named case, confirming the same content-grep discipline applies to architectural-tier scope claims.
+
+**Rule 6 amendment** (5-instance fatigue threshold; codification convention bent at 5-instance rather than typical second-instance, mirroring Phase 2.5 interlude escalation precedent).
+
+> **Going-forward rule #6 (amended at M1.5a PR 3 close).** Phase 2 prompt premises with type signatures, field presence on a named type, consumer file location for a named symbol, or value-space membership must be re-derived from shipped state in Step 0 surface verification; ratified dispositions in resume instructions must not be silently reverted in implementation.
+
+M1.5a instances: Catch 11 (PR 2 close, Class D framing), Catch 12 (PR 3 Phase 2b, Class A), Catch 13 (PR 3 Phase 2c, Class A), Catch 14 (PR 3 Phase 2d Phase 1 take-1, Class A), Catch 15 (PR 3 Phase 2d Phase 1 take-2, Class A). Coverage extended from original type-signature drift framing (PR 1 codification) to field-presence + structural-flow + consumer-file-location + derived-vs-source-field + tier-extrapolation drifts.
+
+**Take-1 D scope amendment** (clarifies architectural authority boundary).
+
+> **Take-1 D (amended at M1.5a PR 3 close, surfaced by Catch 17).** Original (2026-05-11): "Bag + shop mutations stay client-parallel for 5a (revisit at 5b.3 if LocalSaveV1 reveals need)." Amended: "Bag + shop mutations (purchases, drags, rerolls dispatched via client reducer arms) stay client-parallel for 5a; the RULESET INPUT to client shop generation is sim-authoritative (`snapshot.ruleset` is the effective ruleset post-relic composition per Phase 2.5ii); revisit shop generation ownership at 5b.3 if LocalSaveV1 reveals need."
+
+### CF dispositions across PR 3
+
+- **CF 14 closed (Phase 2c)** — ruleset-modifier reroll cost authority regression test landed in `ShopController.test.ts` with Apprentice's Loop + non-default Ruleset levers.
+- **CF 21 detection-side closed (Phase 2b)** — `mirrorsSimShouldEndRun` helper landed at `apps/client/src/run/runEnd.ts`. Summary-side carries to 5b.2 (CF stays open with detection-side-resolved annotation).
+- **CF 39 (NEW)** — maxHearts re-sync from sim's effective ruleset. `state.maxHearts` set from `DEFAULT_RULESET.startingHearts` in `createInitialState` at module-load singleton (RunController.ts INITIAL_CLIENT_STATE); `applySimSnapshot` field list (RunController.ts:174-191) omits `maxHearts` → never re-synced. Iron-will (Marauder starter, `bonusHearts + 1`) canonical trigger; Marauder unreachable at M1.5a HEAD (`M1_PROTOTYPE_CLASS = 'tinker'` hardcoded constant per Phase 2.5ii Step 3 S3.1) makes the bug latent. Fix shape: 1-line addition `maxHearts: snapshot.ruleset.startingHearts` to `applySimSnapshot`. Visible-bug fingerprint under Marauder + iron-will: TopBar/MobileTopBar render 3 filled hearts (length: maxHearts=3, all filled since i < hearts=4); RoundResolution displays `4/3`. Disposition: 5b.1 alongside class-select UI. Surfaced by Phase 2.5ii Step 3 fingerprint conclusion (b). Rule 5 expansion second-instance evidence.
+
+### Counters at PR 3 close
+
+| Counter | Pre-PR-3 | Post-PR-3 |
+|---|---|---|
+| Architectural patterns | 6 | 6 |
+| Predicate-vs-name catches | 13 | 17 |
+| Locked answers | 32 | 32 |
+| Going-forward rules | 8 | 8 (Rule 5 + Rule 6 amendments; no new) |
+| Master-dev chat drifts (Topic 2 counter) | 12 | 15 |
+| Open carry-forwards | 28 | 29 |
+
+### Codex external review summary
+
+PR #15 received 2 P2 findings cumulative across 3 review passes:
+- **Review 1** (fed341d, Phase 2d HEAD): 1 P2 — barrel lazy-boundary regressibility. Closed structurally via Phase 2.5i.
+- **Review 2** (f446fc5, Phase 2.5i HEAD; re-requested via top-level `@codex review` comment): 1 P2 — snapshot.ruleset effective-ruleset flowthrough. Closed structurally via Phase 2.5ii.
+- **Review 3** (a45f746, Phase 2.5ii HEAD; re-requested via top-level `@codex review` comment): clean ("Didn't find any major issues. Hooray!").
+
+Rule 4 catch checkpoint satisfied. Catches 16 + 17 caught by Codex per Rule 4 framing. 4-finding ceiling: 2/4 cumulative — standing agreement (4th finding → comprehensive pre-merge meta-audit) not triggered. Codex re-engagement pattern via top-level `@codex review` comment (NOT thread reply) continues to work; PR 2 close precedent confirmed.
+
+### Process learnings (uncodified; logged for second-instance watch)
+
+- **Pattern candidate #8** — workspace-source subpath imports for fine-grained boundary control against barrel composition fragility. Single instance (Phase 2.5i Path B). Codification convention is second-instance; hold + watch in M2.
+- **Rule candidate #9** — static imports from a workspace package's root barrel are forbidden in main-chunk-load-path files where the barrel transitively re-exports lazy-boundary surfaces; use workspace-source subpath. Single instance (Phase 2.5i). Same M2 watch.
+- **Latent semantic shift in strategies.ts** (Phase 2.5ii Step 0 S0.3): `state.ruleset.rerollCostStart` reads will silently switch from base to effective semantics when the first `rerollCostDelta`-shipping relic ships post-M1. Correct semantic direction (strategies simulate player behavior; players perceive effective costs). No action now; log for future-content review.
+- **Master-dev Rule 10 category 2 drift** (Phase 2d Phase 2 prompt): specified "23/23 tasks" with command `lint test build` (era-mixed; 19 is correct count for that command). Drift #15. Category 2 (quantitative-baseline transposition across command specs) is first instance of THIS specific shape; watch for second instance before extending Rule 10's category list.
+- **Self-contained per-test setup precedent** (Phase 2d Step 4): when existing test helper doesn't expose required spy handles AND extending it would force signature change at multiple call sites, self-contained per-test setup with shared boilerplate is the lower-overhead path. Phase 2.5d `setupTerminalState` precedent referenced. Watch for second instance before codifying.
+
+### PR 4 / 5b queue carry-context pre-flags
+
+- **5b.1** (class-select + starter relic): exposes Marauder runtime-reachability, triggering iron-will visible-bug fingerprint. Fix CF 39 by extending `applySimSnapshot` field list with `maxHearts: snapshot.ruleset.startingHearts`. Verify TopBar / MobileTopBar / RoundResolution render correctly under Marauder + iron-will. Optional integration test: `state.state.maxHearts === snapshot.ruleset.startingHearts` post-sync. Closes CF 39.
+- **5b.2** (run-end summary surface): CF 21 summary-side closure. Build the run-end summary screen consuming sim's `history` + `outcome`.
+- **5b.3** (LocalSaveV1 persistence): CF 38 closure. Persist run state across reloads. Likely re-opens take-1 D shop-generation ownership review per amendment text ("revisit shop generation ownership at 5b.3 if LocalSaveV1 reveals need").
+- **Rule 6 amended scope inheritance**: all subsequent Phase 2 prompts re-derive type signatures + field presence + consumer location + value-space membership from shipped state in Step 0.
+- **Rule 5 amended scope inheritance**: all Phase 1 design halt-gates with architectural-tier scope claims (client-parallel, sim-authoritative, etc.) include content-grep evidence enumerating relics/items/contracts mutating the surface.
+- **4-finding ceiling watch** remains for PR 4 onward.
+
+### Verification (final state, post-Phase-2.5ii a45f746)
+
+```
+pnpm turbo lint test build --force
+Tasks:    19 successful, 19 total
+Cached:    0 cached, 19 total
+Time:    41.201s
+
+pnpm check-schemas-sync
+check-schemas-sync: OK (content-schemas.ts and packages/content/src/schemas.ts byte-identical)
+```
+
+Test counts at PR 3 close: sim 487 + 1 skipped; client 232 (was 210 pre-PR-3; +22 across Phase 2b +16 / Phase 2c +2 / Phase 2d +4); ui-kit 27; content 30. Workspace files: 39.
+
+Determinism: 224 .jsonl + 6 .json fixtures replay byte-stable across the full branch (Phase 2.5ii Step 0 S0.4 confirmed action variants are pure inputs; snapshots not serialized in the action stream).
+
+Bundle envelope (cumulative 92159f9 → a45f746): main +4.02 KB raw / +1.04 KB gz (Phase 2a sim-side only, no main delta; Phase 2b +3.43 KB / +0.89 KB; Phase 2c no client surface; Phase 2d +0.59 KB / +0.15 KB; Phase 2.5i + 2.5ii byte-identical raw on main, with Phase 2.5ii main gz -10 bytes from minified field-name compression noise). CombatOverlay byte-identical across all 6 commits (lazy boundary preserved per PR 1 §2a A.1 resolution). CombatOverlay hash variance: `CombatOverlay-DMzGMH_0.js` at Phase 2d → `CombatOverlay-B-ESmU8_.js` at Phase 2.5ii — hash changed because Phase 2.5ii's source change re-emitted the artifact, but raw + gz sizes byte-identical and chunk-graph composition unchanged.
+
+---
+
 ## 2026-05-15 § M1.5a PR 2 closed
 
 Merge commit `574d74b956ef89c7ffac6d5e333c1772cda8d473` on `main`. PR #14 closed (8-commit feature branch + merge). M1.5a PR 2 ships the client sim RunController integration foundation (Phase 2a + 2b-1 + 2b-2 + 4 reactive Phase 2.5 sub-phases + 1 halt-in-inspection sub-phase). Codex Finding 5 deferred to CF 38.
