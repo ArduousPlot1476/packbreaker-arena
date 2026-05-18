@@ -13,7 +13,6 @@ import type {
   DragStartEvent,
 } from '@dnd-kit/core';
 import type { ClassId, CombatResult, ContractId, GhostId, RelicId } from '@packbreaker/content';
-import { CLASSES } from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
 // chunk-splits only on runtime imports). The runtime createRun call
@@ -48,7 +47,6 @@ import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
   INITIAL_CLIENT_STATE,
-  M1_PROTOTYPE_CLASS,
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
@@ -59,27 +57,51 @@ function makeUid(prefix: 'b' | 's'): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
+/** Input the player commits at class-select. useRun gates createRun on
+ *  this being non-null — until ClassSelectScreen calls beginRun, sim is
+ *  not constructed and the run hasn't started.
+ *
+ *  M1.5b PR 1 Implementation C: replaces the M1_PROTOTYPE_CLASS hardcode
+ *  that previously fed createRun at mount. The createRun useEffect now
+ *  fires only after the player picks a class + starter — see
+ *  RunContext.tsx for the gate that renders ClassSelectScreen vs
+ *  RunBootFallback vs the run-screen children. */
+export interface PendingRunInput {
+  readonly classId: ClassId;
+  readonly startingRelicId: RelicId;
+}
+
 export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
-  // Sim RunController instance — dynamic-imported on mount per Q3
-  // disposition (M1.5a PR 2 Phase 1, A.1 lazy-boundary preservation).
-  // Static import of createRun would drag sim/state.ts → combat.ts
-  // into the main bundle, regressing tech-architecture.md § 10's
-  // "title screen ships React + bag UI only" promise. RunProvider
-  // renders RunBootFallback while this is null so consumers never
-  // observe the placeholder INITIAL_CLIENT_STATE fields.
+  // Sim RunController instance — dynamic-imported when pendingRunInput
+  // resolves (M1.5b PR 1 Implementation C: class-select gate replaces
+  // M1.5a's mount-time createRun). Static import of createRun would drag
+  // sim/state.ts → combat.ts into the main bundle, regressing
+  // tech-architecture.md § 10's "title screen ships React + bag UI only"
+  // promise. RunProvider renders ClassSelectScreen until pendingRunInput
+  // is set, then RunBootFallback while simRun resolves, so consumers
+  // never observe the placeholder INITIAL_CLIENT_STATE fields.
   const [simRun, setSimRun] = useState<SimRunController | null>(null);
+  const [pendingRunInput, setPendingRunInput] = useState<PendingRunInput | null>(
+    null,
+  );
+
+  const beginRun = useCallback((input: PendingRunInput) => {
+    setPendingRunInput(input);
+  }, []);
 
   useEffect(() => {
+    if (pendingRunInput === null) return;
+    if (simRun !== null) return;
     let cancelled = false;
     void import('@packbreaker/sim').then(({ createRun }) => {
       if (cancelled) return;
       const controller = createRun({
         seed: makeRunSeed(),
-        classId: M1_PROTOTYPE_CLASS,
+        classId: pendingRunInput.classId,
         contractId: 'neutral' as ContractId,
-        startingRelicId: CLASSES[M1_PROTOTYPE_CLASS]!.starterRelicPool[0]!,
+        startingRelicId: pendingRunInput.startingRelicId,
         itemsRegistry: SHOP_POOL_ITEMS,
         onTelemetryEvent: () => {
           // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
@@ -93,7 +115,7 @@ export function useRun() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [pendingRunInput, simRun]);
 
   const recipes = useMemo(() => detectRecipes(state.bag), [state.bag]);
 
@@ -383,6 +405,8 @@ export function useRun() {
   return {
     state,
     simRun,
+    pendingRunInput,
+    beginRun,
     recipes,
     scoutedRecipes,
     handleDragStart,
