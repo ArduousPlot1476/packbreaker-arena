@@ -58,7 +58,7 @@ describe('RelicOfferModal', () => {
     expect(cards).toHaveLength(2)
   })
 
-  it('renders 1 card for a boss offer (forward-compat shape; boss detection path lands in PR 3 part 2)', () => {
+  it('renders 1 card for a boss offer (boss detection path shipped at PR 3 Phase 2d)', () => {
     mockContext = {
       pendingRelicOffer: {
         slot: 'boss',

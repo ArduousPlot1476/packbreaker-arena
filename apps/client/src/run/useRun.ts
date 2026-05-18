@@ -19,7 +19,7 @@ import { CLASSES } from '@packbreaker/content';
 // chunk-splits only on runtime imports). The runtime createRun call
 // goes through the dynamic import in the useEffect below.
 import type { RunController as SimRunController } from '@packbreaker/sim';
-import { generateMidRelicOffer } from '@packbreaker/sim';
+import { generateBossRelicOffer, generateMidRelicOffer } from '@packbreaker/sim';
 import { mirrorsSimShouldEndRun } from './runEnd';
 
 /** Payload CombatOverlay forwards to the reducer's combat_done action.
@@ -222,32 +222,42 @@ export function useRun() {
     dispatch({ type: 'continue_to_combat' });
   }, [simRun, state.state.outcome]);
 
-  // ─── M1.5a PR 3 Phase 2b — relic offer + run-end detection ────────
+  // ─── M1.5a PR 3 Phase 2b + Phase 2d — relic offer + run-end ───────
   //
-  // Mid-relic offer detection (boss carved out to PR 3 part 2; sim's
-  // grant_relic boss-phase gate requires 'resolution' phase, which
-  // onCombatDone collapses through atomically — surfacing boss needs
-  // an onCombatDone restructure that's its own ratification point).
+  // Unified pendingRelicOffer useMemo: boss-precedence branch (Phase
+  // 2d) followed by mid branch (Phase 2b). Boss is tested first because
+  // its predicate is tighter (round 11 + history-last win + boss empty)
+  // and disjoint from mid in practice; boss-precedence avoids any path
+  // where both could fire on the same render.
   //
-  // Sim's mid-grant gate (packages/sim/src/run/state.ts:676):
-  //   phase === 'arranging' && currentRound >= 6 && relics.mid === null
+  // Sim's grant gates (packages/sim/src/run/state.ts § grantRelic):
+  //   mid:  phase === 'arranging' && currentRound >= 6 && relics.mid === null
+  //   boss: phase === 'resolution' && lastHistory.round === 11 &&
+  //         lastHistory.outcome === 'win' && relics.boss === null
   //
-  // Client-observable equivalent — sim's RunState has NO phase field
+  // Client-observable equivalents — sim's RunState has NO phase field
   // (RunPhase lives only on RunController via getPhase(), not in
-  // getState()'s snapshot; verified against content-schemas.ts
-  // § RunState at PR 3 Phase 2b). The client tracks combatActive as
-  // the stand-in for sim's 'arranging' window: sim is in 'arranging'
-  // whenever !combatActive holds during an in-progress run (combat
-  // and the collapsed resolution gap both fall inside the combatActive
-  // bracket inside onCombatDone). Round + relics + outcome flow from
-  // sim via sync_from_sim, so the predicate fires the moment sim
-  // transitions to round 6+ arranging.
+  // getState()'s snapshot; verified against content-schemas.ts § RunState
+  // at PR 3 Phase 2b + Phase 2d Phase 1 take-1 S0d). The client tracks
+  // combatActive as the stand-in for sim's 'arranging' AND 'resolution'
+  // windows: sim is in one of those whenever !combatActive holds during
+  // an in-progress run. For boss specifically, onCombatDone defers
+  // advancePhase on the round-11-win-boss-empty branch (see below), so
+  // post-applyCombatOutcome sim phase stays at 'resolution' and the
+  // client observes outcome='in_progress' through the claim window.
   //
-  // useMemo for render stability — generateMidRelicOffer is pure +
-  // deterministic over (runSeed, classId), so a re-render that didn't
-  // change those inputs returns the same array reference and the modal
-  // doesn't reshuffle its card display. Eligibility predicate is part
-  // of the same memo so detection + cards stay in lockstep.
+  // useMemo dep array uses state.state.history.length (NOT the array
+  // reference) as the last-entry witness — sim's getState writes
+  // history: this.history.slice() unconditionally (state.ts § getState),
+  // and the client's applySimSnapshot does the same; the array reference
+  // changes on every sync but the length only changes on actual
+  // applyCombatOutcome appends. Append-only invariant means a length
+  // delta is sufficient to detect any content change relevant to the
+  // boss predicate.
+  //
+  // Generators are pure + deterministic over (runSeed, classId), so
+  // re-renders that didn't change deps return the same card arrays and
+  // the modal doesn't reshuffle.
   const pendingRelicOffer = useMemo<
     | { readonly slot: 'mid' | 'boss'; readonly cards: ReadonlyArray<RelicId> }
     | null
@@ -255,6 +265,20 @@ export function useRun() {
     if (simRun === null) return null;
     if (state.state.outcome !== 'in_progress') return null;
     if (state.combatActive) return null;
+
+    // Boss first — tighter gate (round 11 + win + boss slot empty).
+    const last = state.state.history[state.state.history.length - 1];
+    if (
+      last !== undefined &&
+      last.round === 11 &&
+      last.outcome === 'win' &&
+      state.state.relics.boss === null
+    ) {
+      const cards = generateBossRelicOffer(state.state.seed, state.state.classId);
+      return { slot: 'boss', cards };
+    }
+
+    // Mid — round 6+, mid slot empty.
     if (state.state.round < 6) return null;
     if (state.state.relics.mid !== null) return null;
     const cards = generateMidRelicOffer(state.state.seed, state.state.classId);
@@ -265,6 +289,8 @@ export function useRun() {
     state.combatActive,
     state.state.round,
     state.state.relics.mid,
+    state.state.relics.boss,
+    state.state.history.length,
     state.state.seed,
     state.state.classId,
   ]);
@@ -275,14 +301,25 @@ export function useRun() {
   // gates are authoritative — client does NOT re-validate against the
   // offer (M1 trust model parity with grantRelic's slot/phase-only
   // validation; the modal's pendingRelicOffer-gated render is the
-  // client-side containment). Signature accepts 'mid' | 'boss' for
-  // forward-compat with PR 3 part 2; Phase 2b only ever surfaces 'mid'
-  // via pendingRelicOffer detection.
+  // client-side containment).
+  //
+  // Phase 2d resume (Q1.b): when onCombatDone defers advancePhase for
+  // a boss claim, sim is left at phase 'resolution'. After grantRelic
+  // succeeds, simRun.getPhase() === 'resolution' is still true (grantRelic
+  // does not transition phase), and we resume the deferred advancePhase
+  // so sim reaches 'ended' for the round-11 win path. Phase-conditional
+  // rather than slot-conditional so future deferred-transition slots
+  // generalize cleanly. Use simRun.getPhase() — NOT simRun.getState().phase
+  // — because RunState has no phase field (phase lives only on the
+  // RunController instance; verified at Phase 1 take-1 S0d + take-2 S0l).
   const grantSelectedRelic = useCallback(
     (slot: 'mid' | 'boss', relicId: RelicId) => {
       if (simRun === null) return;
       if (state.state.outcome !== 'in_progress') return;
       simRun.grantRelic(slot, relicId);
+      if (simRun.getPhase() === 'resolution') {
+        simRun.advancePhase();
+      }
       dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
     },
     [simRun, state.state.outcome],
@@ -291,6 +328,16 @@ export function useRun() {
   // CombatOverlay computes damageDealt / damageTaken / opponentGhostId /
   // opponentClassId at combat-end (it has the input + result on hand)
   // and forwards them to onCombatDone.
+  //
+  // Phase 2d boss-claim defer (Q2): after applyCombatOutcome transitions
+  // sim to 'resolution', detect the round-11-win-boss-empty window and
+  // SKIP advancePhase. The resolution-phase snapshot is then synced to
+  // the client so pendingRelicOffer's boss branch fires; the deferred
+  // advancePhase is resumed inside grantSelectedRelic phase-conditionally
+  // (so the boss grant lands while sim is still in 'resolution', then
+  // sim transitions to 'ended' via the resumed advancePhase). Predicate
+  // mirrors the boss branch of the pendingRelicOffer useMemo — same three
+  // readings; inline rather than helper because of the one call site.
   const onCombatDone = useCallback((payload: CombatDonePayload) => {
     if (simRun === null) return;
     if (state.state.outcome !== 'in_progress') return;
@@ -309,7 +356,15 @@ export function useRun() {
       opponentGhostId: payload.opponentGhostId,
       opponentClassId: payload.opponentClassId,
     });
-    simRun.advancePhase();
+    const postApply = simRun.getState();
+    const lastEntry = postApply.history[postApply.history.length - 1];
+    const shouldDeferAdvance =
+      lastEntry?.round === 11 &&
+      lastEntry?.outcome === 'win' &&
+      postApply.relics.boss === null;
+    if (!shouldDeferAdvance) {
+      simRun.advancePhase();
+    }
     const snapshot = simRun.getState();
     const goldDelta = snapshot.gold - goldBefore;
     dispatch({ type: 'sync_from_sim', snapshot });
