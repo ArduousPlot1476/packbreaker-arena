@@ -19,7 +19,16 @@ import { CLASSES } from '@packbreaker/content';
 // chunk-splits only on runtime imports). The runtime createRun call
 // goes through the dynamic import in the useEffect below.
 import type { RunController as SimRunController } from '@packbreaker/sim';
-import { generateBossRelicOffer, generateMidRelicOffer } from '@packbreaker/sim';
+// Phase 2.5i (Codex PR #15 P2): import from the relicOffer module
+// directly, NOT via @packbreaker/sim's root barrel. The root barrel
+// re-exports state.ts → combat.ts (simulateCombat) via the run subbarrel,
+// and a static-import edge to the root barrel makes useRun.ts's
+// main-chunk membership structurally regressible against future
+// barrel-composition changes. relicOffer.ts itself imports only
+// @packbreaker/content + sim's rng module — zero coupling to state.ts —
+// so a direct subpath import preserves the §2a A.1 lazy boundary
+// (decision-log.md 2026-05-13) by construction.
+import { generateBossRelicOffer, generateMidRelicOffer } from '@packbreaker/sim/src/run/relicOffer';
 import { mirrorsSimShouldEndRun } from './runEnd';
 
 /** Payload CombatOverlay forwards to the reducer's combat_done action.
