@@ -47,10 +47,6 @@ import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
 import { makeGhostForRound } from './ghost';
 
-// Player class is the M1 prototype Tinker — visible in the portrait
-// label. Real class-select screen (gdd.md § 14 screen #2) is M1.5+.
-const M1_PROTOTYPE_CLASS_LABEL = 'Tinker';
-
 // Event types that mean "the player needs to see this combat play out."
 // Used by the option-2 zero-content fast-skip predicate. Codex P1 fix on
 // PR #7 (decision-log 2026-05-04 amendment): the previous predicate
@@ -234,7 +230,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         initialGhostHp,
         ticksPerSecond: TICKS_PER_SECOND,
         ghostClassLabel,
-        playerClassLabel: M1_PROTOTYPE_CLASS_LABEL,
+        playerClassLabel: ctx.state.state.className,
         bagLayout,
         onCombatEnd: () => setPhase('resolved'),
       });
@@ -250,7 +246,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       else if (gameRef.current) gameRef.current.destroy(true);
       gameRef.current = null;
     };
-  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
+  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
 
   const isWin = result?.outcome === 'player_win';
   const ruleset = ctx.state.state.ruleset;
