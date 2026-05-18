@@ -4,13 +4,15 @@
 // PointerSensor pointercancel + window-blur handling routes through.
 
 import { describe, expect, it } from 'vitest';
-import type { CombatResult } from '@packbreaker/content';
+import type { ClassId, CombatResult } from '@packbreaker/content';
 import {
   clientRunReducer,
   createInitialState,
   type ClientRunState,
 } from './RunController';
 import type { BagItem, ItemId } from './types';
+
+const TINKER = 'tinker' as ClassId;
 
 // Stub CombatResult — the reducer's combat_done handler doesn't read
 // outcome / damage in M1.3.4a commit 2 (commit 3 wires the consumption).
@@ -45,7 +47,7 @@ function withDrag(state: ClientRunState): ClientRunState {
  *  inside createInitialState changes each call but the structural shape
  *  is invariant, which is what these reducer tests assert. */
 function freshInitial(): ClientRunState {
-  return createInitialState();
+  return createInitialState(TINKER);
 }
 
 describe('clientRunReducer', () => {
