@@ -2,21 +2,40 @@
 // viewport. Desktop branch renders synchronously; mobile branch is
 // lazy-loaded behind React.lazy + Suspense per M1.3.3 commit 8.5.
 
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
+import type { ClassId, RelicId } from '@packbreaker/content';
 import { RunScreen } from './RunScreen';
 
 // M1.4b1 Phase 2.5: stub the lazy-loaded MobileRunScreen module so the
 // dispatcher test doesn't race the real dynamic import + Suspense
 // flush under parallel-load conditions. The dispatcher is the unit
 // under test — MobileRunScreen content is incidental observable state.
-// The stub renders the same tab-label strings the real component
-// surfaces ('SHOP', 'CRAFTING', 'RELICS', 'LOG'); changing those
-// labels in production won't surface here, but coverage of the
-// labels lives in MobileTabBar.test.tsx (the dedicated tab-bar test).
 vi.mock('./mobile/MobileRunScreen', () => ({
   MobileRunScreen: function MobileRunScreenStub() {
     return <div>SHOP CRAFTING RELICS LOG</div>;
+  },
+}));
+
+// M1.5b PR 1: stub ClassSelectScreen with a component that auto-fires
+// beginRun on first effect (tinker + apprentices-loop). Same rationale
+// as the MobileRunScreen stub — the class-select flow is unit-under-test
+// for ClassSelectScreen.test.tsx + ClassSelectFlow.test.tsx, not the
+// dispatcher tests here.
+vi.mock('./ClassSelectScreen', () => ({
+  ClassSelectScreen: function StubClassSelectScreen({
+    onConfirm,
+  }: {
+    onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
+  }) {
+    useEffect(() => {
+      onConfirm({
+        classId: 'tinker' as ClassId,
+        startingRelicId: 'apprentices-loop' as RelicId,
+      });
+    }, [onConfirm]);
+    return null;
   },
 }));
 

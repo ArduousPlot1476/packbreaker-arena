@@ -4,7 +4,18 @@
 // PointerSensor pointercancel + window-blur handling routes through.
 
 import { describe, expect, it } from 'vitest';
-import type { ClassId, CombatResult } from '@packbreaker/content';
+import type {
+  ClassId,
+  CombatResult,
+  ContractId,
+  IsoTimestamp,
+  RelicId,
+  RoundNumber,
+  RunId,
+  RunState as SimRunState,
+  SimSeed,
+} from '@packbreaker/content';
+import { DEFAULT_RULESET } from '@packbreaker/content';
 import {
   clientRunReducer,
   createInitialState,
@@ -216,5 +227,86 @@ describe('clientRunReducer', () => {
     });
     expect(next.state.gold).toBe(initial.state.gold + 3);
     expect(next.combatActive).toBe(false);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 1 Implementation F.1 + F.2 — applySimSnapshot regression
+// tests for CF 39 (maxHearts under iron-will) + Finding A (className).
+//
+// Both fields used to be client-owned-derived placeholders hardcoded to
+// the Tinker M1_PROTOTYPE_CLASS world. Under class-select reachability,
+// they have to track sim-authoritative state per applySimSnapshot.
+// ────────────────────────────────────────────────────────────────────
+
+describe('clientRunReducer — applySimSnapshot CF 39 + Finding A regressions', () => {
+  it('F.1 CF 39: Marauder + iron-will init_from_sim → maxHearts=4 AND hearts=4', () => {
+    // Iron Will gives +1 heart (RELICS['iron-will'].modifiers.bonusHearts).
+    // sim's composeRuleset adds the bonus to DEFAULT_RULESET.startingHearts=3
+    // → effectiveRuleset.startingHearts=4 (also the initial hearts value at
+    // run start). Pre-fix: client's INITIAL_CLIENT_STATE.maxHearts=3
+    // (DEFAULT_RULESET.startingHearts), so the resolution panel showed 4/3
+    // post-Iron-Will. Post-fix: applySimSnapshot writes
+    // snapshot.ruleset.startingHearts into maxHearts on every init/sync.
+    const simRulesetWithIronWill = {
+      ...DEFAULT_RULESET,
+      startingHearts: 4, // hearts=3 base + 1 from iron-will
+    };
+    const snapshot: SimRunState = {
+      runId: 'test-marauder-iron-will' as RunId,
+      seed: 12345 as SimSeed,
+      classId: 'marauder' as ClassId,
+      contractId: 'neutral' as ContractId,
+      ruleset: simRulesetWithIronWill,
+      derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+      startedAt: '2025-01-01T00:00:00.000Z' as IsoTimestamp,
+      hearts: 4,
+      gold: 4,
+      currentRound: 1 as RoundNumber,
+      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      relics: { starter: 'iron-will' as RelicId, mid: null, boss: null },
+      shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      trophiesAtStart: 0,
+      history: [],
+      outcome: 'in_progress',
+    };
+    const next = clientRunReducer(freshInitial(), {
+      type: 'init_from_sim',
+      snapshot,
+    });
+    expect(next.state.hearts).toBe(4);
+    expect(next.state.maxHearts).toBe(4);
+  });
+
+  it('F.2 Finding A: Marauder init_from_sim → className === "Marauder"', () => {
+    // Pre-fix: className was hardcoded to 'Tinker' at createInitialState
+    // and never overwritten by applySimSnapshot, so a Marauder run still
+    // reported 'Tinker' for any consumer reading state.state.className
+    // (combat overlay portrait label, etc.).  Post-fix: applySimSnapshot
+    // writes CLASSES[snapshot.classId].displayName into className.
+    const snapshot: SimRunState = {
+      runId: 'test-marauder-class-label' as RunId,
+      seed: 12345 as SimSeed,
+      classId: 'marauder' as ClassId,
+      contractId: 'neutral' as ContractId,
+      ruleset: DEFAULT_RULESET,
+      derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
+      startedAt: '2025-01-01T00:00:00.000Z' as IsoTimestamp,
+      hearts: 3,
+      gold: 4,
+      currentRound: 1 as RoundNumber,
+      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      relics: { starter: 'razors-edge' as RelicId, mid: null, boss: null },
+      shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      trophiesAtStart: 0,
+      history: [],
+      outcome: 'in_progress',
+    };
+    const next = clientRunReducer(freshInitial(), {
+      type: 'init_from_sim',
+      snapshot,
+    });
+    expect(next.state.className).toBe('Marauder');
+    expect(next.state.classId).toBe('marauder');
   });
 });

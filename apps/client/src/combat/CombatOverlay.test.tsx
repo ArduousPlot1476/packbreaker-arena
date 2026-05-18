@@ -20,12 +20,33 @@
 // is never called, and the mock makes that observable; for Case B the
 // mock just stands in for the real game-construction call.
 
+import { useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RefObject } from 'react';
-import type { CombatResult, PlacementId } from '@packbreaker/content';
+import type { ClassId, CombatResult, PlacementId, RelicId } from '@packbreaker/content';
 import { CombatOverlay } from './CombatOverlay';
 import { RunProvider } from '../run/RunContext';
+
+// M1.5b PR 1: stub ClassSelectScreen so RunProvider transitions through
+// the gate to RunContext.Provider directly. Same pattern as
+// RunContext.test.tsx and RunScreen.test.tsx — class-select integration
+// lives in dedicated test files.
+vi.mock('../screens/ClassSelectScreen', () => ({
+  ClassSelectScreen: function StubClassSelectScreen({
+    onConfirm,
+  }: {
+    onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
+  }) {
+    useEffect(() => {
+      onConfirm({
+        classId: 'tinker' as ClassId,
+        startingRelicId: 'apprentices-loop' as RelicId,
+      });
+    }, [onConfirm]);
+    return null;
+  },
+}));
 
 // M1.4a: CombatOverlay requires bagContainerRef. Tests don't render a
 // real bag DOM, so a ref with current=null is sufficient — CombatOverlay

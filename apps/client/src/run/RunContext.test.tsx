@@ -29,6 +29,7 @@
 // enterCombatPhase, onCombatDone capture-delta + Bucket A dissolution
 // via opponentClassId flowing through sync_from_sim).
 
+import { useEffect } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import type {
@@ -49,6 +50,29 @@ import { DEFAULT_RULESET } from '@packbreaker/content';
 import { RunProvider, useRunContext } from './RunContext';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
 import { SHOP_POOL_ITEMS } from './content';
+
+// M1.5b PR 1 Implementation C+B: RunProvider now mounts ClassSelectScreen
+// when pendingRunInput is null. Existing tests in this file expect a
+// pre-gate world where createRun fired on mount. Stub ClassSelectScreen
+// with a component that auto-fires beginRun (tinker + apprentices-loop)
+// on its first effect — preserves the old "auto-create-run-on-mount"
+// semantics for everything except the dedicated class-select-flow tests
+// (which live in ClassSelectFlow.test.tsx and don't apply this mock).
+vi.mock('../screens/ClassSelectScreen', () => ({
+  ClassSelectScreen: function StubClassSelectScreen({
+    onConfirm,
+  }: {
+    onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
+  }) {
+    useEffect(() => {
+      onConfirm({
+        classId: 'tinker' as ClassId,
+        startingRelicId: 'apprentices-loop' as RelicId,
+      });
+    }, [onConfirm]);
+    return null;
+  },
+}));
 
 function GoldDisplay({ testId }: { testId: string }) {
   const { state, onReroll } = useRunContext();
@@ -163,14 +187,15 @@ describe('RunProvider — state preservation across child swap (Codex P1 regress
   });
 });
 
-describe('RunProvider — RunBootFallback + dynamic-import (M1.5a PR 2 Phase 2b-1)', () => {
-  it('renders RunBootFallback initially while simRun is null', () => {
-    const { getByTestId, queryByTestId } = render(
-      <Wrapper child="A" />,
-    );
-    // Synchronously after render, the dynamic-import of sim has been
-    // scheduled but the promise has not resolved — the provider value
-    // has simRun: null and renders the fallback.
+describe('RunProvider — RunBootFallback + dynamic-import (M1.5a PR 2 Phase 2b-1; M1.5b PR 1 class-select gate)', () => {
+  it('renders RunBootFallback after stub-ClassSelectScreen fires beginRun (before sim resolves)', async () => {
+    // M1.5b PR 1: ClassSelectScreen is stub-mocked at the top of this
+    // file to auto-fire beginRun on its first effect with tinker +
+    // apprentices-loop. After render() returns (act flushes effects),
+    // pendingRunInput is non-null + simRun is still null → RunProvider
+    // renders RunBootFallback. The dynamic-import microtask hasn't
+    // resolved yet, so consumer children are not mounted.
+    const { getByTestId, queryByTestId } = render(<Wrapper child="A" />);
     expect(getByTestId('run-boot-fallback')).toBeInTheDocument();
     expect(queryByTestId('a')).toBeNull();
   });
