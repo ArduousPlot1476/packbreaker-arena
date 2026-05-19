@@ -4,6 +4,186 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-19 — M1.5b PR 1 closed (class-select + starter-relic screen + CF 39 close + 5 CF carry-forwards + M1_PROTOTYPE_CLASS retired)
+
+### Branch + commit topology
+
+Branch: `m1.5b-pr1-class-select-and-starter-relic` off main `d2e4d00` (post-M1.5a-PR-3-close baseline). Nine branch commits + `--no-ff` merge commit TBD. Tip: `000000061c85e1f72db9c59fb90658b8b1a7c8d9` (display prefix `0000000` is real, not a paste error — the SHA happens to start with seven zeros).
+
+| SHA prefix | Phase / Implementation | Scope |
+|---|---|---|
+| `90ab6e8` | Phase 2 — A | docs(visual-direction): scope bag-60% rule to in-run screens; pre-run screens exempt (Finding C original). |
+| `5f4c584` | Phase 2 — C-gate | feat(run): gate createRun on class+starter selection via `pendingRunInput`; `beginRun` setter exposed; `M1_PROTOTYPE_CLASS` import removed from `useRun.ts`. |
+| `2cbea85` | Phase 2 — D | refactor(run): retire `M1_PROTOTYPE_CLASS`; `createInitialState(classId)` signature; `applySimSnapshot` adds `maxHearts` (snapshot.ruleset.startingHearts) + `className` (CLASSES[classId].displayName); reroll arm reads `state.state.classId`. CF 39 + Finding A original close here. |
+| `68169bf` | Phase 2 — E | fix(combat): `CombatOverlay` reads `playerClassLabel: ctx.state.state.className`; `M1_PROTOTYPE_CLASS_LABEL` retired. Finding B original close here. |
+| `dcabd7a` | Phase 2 — B | feat(screens): `ClassSelectScreen` dispatcher + `DesktopClassSelectScreen` + `MobileClassSelectScreen` (lazy) + shared atoms (`ClassCard`, `RelicCard`, `BeginRunBtn`, `Pips`, `PanelShell`, `ClassMark` portraits, `RelicGlyph` for 6 starter relics, text atoms). Ported byte-for-byte-in-semantics from M1.5b PR 1 Claude Design board. `RunContext.tsx` mounts `<ClassSelectScreen onConfirm={value.beginRun} />` when both `simRun === null` AND `pendingRunInput === null`. Includes `tooling/scripts/extract-design-board.cjs` helper used to extract the board's bundler-encoded React source. |
+| `d12bda1` | Phase 2 — F | test(client): F.1 + F.2 applySimSnapshot CF 39 + Finding A regressions (RunController.test.ts); F.3 ClassSelect → init_from_sim integration smoke (ClassSelectFlow.test.tsx NEW); F.4 Marauder RelicOfferModal mid + boss cases (RelicOfferModal.test.tsx augmented); F.5 ClassSelectScreen dispatcher unit tests (ClassSelectScreen.test.tsx NEW). Existing fixtures repointed via `vi.mock` stub to `ClassSelectScreen` auto-firing `beginRun(tinker, apprentices-loop)` on first effect. |
+| `ea2a4b0` | Phase 2 — bundle-delta correction | perf(run): lazy-load `ClassSelectScreen` via `React.lazy + Suspense` from `RunContext.tsx`. Static import pushed main-chunk delta to +5.79% (over budget); lazy boundary restores +0.18%. `ClassSelectScreen-*.js` becomes a dedicated 14.6 kB chunk; mobile lazy chunk nests under it. Test fixtures repointed to wait for consumer markers (not fallback-absence) since the lazy boundary adds a render cycle. |
+| `17bd494` | Phase 2.5 | fix(combat): `buildCombatInput` sources `classId` + `relics` from sim-authoritative `state.classId` / `state.relics`. Codex P1 finding on PR 16 (`ea2a4b0`): pre-fix the function hardcoded `'tinker'` + `emptyRelicSlots()`, so Marauder runs played as Tinker in combat and starter-relic combat effects (Razor's Edge, Bloodfont, Iron Will, etc.) silently no-opped. Two adjacent hardcodes documented + deferred: **CF 42** (startingHp: 30 Rule 6 violation, auto-close on first item with `passiveStats.maxHpBonus`) and **CF 43** (`recipeBornPlacementIds` omission, Tinker class passive + Pocket Forge + Catalyst silently no-op in client-side combat). Test parameterizes `ClassSelectScreen` stub via `mocks.classSelectInput` (vi.hoisted) for Marauder + Razor's Edge propagation regression. **Bonus catch**: `mocks.runCombat.mockClear()` added in `beforeEach` after the new test was initially asserting on Case A's leftover Tinker call (vitest mock.calls accumulates by default). |
+| `0000000` | Phase 2.5b | fix(hud): `LeftRail` + `RelicsTab` read class/relics from authoritative state. Visual playtest on PR 16 commit `17bd494` revealed a P0: selecting Marauder + Iron Will + clicking Begin Run landed on a run-screen rail rendering "CLASS: Tinker / +10% recipe potency / Apprentice's Loop / EMPTY / EMPTY". Step 2.5b.0 diagnostic confirmed the state-write chain is correct end-to-end (F.3 + F.5 + Phase 2.5 propagation tests pass on state assertions). The bug is purely display-side decoupling: `LeftRail.tsx` was fully static (zero `useRunContext` reads), `RelicsTab.tsx` read only `state.className`. Fix wires both surfaces to authoritative state through CLASSES + RELICS content registries. New `GenericRelicGlyph` placeholder in `atoms.tsx` for mid/boss relics pending **CF 44** (named-glyph rollout, defer to M2 visual polish). Integration coverage added: `LeftRail.test.tsx` (NEW, 5 tests) + `RelicsTab.test.tsx` (rebaselined + 3 new), closing the gap that let prior tests pass while LeftRail lied. |
+
+### What landed (load-bearing surface summary)
+
+- **Class-select / starter-relic screen** at `apps/client/src/screens/ClassSelectScreen.tsx` + `DesktopClassSelectScreen.tsx` + `mobile/MobileClassSelectScreen.tsx`. Two-stage inline-reveal: class pick → starter pick. Selected affordance: 2px accent ring + soft glow + 2px lift + ✓ badge. Desktop stage 2 persists selected class as left-column context card with OR-SWITCH dim unselected class below (0.42 opacity, 66% scale). Mobile stage 2 replaces OR-SWITCH with slim sticky context header + CHANGE button. Selection recap dropped per Q3 disposition (b). Lazy-loaded from `RunContext.tsx` (per Phase 2 bundle-delta correction).
+- **`pendingRunInput` gate** at `useRun.ts`. Sim's `createRun` no longer fires on mount; fires only after the player commits via `beginRun` setter, which `ClassSelectScreen` calls via `onConfirm` prop. `M1_PROTOTYPE_CLASS` + `M1_PROTOTYPE_CLASS_LABEL` retired.
+- **`applySimSnapshot` field expansion** at `RunController.ts`. Writes `maxHearts: snapshot.ruleset.startingHearts` + `className: CLASSES[snapshot.classId].displayName` on every init/sync. CF 39 + Finding A original close here (both fields were client-owned-derived placeholders; sim-authoritative now). JSDoc amendment removes `className` + `maxHearts` from the untouched-fields list.
+- **`createInitialState(classId)` signature**. Was parameterless under M1.5a's `M1_PROTOTYPE_CLASS` hardcode; takes the player-chosen classId. `INITIAL_CLIENT_STATE` uses a `'tinker'` sentinel that is never observed at runtime (RunProvider gates rendering on simRun).
+- **`buildCombatInput` sourcing** at `CombatOverlay.tsx`. `classId` + `relics` read from `state.classId` / `state.relics` (Phase 2.5 fix on Codex P1). CF 42 + CF 43 carry-forwards documented inline.
+- **HUD display wiring** at `LeftRail.tsx` + `RelicsTab.tsx`. Read class + 3 relic slots from authoritative state via CLASSES + RELICS registries. `GenericRelicGlyph` placeholder for mid + boss relics pending CF 44 named-glyph rollout.
+- **`visual-direction.md § 1` amendment** scoping the bag-60% rule to in-run screens (Finding C original close).
+- **F.1–F.5 + Phase 2.5 propagation + Phase 2.5b display tests** at `RunController.test.ts` (F.1 + F.2), `ClassSelectFlow.test.tsx` (F.3, NEW), `RelicOfferModal.test.tsx` (F.4), `ClassSelectScreen.test.tsx` (F.5, NEW), `CombatOverlay.test.tsx` (Phase 2.5 buildCombatInput propagation), `LeftRail.test.tsx` (Phase 2.5b, NEW), `RelicsTab.test.tsx` (Phase 2.5b rebaseline + augmentation).
+- **`tooling/scripts/extract-design-board.cjs`** helper retained in-tree — one-shot extractor that decoded the design board's base64+gzip bundler manifest into the JSX source the port was authored against. Reusable for future design-board imports.
+
+### Pipeline + schemas (final, verbatim)
+
+```
+$ pnpm turbo lint test build --force
+...
+@packbreaker/client:test:  Test Files  24 passed (24)
+@packbreaker/client:test:       Tests  255 passed (255)
+@packbreaker/client:test:    Start at  13:15:17
+@packbreaker/client:test:    Duration  24.17s
+
+ Tasks:    19 successful, 19 total
+Cached:    0 cached, 19 total
+  Time:    41.193s
+```
+
+```
+$ pnpm check-schemas-sync
+> packbreaker-arena@0.0.1 check-schemas-sync C:\Users\trobbins\OneDrive - Alevio\Documents\packbreaker-arena
+> node tooling/scripts/check-schemas-sync.cjs
+
+check-schemas-sync: OK (content-schemas.ts and packages/content/src/schemas.ts byte-identical)
+```
+
+Test counts: **232 (PR baseline at `d2e4d00`) → 247 (post-Phase-2.5 `17bd494`) → 255 (post-Phase-2.5b `0000000`)**. Net **+23 client tests**. Sim test count **unchanged** (no sim-side changes).
+
+### Bundle deltas
+
+#### Table A — vs `main d2e4d00` (PR open baseline)
+
+| Chunk | `d2e4d00` | `0000000` | Δ B | Δ % |
+|---|---:|---:|---:|---:|
+| **main (`index-*.js`)** | 251,326 | 261,615 | **+10,289** | **+4.09% ✅** |
+| sim chunk (`index-*.js`) | 17,113 | 17,123 | +10 | +0.06% |
+| `CombatOverlay-*.js` | 1,498,650 | 1,498,705 | +55 | +0.004% |
+| `MobileRunScreen-*.js` | 14,135 | 14,565 | +430 | +3.04% |
+| `combat-*.js` | 10,611 | 10,613 | +2 | +0.02% |
+| `index-*.css` | 10,648 | 11,015 | +367 | +3.45% |
+| **NEW** `ClassSelectScreen-*.js` | — | 4,613 | new chunk (lazy) | — |
+| **NEW** `MobileClassSelectScreen-*.js` | — | 3,643 | new chunk (lazy) | — |
+
+Main chunk +4.09% — **under the +5% PR budget**. The +10,289 B on main reflects the `atoms.tsx` hoist after Phase 2.5b: atoms is shared between `LeftRail` (eager in main) + lazy `ClassSelectScreen`, so Vite hoists it into main. The lazy `ClassSelectScreen-*.js` chunk correspondingly shrinks (from a hypothetical 14.6 kB if atoms were inside it, down to 4.6 kB after the hoist).
+
+#### Table B — vs `ea2a4b0` (Phase 2 close)
+
+| Chunk | `ea2a4b0` | `0000000` | Δ B |
+|---|---:|---:|---:|
+| main | 251,769 | 261,615 | +9,846 |
+| sim chunk | 17,115 | 17,123 | +8 |
+| CombatOverlay | 1,498,683 | 1,498,705 | +22 |
+| MobileRunScreen | 14,135 | 14,565 | +430 |
+| ClassSelectScreen | 14,609 | 4,613 | −9,996 |
+| MobileClassSelectScreen | 3,687 | 3,643 | −44 |
+| combat | 10,611 | 10,613 | +2 |
+| index.css | 11,015 | 11,015 | 0 |
+
+Net dist delta over Phase 2.5 + Phase 2.5b combined: **+268 B**. Main grew because of the atoms hoist; ClassSelectScreen chunk shrank correspondingly.
+
+#### Table C — vs `17bd494` (Phase 2.5 close)
+
+| Chunk | `17bd494` | `0000000` | Δ B |
+|---|---:|---:|---:|
+| main | 251,760 | 261,615 | +9,855 |
+| sim chunk | 17,114 | 17,123 | +9 |
+| CombatOverlay | 1,498,705 | 1,498,705 | 0 |
+| MobileRunScreen | 14,135 | 14,565 | +430 |
+| ClassSelectScreen | 14,609 | 4,613 | −9,996 |
+| MobileClassSelectScreen | 3,687 | 3,643 | −44 |
+| combat | 10,611 | 10,613 | +2 |
+| index.css | 11,015 | 11,015 | 0 |
+
+Phase 2.5b alone: +256 B net. The atoms hoist into main accounts for the ~10 kB main growth offset by the ~10 kB ClassSelectScreen shrink.
+
+### Codex review outcome
+
+- **Initial review on `ea2a4b0`** (post Phase 2 implementation): **1 P1 finding** — "Apply selected class and relics to combat input." `buildCombatInput` at `apps/client/src/combat/CombatOverlay.tsx:~100-103` hardcoded `classId: 'tinker'` + `emptyRelicSlots()`. Marauder runs played as Tinker; all relic combat effects no-opped. **Finding count: 1/4 ceiling.**
+- **Re-review on `0000000`** (post Phase 2.5b, requested via fresh top-level PR comment with `@codex review` per Rule 4 re-engagement discipline): **"Didn't find any major issues."** Finding count stays 1/4. No comprehensive pre-merge meta-audit triggered.
+
+### Visual playtest manifest
+
+| ID | Capture | Status |
+|---|---|---|
+| (a) | Desktop class-select stage 1 (Marauder + Tinker cards visible, CTA disabled) | ✅ pass |
+| (b) | Desktop class-select stage 2 (Marauder selected, Iron Will highlighted) — recap bottom-left absent per disposition (b) | ✅ pass |
+| (c) | Mobile class-select stage 1 (stacked Tinker + Marauder cards) | ✅ pass |
+| (d) | Mobile class-select stage 2 (Marauder + Iron Will, sticky context header + CHANGE button) | ✅ pass |
+| (e) | Post-Begin-Run TopBar under Marauder + Iron Will → 4 heart glyphs visible (CF 39) | ✅ pass |
+| (f) | Post-Begin-Run RoundResolution under Marauder + Iron Will → "4/4" not "4/3" (CF 39) | ✅ pass |
+| (g) | Mid-run CombatOverlay portrait label reads "Marauder" not "Tinker" (Finding B original) | ✅ pass |
+| (h) | Mobile CHANGE affordance functional verification (stage 2 → stage 1 → reselect → stage 2 with new class) | ✅ pass |
+| Phase 2.5 (f)-re-capture | Marauder + Razor's Edge combat damage reflects +1 base passive + +2 bonus stacking | ✅ pass |
+| Phase 2.5b ClassSelect | Marauder + Iron Will selection round-trip | ✅ pass |
+| Phase 2.5b R1 LeftRail | "Marauder" + Marauder passive + "Iron Will" + "+1 heart." + mid/boss EMPTY slots | ✅ pass |
+| Phase 2.5b R6 mid-relic offer | Berserker's Pendant + Crimson Pact modal (Marauder pool) | ✅ pass |
+| Phase 2.5b R6 post-choice | chosen mid relic appears in LeftRail mid slot with name + description + generic placeholder glyph | ✅ pass (CF 44 placeholder rendering as expected) |
+| Phase 2.5b R11 boss-relic offer | Conqueror's Crown modal | ✅ pass |
+| Phase 2.5b R11 Victory | Run resolution with 3 relic slots populated (Iron Will / Berserker's Pendant / Conqueror's Crown) | ✅ pass |
+
+### Pattern + catch + rule codification
+
+- **No new patterns codified.** Two pattern candidates registered for second-instance codification:
+  - **Pattern candidate #7** — audit / wider-sweep scope must extend to ALL data-flow surfaces affecting the bug's outputs, not just surfaces matching the hypothesized bug shape. Evidence (this PR): 3 Topic 2 drifts of audit-scope shape — Step 0 grep-pattern missed the `classId: 'tinker'` literal in S0v.* (Phase 2 caught it in Phase 2.5 instead), Phase 2.5 wider-sweep limited to input-builder shape but missed display-layer state-reads, Phase 2.5b initial framing hypothesized "state.classId is effectively 'tinker'" when in fact state-write was correct and the bug was on the read side. Single-PR clustering; codify on second occurrence across a different milestone.
+  - **Pattern candidate #8** — master-dev factual claims (especially numeric) in framing or acceptance criteria must be source-verified against the codebase before being written. Evidence (this PR): 1 Topic 2 drift — Phase 2.5b DoD #8 wrote "Starting hearts = 5 (4 base + 1 from Iron Will)" when `DEFAULT_RULESET.startingHearts = 3` and iron-will adds 1 → actual = 4 not 5. Single instance; codify on second occurrence.
+- **No new catches codified.** One catch candidate registered:
+  - **Catch candidate — display-decoupling (C-class)** — HUD components that hardcode prototype defaults instead of reading authoritative state. Symptom: UI lies about state; combat math may be correct while the rail tells the player the wrong story. Detection antidote: integration tests must render the display component AND assert visible text matches state, not just assert state itself. Evidence (this PR): `LeftRail.tsx` fully static + `RelicsTab.tsx` partially wired post-prototype, surviving F.3 / F.5 integration tests because those assert on `state.*` and `runCombat.mock.calls`, not on rendered DOM. Single instance; codify on second occurrence.
+- **No new rules codified.** One rule candidate registered:
+  - **Rule candidate — vitest `mock.calls` accumulates across tests by default**; call `mockClear()` in `beforeEach` (or before render in the specific test) when asserting on call indices/contents. Evidence (this PR): Phase 2.5 propagation test initially asserted on Case A's leftover Tinker call before `mockClear` was added in `beforeEach`. Single instance; codify on second occurrence.
+
+### Findings A/B/C dispositions
+
+Two parallel A/B/C labellings emerged across this PR — both are documented for traceability.
+
+**Phase 1 original Findings A/B/C (entered PR scope at Phase 1 framing):**
+- **Finding A (original)** — `className` derivation; commit `2cbea85` (Phase 2 D), `applySimSnapshot` writes `CLASSES[snapshot.classId].displayName`. **Closed.**
+- **Finding B (original)** — `CombatOverlay` portrait label hardcoded to `'Tinker'`; commit `68169bf` (Phase 2 E), reads `ctx.state.state.className`. **Closed.**
+- **Finding C (original)** — `visual-direction.md § 1` bag-60% rule applied universally instead of in-run-only; commit `90ab6e8` (Phase 2 A), single-line scoping amendment. **Closed.**
+
+**Post-Phase-2 Findings A/B/C (entered PR scope post-implementation):**
+- **Finding A (post-Phase-2; Codex P1 on PR 16 `ea2a4b0`)** — `buildCombatInput` classId + relics hardcoded; commit `17bd494` (Phase 2.5), reads `state.classId` / `state.relics`. **Closed.**
+- **Finding B (post-Phase-2; playtest catch on `17bd494`)** — `LeftRail.tsx` fully static, `RelicsTab.tsx` partially wired; commit `0000000` (Phase 2.5b), both surfaces wired to authoritative state. **Closed.**
+- **Finding C (post-Phase-2; master-dev-only)** — Phase 2.5b framing's "Starting hearts = 5 (4 base + 1)" numeric drift vs `DEFAULT_RULESET.startingHearts = 3`. **Master-dev annotation only**; no code impact (actual hearts under Marauder + Iron Will = 4, matches F.1 regression assertion). Surfaces as Pattern candidate #8 evidence.
+
+### CF dispositions across PR
+
+- **CF 39 closed** (M1.5a PR 3 open; M1.5b PR 1 Phase 2 D close) — `applySimSnapshot` writes `maxHearts: snapshot.ruleset.startingHearts` so the field tracks sim-authoritative effective ruleset. Resolves the iron-will Marauder fingerprint (TopBar/MobileTopBar render 4 hearts under +1 bonusHearts; RoundResolution displays 4/4 not 4/3). Closure commit: `2cbea85`. Regression test: F.1 at `RunController.test.ts § applySimSnapshot CF 39 + Finding A regressions`.
+- **CF 40 opened (NEW)** — `contractName` + `contractText` hardcoded literals at `createInitialState`. Currently the only contract is `neutral` so the hardcode matches. Defer to M2 contract system (when the second contract ships, `createInitialState` reads from `CONTRACTS[contractId].displayName` + `description`). Auto-close trigger: M2 contract system or first non-neutral contract. **Severity**: cosmetic / placeholder.
+- **CF 41 opened (NEW)** — `run_start` telemetry payload reconciliation re. `startingRelicId`. The sim's emit site (`packages/sim/src/run/state.ts § run_start`) writes `{ runId, classId, contractId, seed }` per `telemetry-plan.md § 3 Run lifecycle`. The plan's § 1 *prose* implies starter-relic-choice is captured (`run_start` fires "when the player commits to a run after class + relic select"), but `startingRelicId` is not actually in the payload. Folds into CF 35 scope at the M1.5b telemetry milestone (sim-side schema extension required to add the field). Auto-close trigger: CF 35 closes.
+- **CF 42 opened (NEW)** — `buildCombatInput.startingHp: 30` Rule 6 violation. `BASE_COMBATANT_HP = 30` and no M1 item ships `passiveStats.maxHpBonus`, so the hardcode matches the derivation rule on `schemas.ts § Combatant` comment for every M1 build. Auto-close trigger: first M1 item with `maxHpBonus` ships → replace with a client-side analog of sim's `computeStartingHpFromBag`. **Severity**: latent — Rule 6 violation with zero current impact. Inline comment in `buildCombatInput` documents the deferral.
+- **CF 43 opened (NEW)** — `buildCombatInput.recipeBornPlacementIds` omission. Sim's internal `bornFromRecipe` set is unreachable from the client tier; client's `clientRunReducer` combine arm does not track which placement-ids were minted by `combineRecipe`. Tinker's `class.passive.recipeBonusPct: 10` + recipeBonusPct relics (Pocket Forge `+15%`, Catalyst `+30%`) silently no-op in client-side combat. Pre-existing bug from M1.3.4a's `M1_PROTOTYPE` wiring (predates this PR). Defer to M1.5b PR 2 / LocalSaveV1 — fix requires new client-side state (`bornFromRecipe: Set<PlacementId>` on `ClientRunState`, enrich `combine` reducer arm to record output placement-ids, thread into `buildCombatInput`). **Severity**: bug — combat math currently undervalues recipe-output damage / healing for Tinker class + Pocket Forge / Catalyst builds. Inline comment in `buildCombatInput` documents the deferral.
+- **CF 44 opened (NEW)** — Mid + boss relic named glyphs. Six relics across Marauder + Tinker mid/boss pools (`resonant-anchor`, `catalyst`, `worldforge-seed`, `berserkers-pendant`, `crimson-pact`, `conquerors-crown`) currently render with the `GenericRelicGlyph` placeholder (diamond + dot) in `LeftRail` + `RelicsTab`. Functional display is correct (name + description from `RELICS[id]`); the glyph is the only cosmetic gap. Defer to M2 visual polish or earlier asset cycle. Auto-close trigger: named glyphs land for all 6 mid + boss relics (likely as additions to `atoms.tsx § RelicGlyph` switch). **Severity**: cosmetic-only.
+- **`M1_PROTOTYPE_CLASS` + `M1_PROTOTYPE_CLASS_LABEL` retired.** Both constants deleted at commits `2cbea85` + `68169bf`. No remaining production references; test fixtures use explicit `'tinker' as ClassId` / `'marauder' as ClassId` casts.
+
+### Counters at PR close
+
+| Counter | Pre-PR-1 (post-M1.5a-PR-3) | Post-PR-1 |
+|---|---|---|
+| Open CFs | 29 | 33 (CF 39 closed; CFs 40, 41, 42, 43, 44 opened; net +4) |
+| Architectural patterns | 6 | 6 (Pattern candidates #7 + #8 held for second instance) |
+| Predicate-vs-name catches | 17 | 17 (display-decoupling catch candidate held for second instance) |
+| Locked answers | 32 | 32 |
+| Going-forward rules | 8 | 8 (vitest mockClear rule candidate held for second instance) |
+| Master-dev chat drifts (Topic 2 counter) | 15 | 20 (+5 this PR: S0v.6 telemetry payload contract, Step 0 grep-pattern incompleteness, recap audit screenshot/source confusion, Phase 2.5 wider-sweep scope limit, Phase 2.5b heart-math numeric fact-check) |
+
+### Coupling notes for future-self
+
+- `apps/client/src/screens/class-select/atoms.tsx` exports primitives consumed by both class-select chrome and run-screen chrome (`LeftRail` / `RelicsTab`). The class-select-screen module became the canonical class + starter-relic glyph source. If future PRs want to break this coupling (e.g., move glyphs to `icons/icons.tsx` or a dedicated `class-relic-icons/` module), the work is mechanical.
+- `tooling/scripts/extract-design-board.cjs` retained as a reusable extractor for future Claude Design board imports. One-shot for this PR.
+- Pre-existing unused exports in `apps/client/src/icons/icons.tsx`: `TinkerGlyph` + `RelicLoop` are no longer referenced (LeftRail + RelicsTab moved to atoms-sourced glyphs). Cleanup is optional; not load-bearing.
+
+---
+
 ## 2026-05-17 — M1.5a PR 3 closed (relic offers + run-end detection + CF 14 regression test)
 
 ### Branch + commit topology
