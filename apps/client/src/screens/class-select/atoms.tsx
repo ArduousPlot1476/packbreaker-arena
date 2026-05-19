@@ -251,6 +251,26 @@ export function RelicGlyph({ id, size = 40 }: { id: string; size?: number }) {
   }
 }
 
+/** Generic placeholder for mid / boss relics until named glyphs ship
+ *  (CF 44 — M2 visual polish). Diamond + dot in the same 1.5px-stroke
+ *  vector-flat language as the named glyphs above; deliberately
+ *  non-specific so it doesn't collide with any future named relic. */
+export function GenericRelicGlyph({ size = 40 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
+      <g
+        stroke="var(--text-primary)"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M20 8 L32 20 L20 32 L8 20 Z" />
+        <circle cx="20" cy="20" r="3" fill="var(--text-primary)" />
+      </g>
+    </svg>
+  );
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Stepper pip indicator — Step 1 of 2 / Step 2 of 2 affordance per
 // design board (active pip = text-primary, inactive = border-default).
