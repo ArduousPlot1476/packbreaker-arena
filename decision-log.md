@@ -4,6 +4,47 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-19 — M1.5b PR 2 scoped to 5b.2 (run-end summary surface) only
+
+Fresh-chat handoff proposed bundling 5b.2 (run-end summary surface) and 5b.3 (LocalSaveV1 persistence) into a single "2a/2b" branch. Rejected on two grounds:
+
+1. **Codex-surface size.** 5b.2 is a presentation-only HUD overlay; 5b.3 introduces a persistence layer (localStorage write path, schema versioning, hydrate-on-mount, corruption handling). Bundling doubles the review surface and the failure modes overlap awkwardly (a 5b.3 hydrate bug masquerades as a 5b.2 render bug, etc.).
+2. **CF entanglement lives in 5b.3, not 5b.2.** CF 34 (run-end telemetry payload), CF 37 (post-run navigation), and the take-1 D re-open (final-screen relic-list rendering) all land in 5b.3's persistence + post-run flow, not in 5b.2's summary surface. Bundling would force these to ride a "summary" PR where they don't belong.
+
+**Decisions:**
+
+- **M1.5b PR 2 scope:** 5b.2 only — run-end summary surface (post-final-combat overlay; class + relics + final HP + heart history + adventure tile breadcrumb). No persistence, no post-run navigation, no telemetry payload.
+- **M1.5b PR 3 scope:** 5b.3 only — LocalSaveV1 persistence + CF 34 + CF 37 + take-1 D re-open close.
+- **CF 43** (Tinker class passive + Pocket Forge + Catalyst silently no-op in client-side combat, opened Phase 2.5 of PR 1 at `17bd494`): held for **either a separate narrow PR or 5b.3 ride-along**, whichever lands first by Phase-1 design pass. Not bundled into 5b.2.
+- **CF 14 reference in handoff struck as stale.** Handoff cited CF 14 as live; CF 14 closed at M1.5a PR 3 Phase 2c on 2026-05-17. No 5b.2 / 5b.3 work touches it.
+- **CF 38 disposition:** parked for M2 polish. Phase 2.5i halt-gate matrix (three structural axes × three UX axes) costs a full Phase-1 design pass to resolve, and the trophy axis only becomes meaningful when M2's per-round trophy schedule lands. Graybox is acceptable today. Not bundled into PR 2 or PR 3.
+
+**Branch cut:** `m1.5b-pr2-run-end-summary` off `96e0c1e` (post-PR-1-merge main tip), pending this docs commit landing first.
+
+---
+
+## 2026-05-19 — Merge-workflow "fall back to GitHub" framing sharpened
+
+Refinement of the merge-conflict discipline, not a new rule. Original framing was "if local merge gets hairy, fall back to GitHub web UI for conflict resolution." That framing is too broad — it conflates two structurally different failure modes.
+
+**Sharpened trigger condition for GitHub fallback:** external-work divergence on main, i.e., a **semantic conflict against unfamiliar code** introduced upstream that requires reading + understanding context outside the current branch's diff. GitHub's PR-review surface (file tree, hunk-level context, blame, expandable surrounding code) is the right tool for that diagnostic load.
+
+**NOT a GitHub-fallback case:** predictable **structural conflicts from same-anchor inserts into append-only artifacts** (`decision-log.md`, `telemetry-plan.md`, future append-only logs). When two commits each insert a new entry at the documented top anchor, the conflict is mechanical (both entries belong, in chronological order) and the intent is unambiguous (both authors meant to land their entry above the prior top). Inline resolution at the terminal is correct here — GitHub fallback wastes time on a one-keystroke decision.
+
+**Surfaced by M1.5b PR 1 merge.** Docs commit `474a5d1` (PR 1 closing log) and branch commit `0000000` (Phase 2.5b LeftRail + RelicsTab fix) each inserted at `decision-log.md`'s top anchor against `d2e4d00`. The `--no-ff` merge produced a textbook same-anchor conflict; resolved locally in seconds with both entries preserved in chronological order (PR 1 close on top, Phase 2.5b row inside the PR 1 close table referencing `0000000`).
+
+**Codification status:** logged as discipline refinement, not promoted to a standing rule. Burden is low, shape is narrow (append-only docs only), and the second-instance convention holds — codify on the next occurrence if it recurs.
+
+---
+
+## 2026-05-19 — Stale branch cleanup (`m1.5a-pr3-relics-and-runend`)
+
+Local + remote branch `m1.5a-pr3-relics-and-runend` deleted. Commits remain reachable via merge commit `d3f2409`'s second parent (M1.5a PR 3 merge, 2026-05-17). Workspace branches at PR 2 cut: `main` + `origin/main` only.
+
+Land this docs commit on main, then cut `m1.5b-pr2-run-end-summary` off `96e0c1e`.
+
+---
+
 ## 2026-05-19 — M1.5b PR 1 closed (class-select + starter-relic screen + CF 39 close + 5 CF carry-forwards + M1_PROTOTYPE_CLASS retired)
 
 ### Branch + commit topology
