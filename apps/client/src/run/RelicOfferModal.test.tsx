@@ -100,4 +100,75 @@ describe('RelicOfferModal', () => {
     expect(getByText('Resonant Anchor')).toBeInTheDocument()
     expect(getByText('+1 shop slot.')).toBeInTheDocument()
   })
+
+  // ─────────────────────────────────────────────────────────────
+  // M1.5b PR 1 F.4 — Marauder integration smoke. Both Marauder mid
+  // candidates (berserkers-pendant + crimson-pact) and boss
+  // (conquerors-crown) must render through the same modal surface
+  // that previously only saw Tinker offers under M1_PROTOTYPE_CLASS.
+  // ─────────────────────────────────────────────────────────────
+
+  it('F.4 Marauder mid offer renders berserkers-pendant + crimson-pact (balance-bible.md § 13)', () => {
+    mockContext = {
+      pendingRelicOffer: {
+        slot: 'mid',
+        cards: ['berserkers-pendant' as RelicId, 'crimson-pact' as RelicId],
+      },
+      grantSelectedRelic: vi.fn(),
+    }
+    const { getByTestId, getByText, getAllByTestId } = render(<RelicOfferModal />)
+    expect(getByTestId('relic-offer-title').textContent).toBe('Choose a mid relic')
+    expect(getAllByTestId(/^relic-offer-card-/)).toHaveLength(2)
+    expect(getByText("Berserker's Pendant")).toBeInTheDocument()
+    expect(getByText('+3 base damage on every damage effect. Stacks.')).toBeInTheDocument()
+    expect(getByText('Crimson Pact')).toBeInTheDocument()
+    expect(getByText('+35% lifesteal. Stacks.')).toBeInTheDocument()
+  })
+
+  it('F.4 Marauder mid click → grantSelectedRelic("mid", "berserkers-pendant")', () => {
+    const grant = vi.fn()
+    mockContext = {
+      pendingRelicOffer: {
+        slot: 'mid',
+        cards: ['berserkers-pendant' as RelicId, 'crimson-pact' as RelicId],
+      },
+      grantSelectedRelic: grant,
+    }
+    const { getByTestId } = render(<RelicOfferModal />)
+    fireEvent.click(getByTestId('relic-offer-card-berserkers-pendant'))
+    expect(grant).toHaveBeenCalledOnce()
+    expect(grant).toHaveBeenCalledWith('mid', 'berserkers-pendant')
+  })
+
+  it('F.4 Marauder boss offer renders conquerors-crown (balance-bible.md § 13)', () => {
+    mockContext = {
+      pendingRelicOffer: {
+        slot: 'boss',
+        cards: ['conquerors-crown' as RelicId],
+      },
+      grantSelectedRelic: vi.fn(),
+    }
+    const { getByTestId, getByText, getAllByTestId } = render(<RelicOfferModal />)
+    expect(getByTestId('relic-offer-title').textContent).toBe('Choose a boss relic')
+    expect(getAllByTestId(/^relic-offer-card-/)).toHaveLength(1)
+    expect(getByText("Conqueror's Crown")).toBeInTheDocument()
+    expect(
+      getByText('+4 base damage on every damage effect; +3g per round won.'),
+    ).toBeInTheDocument()
+  })
+
+  it('F.4 Marauder boss click → grantSelectedRelic("boss", "conquerors-crown")', () => {
+    const grant = vi.fn()
+    mockContext = {
+      pendingRelicOffer: {
+        slot: 'boss',
+        cards: ['conquerors-crown' as RelicId],
+      },
+      grantSelectedRelic: grant,
+    }
+    const { getByTestId } = render(<RelicOfferModal />)
+    fireEvent.click(getByTestId('relic-offer-card-conquerors-crown'))
+    expect(grant).toHaveBeenCalledOnce()
+    expect(grant).toHaveBeenCalledWith('boss', 'conquerors-crown')
+  })
 })

@@ -19,17 +19,29 @@
 // the dispatch boundary. State below the dispatcher's swap point is
 // destroyed on every swap.
 
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react';
 import { useRun } from './useRun';
+
+// Lazy-import the class-select screen so its atoms + Desktop + Mobile
+// components ship in a dedicated chunk rather than the main bundle.
+// Honors the tech-architecture.md § 10 lazy-load discipline (M1.5b PR 1
+// bundle-delta budget). The RunBootFallback rendered during the
+// lazy-import microtask is visually identical to the createRun-in-flight
+// fallback, so the transition is seamless.
+const ClassSelectScreen = lazy(() =>
+  import('../screens/ClassSelectScreen').then((m) => ({
+    default: m.ClassSelectScreen,
+  })),
+);
 
 type RunContextValue = ReturnType<typeof useRun>;
 
 const RunContext = createContext<RunContextValue | null>(null);
 
-/** Full-viewport placeholder rendered while useRun's dynamic-imported
- *  sim RunController is still resolving (one render of simRun: null
- *  per Q3 disposition, M1.5a PR 2 Phase 1). Mirrors the MobileFallback
- *  affordance in apps/client/src/screens/RunScreen.tsx — same
+/** Full-viewport placeholder rendered between class-select confirm and
+ *  sim's createRun resolving — that race is short (one dynamic-import
+ *  microtask), so the fallback is rarely visible in practice. Mirrors
+ *  the MobileFallback in apps/client/src/screens/RunScreen.tsx — same
  *  `var(--bg-deep)` full-viewport div so the boot transition is
  *  visually indistinguishable from app-load → first-paint. */
 function RunBootFallback() {
@@ -43,7 +55,16 @@ function RunBootFallback() {
 
 export function RunProvider({ children }: { children: ReactNode }) {
   const value = useRun();
-  if (value.simRun === null) return <RunBootFallback />;
+  if (value.simRun === null) {
+    if (value.pendingRunInput === null) {
+      return (
+        <Suspense fallback={<RunBootFallback />}>
+          <ClassSelectScreen onConfirm={value.beginRun} />
+        </Suspense>
+      );
+    }
+    return <RunBootFallback />;
+  }
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }
 

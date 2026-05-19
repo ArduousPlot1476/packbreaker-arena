@@ -184,6 +184,29 @@ Two parallel A/B/C labellings emerged across this PR — both are documented for
 
 ---
 
+## 2026-05-19 — M1.5b PR 1 Phase 2.5b interlude: LeftRail + RelicsTab read class/relics from authoritative state (playtest catch on 17bd494)
+
+Visual playtest on PR 16 commit `17bd494` (Phase 2.5 buildCombatInput fix) surfaced a P0: selecting Marauder + Iron Will on `ClassSelectScreen` and clicking Begin Run landed on a run-screen rail rendering "CLASS: Tinker / +10% recipe potency / Apprentice's Loop / EMPTY / EMPTY". Diagnostic at Step 2.5b.0 verified the state-write chain (ClassSelectScreen → useRun.beginRun → sim.createRun → applySimSnapshot) is correct end-to-end — F.3 + F.5 integration tests assert `state.classId === 'marauder'` and pass. The bug is purely **display-side decoupling**: `apps/client/src/hud/LeftRail.tsx` is fully static (no `useRunContext`, no state reads at all), and `apps/client/src/screens/mobile/tabs/RelicsTab.tsx` reads only `state.className` (everything else hardcoded). Marauder-only `berserkers-pendant` + `crimson-pact` appearing in the round-6 mid-relic modal confirmed `state.classId === 'marauder'` at runtime, ruling out the framing's "state seeded as Tinker" hypothesis.
+
+Fix: wire both surfaces to authoritative state. LeftRail + RelicsTab now read `state.classId` → `CLASSES[classId].displayName` + `CLASSES[classId].passive.description` for the class card; `state.relics.starter / .mid / .boss` → `RELICS[id].name` + `.description` for each slot. Slots resolve to `EmptyRelicSlot` (existing dashed-border placeholder) when their relic id is null. Class portraits use `ClassMark` (from `apps/client/src/screens/class-select/atoms.tsx`, covers both classes). Starter relics use `RelicGlyph` (covers all 6 starter relic ids). Mid + boss relics use a new `GenericRelicGlyph` (diamond + dot, 1.5px-stroke vector-flat in atoms.tsx) pending named-glyph rollout — see CF 44 below.
+
+**Why the prior tests didn't catch it**: F.3 + F.5 + Phase 2.5 propagation tests assert on `state.*` and `runCombat.mock.calls[0]`. No test rendered LeftRail / RelicsTab and asserted the visible text matched state. New integration coverage at `apps/client/src/hud/LeftRail.test.tsx` (NEW, 5 tests) + augmented `apps/client/src/screens/mobile/tabs/RelicsTab.test.tsx` (rebaselined existing 2 tests + 4 new) drives the display surface across Marauder/Iron Will, Tinker/Apprentice's Loop, mid-granted, boss-granted, and all-slots-empty fixtures.
+
+### CF dispositions
+
+- **CF 44 (NEW)** — Mid/boss relic named glyphs. Six relics across Marauder + Tinker mid/boss pools (`resonant-anchor`, `catalyst`, `worldforge-seed`, `berserkers-pendant`, `crimson-pact`, `conquerors-crown`) currently render with a generic diamond-and-dot placeholder in LeftRail + RelicsTab. Functional display is correct (name + description from `RELICS[id]`); the glyph is the only cosmetic gap. Defer to M2 visual polish pass or earlier asset cycle. **Auto-close trigger**: named glyphs land for all mid + boss relics across both classes (likely as additions to `screens/class-select/atoms.tsx` `RelicGlyph` switch, or as a sibling icon module). **Severity**: cosmetic-only; functional display works with placeholder.
+
+### What stays open
+
+- **CF 42** (open, M1.5b PR 1 Phase 2.5): `buildCombatInput.startingHp: 30` hardcode. No M1 item ships `passiveStats.maxHpBonus` so the value is correct for every M1 build; auto-closes when the first `maxHpBonus` item ships.
+- **CF 43** (open, M1.5b PR 1 Phase 2.5): `buildCombatInput` omits `recipeBornPlacementIds`. Tinker class passive `recipeBonusPct` + Pocket Forge + Catalyst silently no-op in client-side combat pending client-side `bornFromRecipe` tracking. Defer to M1.5b PR 2 / LocalSaveV1.
+
+### Coverage gap codification (deferred to PR close)
+
+The class-of-bug — "state-write chain correct, display reads defaults" — has now surfaced once (Phase 2.5b). The full Rule 5/6-style codification is deferred to the M1.5b PR 1 closing log; the Phase 2.5b open here documents the instance for future-self.
+
+---
+
 ## 2026-05-17 — M1.5a PR 3 closed (relic offers + run-end detection + CF 14 regression test)
 
 ### Branch + commit topology

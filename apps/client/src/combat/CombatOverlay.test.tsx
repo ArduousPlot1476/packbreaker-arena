@@ -20,12 +20,42 @@
 // is never called, and the mock makes that observable; for Case B the
 // mock just stands in for the real game-construction call.
 
-import { describe, expect, it, vi } from 'vitest';
+import { useEffect } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RefObject } from 'react';
-import type { CombatResult, PlacementId } from '@packbreaker/content';
+import type {
+  ClassId,
+  CombatInput,
+  CombatResult,
+  PlacementId,
+  RelicId,
+} from '@packbreaker/content';
 import { CombatOverlay } from './CombatOverlay';
 import { RunProvider } from '../run/RunContext';
+
+// M1.5b PR 1: stub ClassSelectScreen so RunProvider transitions through
+// the gate to RunContext.Provider directly. Same pattern as
+// RunContext.test.tsx and RunScreen.test.tsx — class-select integration
+// lives in dedicated test files. The stub's auto-confirm payload is
+// parameterized via mocks.classSelectInput so the Phase 2.5 buildCombatInput
+// regression tests can drive Marauder + Razor's Edge through the same
+// surface without re-mocking.
+vi.mock('../screens/ClassSelectScreen', () => ({
+  ClassSelectScreen: function StubClassSelectScreen({
+    onConfirm,
+  }: {
+    onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
+  }) {
+    useEffect(() => {
+      onConfirm({
+        classId: mocks.classSelectInput.classId,
+        startingRelicId: mocks.classSelectInput.startingRelicId,
+      });
+    }, [onConfirm]);
+    return null;
+  },
+}));
 
 // M1.4a: CombatOverlay requires bagContainerRef. Tests don't render a
 // real bag DOM, so a ref with current=null is sufficient — CombatOverlay
@@ -103,11 +133,27 @@ const OFFSET_HEAL_RESULT: CombatResult = {
 
 // vi.mock factories are hoisted to the top of the module — any
 // top-level mock-state references must be created via vi.hoisted so
-// the references survive the lift.
+// the references survive the lift. classSelectInput is read by the
+// ClassSelectScreen stub above; reset in beforeEach to keep existing
+// tests on the default Tinker payload.
 const mocks = vi.hoisted(() => ({
   createCombatGame: vi.fn(),
   runCombat: vi.fn(),
+  classSelectInput: {
+    classId: 'tinker',
+    startingRelicId: 'apprentices-loop',
+  } as { classId: ClassId; startingRelicId: RelicId },
 }));
+
+beforeEach(() => {
+  mocks.classSelectInput.classId = 'tinker' as ClassId;
+  mocks.classSelectInput.startingRelicId = 'apprentices-loop' as RelicId;
+  // mock.calls accumulates across tests by default — clear runCombat
+  // history so each test reads only its own call (the Phase 2.5
+  // propagation tests assert on the FIRST runCombat call).
+  mocks.runCombat.mockClear();
+  mocks.createCombatGame.mockClear();
+});
 
 vi.mock('./sim-bridge.combat', () => ({
   runCombat: mocks.runCombat,
@@ -141,12 +187,14 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       </RunProvider>,
     );
 
-    // M1.5a PR 2 Phase 2b-1: RunProvider dynamic-imports sim's createRun
-    // on mount and renders RunBootFallback until simRun resolves. Wait
-    // for the fallback to disappear before asserting CombatOverlay-side
-    // render behavior.
+    // M1.5b PR 1: the lazy class-select Suspense fallback shares the
+    // run-boot-fallback testid with the non-Suspense createRun-in-flight
+    // fallback. Wait for the combat overlay's resolution panel itself
+    // (DEFEAT header from the zero-content bypass) rather than fallback-
+    // absence — the brief stub-mounted state would also satisfy the
+    // negation but doesn't have the consumer mounted yet.
     await waitFor(() => {
-      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+      expect(screen.getByText(/DEFEAT/)).toBeInTheDocument();
     });
 
     // Phaser canvas container is NOT rendered — the option-2 branch
@@ -193,17 +241,11 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
       </RunProvider>,
     );
 
-    // M1.5a PR 2 Phase 2b-1: wait for RunProvider to resolve the
-    // dynamic-import of sim before asserting CombatOverlay render.
+    // M1.5b PR 1: wait for combat-canvas-container directly (not
+    // fallback-absence — see Case A note for the rationale).
     await waitFor(() => {
-      expect(screen.queryByTestId('run-boot-fallback')).toBeNull();
+      expect(screen.getByTestId('combat-canvas-container')).toBeInTheDocument();
     });
-
-    // Phaser canvas container IS rendered — phase initializes to
-    // 'combat' because hasNoMeaningfulEvents is false (damage + heal
-    // events present), so isZeroContent is false and the bypass does
-    // not fire.
-    expect(screen.getByTestId('combat-canvas-container')).toBeInTheDocument();
     expect(screen.getByTestId('combat-skip')).toBeInTheDocument();
 
     // createCombatGame is invoked from useEffect's start() — the call
@@ -219,5 +261,70 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
     expect(screen.queryByText(/DEFEAT/)).toBeNull();
     expect(screen.queryByText(/VICTORY/)).toBeNull();
     expect(onDone).not.toHaveBeenCalled();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 1 Phase 2.5 — buildCombatInput propagation regression
+// (Codex P1 finding on PR 16 ea2a4b0).
+//
+// Pre-fix, buildCombatInput hardcoded the player Combatant's classId to
+// 'tinker' and relics to emptyRelicSlots(). Any Marauder run played as
+// Tinker in combat; every starter relic's combat effect silently
+// no-opped (Razor's Edge bonusBaseDamage, Bloodfont lifestealPct, etc.).
+//
+// Post-fix, both come from state.classId / state.relics (mirrored by
+// applySimSnapshot from sim's authoritative snapshot). These tests
+// drive the class-select stub with Marauder + Razor's Edge through the
+// same render path the player takes, then assert on the runCombat
+// mock's first argument that the CombatInput's player Combatant was
+// constructed from the player-chosen class and starter relic.
+// ────────────────────────────────────────────────────────────────────
+
+describe('CombatOverlay — buildCombatInput propagation (Phase 2.5 Codex P1)', () => {
+  it('Marauder + Razor’s Edge: player Combatant has classId=marauder + relics.starter=razors-edge', async () => {
+    mocks.classSelectInput.classId = 'marauder' as ClassId;
+    mocks.classSelectInput.startingRelicId = 'razors-edge' as RelicId;
+    mocks.runCombat.mockReturnValue(ZERO_CONTENT_RESULT);
+    mocks.createCombatGame.mockClear();
+
+    render(
+      <RunProvider>
+        <CombatOverlay active={true} onDone={vi.fn()} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.runCombat).toHaveBeenCalled();
+    });
+
+    const firstCall = mocks.runCombat.mock.calls[0]!;
+    const input = firstCall[0] as CombatInput;
+    expect(input.player.classId).toBe('marauder');
+    expect(input.player.relics.starter).toBe('razors-edge');
+    expect(input.player.relics.mid).toBeNull();
+    expect(input.player.relics.boss).toBeNull();
+  });
+
+  it('Tinker + Apprentice’s Loop: player Combatant has classId=tinker + relics.starter=apprentices-loop (control)', async () => {
+    mocks.classSelectInput.classId = 'tinker' as ClassId;
+    mocks.classSelectInput.startingRelicId = 'apprentices-loop' as RelicId;
+    mocks.runCombat.mockReturnValue(ZERO_CONTENT_RESULT);
+    mocks.createCombatGame.mockClear();
+
+    render(
+      <RunProvider>
+        <CombatOverlay active={true} onDone={vi.fn()} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+
+    await waitFor(() => {
+      expect(mocks.runCombat).toHaveBeenCalled();
+    });
+
+    const firstCall = mocks.runCombat.mock.calls[0]!;
+    const input = firstCall[0] as CombatInput;
+    expect(input.player.classId).toBe('tinker');
+    expect(input.player.relics.starter).toBe('apprentices-loop');
   });
 });

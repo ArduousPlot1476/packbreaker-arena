@@ -18,6 +18,7 @@
 // authoritative when contracts mutate the levers.
 
 import {
+  CLASSES,
   DEFAULT_RULESET,
   type ClassId,
   type CombatResult,
@@ -28,11 +29,6 @@ import {
   type RunState as SimRunState,
 } from '@packbreaker/content';
 
-// M1.3.4a: hardcoded class for the prototype run. Class-select screen
-// (gdd.md § 14 screen #2) is M1.5+; until then the run starts as Tinker.
-// Exported for useRun.ts's createRun input construction (M1.5a PR 2
-// Phase 2b-1 dynamic-import wiring).
-export const M1_PROTOTYPE_CLASS = 'tinker' as ClassId;
 import { generateInitialShop, generateShop } from '../shop/ShopController';
 import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
 import { ITEMS } from './content';
@@ -56,17 +52,18 @@ export interface ClientRunState {
 /** Mints a fresh ClientRunState for a new run. Seed is wall-clock-derived
  *  via sim-bridge.makeRunSeed; the round-1 shop is sim-generated.
  *
- *  M1.3.4a notes:
- *    - The companion `INITIAL_CLIENT_STATE` const below evaluates this at
- *      module-import time, so the run starts at the same seed for the
- *      lifetime of the page load. New-run / persistence is M1.5+.
- *    - Each call mints a NEW seed (wall-clock + Math.random). For tests
- *      that need determinism, construct fixtures explicitly rather than
- *      relying on the const. */
-export function createInitialState(): ClientRunState {
+ *  M1.5b PR 1: takes a `classId` arg (was parameterless under M1.5a's
+ *  M1_PROTOTYPE_CLASS hardcode). The class-select screen feeds the
+ *  player-chosen classId through useRun → applySimSnapshot's init pass;
+ *  the shop and className placeholder mint from the same classId here so
+ *  the placeholder ClientRunState is internally consistent before sim
+ *  attaches. Note: each call mints a NEW seed (wall-clock + Math.random).
+ *  For tests that need determinism, construct fixtures explicitly rather
+ *  than relying on the singleton. */
+export function createInitialState(classId: ClassId): ClientRunState {
   const seed = makeRunSeed();
   const ruleset = DEFAULT_RULESET;
-  const shop = generateInitialShop(seed, M1_PROTOTYPE_CLASS, ruleset);
+  const shop = generateInitialShop(seed, classId, ruleset);
   return {
     bag: [],
     shop,
@@ -78,17 +75,17 @@ export function createInitialState(): ClientRunState {
       gold: ruleset.baseGoldPerRound,
       trophy: 0,
       rerollCount: 0,
-      className: 'Tinker',
+      className: CLASSES[classId]!.displayName,
       contractName: 'Neutral',
       contractText: 'No modifiers',
       ruleset,
-      // Placeholders for the 6 sim-derived fields (M1.5a PR 2 Phase 2b-1).
-      // Written here so the type checks before RunProvider's
-      // init_from_sim dispatch overwrites them on mount; consumers never
-      // observe these placeholders because RunProvider conditionally
-      // renders RunBootFallback until simRun resolves.
+      // Placeholders for the sim-derived fields (M1.5a PR 2 Phase 2b-1).
+      // Written here so the type checks before init_from_sim's dispatch
+      // overwrites them on mount; consumers never observe these
+      // placeholders because RunProvider conditionally renders
+      // ClassSelectScreen → RunBootFallback until simRun resolves.
       runId: '' as RunId,
-      classId: M1_PROTOTYPE_CLASS,
+      classId,
       contractId: 'neutral' as ContractId,
       derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
       relics: emptyRelicSlots(),
@@ -103,8 +100,13 @@ export function createInitialState(): ClientRunState {
 }
 
 /** Module-level singleton initial state. useRun uses this directly so
- *  state at first render matches what tests observe. */
-export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState();
+ *  state at first render matches what tests observe. The 'tinker'
+ *  placeholder is a sentinel — never observed at runtime because
+ *  RunProvider renders ClassSelectScreen until pendingRunInput resolves,
+ *  then init_from_sim overwrites every sim-authoritative field. */
+export const INITIAL_CLIENT_STATE: ClientRunState = createInitialState(
+  'tinker' as ClassId,
+);
 
 // computeRerollCost is imported from run/sim-bridge.ts so the reducer's
 // spend-deduction and ShopPanel / ShopTab affordability state share one
@@ -157,8 +159,10 @@ export type RunAction =
  *  authoritative for M1.5a. shop is bootstrapped from sim's snapshot
  *  at the init_from_sim reducer arm post-applySimSnapshot (Phase 2.5b
  *  Codex response); sync continues to leave shop client-authoritative.
- *  className/contractName/contractText/maxHearts/totalRounds also
- *  untouched — they're derived placeholders the client owns.
+ *  contractName/contractText/totalRounds also untouched — they're
+ *  derived placeholders the client owns. (className and maxHearts now
+ *  derive from sim-authoritative classId and ruleset.startingHearts
+ *  respectively, updated per sync — M1.5b PR 1 CF 39 fix + Finding A.)
  *
  *  trophy is locked client-authoritative for M1.5a per decision-log.md
  *  2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13; sim's
@@ -182,6 +186,8 @@ function applySimSnapshot(
       ruleset: snapshot.ruleset,
       derived: snapshot.derived,
       hearts: snapshot.hearts,
+      maxHearts: snapshot.ruleset.startingHearts,
+      className: CLASSES[snapshot.classId]!.displayName,
       round: snapshot.currentRound,
       relics: snapshot.relics,
       outcome: snapshot.outcome,
@@ -359,7 +365,7 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       const newSlots = generateShop(
         state.state.seed,
         state.state.round,
-        M1_PROTOTYPE_CLASS,
+        state.state.classId,
         ruleset,
         state.state.rerollCount + 1,
       );

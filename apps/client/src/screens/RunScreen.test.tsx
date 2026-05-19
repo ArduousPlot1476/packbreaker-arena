@@ -2,21 +2,40 @@
 // viewport. Desktop branch renders synchronously; mobile branch is
 // lazy-loaded behind React.lazy + Suspense per M1.3.3 commit 8.5.
 
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
+import type { ClassId, RelicId } from '@packbreaker/content';
 import { RunScreen } from './RunScreen';
 
 // M1.4b1 Phase 2.5: stub the lazy-loaded MobileRunScreen module so the
 // dispatcher test doesn't race the real dynamic import + Suspense
 // flush under parallel-load conditions. The dispatcher is the unit
 // under test — MobileRunScreen content is incidental observable state.
-// The stub renders the same tab-label strings the real component
-// surfaces ('SHOP', 'CRAFTING', 'RELICS', 'LOG'); changing those
-// labels in production won't surface here, but coverage of the
-// labels lives in MobileTabBar.test.tsx (the dedicated tab-bar test).
 vi.mock('./mobile/MobileRunScreen', () => ({
   MobileRunScreen: function MobileRunScreenStub() {
     return <div>SHOP CRAFTING RELICS LOG</div>;
+  },
+}));
+
+// M1.5b PR 1: stub ClassSelectScreen with a component that auto-fires
+// beginRun on first effect (tinker + apprentices-loop). Same rationale
+// as the MobileRunScreen stub — the class-select flow is unit-under-test
+// for ClassSelectScreen.test.tsx + ClassSelectFlow.test.tsx, not the
+// dispatcher tests here.
+vi.mock('./ClassSelectScreen', () => ({
+  ClassSelectScreen: function StubClassSelectScreen({
+    onConfirm,
+  }: {
+    onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
+  }) {
+    useEffect(() => {
+      onConfirm({
+        classId: 'tinker' as ClassId,
+        startingRelicId: 'apprentices-loop' as RelicId,
+      });
+    }, [onConfirm]);
+    return null;
   },
 }));
 
@@ -60,16 +79,16 @@ describe('RunScreen branch dispatcher', () => {
   it('renders DesktopRunScreen when matchMedia is false (post RunBootFallback resolve)', async () => {
     matchesValue = false;
     const { container } = render(<RunScreen />);
-    // M1.5a PR 2 Phase 2b-1: RunProvider now dynamic-imports sim's
-    // createRun on mount and renders RunBootFallback until simRun
-    // resolves. Desktop branch (matchMedia false) does NOT go through
-    // the mobile Suspense lazy-load path; once the boot fallback
-    // clears, DesktopRunScreen renders directly (no Suspense fallback).
+    // M1.5b PR 1: RunProvider's class-select boundary is lazy + the
+    // stub-ClassSelectScreen's useEffect setPendingRunInput races sim's
+    // dynamic-import. The DOM transitions through multiple intermediate
+    // states (Suspense fallback → stub mounted → RunBootFallback →
+    // DesktopRunScreen). Wait directly for the desktop content marker
+    // rather than the fallback-absence (which holds transiently between
+    // intermediate renders).
     await waitFor(() => {
-      expect(container.querySelector('[data-testid="run-boot-fallback"]')).toBeNull();
+      expect(container.textContent).toContain('BAG · 6×4');
     });
-    // Desktop renders BAG · 6×4 header (compact mode is OFF by default).
-    expect(container.textContent).toContain('BAG · 6×4');
     expect(container.querySelector('[data-testid="mobile-suspense-fallback"]')).toBeNull();
   });
 
