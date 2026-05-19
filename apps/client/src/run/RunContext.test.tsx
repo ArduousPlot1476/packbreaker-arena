@@ -1174,3 +1174,111 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
     expect(advancePhaseSpy).toHaveBeenCalledOnce();
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 2 Step 2 — resetRun two-axis reset coverage.
+//
+// resetRun is exposed by useRun and consumed by RunEndScreen's CTA.
+// It must clear (a) the reducer state and (b) the hook-level simRun
+// + pendingRunInput so RunProvider falls back to the class-select gate
+// for a fresh run. The stub-mocked ClassSelectScreen at the top of
+// this file auto-fires beginRun on its first effect, so a complete
+// reset cycle from a running run lands back at the consumer with
+// re-initialized state.
+// ────────────────────────────────────────────────────────────────────
+
+function ResetProbe({ testId }: { testId: string }) {
+  const { state, onReroll, resetRun } = useRunContext();
+  return (
+    <div data-testid={testId}>
+      <span data-testid={`${testId}-reroll-count`}>{state.state.rerollCount}</span>
+      <button
+        data-testid={`${testId}-reroll`}
+        type="button"
+        onClick={onReroll}
+      >
+        reroll
+      </button>
+      <button
+        data-testid={`${testId}-reset`}
+        type="button"
+        onClick={resetRun}
+      >
+        reset
+      </button>
+    </div>
+  );
+}
+
+describe('RunProvider — resetRun two-axis reset (M1.5b PR 2)', () => {
+  it('resetRun discards reducer state — rerollCount returns to 0 after the reset cycle re-resolves', async () => {
+    const { getByTestId, queryByTestId } = render(
+      <RunProvider>
+        <ResetProbe testId="r" />
+      </RunProvider>,
+    );
+
+    // Initial mount: stub-ClassSelectScreen auto-fires beginRun, dynamic-
+    // import resolves, init_from_sim populates state, consumer mounts.
+    await waitFor(() => {
+      expect(queryByTestId('r')).toBeInTheDocument();
+    });
+    expect(getByTestId('r-reroll-count').textContent).toBe('0');
+
+    // Reroll lifts rerollCount to 1 (Apprentice's Loop gives the first
+    // reroll for free; the reducer still increments the counter).
+    act(() => {
+      fireEvent.click(getByTestId('r-reroll'));
+    });
+    expect(getByTestId('r-reroll-count').textContent).toBe('1');
+
+    // resetRun: reducer state → INITIAL_CLIENT_STATE (rerollCount=0);
+    // simRun → null; pendingRunInput → null. The class-select stub
+    // re-fires beginRun, RunBootFallback flashes, a fresh sim resolves,
+    // init_from_sim repopulates. The re-mounted consumer reads
+    // rerollCount=0 from the fresh state.
+    act(() => {
+      fireEvent.click(getByTestId('r-reset'));
+    });
+    await waitFor(() => {
+      expect(queryByTestId('r')).toBeInTheDocument();
+      expect(getByTestId('r-reroll-count').textContent).toBe('0');
+    });
+  });
+
+  it('resetRun re-traverses the class-select gate — RunBootFallback is observable between consumer cycles', async () => {
+    const { getByTestId, queryByTestId } = render(
+      <RunProvider>
+        <ResetProbe testId="r" />
+      </RunProvider>,
+    );
+
+    // Mount → consumer present.
+    await waitFor(() => {
+      expect(queryByTestId('r')).toBeInTheDocument();
+    });
+
+    // Click reset. The reducer + setSimRun(null) + setPendingRunInput(null)
+    // batch; React re-renders with simRun===null. The stub-ClassSelectScreen
+    // mounts (renders null) and its first effect re-fires beginRun, so
+    // pendingRunInput becomes non-null again — at which point RunProvider
+    // renders RunBootFallback while the createRun dynamic-import re-resolves.
+    // The consumer is unmounted during this window, which is the proof of
+    // the two-axis nature of the reset: dispatching reset_run alone (without
+    // setSimRun(null) + setPendingRunInput(null)) would not unmount the
+    // consumer because RunProvider's branch predicate reads simRun + pendingRunInput,
+    // not reducer state.
+    act(() => {
+      fireEvent.click(getByTestId('r-reset'));
+    });
+    expect(queryByTestId('r')).toBeNull();
+    expect(getByTestId('run-boot-fallback')).toBeInTheDocument();
+
+    // After the microtask resolves, consumer remounts and RunBootFallback
+    // is gone.
+    await waitFor(() => {
+      expect(queryByTestId('r')).toBeInTheDocument();
+    });
+    expect(queryByTestId('run-boot-fallback')).toBeNull();
+  });
+});

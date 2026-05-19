@@ -328,6 +328,23 @@ export function useRun() {
 
   const isRunEnded = mirrorsSimShouldEndRun({ outcome: state.state.outcome });
 
+  // M1.5b PR 2 Q(c) two-axis reset: clear the reducer state AND the
+  // hook-level sim handle + pending-input flag so RunProvider falls
+  // back to the simRun===null && pendingRunInput===null branch (which
+  // mounts ClassSelectScreen). Without the dispatch the reducer would
+  // retain the terminal outcome and RunEndScreen would stay mounted;
+  // without the two state setters the createRun useEffect's
+  // `if (simRun !== null) return;` guard would skip the next sim
+  // construction even after a fresh class-select pick.
+  //
+  // 5b.3 LocalSaveV1 reuses this callback shape as the "abandon current
+  // run" handler — same two-axis discard.
+  const resetRun = useCallback(() => {
+    dispatch({ type: 'reset_run' });
+    setSimRun(null);
+    setPendingRunInput(null);
+  }, []);
+
   // Dispatches sim's grantRelic + sync_from_sim. Sim's M1.2.6 phase
   // gates are authoritative — client does NOT re-validate against the
   // offer (M1 trust model parity with grantRelic's slot/phase-only
@@ -420,5 +437,6 @@ export function useRun() {
     pendingRelicOffer,
     isRunEnded,
     grantSelectedRelic,
+    resetRun,
   };
 }
