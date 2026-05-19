@@ -4,6 +4,48 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-19 — M1.5b PR 2 Phase 1 ratified
+
+Halt-gate: F.3 Marauder ClassSelectFlow.test.tsx flake (latent in PR 1,
+surfaced by Phase 1 counter-rebaseline against PR 1 closing-log
+baseline 255/255 client tests). Triage: environmental — isolation
+passes 2/2 in 260ms; full-workspace concurrent contention straddles
+waitFor default 1000ms under cold lazy-import resolution. Resolution
+option β (pre-Phase-2 narrow hot-fix on main, separate commit from
+PR 2 branch).
+
+Catch candidate: latent-test-infra-flake-surfaced-by-next-PR-Phase-1-
+counter-rebaseline (C2 family lineage). First instance. Held for
+second-instance codification per convention; antidote candidate
+"close-time test runs include N≥3 full-workspace runs under cold
+cache, not just isolation passes." Counter 17 catches unchanged
+(catch not codified at first instance).
+
+Q-set dispositions (Phase 2 / Claude Design binding):
+(a) full-screen RunEndScreen, mirrors ClassSelectScreen pattern.
+(b) outcome + class + round reached + final hearts + 3-relic loadout
+    + per-round W/L breadcrumb + final gold + final trophy value.
+(c) new run via class-select re-entry; reset_run reducer arm +
+    simRun useRef disposal at hook level + pendingRunInput=null.
+    Two-axis reset; LocalSaveV1 (5b.3) reuses arm as abandon handler.
+(d) shared content panel locked; outer wrapper shape (viewport-
+    branched per ClassSelectScreen precedent vs single responsive)
+    deferred to Claude Design pass.
+(e) defer all PR 2 telemetry to CF 35; no new TelemetryEvent
+    variants.
+(f) show final trophy value (NOT delta); delta UX rebalanced at M2
+    per-round trophy schedule.
+(g) integration (RunEndFlow.test.tsx) + component
+    (RunEndScreen.test.tsx); F.3/F.5 split precedent.
+(h) replace RunEndOverlay.tsx entirely; preserve runEnd.test.ts
+    (mirrorsSimShouldEndRun); migrate data-testid anchors where
+    assertion semantic matches.
+
+CF 21 summary-side close lands at PR 2 merge.
+Master-dev drift counter unchanged (no chat-side drift this turn).
+
+---
+
 ## 2026-05-19 — M1.5b PR 2 scoped to 5b.2 (run-end summary surface) only
 
 Fresh-chat handoff proposed bundling 5b.2 (run-end summary surface) and 5b.3 (LocalSaveV1 persistence) into a single "2a/2b" branch. Rejected on two grounds:

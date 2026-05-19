@@ -67,9 +67,12 @@ describe('RunProvider → ClassSelectScreen → init_from_sim flow (F.3)', () =>
 
     // RunProvider lazy-imports ClassSelectScreen — wait for the
     // dynamic-import to resolve before driving class-select clicks.
+    // Cold-cache resolution under full-workspace concurrent runner can
+    // straddle the default waitFor 1000ms ceiling; 2000ms buys headroom
+    // without masking real regressions. Isolation runs land in <300ms.
     await waitFor(() => {
       expect(getByTestId('class-card-marauder')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
     expect(getByTestId('begin-run-cta')).toBeDisabled();
 
     // Pick Marauder → stage 2 with Marauder starter pool.
@@ -108,7 +111,7 @@ describe('RunProvider → ClassSelectScreen → init_from_sim flow (F.3)', () =>
 
     await waitFor(() => {
       expect(getByTestId('class-card-tinker')).toBeInTheDocument();
-    });
+    }, { timeout: 2000 });
     fireEvent.click(getByTestId('class-card-tinker'));
     fireEvent.click(getByTestId('relic-card-apprentices-loop'));
     fireEvent.click(getByTestId('begin-run-cta'));
