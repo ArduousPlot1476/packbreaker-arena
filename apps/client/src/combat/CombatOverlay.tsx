@@ -33,7 +33,7 @@ import {
 } from '@packbreaker/content';
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
-import { clientBagToSimBag, emptyRelicSlots } from '../run/sim-bridge';
+import { clientBagToSimBag } from '../run/sim-bridge';
 import { runCombat } from './sim-bridge.combat';
 import {
   CombatScene,
@@ -89,7 +89,7 @@ interface CombatOverlayProps {
 
 /** Builds a CombatInput from current run state. Pure construction —
  *  no rng, no side effects. */
-function buildCombatInput(
+export function buildCombatInput(
   bag: ReturnType<typeof useRunContext>['state']['bag'],
   state: ReturnType<typeof useRunContext>['state']['state'],
 ): { input: CombatInput; ghostClass: string; ghostId: GhostId; ghostClassId: ClassId } {
@@ -99,10 +99,30 @@ function buildCombatInput(
     seed: state.seed,
     player: {
       bag: playerBag,
-      relics: emptyRelicSlots(),
-      classId: 'tinker' as CombatInput['player']['classId'],
-      // M1.3.4a: maxHpBonus / class-driven HP / boss overrides land in
-      // M1.5 alongside relic state. For now, base HP only.
+      // M1.5b PR 1 Phase 2.5 (Codex P1 fix on PR 16 ea2a4b0): classId
+      // and relics come from sim-authoritative state.classId /
+      // state.relics (mirrored by applySimSnapshot). Pre-fix the
+      // M1.3.4a prototype hardcoded `'tinker'` + `emptyRelicSlots()`,
+      // so Marauder runs played as Tinker and starter-relic combat
+      // effects (Razor's Edge, Bloodfont, Iron Will, etc.) silently
+      // no-opped.
+      relics: state.relics,
+      classId: state.classId,
+      // CF 42 (open): startingHp hardcode. BASE_COMBATANT_HP is 30
+      // and no M1 item ships passiveStats.maxHpBonus, so this matches
+      // the derivation rule on schemas.ts § Combatant comment for
+      // every M1 build. Auto-close trigger: first item with
+      // maxHpBonus ships; replace with a client-side analog of sim's
+      // computeStartingHpFromBag.
+      //
+      // CF 43 (open): recipeBornPlacementIds is intentionally omitted
+      // (sim's internal `bornFromRecipe` set is unreachable from the
+      // client tier; client's clientRunReducer combine arm does not
+      // track which placement-ids were minted by combineRecipe).
+      // Consequence: Tinker's class.passive.recipeBonusPct and the
+      // recipeBonusPct relics (Pocket Forge, Catalyst) silently
+      // no-op in client-side combat. Deferred to M1.5b PR 2 /
+      // LocalSaveV1; requires new client-side state.
       startingHp: 30,
     },
     ghost: ghost.combatant,
