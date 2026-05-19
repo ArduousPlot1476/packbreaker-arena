@@ -34,6 +34,17 @@ const ClassSelectScreen = lazy(() =>
   })),
 );
 
+// Lazy-import the run-end summary screen for the same bundle-isolation
+// reason — RunEndScreen mounts only when isRunEnded flips true, which
+// is rare per session, so paying its bytes upfront in the main chunk
+// would burn budget on a surface most users won't see until end of
+// run. Same RunBootFallback during the microtask.
+const RunEndScreen = lazy(() =>
+  import('../screens/RunEndScreen').then((m) => ({
+    default: m.RunEndScreen,
+  })),
+);
+
 type RunContextValue = ReturnType<typeof useRun>;
 
 const RunContext = createContext<RunContextValue | null>(null);
@@ -64,6 +75,21 @@ export function RunProvider({ children }: { children: ReactNode }) {
       );
     }
     return <RunBootFallback />;
+  }
+  // M1.5b PR 2 Q(a) + Q(h): post-run is an architectural bookend to
+  // ClassSelectScreen. RunEndScreen mounts INSIDE RunContext.Provider
+  // so it can call useRunContext() for the 8 ratified fields without
+  // prop-drilling. The in-run children (DesktopRunScreen + MobileRunScreen
+  // + their TopBar / LeftRail / BagBoard / ShopPanel) are not mounted
+  // while RunEndScreen owns the viewport. CF 21 summary-side closes here.
+  if (value.isRunEnded) {
+    return (
+      <RunContext.Provider value={value}>
+        <Suspense fallback={<RunBootFallback />}>
+          <RunEndScreen onRestart={value.resetRun} />
+        </Suspense>
+      </RunContext.Provider>
+    );
   }
   return <RunContext.Provider value={value}>{children}</RunContext.Provider>;
 }
