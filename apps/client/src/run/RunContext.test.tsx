@@ -47,6 +47,7 @@ import type {
   SimSeed,
 } from '@packbreaker/content';
 import { DEFAULT_RULESET } from '@packbreaker/content';
+import type { LocalSaveV1 } from '@packbreaker/shared';
 import { RunProvider, useRunContext } from './RunContext';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
 import { SHOP_POOL_ITEMS } from './content';
@@ -1415,3 +1416,100 @@ describe('RunProvider — save-on-quiescent timing (M1.5b PR 3 / 5b.3a)', () => 
     expect(savedAfterReroll).toBe(savedAfterMount);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5 P1 (Catch 20) — load-on-mount restore
+// race guard.
+//
+// Pre-fix: load-on-mount's dynamic-import resolution unconditionally
+// called setSimRun + dispatch(restore_from_save) once the import
+// resolved (the inline comment claimed race-guarding but the code only
+// checked an unmount-cancellation flag). If a fresh class-select pick
+// fired during the import window — exactly the auto-fire stub's
+// behavior on mount — the restore callback clobbered the freshly-
+// initialized run when the import eventually resolved.
+//
+// Post-fix: a monotonic restoreEpochRef in useRun is bumped
+// synchronously by the createRun useEffect before its dynamic-import.
+// Restore's resolve callback observes the bumped epoch (captured-vs-
+// current mismatch) and bails before setSimRun + dispatch, leaving the
+// fresh run intact.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — load-on-mount restore race guard (M1.5b PR 3 / 5b.3a Phase 2.5 P1)', () => {
+  it('fresh-run wins when class-select fires during a pending restore — saved Marauder is NOT applied over fresh Tinker', async () => {
+    // Stage a v1 Marauder save in localStorage. After mount, the auto-
+    // fire ClassSelectScreen stub (configured at the top of this file
+    // to fire Tinker + apprentices-loop) will race the restore's
+    // dynamic-import resolution. Pre-fix this clobbered to Marauder;
+    // post-fix the fresh Tinker run survives.
+    const maraudersSave: LocalSaveV1 = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'race-test-run' as RunId,
+        seed: 99999 as SimSeed,
+        classId: 'marauder' as ClassId,
+        contractId: 'neutral' as ContractId,
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z' as IsoTimestamp,
+        hearts: 3,
+        gold: 42,
+        currentRound: 5 as RoundNumber,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        relics: {
+          starter: 'iron-will' as RelicId,
+          mid: null,
+          boss: null,
+        },
+        shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress' as RunOutcome,
+        rngState: 0x12345678,
+        rerollCount: 0,
+        trophy: 0,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(maraudersSave));
+
+    const { queryByTestId, getByTestId } = render(
+      <RunProvider>
+        <RaceProbe testId="rp" />
+      </RunProvider>,
+    );
+
+    // Wait for both async paths to resolve and the consumer to mount.
+    await waitFor(() => {
+      expect(queryByTestId('rp')).toBeInTheDocument();
+    });
+
+    // Drive the eventLoop a few microtasks so any pending restore that
+    // bails (or stale clobber, in the broken pre-fix case) lands.
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    // Fresh Tinker run wins. Pre-fix this would have been 'marauder'
+    // because the restore callback fired second and overwrote the fresh
+    // controller's init_from_sim state.
+    expect(getByTestId('rp-classid').textContent).toBe('tinker');
+    expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+    // Round = 1 (fresh) NOT 5 (saved).
+    expect(getByTestId('rp-round').textContent).toBe('1');
+  });
+});
+
+function RaceProbe({ testId }: { testId: string }) {
+  const { state } = useRunContext();
+  return (
+    <div data-testid={testId}>
+      <span data-testid={`${testId}-classid`}>{String(state.state.classId)}</span>
+      <span data-testid={`${testId}-relic-starter`}>{String(state.state.relics.starter)}</span>
+      <span data-testid={`${testId}-round`}>{state.state.round}</span>
+    </div>
+  );
+}

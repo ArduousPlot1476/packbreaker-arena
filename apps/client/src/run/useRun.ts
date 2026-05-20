@@ -89,6 +89,20 @@ export function useRun() {
     null,
   );
 
+  // M1.5b PR 3 / 5b.3a Phase 2.5 P1 fix (Catch 20): monotonic epoch ref
+  // shared between the load-on-mount restore effect and the fresh-run
+  // createRun effect. The restore effect captures epochRef.current at
+  // start; the createRun effect bumps it synchronously when a fresh run
+  // is initiated. If a fresh run starts during the restore's dynamic-
+  // import window, the resolve callback observes a stale captured epoch
+  // and aborts before setSimRun + dispatch, leaving the fresh run intact.
+  //
+  // useRef vs. state: React state captured in the closure would always
+  // read null at effect-start (mount). A simRun-dep wouldn't help either
+  // (it would re-fire the restore on transition). The ref is leaner and
+  // mirrors the React idiom for "out-of-render mutable handles."
+  const restoreEpochRef = useRef(0);
+
   const beginRun = useCallback((input: PendingRunInput) => {
     setPendingRunInput(input);
   }, []);
@@ -100,20 +114,24 @@ export function useRun() {
   // here — the next saveLocal call (post-fresh-run arranging-entry)
   // overwrites the stale terminal save.
   //
-  // Mount-only effect (empty deps). Guards against double-entry via the
-  // simRun/pendingRunInput checks; if a class-select interaction has
-  // already started by the time this resolves (race with user action),
-  // the dynamic import resolves but the setSimRun is skipped.
+  // Mount-only effect (empty deps). The `cancelled` flag covers unmount
+  // during the import window; the epoch comparison (Phase 2.5 P1 fix /
+  // Catch 20) covers the race where a fresh run is started during the
+  // window — see restoreEpochRef declaration above.
   useEffect(() => {
     let cancelled = false;
+    const myEpoch = restoreEpochRef.current;
     const saved = loadLocal();
     if (saved === null || saved.inProgressRun === null) return;
     if (saved.inProgressRun.outcome !== 'in_progress') return;
     const snapshot = saved.inProgressRun;
     void import('@packbreaker/sim').then(({ restoreRun }) => {
       if (cancelled) return;
-      // Race-guard: user may have begun a fresh class-select pick while
-      // the dynamic import was resolving. Don't blow away their input.
+      // Phase 2.5 P1 race-guard: if a fresh run was initiated during the
+      // dynamic-import window, the createRun effect synchronously bumped
+      // restoreEpochRef.current past myEpoch. Bail without clobbering the
+      // fresh run's setSimRun + init_from_sim dispatch.
+      if (restoreEpochRef.current !== myEpoch) return;
       const controller = restoreRun(snapshot, {
         itemsRegistry: SHOP_POOL_ITEMS,
         onTelemetryEvent: () => {
@@ -131,6 +149,10 @@ export function useRun() {
   useEffect(() => {
     if (pendingRunInput === null) return;
     if (simRun !== null) return;
+    // Phase 2.5 P1 race-guard companion: synchronously invalidate any
+    // pending restore BEFORE the dynamic import. Restore's resolve
+    // callback observes the bumped epoch and bails.
+    restoreEpochRef.current += 1;
     let cancelled = false;
     void import('@packbreaker/sim').then(({ createRun }) => {
       if (cancelled) return;
