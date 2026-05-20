@@ -4,6 +4,170 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-20 — M1.5b PR 3 / 5b.3a Phase 2.5 — Codex P1+P2 (Catch 20+21)
+
+Codex review of `a5f6149` returned two findings — both confirmed by
+master-dev and fixed in this interlude. 4-finding ceiling at 2/4
+(reactive). Pipeline triple-green; ready for Codex re-request once
+master-dev confirms.
+
+### P1 — load-on-mount restore race (Catch 20)
+
+**Surface.** `useRun.ts` load-on-mount useEffect (~lines 107-129
+pre-fix) carried an inline race-guard comment claiming protection
+against "user may have begun a fresh class-select pick while the
+dynamic import was resolving" — but the actual code only checked an
+unmount-cancellation flag. The two async paths (restore's
+`import('@packbreaker/sim').then(restoreRun)` and createRun's
+`.then(createRun)`) share the same cached module promise but have no
+explicit synchronization. A structural race: if a fresh run is
+initiated during restore's import window, the restore's resolve
+callback unconditionally calls setSimRun + dispatch(restore_from_save),
+clobbering the fresh run's setSimRun(controller) + dispatch(
+init_from_sim).
+
+**Comment-vs-code discrepancy.** The Codex finding caught the
+documentation lying about the implementation — the comment
+described an invariant that the code did NOT enforce. Logged
+separately from the architectural race itself; both close together.
+
+**Fix (commit `1fd5424`).** Monotonic epoch ref (lean Option A per
+the prompt) shared between the two async paths:
+
+- `restoreEpochRef = useRef(0)` declared at the useRun top-level.
+- Restore useEffect captures `myEpoch = restoreEpochRef.current` at
+  effect-start (synchronously, before the dynamic-import).
+- createRun useEffect synchronously bumps `restoreEpochRef.current +=
+  1` BEFORE its dynamic-import, even though the import resolution is
+  async — the ref bump is visible to restore's resolve closure by the
+  time it would run.
+- Restore's resolve callback compares `restoreEpochRef.current !==
+  myEpoch` and bails before setSimRun + dispatch if a fresh run was
+  initiated. Fresh run's init_from_sim dispatch survives intact.
+
+State-check guard alternative (simRun !== null read via useRef
+mirror) rejected as heavier than the epoch ref. False race-guard
+comment replaced with an accurate description of the implemented
+guard; cross-reference at the restoreEpochRef declaration documents
+the synchronous handshake.
+
+**Test (RunContext.test.tsx).** Pre-populate localStorage with a v1
+Marauder save → mount RunProvider with the auto-fire ClassSelectScreen
+stub configured to fire Tinker + apprentices-loop. Both async paths
+race; assert final state is the fresh Tinker run (classId='tinker',
+relics.starter='apprentices-loop', round=1) NOT the restored Marauder
+save (classId='marauder', round=5).
+
+### P2 — storage access + read/write throw-safety (Catch 21)
+
+**Surface.** `apps/client/src/persistence/storage.ts` (pre-fix):
+
+```
+function getDefaultStorage(): SaveStorageAdapter | null {
+  if (typeof globalThis === 'undefined') return null;
+  const g = globalThis as { localStorage?: SaveStorageAdapter };
+  return g.localStorage ?? null;   // ← can throw SecurityError
+}
+
+export function loadRaw(storage?): unknown {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return null;
+  const raw = adapter.getItem(SAVE_STORAGE_KEY);  // ← can throw
+  ...
+}
+
+export function save(payload, storage?): void {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return;
+  adapter.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));  // ← QuotaExceededError
+}
+
+export function clearSave(storage?): void {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return;
+  adapter.removeItem(SAVE_STORAGE_KEY);  // ← can throw
+}
+```
+
+The `typeof globalThis === 'undefined'` check guards against
+undefined globalThis but NOT against the property access throwing.
+In Safari private-browsing / opaque-origin / blocked-storage
+contexts, reading `globalThis.localStorage` itself raises
+SecurityError. Plus `getItem`/`setItem`/`removeItem` can throw at
+runtime under QuotaExceededError / mid-session storage block. Net
+result: a single throw propagates through loadLocal → useRun's
+load-on-mount useEffect and breaks the mount path, violating the
+no-op fallback contract under exactly the conditions where it was
+supposed to engage.
+
+**Fix (commit `5263d0f`).** Wrap every browser-storage touchpoint
+in try/catch with a null/no-op fallback:
+
+- getDefaultStorage: try/catch around the property read; null on
+  throw (same as the SSR / no-localStorage branch).
+- save(): try/catch around adapter.setItem; silent no-op on throw.
+- loadRaw(): try/catch around adapter.getItem; null on throw,
+  treating the failure same as "no save present" → fresh-run path.
+- clearSave(): try/catch around adapter.removeItem; silent no-op
+  on throw.
+
+Doc comment expanded with the explicit runtime conditions that
+trigger throws (Safari private-browsing, opaque origins,
+QuotaExceededError, blocked storage).
+
+**Tests (persistence.test.ts).** Five new throw-safety cases:
+
+1. loadLocal returns null when adapter.getItem throws.
+2. saveLocal is silent no-op when adapter.setItem throws (e.g.
+   QuotaExceededError).
+3. clearLocal is silent no-op when adapter.removeItem throws.
+4. Full mount path (save → load → clear) survives a fully-throwing
+   adapter without propagation.
+5. `globalThis.localStorage` access itself throwing — simulated via
+   `Object.defineProperty` with a getter throwing SecurityError —
+   is caught by getDefaultStorage's defensive try/catch; loadLocal,
+   saveLocal, clearLocal all no-op without propagation.
+
+### Counter updates
+
+| Counter | Pre-2.5 | Post-2.5 |
+|---|---:|---:|
+| Predicate-vs-name catches codified | 19 | **21** (+Catch 20 P1 race; +Catch 21 P2 throw-safety) |
+| 4-finding ceiling | 0/4 | **2/4** (reactive) |
+| Open CFs | 30 (CF 34, CF 35, CF 37, CF 38, CF 42, CF 43, CF 45 + 23 earlier) | unchanged |
+
+Catch 20 + 21 both Class C2 (architectural / structural concerns vs.
+isolated logic bugs). Antidote candidates held pending second-instance
+triggers — no codification this turn.
+
+### Branch state at Phase 2.5 close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 10 atomic branch
+commits (7 original + d4fd27c layering fix + 1fd5424 P1 + 5263d0f
+P2) + 2 docs commits (a5f6149 + this entry).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `1fd5424` | Phase 2.5 P1 — race guard | Monotonic restoreEpochRef in useRun; restore's resolve callback bails on epoch mismatch; createRun useEffect synchronously bumps before its dynamic-import. False race-guard comment corrected. +1 regression test (race interleave with auto-fire stub). |
+| `5263d0f` | Phase 2.5 P2 — throw-safety | try/catch wrapping for getDefaultStorage property read + adapter.getItem/setItem/removeItem in storage.ts. +5 throw-safety tests (3 method-level + 1 full-path + 1 globalThis-getter-throws). |
+| this entry | Phase 2.5 docs | docs(decision-log): 5b.3a Phase 2.5 — Codex P1+P2 (Catch 20+21). |
+
+### Working-tree note (orphaned cleanup ride-along)
+
+Commit `1fd5424` incidentally landed the previously-orphaned
+`apps/client/vite.config.ts.timestamp-*.mjs` deletion (a Vite-
+generated tempfile that had been staged-for-deletion in the index
+since before this conversation started). The deletion was already
+staged when I added the P1 fix files; `git commit -m` picked up the
+full index. Net effect: a stale tempfile no longer tracked in git
+history — harmless, arguably correct. The matching `.gitignore`
+modification (which presumably adds the pattern) remains in the
+working tree unstaged.
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
 ## 2026-05-20 — M1.5b PR 3 / 5b.3a pre-push gate clearance (LocalSaveV1 persistence core)
 
 5b.3a's 7-commit body of work (LocalSaveV1 schema authored as
