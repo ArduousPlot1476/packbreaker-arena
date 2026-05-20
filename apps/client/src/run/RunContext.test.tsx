@@ -1415,6 +1415,84 @@ describe('RunProvider — save-on-quiescent timing (M1.5b PR 3 / 5b.3a)', () => 
     const savedAfterReroll = localStorage.getItem('pba.v1.save');
     expect(savedAfterReroll).toBe(savedAfterMount);
   });
+
+  // D-F5 focused negative + positive: byte-equality above is sufficient
+  // for reroll specifically (rerollCount/shop/gold/rngState all change,
+  // so identical bytes ⟹ no fire) but the audit asked for a spy-based
+  // pin AND a positive case on round change. This test instruments
+  // localStorage.setItem to count save writes directly and drives a
+  // combat completion to bump the round.
+  it('setItem fires on initial mount + round change, NOT on reroll (D-F5 spy pin)', async () => {
+    // Spy on the localStorage instance directly. Spying on
+    // Storage.prototype doesn't work under happy-dom — the localStorage
+    // object's setItem isn't the prototype method.
+    const setItemSpy = vi.spyOn(localStorage, 'setItem');
+    try {
+      const { getCtx } = await renderAndCapture();
+      const ctx0 = getCtx();
+      expect(ctx0.simRun).not.toBeNull();
+
+      // Mount-time save fires when the save effect runs on the simRun
+      // null → controller transition. Wait for it to land.
+      await waitFor(() => {
+        const writes = setItemSpy.mock.calls.filter((c) => c[0] === 'pba.v1.save');
+        expect(writes.length).toBeGreaterThanOrEqual(1);
+      });
+      const writesAfterMount = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+
+      // ── Negative: reroll is mid-round mutation. Deps:
+      // [simRun, state.state.round, state.state.outcome] — none change
+      // on a reroll. Effect MUST NOT fire.
+      const rerollCountBefore = getCtx().state.state.rerollCount;
+      act(() => {
+        ctx0.onReroll();
+      });
+      await waitFor(() => {
+        expect(getCtx().state.state.rerollCount).toBe(rerollCountBefore + 1);
+      });
+      // Drain microtasks so any latent save effect has a chance to misfire.
+      await new Promise<void>((r) => setTimeout(r, 0));
+
+      const writesAfterReroll = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+      expect(writesAfterReroll).toBe(writesAfterMount);
+
+      // ── Positive: drive a combat completion. onContinue + onCombatDone
+      // → sim.advancePhase → state.state.round increments → save effect
+      // MUST fire.
+      act(() => ctx0.onContinue());
+      await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+      const roundBefore = getCtx().state.state.round;
+      act(() => {
+        ctx0.onCombatDone({
+          result: {
+            events: [],
+            outcome: 'player_win' as const,
+            finalHp: { player: 30, ghost: 0 },
+            endedAtTick: 5,
+          },
+          opponentGhostId: null,
+          opponentClassId: 'tinker' as ClassId,
+          damageDealt: 30,
+          damageTaken: 6,
+        });
+      });
+      await waitFor(() => {
+        expect(getCtx().state.state.round).toBe(roundBefore + 1);
+      });
+
+      const writesAfterRoundAdvance = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+      expect(writesAfterRoundAdvance).toBeGreaterThan(writesAfterReroll);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
 });
 
 // ────────────────────────────────────────────────────────────────────
