@@ -4,6 +4,61 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-20 — M1.5b PR 3 / 5b.3a pre-push gate clearance (LocalSaveV1 persistence core)
+
+5b.3a's 7-commit body of work (LocalSaveV1 schema authored as
+SerializedRunState; sim getRngState + restoreRun + RestoreRunOptions;
+real startedAt timestamp; client persistence layer + migration scaffold;
+save-on-quiescent + load-on-mount + clearLocal-on-reset wiring;
+round-trip + post-load-combat + migration + quiescent-timing test
+coverage) cleared the master-dev pre-push gate matrix with one
+remediation (item D layering fix).
+
+### Pre-push gate results
+
+| Item | Disposition |
+|---|---|
+| **A** tech-architecture.md § 7.1 amendment | NO-OP — already amended in Commit 1 (4200be6); SerializedRunState authored, `inProgressRun: SerializedRunState \| null` (readonly, non-optional, nullable), path comment points at `packages/content/src/schemas.ts § 13` + `packages/shared/src/save/index.ts` |
+| **B** LocalSaveV1.inProgressRun = SerializedRunState \| null end-to-end | CONFIRMED — both content-schemas.ts § 13 and packages/content/src/schemas.ts § 13 byte-identical; save/load round-trips snapshot through LocalSaveV1.inProgressRun; `pnpm check-schemas-sync: OK` |
+| **C** sim barrel exports restoreRun + RestoreRunOptions + RunController | CONFIRMED — both Rule 7 barrels (`packages/sim/src/run/index.ts` + `packages/sim/src/index.ts`) export restoreRun + RestoreRunOptions; getRngState is an instance method on the barrel-exported RunController interface (no separate top-level export needed) |
+| **D** packages/shared layering | **REMEDIATED — Catch 19 + Commit d4fd27c**. Master-dev grep surfaced runtime `globalThis.localStorage` access inside `packages/shared/src/save/storage.ts:32-36`. Shared package must stay types-only since apps/server imports it. Storage runtime relocated to `apps/client/src/persistence/storage.ts` (Option 1 ratified); `packages/shared/src/save/index.ts` reverts to pure types-only re-exports; `packages/shared/src/save/storage.ts` deleted. Post-fix `git grep "localStorage\|window.\|globalThis." packages/shared/` returns exactly one hit — a comment line inside `shared/save/index.ts` describing the new layering invariant — zero runtime hits. |
+| **E** quiescent-save granularity | PASS — saves fire only at arranging-entry + terminal (useEffect deps `[simRun, state.state.round, state.state.outcome]`); no design-level loss surface. Purchases are atomic in `drop_bag` (debit gold + append bag + null shop slot all in one reducer arm); `state.drag` is a transient UI ghost with no shop/gold mutation. Round-boundary granularity loses at most one round's purchases on crash mid-shopping — the clean tradeoff. |
+| **F** test concurrency config | REPORTED (no change) — `turbo.json` has no `concurrency` setting (defaults to N=cores); `vite.config.ts` files have no `testTimeout` / `pool` overrides; per-package `test` script is bare `vitest run`. The 5b.3a triple-green pipeline pass required `--concurrency=1` to avoid a V8 zone OOM under stacked happy-dom + vitest concurrency. Logged as CI-watch — if CI exhibits the same OOM post-push, a follow-up CF tracks pinning concurrency in turbo.json or vitest's pool config. |
+
+### Catch 19 (NEW)
+
+**Catch 19 (C2 — types-only-package-runtime-leak).** `packages/shared/src/save/storage.ts` (Commit `f08b339`) introduced runtime `globalThis.localStorage` access into the types-only cross-boundary shared package (Node server imports it). SSR-defensive but architecturally wrong. Caught at master-dev pre-push layering gate (Rule 8 inspection), not Codex. Fix: storage runtime moved to `apps/client/src/persistence/storage.ts`; `shared/save` reverted to types-only. **Antidote candidate (held):** lint / dependency-cruiser guard forbidding platform-global access in `packages/shared` — second-instance trigger.
+
+Catch counter: 18 → 19 at 5b.3a pre-push.
+
+### CF dispositions
+
+- **CF 34** (gold/rerollCount/bag/shop authority migration to sim) — carried forward; explicitly deferred per Phase 1 B2′ ratification (persistence-time reconciliation; live-mutation authority stays client-parallel). Revisit at 5b.3b or beyond.
+- **CF 35** (onTelemetryEvent wiring) — unchanged; still stubbed.
+- **CF 43** (Tinker recipeBornPlacementIds threading) — unchanged; decoupled from 5b.3a's persistence path per Phase 1 (Set\<PlacementId\> doesn't round-trip JSON; restoreRun yields empty Set matching fresh-controller shape).
+- **CF 45 (NEW, latent)** — Client placement-id minting uses `b${Date.now()+Math.random()}` (useRun.ts:56-58), non-deterministic state flowing into CombatInput.bag → replay ItemRefs. M1-safe: persisted verbatim across save/load; no cross-client replay until M2 /v1/replay/validate. Revisit M2. Not a 5b.3a defect.
+
+### Branch state at pre-push
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437` (post-M1.5b PR 2 merge baseline). 7 atomic branch commits + this docs commit + (next) closing/counter entry at merge.
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `4200be6` | Commit 1 — SCHEMA | Authored `SerializedRunState extends RunState { rngState; rerollCount; trophy }` in content-schemas.ts § 13 + byte-synced packages/content/src/schemas.ts; amended tech-arch § 7.1 (phantom SerializedRunState → real type; path comment fixed); re-exported through @packbreaker/shared. |
+| `5336d19` | Commit 2 — SIM API | `getRngState(): number` method on RunController + `restoreRun(serialized, options?): RunController` factory + `RestoreRunOptions` type. Optional `restoreFrom` parameter on RunControllerImpl constructor branches the init flow (no run_start telemetry on restore; rng restored via `createRng(restoreFrom.rngState as SimSeed)`; relics recomposed against all 3 slots; sim's bag stays empty per Q2 Amendment A live invariant). Rule 7 barrel sweep both sub-barrel + root barrel. |
+| `54c2a15` | Commit 3 — STARTEDAT FIX | `new Date().toISOString() as IsoTimestamp` injected at the createRun call site in useRun.ts; sim's `'2025-01-01T00:00:00.000Z'` sentinel default no longer reached in production. |
+| `f08b339` | Commit 4 — SAVE/LOAD primitives | Shared-package `storage.ts` with save/loadRaw/clearSave + SaveStorageAdapter; `pba.v1.save` localStorage key; SSR-defensive (silent no-op when globalThis.localStorage undefined). Migration scaffold at apps/client/src/persistence/migrations/ (v1 identity stub + dispatcher). Client composer (saveLocal/loadLocal/clearLocal) wraps shared primitives + migration. ⚠ This commit introduced Catch 19's layering bug — remediated in d4fd27c. |
+| `9e265b8` | Commit 5 — WIRING | useRun load-on-mount useEffect (dynamic-import restoreRun if v1 in-progress save present); save-on-quiescent useEffect (deps narrowed to `[simRun, round, outcome]`); clearLocal in resetRun; new `restore_from_save` reducer arm (snapshot.bag → BagItem[] inverse impedance, snapshot.shop → ShopSlot[] mirror of init_from_sim shape, rerollCount + trophy lifted). Test setup adds `localStorage.clear()` in afterEach. |
+| `5175662` | Commit 6 — TESTS | Round-trip + post-load-combat coverage at `packages/sim/test/restoreRun.test.ts` (+12 sim tests). Save/loadLocal round-trip + migration dispatcher + corruption tolerance at `apps/client/src/persistence/persistence.test.ts` (+15 client tests). restore_from_save reducer arm at `apps/client/src/run/RunController.test.ts` (+4 client tests). Quiescent-save timing integration at `apps/client/src/run/RunContext.test.tsx` (+1 client test). |
+| `d4fd27c` | Catch 19 — LAYERING FIX | Storage runtime relocated `packages/shared/src/save/storage.ts` → `apps/client/src/persistence/storage.ts`. shared/save/index.ts reverted to types-only re-export. SaveStorageAdapter type moved with the runtime (no server consumer). Importers rewired (persistence/index.ts + persistence.test.ts). Migration index.ts comment updated. Zero runtime localStorage/window/globalThis in packages/shared post-fix. |
+| this entry | Item G docs | docs(decision-log): 5b.3a pre-push gate clearance + CF 45 + Catch 19. |
+
+### Closing / counter entry
+
+Defers to merge per the project closing-log convention (pattern + counter updates land at PR close, not at intermediate push). Catch 19 is recorded inline above; CF 45 opens; CF 34 carries; counters update at merge.
+
+---
+
 ## 2026-05-19 — M1.5b PR 2 closed (RunEndScreen + reset_run + CF 21 summary-side close)
 
 ### Branch + commit topology
