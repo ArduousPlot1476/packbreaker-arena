@@ -27,6 +27,7 @@ import {
   type RunId,
   type RunOutcome,
   type RunState as SimRunState,
+  type SerializedRunState,
 } from '@packbreaker/content';
 
 import { generateInitialShop, generateShop } from '../shop/ShopController';
@@ -138,7 +139,8 @@ export type RunAction =
     }
   | { type: 'init_from_sim'; snapshot: SimRunState }
   | { type: 'sync_from_sim'; snapshot: SimRunState }
-  | { type: 'reset_run' };
+  | { type: 'reset_run' }
+  | { type: 'restore_from_save'; snapshot: SerializedRunState };
 
 /** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
  *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
@@ -454,6 +456,47 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
 
     case 'reset_run':
       return INITIAL_CLIENT_STATE;
+
+    case 'restore_from_save': {
+      // M1.5b PR 3 / 5b.3a Commit 5: rehydrate ClientRunState from a
+      // SerializedRunState (loaded via apps/client/src/persistence). The
+      // snapshot's sim-authoritative slice (RunState fields) flows through
+      // applySimSnapshot exactly like init_from_sim; the SerializedRunState-
+      // only fields (rerollCount, trophy) are written on top of state.
+      //
+      // Top-level bag is restored by converting BagState.placements (sim
+      // shape: placementId/itemId/anchor/rotation) back to BagItem[] (client
+      // shape: uid/itemId/col/row/rot). The save composer (useRun) uses
+      // clientBagToSimBag at save time; this is the inverse impedance
+      // bridge — uid is brand-cast to/from PlacementId per sim-bridge.ts
+      // convention.
+      //
+      // Top-level shop bootstraps from snapshot.shop.slots (mirrors
+      // init_from_sim's shop arm). At save time the quiescent invariant
+      // (arranging-entry only) guarantees purchased=[] and
+      // rerollsThisRound=0, so no purchased-null masking is needed.
+      const s = action.snapshot;
+      const base = applySimSnapshot(state, s, /* includeGold */ true);
+      return {
+        ...base,
+        bag: s.bag.placements.map((p) => ({
+          uid: String(p.placementId),
+          itemId: p.itemId as ItemId,
+          col: p.anchor.col,
+          row: p.anchor.row,
+          rot: p.rotation,
+        })),
+        shop: s.shop.slots.map((itemId, i) => ({
+          uid: `s${s.currentRound}-${s.shop.rerollsThisRound}-${i}`,
+          itemId: itemId as ItemId,
+        })),
+        state: {
+          ...base.state,
+          rerollCount: s.rerollCount,
+          trophy: s.trophy,
+        },
+      };
+    }
 
     default: {
       const _exhaustive: never = action;
