@@ -719,6 +719,50 @@ export interface GhostBuild {
 // § 13 — LOCAL SAVE  (packages/shared)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Sim's RunState (§ 10) is rehydration-incomplete: the RunController carries
+ *  internal-only mutable state outside getState() (notably the run's Rng cursor
+ *  state, plus pendingItems / bornFromRecipe / nextPlacementCounter /
+ *  lastCombatResult — see packages/sim/src/run/state.ts § "Internal-only run
+ *  state"). SerializedRunState extends RunState with the minimal additional
+ *  fields needed to rebuild a live RunController under M1.5b PR 3 / 5b.3a's
+ *  quiescent-save invariant (save fires at arranging-entry + terminal only).
+ *
+ *  Fields added on top of RunState:
+ *    - rngState: the Mulberry32 #state at save time. Captured via
+ *      RunController.getRngState() (surface added 5b.3a). Forward-compat
+ *      insurance — in the current client/sim split, combat seed is
+ *      `state.seed` (constant; see CombatOverlay.buildCombatInput) and shop
+ *      generation is client-driven from `state.seed` + `state.round`, so
+ *      rngState is not load-bearing for production deterministic replay.
+ *      It IS load-bearing for sim's internal `runCombatInternal` path
+ *      (tests / replay fixtures), and capturing it now avoids a future
+ *      migration if CF 34 closes and shop/combat seeding moves sim-side.
+ *
+ *    - rerollCount, trophy: client-owned fields per the M1.5a PR 2 Q2
+ *      Amendment A authority split — not in RunState because sim doesn't
+ *      see them. Persistence-time field-sourcing table (M1.5b PR 3 Phase 1
+ *      ratification) hoists them onto SerializedRunState so the entire
+ *      inProgressRun payload is one type.
+ *
+ *  Fields explicitly NOT extended (Phase 1 quiescent-save invariant):
+ *    - phase: implicit from outcome — `'arranging'` at save time per the
+ *      arranging-entry firing rule; `'ended'` iff outcome !== 'in_progress'.
+ *    - pendingItems: empty at arranging-entry (post-combat shop regen happens
+ *      after all pendingItems have been placed; if a player has un-placed
+ *      pendingItems, save fires next arranging-entry cycle).
+ *    - nextPlacementCounter: re-derived to 0 on restoreRun() — sim's bag is
+ *      empty in M1.5a (client owns bag per Q2 Amendment A); sim's placeItem
+ *      is never called by client code.
+ *    - bornFromRecipe (Set<PlacementId>): CF 43 decoupled per Phase 1 — Sets
+ *      are not JSON-roundtrippable, and CF 43's eventual client mirror is a
+ *      separate PR. Recipe-bonus tracking lives sim-internal; restore yields
+ *      an empty Set, which matches the freshly-constructed controller shape. */
+export interface SerializedRunState extends RunState {
+  readonly rngState: number
+  readonly rerollCount: number
+  readonly trophy: number
+}
+
 /** Versioned. Migrations live in apps/client/src/persistence/migrations/. */
 export interface LocalSaveV1 {
   readonly schemaVersion: 1
@@ -727,7 +771,7 @@ export interface LocalSaveV1 {
   readonly lastDailyAttempted: IsoDate | null
   readonly tutorialCompleted: boolean
   readonly telemetryAnonId: string // uuid v4, generated on first run
-  readonly inProgressRun: RunState | null
+  readonly inProgressRun: SerializedRunState | null
 }
 
 export type LocalSave = LocalSaveV1

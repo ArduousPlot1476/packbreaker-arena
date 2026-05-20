@@ -245,20 +245,31 @@ All request/response types in `packages/shared/src/api/`. Server validates with 
 ## 7. Persistence
 
 ### 7.1 Local save format (M1)
+
+Canonical types declared in `packages/content/src/schemas.ts` § 13 (byte-synced with the repo-root `content-schemas.ts`); re-exported through `packages/shared/src/save/index.ts` so client/server code imports them from `@packbreaker/shared`.
+
 ```ts
-// packages/shared/src/save.ts
-interface LocalSaveV1 {
-  schemaVersion: 1
-  trophies: number
-  dailyStreak: number
-  lastDailyAttempted: string         // ISO date
-  tutorialCompleted: boolean
-  telemetryAnonId: string             // uuid v4, generated on first run
-  inProgressRun?: SerializedRunState  // crash-recovery resume
+// packages/content/src/schemas.ts § 13 (re-exported via @packbreaker/shared)
+interface SerializedRunState extends RunState {
+  readonly rngState: number      // Mulberry32 #state at save time
+  readonly rerollCount: number   // client-owned (Q2 Amendment A)
+  readonly trophy: number        // client-owned (+18 per win; M2 schedule defers)
 }
+
+interface LocalSaveV1 {
+  readonly schemaVersion: 1
+  readonly trophies: number
+  readonly dailyStreak: number
+  readonly lastDailyAttempted: IsoDate | null
+  readonly tutorialCompleted: boolean
+  readonly telemetryAnonId: string                // uuid v4, generated on first run
+  readonly inProgressRun: SerializedRunState | null  // crash-recovery resume
+}
+
+type LocalSave = LocalSaveV1
 ```
 
-Versioned from day one. Migrations live in `apps/client/src/persistence/migrations/`.
+Versioned from day one. Migrations live in `apps/client/src/persistence/migrations/`. M1.5b PR 3 / 5b.3a authored `SerializedRunState` after Step 0 surfaced that the pre-existing tech-arch reference to `SerializedRunState` was a phantom type (never authored) and that sim's `RunState` (§ 10) is rehydration-incomplete — the run controller carries internal-only mutable state (Rng cursor + 5 others) outside `getState()`. The quiescent-save invariant (fire only at arranging-entry + terminal outcome) keeps the rehydration surface minimal: `phase`, `pendingItems`, `bornFromRecipe`, and `nextPlacementCounter` are implicit / re-derivable / decoupled per Phase 1 ratification; only `rngState` + the two client-owned fields land on the wire.
 
 ### 7.2 Server save format (M2)
 Server stores authoritative trophy and daily streak; client save becomes a cache. Conflict resolution: server wins, client toasts "synced."
