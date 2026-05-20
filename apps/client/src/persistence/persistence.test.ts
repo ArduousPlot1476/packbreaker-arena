@@ -7,17 +7,17 @@
 //   - loadLocal corruption tolerance: returns null on malformed JSON,
 //     unknown schemaVersion, non-object payload
 //
-// Shared-package storage primitives (save/loadRaw/clearSave) are
-// exercised transitively through the client wrappers (saveLocal/
-// loadLocal/clearLocal).
+// Client-tier storage primitives (./storage save/loadRaw/clearSave)
+// are exercised transitively through the client composer wrappers
+// (saveLocal / loadLocal / clearLocal).
 
 import { describe, expect, it } from 'vitest';
 import type {
   LocalSaveV1,
-  SaveStorageAdapter,
   SerializedRunState,
 } from '@packbreaker/shared';
-import { SAVE_STORAGE_KEY } from '@packbreaker/shared';
+import type { SaveStorageAdapter } from './storage';
+import { SAVE_STORAGE_KEY } from './storage';
 import type {
   ClassId,
   ContractId,

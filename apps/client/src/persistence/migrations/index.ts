@@ -1,6 +1,6 @@
 // Migration chain dispatcher. Routes a parsed-but-unmigrated payload
-// (from packages/shared/src/save/storage.ts loadRaw()) to the current
-// LocalSaveV1 shape based on the payload's schemaVersion field.
+// (from apps/client/src/persistence/storage.ts loadRaw()) to the
+// current LocalSaveV1 shape based on the payload's schemaVersion field.
 //
 // 5b.3a ships v1 only — dispatcher routes to the identity migration.
 // Future schema bumps add migration functions in vN.ts files and update

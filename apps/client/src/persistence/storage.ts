@@ -2,20 +2,24 @@
 // Namespaced under `pba.v1.save` per tech-architecture.md § 6.1
 // ("Local saves use localStorage, namespaced under `pba.v1.*`").
 //
+// Layering: these primitives live client-side because the apps/server
+// package imports @packbreaker/shared (types crossing the client/server
+// boundary); shared must stay types-only. Pre-Catch-19 these primitives
+// lived in packages/shared/src/save/storage.ts; they were relocated here
+// in the 5b.3a pre-push gate-clearance pass after the master-dev layering
+// audit caught the runtime globalThis.localStorage access.
+//
 // The primitives are deliberately dumb: save() serializes a typed
 // LocalSaveV1, loadRaw() returns the parsed-but-unmigrated payload as
 // `unknown`, clearSave() deletes the key. Version validation + migration
-// chain dispatch lives one tier up at apps/client/src/persistence/
-// migrations/ — the shared layer doesn't import client code, and future
-// LocalSaveV2 bumps need access to client-only state shape during
-// migration.
+// chain dispatch lives at apps/client/src/persistence/migrations/.
 //
 // SSR / non-browser environments (where globalThis.localStorage is
 // undefined) silently no-op on save/clearSave and return null on
-// loadRaw. The client persistence layer treats null-from-loadRaw the
+// loadRaw. The client persistence composer treats null-from-loadRaw the
 // same as "no save present" — fresh-run path.
 
-import type { LocalSaveV1 } from '@packbreaker/content';
+import type { LocalSaveV1 } from '@packbreaker/shared';
 
 export const SAVE_STORAGE_KEY = 'pba.v1.save';
 

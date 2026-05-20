@@ -1,14 +1,15 @@
-// @packbreaker/shared/save — local persistence schema + storage primitives.
+// @packbreaker/shared/save — local persistence schema (types-only).
 //
-// Canonical type definitions live in @packbreaker/content (schemas.ts § 13).
-// Re-exported here so client/server code can keep importing them from
+// Canonical definition lives in @packbreaker/content (schemas.ts § 13).
+// Re-exported here so client/server code can keep importing it from
 // @packbreaker/shared per the original API surface.
 //
-// M1.5b PR 3 / 5b.3a Commit 4 added storage primitives in storage.ts.
-// Migration chain for future schemaVersion bumps lives in
-// apps/client/src/persistence/migrations/ (client-side because migrations
-// may need access to client-only state shape during upgrade).
+// Layering: the apps/server package imports @packbreaker/shared for
+// types crossing the client/server boundary, so this module must stay
+// types-only — no runtime, no platform-global access (window /
+// localStorage / globalThis). The M1 LocalSave runtime primitives
+// (save / loadRaw / clearSave + SaveStorageAdapter) live in the client
+// tier at apps/client/src/persistence/storage.ts (relocated during the
+// 5b.3a pre-push gate-clearance pass per Catch 19 / Option 1).
 
 export type { LocalSaveV1, LocalSave, SerializedRunState } from '@packbreaker/content';
-export type { SaveStorageAdapter } from './storage';
-export { save, loadRaw, clearSave, SAVE_STORAGE_KEY } from './storage';
