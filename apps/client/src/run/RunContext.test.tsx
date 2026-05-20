@@ -1513,3 +1513,152 @@ function RaceProbe({ testId }: { testId: string }) {
     </div>
   );
 }
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5h (Catch 22 / Class A) — end-to-end
+// corrupt-payload mount fallback.
+//
+// Pre-remediation, a {schemaVersion: 1, ...garbage} payload passed
+// the migrate dispatcher's version check and threw inside restoreRun
+// or downstream constructors. The throw lived in a Promise callback
+// (useRun's dynamic-import .then), so it surfaced as a console
+// unhandled-rejection — simRun stayed null and the fresh-run UI
+// mounted via the ClassSelectScreen mock, but with a dirtied console
+// that CI could have flagged as a regression.
+//
+// Post-fix: the load-boundary shape validator rejects the corrupt
+// payload at loadLocal time; useRun's load effect bails on
+// saved === null without ever calling restoreRun. End-to-end:
+// fresh Tinker run mounts, no throws.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — corrupt-payload mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5h)', () => {
+  it('mount with {schemaVersion: 1, inProgressRun missing relics} → fresh Tinker run, no throws', async () => {
+    // Corrupt-but-v1 payload: outcome is in_progress (so the load
+    // effect would attempt restore) but relics is omitted — the
+    // pre-fix path threw at restoreRun's `serialized.relics.starter`
+    // deref. The validator now rejects at loadLocal time.
+    const corrupt = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'corrupt-test',
+        seed: 12345,
+        classId: 'marauder',
+        contractId: 'neutral',
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z',
+        hearts: 3,
+        gold: 14,
+        currentRound: 4,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        // relics intentionally omitted — pre-fix throw vector A3/A6
+        shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress',
+        rngState: 0x42424242,
+        rerollCount: 0,
+        trophy: 36,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(corrupt));
+
+    // Spy on console.error / console.warn to assert no unhandled
+    // rejections or restoreRun warnings (validator should have caught
+    // the corruption upstream of the try/catch, so the warn never fires).
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const { queryByTestId, getByTestId } = render(
+        <RunProvider>
+          <RaceProbe testId="rp" />
+        </RunProvider>,
+      );
+
+      await waitFor(() => {
+        expect(queryByTestId('rp')).toBeInTheDocument();
+      });
+      await new Promise<void>((r) => setTimeout(r, 10));
+
+      // Fresh Tinker run (auto-fired by the ClassSelectScreen mock).
+      expect(getByTestId('rp-classid').textContent).toBe('tinker');
+      expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+      expect(getByTestId('rp-round').textContent).toBe('1');
+      // No restore attempts surfaced through the try/catch — validator
+      // rejected at loadLocal time, the load-effect bailed pre-import.
+      expect(errorSpy).not.toHaveBeenCalled();
+      const restoreWarns = warnSpy.mock.calls.filter(
+        (call) => typeof call[0] === 'string' && call[0].startsWith('[useRun] restoreRun'),
+      );
+      expect(restoreWarns.length).toBe(0);
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('mount with shop.slots containing null (post-purchase terminal save) → fresh run, validator rejects', async () => {
+    // The terminal-save edge case from Step 0 #1: if a player buys
+    // from shop in the final round before run-end, state.shop has
+    // null slots; combat_done leaves state.shop unchanged on runEnded
+    // so the terminal save persists those nulls. clientShopToSimShop's
+    // cast preserves them as null in JSON; the validator on next load
+    // rejects (isStr fails for null slot). Fresh-run fallback.
+    const partialPurchase = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'null-slot-test',
+        seed: 12345,
+        classId: 'marauder',
+        contractId: 'neutral',
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z',
+        hearts: 3,
+        gold: 14,
+        currentRound: 4,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        relics: { starter: 'iron-will', mid: null, boss: null },
+        shop: { slots: ['iron-mace', null, 'iron-mace'], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress',
+        rngState: 0x42424242,
+        rerollCount: 0,
+        trophy: 36,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(partialPurchase));
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { queryByTestId, getByTestId } = render(
+        <RunProvider>
+          <RaceProbe testId="rp" />
+        </RunProvider>,
+      );
+      await waitFor(() => {
+        expect(queryByTestId('rp')).toBeInTheDocument();
+      });
+      await new Promise<void>((r) => setTimeout(r, 10));
+
+      expect(getByTestId('rp-classid').textContent).toBe('tinker');
+      expect(getByTestId('rp-round').textContent).toBe('1');
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});

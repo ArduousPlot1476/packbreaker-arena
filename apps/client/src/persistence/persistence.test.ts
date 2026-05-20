@@ -187,6 +187,185 @@ describe('persistence — loadLocal corruption tolerance', () => {
   });
 });
 
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5h (Catch 22 / Class A) — load-boundary
+// shape validator.
+//
+// Pre-remediation, the migrate dispatcher routed by schemaVersion=1
+// alone and cast the payload to LocalSaveV1 with no structural
+// validation. {schemaVersion: 1, ...garbage} would pass and throw
+// downstream at restoreRun's relics.starter deref, the constructor's
+// history.slice(), or the reducer arm's bag.placements.map(...).
+//
+// Post-fix: validateLocalSaveV1 rejects any structural mismatch. The
+// load+restore path cannot throw on a validator-passing payload.
+// ────────────────────────────────────────────────────────────────────
+
+describe('persistence — load-boundary shape validator (Phase 2.5h)', () => {
+  it('rejects {schemaVersion: 1} with no inProgressRun field — undefined inProgressRun is NOT null', () => {
+    // The pre-fix useRun guard checked `=== null` which doesn't catch
+    // undefined. The validator now requires inProgressRun to be
+    // present (null OR an object); undefined fails the SerializedRunState
+    // typeof check and propagates to validator rejection.
+    const adapter = makeAdapter({
+      [SAVE_STORAGE_KEY]: JSON.stringify({ schemaVersion: 1 }),
+    });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has undefined relics', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, relics: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has null relics.starter', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: null, mid: null, boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has undefined history', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, history: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has undefined bag', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, bag: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has bag.placements not-array', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        bag: { dimensions: { width: 6, height: 4 }, placements: 'not-an-array' },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with a bag.placements element missing anchor', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        bag: {
+          dimensions: { width: 6, height: 4 },
+          placements: [{ placementId: 'p-0', itemId: 'iron-mace', rotation: 0 }],
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has undefined shop', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, shop: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has shop.slots not-array', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        shop: { slots: 'bogus', purchased: [], rerollsThisRound: 0 },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has shop.slots containing null', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        shop: { slots: [null], purchased: [], rerollsThisRound: 0 },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has invalid outcome string', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, outcome: 'bogus-outcome' },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has non-numeric hearts', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, hearts: 'three' as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload whose inProgressRun has NaN rngState (non-finite)', () => {
+    // JSON.stringify(NaN) === 'null', so this round-trips as null and is
+    // rejected by the numeric check.
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, rngState: NaN },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts a fully-valid payload (validator does not over-reject)', () => {
+    const adapter = makeAdapter();
+    saveLocal(makeSave(), adapter);
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+
+  it('accepts inProgressRun: null (explicit no-active-run sentinel)', () => {
+    const adapter = makeAdapter();
+    saveLocal(makeSave({ inProgressRun: null }), adapter);
+    expect(loadLocal(adapter)?.inProgressRun).toBeNull();
+  });
+});
+
 describe('persistence — migration dispatcher', () => {
   it('migrate(v1 payload) returns the payload unchanged (identity)', () => {
     const v1 = makeSave({ telemetryAnonId: 'uuid-test' });

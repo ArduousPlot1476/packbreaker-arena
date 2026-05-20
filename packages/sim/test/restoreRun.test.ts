@@ -171,12 +171,36 @@ describe('restoreRun — fidelity round-trip', () => {
 });
 
 describe('restoreRun — RNG cursor restore', () => {
+  it('post-restore rng cursor === saved cursor (terminal-seed invariant)', () => {
+    // Phase 2.5h (Catch 23 / Class B) cursor-preservation invariant:
+    // createRng(restoreFrom.rngState) is the TERMINAL RNG-relevant op
+    // in the restore branch (makeShop was removed). Therefore
+    // restored.getRngState() must equal snapshot.rngState verbatim —
+    // no consumption between seed and observation.
+    //
+    // Pre-remediation this test asserted only that two restores produce
+    // identical cursors (drift-equals-drift), which masked the
+    // makeShop-induced cursor advancement. The corrected assertion
+    // catches any future regression of the terminal-seed invariant.
+    const original = createRun({
+      seed: 99999 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const snapshot = captureSerialized(original);
+
+    const restored = restoreRun(snapshot);
+
+    expect(restored.getRngState()).toBe(snapshot.rngState);
+  });
+
   it('restoreRun is deterministic given the same snapshot — two restores produce identical rng state', () => {
-    // restoreRun's constructor runs makeShop(currentRound) after seeding the
-    // rng to snapshot.rngState, so the post-construct rng has advanced past
-    // the saved position by makeShop's consumption. The key determinism
-    // invariant: this advancement is REPEATABLE — two restoreRun calls on
-    // the same snapshot produce controllers with identical rng cursors.
+    // Companion determinism invariant — kept as a regression sentinel.
+    // Under the verbatim-restore + terminal-seed fix this is trivially
+    // true (both equal snapshot.rngState); under any future drift
+    // regression it would catch a non-deterministic divergence between
+    // two restores.
     const original = createRun({
       seed: 99999 as SimSeed,
       classId: TINKER,
@@ -194,6 +218,8 @@ describe('restoreRun — RNG cursor restore', () => {
   it('snapshot.rngState round-trips through JSON.stringify/parse without loss', () => {
     // Persistence path round-trip: SerializedRunState → JSON → parsed → use
     // as restoreRun input. rngState is a plain integer; JSON preserves it.
+    // Post-Phase-2.5h: the JSON-roundtripped restore also satisfies the
+    // terminal-seed invariant.
     const original = createRun({
       seed: 11111 as SimSeed,
       classId: TINKER,
@@ -204,9 +230,8 @@ describe('restoreRun — RNG cursor restore', () => {
     const jsonRoundTripped = JSON.parse(JSON.stringify(snapshot)) as SerializedRunState;
     expect(jsonRoundTripped.rngState).toBe(snapshot.rngState);
 
-    const restoredOriginal = restoreRun(snapshot);
     const restoredFromJson = restoreRun(jsonRoundTripped);
-    expect(restoredFromJson.getRngState()).toBe(restoredOriginal.getRngState());
+    expect(restoredFromJson.getRngState()).toBe(snapshot.rngState);
   });
 
   it('restoreRun produces a controller distinct from the original (separate Rng instances)', () => {
@@ -219,6 +244,52 @@ describe('restoreRun — RNG cursor restore', () => {
     const snapshot = captureSerialized(original);
     const restored = restoreRun(snapshot);
     expect(restored).not.toBe(original);
+  });
+});
+
+describe('restoreRun — shop verbatim restore (Phase 2.5h / Catch 23)', () => {
+  it('restored shop slots match the snapshot verbatim (no regeneration)', () => {
+    // Phase 2.5h shop-verbatim invariant: the restore branch no longer
+    // calls makeShop. Sim's this.shop is restored byte-equal to
+    // restoreFrom.shop. Combined with the save-side
+    // clientShopToSimShop sourcing in useRun, this is what makes
+    // save→load→save byte-stable.
+    const original = createRun({
+      seed: 31415 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const snapshot = captureSerialized(original);
+
+    const restored = restoreRun(snapshot);
+    const restoredShop = restored.getState().shop;
+
+    expect(restoredShop.slots).toEqual(snapshot.shop.slots);
+    expect(restoredShop.purchased).toEqual(snapshot.shop.purchased);
+    expect(restoredShop.rerollsThisRound).toBe(snapshot.shop.rerollsThisRound);
+  });
+
+  it('save→load→save under zero player action is idempotent — rngState + shop stable', () => {
+    // C-F1 / C-F2 idempotence falls out from verbatim-restore +
+    // terminal-seed + save-side client-shop sourcing. Hand-roll a
+    // snapshot, restore, capture again, and assert byte-equality on
+    // the cursor + shop fields.
+    const original = createRun({
+      seed: 27182 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const snap1 = captureSerialized(original);
+
+    const restored = restoreRun(snap1);
+    const snap2 = captureSerialized(restored);
+
+    expect(snap2.rngState).toBe(snap1.rngState);
+    expect(snap2.shop.slots).toEqual(snap1.shop.slots);
+    expect(snap2.shop.purchased).toEqual(snap1.shop.purchased);
+    expect(snap2.shop.rerollsThisRound).toBe(snap1.shop.rerollsThisRound);
   });
 });
 
