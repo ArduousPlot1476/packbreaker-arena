@@ -137,7 +137,8 @@ export type RunAction =
       goldDelta: number;
     }
   | { type: 'init_from_sim'; snapshot: SimRunState }
-  | { type: 'sync_from_sim'; snapshot: SimRunState };
+  | { type: 'sync_from_sim'; snapshot: SimRunState }
+  | { type: 'reset_run' };
 
 /** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
  *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
@@ -450,6 +451,9 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
 
     case 'sync_from_sim':
       return applySimSnapshot(state, action.snapshot, /* includeGold */ false);
+
+    case 'reset_run':
+      return INITIAL_CLIENT_STATE;
 
     default: {
       const _exhaustive: never = action;

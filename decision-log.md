@@ -95,6 +95,36 @@ Fresh master-dev chat at 5b.3 open. Handoff includes counter snapshot + CF dispo
 
 ---
 
+## 2026-05-19 — M1.5b PR 2 Claude Design pass ratified
+
+HTML design board satisfies 10/10 DoD + 8/8 ratified field coverage.
+WCAG AA verified on three outcome accents (gold #f5b942 ~10.4:1,
+crimson #e85c5c ~5.0:1, slate #8a9bb0 ~6.7:1 against #1a1a1a).
+Semantic separability without color confirmed via glyph + weight +
+italic + copy differentiation. Shape/fill breadcrumb differentiation
+(W tint+solid / L hatched+solid / untouched dashed+dot).
+
+Q(d) final disposition — single responsive component with .mobile
+modifier class via useViewport(). Diverges from ClassSelectScreen
+separate-component pattern; justified by structurally identical
+content across viewports.
+
+Six Phase 2 clarifications: (1) relic tier labels drop round suffix
+for graybox; (2) sub-copy derived from (outcome, round); (3)
+toLocaleString() for gold + trophy; (4) annotation layer is design-
+board only, not production; (5) heart pip rendering matches in-run
+HUD convention (Step 0 verify); (6) mobile text-overflow:ellipsis +
+real-string integration test fixtures.
+
+Two held concerns (log only): gold-on-gold tension on VICTORY
+outcome+CTA (M2 polish revisits); mobile vertical stack height tight
+margin (real-string testing is validation gate).
+
+Master-dev drift counter unchanged. Catches counter unchanged (still
+17 at PR-2-open).
+
+---
+
 ## 2026-05-19 — M1.5b PR 2 Phase 1 ratified
 
 Halt-gate: F.3 Marauder ClassSelectFlow.test.tsx flake (latent in PR 1,

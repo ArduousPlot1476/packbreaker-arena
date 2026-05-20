@@ -12,6 +12,7 @@ import type {
   RelicId,
   RoundNumber,
   RunId,
+  RunOutcome,
   RunState as SimRunState,
   SimSeed,
 } from '@packbreaker/content';
@@ -19,6 +20,7 @@ import { DEFAULT_RULESET } from '@packbreaker/content';
 import {
   clientRunReducer,
   createInitialState,
+  INITIAL_CLIENT_STATE,
   type ClientRunState,
 } from './RunController';
 import type { BagItem, ItemId } from './types';
@@ -276,6 +278,37 @@ describe('clientRunReducer — applySimSnapshot CF 39 + Finding A regressions', 
     });
     expect(next.state.hearts).toBe(4);
     expect(next.state.maxHearts).toBe(4);
+  });
+
+  it('reset_run from a terminal won state returns INITIAL_CLIENT_STATE singleton', () => {
+    // Construct a "terminal" state: outcome flipped + history populated +
+    // hearts depleted (Marauder Iron Will victory shape with depleted hearts
+    // mid-boss). reset_run should discard ALL of this and return the module
+    // initial state. Reference equality with INITIAL_CLIENT_STATE proves the
+    // reducer returns the singleton (not a structurally-equivalent copy),
+    // which is what the resetRun hook callback relies on for two-axis reset
+    // semantics in Step 2.
+    const terminal: ClientRunState = {
+      ...freshInitial(),
+      state: {
+        ...freshInitial().state,
+        outcome: 'won' as RunOutcome,
+        round: 11 as RoundNumber,
+        hearts: 1,
+        history: [
+          { round: 11 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 0, goldEarnedThisRound: 4, opponentGhostId: null, opponentClassId: null },
+        ],
+      },
+    };
+    const next = clientRunReducer(terminal, { type: 'reset_run' });
+    expect(next).toBe(INITIAL_CLIENT_STATE);
+  });
+
+  it('reset_run is idempotent — reducer returns the same singleton across repeated dispatches', () => {
+    const after1 = clientRunReducer(freshInitial(), { type: 'reset_run' });
+    const after2 = clientRunReducer(after1, { type: 'reset_run' });
+    expect(after2).toBe(after1);
+    expect(after2).toBe(INITIAL_CLIENT_STATE);
   });
 
   it('F.2 Finding A: Marauder init_from_sim → className === "Marauder"', () => {
