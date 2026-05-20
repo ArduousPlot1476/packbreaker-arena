@@ -138,5 +138,5 @@ export function validateLocalSaveV1(parsed: unknown): LocalSaveV1 | null {
   const ip = parsed.inProgressRun;
   if (ip !== null && !isValidSerializedRunState(ip)) return null;
 
-  return parsed as LocalSaveV1;
+  return parsed as unknown as LocalSaveV1;
 }
