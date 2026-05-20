@@ -18,6 +18,21 @@
 // undefined) silently no-op on save/clearSave and return null on
 // loadRaw. The client persistence composer treats null-from-loadRaw the
 // same as "no save present" — fresh-run path.
+//
+// Throw-safety (Phase 2.5 P2 fix / Catch 21): every browser-storage
+// touchpoint is wrapped in try/catch with a null/no-op fallback. The
+// runtime conditions that produce throws include:
+//   - Safari private-browsing: accessing `globalThis.localStorage`
+//     itself throws SecurityError.
+//   - Opaque origins (sandboxed iframes, file:// in some browsers):
+//     property access throws SecurityError.
+//   - QuotaExceededError on setItem when storage is full.
+//   - User has disabled site data; getItem/setItem/removeItem all
+//     throw.
+// In all of these the persistence layer must not throw to its caller;
+// the load-on-mount and quiescent-save paths fall back to the fresh-run
+// path (no save loaded) and silent skip (no save written), preserving
+// the in-memory run state.
 
 import type { LocalSaveV1 } from '@packbreaker/shared';
 
@@ -35,21 +50,36 @@ export interface SaveStorageAdapter {
 
 function getDefaultStorage(): SaveStorageAdapter | null {
   if (typeof globalThis === 'undefined') return null;
-  const g = globalThis as { localStorage?: SaveStorageAdapter };
-  return g.localStorage ?? null;
+  // Property access on `globalThis.localStorage` itself can throw
+  // SecurityError in Safari private-browsing / opaque-origin / blocked-
+  // storage contexts. The typeof check above only guards against
+  // undefined globalThis. Wrap the property read.
+  try {
+    const g = globalThis as { localStorage?: SaveStorageAdapter };
+    return g.localStorage ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Serialize a LocalSaveV1 payload to JSON and write to local storage.
- *  No-op when no storage adapter is available (SSR, non-browser). */
+ *  No-op when no storage adapter is available (SSR, non-browser) OR
+ *  when setItem throws (QuotaExceededError, SecurityError, etc.). */
 export function save(payload: LocalSaveV1, storage?: SaveStorageAdapter): void {
   const adapter = storage ?? getDefaultStorage();
   if (!adapter) return;
-  adapter.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));
+  try {
+    adapter.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Storage write failed (quota exceeded, blocked storage, etc.).
+    // Persistence is best-effort; the in-memory run state is intact.
+  }
 }
 
 /** Read + JSON.parse the saved payload, returning the unmigrated shape
  *  as `unknown`. Returns null when:
  *    - no storage adapter is available,
+ *    - getItem throws (blocked storage, SecurityError, etc.),
  *    - the key is absent,
  *    - the stored value is not valid JSON.
  *
@@ -58,7 +88,13 @@ export function save(payload: LocalSaveV1, storage?: SaveStorageAdapter): void {
 export function loadRaw(storage?: SaveStorageAdapter): unknown {
   const adapter = storage ?? getDefaultStorage();
   if (!adapter) return null;
-  const raw = adapter.getItem(SAVE_STORAGE_KEY);
+  let raw: string | null;
+  try {
+    raw = adapter.getItem(SAVE_STORAGE_KEY);
+  } catch {
+    // Storage read failed; treat as "no save present" → fresh-run path.
+    return null;
+  }
   if (raw === null) return null;
   try {
     return JSON.parse(raw);
@@ -67,9 +103,15 @@ export function loadRaw(storage?: SaveStorageAdapter): unknown {
   }
 }
 
-/** Remove the persisted save. No-op when no storage adapter is available. */
+/** Remove the persisted save. No-op when no storage adapter is
+ *  available OR when removeItem throws. */
 export function clearSave(storage?: SaveStorageAdapter): void {
   const adapter = storage ?? getDefaultStorage();
   if (!adapter) return;
-  adapter.removeItem(SAVE_STORAGE_KEY);
+  try {
+    adapter.removeItem(SAVE_STORAGE_KEY);
+  } catch {
+    // Storage clear failed; the persistence layer should not propagate
+    // the throw to its caller (resetRun is fire-and-forget UI flow).
+  }
 }

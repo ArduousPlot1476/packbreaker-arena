@@ -215,3 +215,97 @@ describe('persistence — migration dispatcher', () => {
     expect(result).toBe(v1);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5 P2 (Catch 21) — throw-safe storage.
+//
+// Pre-fix: getDefaultStorage's property access on `globalThis.localStorage`
+// could throw SecurityError on Safari private-browsing / opaque-origin
+// / blocked-storage contexts, propagating up through loadLocal /
+// saveLocal / clearLocal and breaking the no-op fallback contract.
+// Similarly getItem/setItem/removeItem could throw at runtime
+// (QuotaExceededError, partitioned storage, etc.).
+//
+// Post-fix: every browser-storage touchpoint is wrapped in try/catch
+// with a null/no-op fallback. The mount path always survives.
+// ────────────────────────────────────────────────────────────────────
+
+function makeThrowingAdapter(throwOn: {
+  getItem?: boolean;
+  setItem?: boolean;
+  removeItem?: boolean;
+}): SaveStorageAdapter {
+  return {
+    getItem() {
+      if (throwOn.getItem) throw new Error('SecurityError: getItem blocked');
+      return null;
+    },
+    setItem() {
+      if (throwOn.setItem) throw new Error('QuotaExceededError: setItem failed');
+    },
+    removeItem() {
+      if (throwOn.removeItem) throw new Error('SecurityError: removeItem blocked');
+    },
+  };
+}
+
+describe('persistence — throw-safe storage adapter (Phase 2.5 P2)', () => {
+  it('loadLocal returns null without throwing when getItem throws', () => {
+    const adapter = makeThrowingAdapter({ getItem: true });
+    expect(() => loadLocal(adapter)).not.toThrow();
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('saveLocal is a silent no-op when setItem throws (e.g. QuotaExceededError)', () => {
+    const adapter = makeThrowingAdapter({ setItem: true });
+    expect(() => saveLocal(makeSave(), adapter)).not.toThrow();
+  });
+
+  it('clearLocal is a silent no-op when removeItem throws', () => {
+    const adapter = makeThrowingAdapter({ removeItem: true });
+    expect(() => clearLocal(adapter)).not.toThrow();
+  });
+
+  it('full mount path survives a throwing storage: save → load → clear all no-op without throwing', () => {
+    const adapter = makeThrowingAdapter({
+      getItem: true,
+      setItem: true,
+      removeItem: true,
+    });
+    expect(() => saveLocal(makeSave(), adapter)).not.toThrow();
+    expect(() => loadLocal(adapter)).not.toThrow();
+    expect(loadLocal(adapter)).toBeNull();
+    expect(() => clearLocal(adapter)).not.toThrow();
+  });
+});
+
+describe('persistence — throw-safe globalThis.localStorage access (Phase 2.5 P2)', () => {
+  it('loadLocal with default adapter returns null when globalThis.localStorage access throws', () => {
+    // Replace globalThis.localStorage with a getter that throws (Safari
+    // private-browsing emulation). The defensive try/catch around the
+    // property access in getDefaultStorage should return null without
+    // propagating the SecurityError.
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+    try {
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new Error('SecurityError: storage blocked');
+        },
+      });
+      expect(() => loadLocal()).not.toThrow();
+      expect(loadLocal()).toBeNull();
+      expect(() => saveLocal(makeSave())).not.toThrow();
+      expect(() => clearLocal()).not.toThrow();
+    } finally {
+      // Restore original localStorage descriptor for subsequent tests
+      // (afterEach calls localStorage.clear() — without restore the
+      // getter would throw at cleanup time).
+      if (original) {
+        Object.defineProperty(globalThis, 'localStorage', original);
+      } else {
+        delete (globalThis as { localStorage?: unknown }).localStorage;
+      }
+    }
+  });
+});
