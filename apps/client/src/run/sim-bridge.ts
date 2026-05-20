@@ -26,6 +26,7 @@ import type {
   PlacementId,
   RelicSlots,
   Ruleset,
+  ShopState,
   SimSeed,
 } from '@packbreaker/content';
 import type { Rng } from '@packbreaker/sim';
@@ -112,6 +113,38 @@ export function clientBagToSimBag(bag: BagItem[], dimensions: BagDimensions): Ba
     rotation: b.rot as 0 | 90 | 180 | 270,
   }));
   return { dimensions, placements };
+}
+
+/** Adapter: client ShopSlot[] → canonical ShopState. Companion to
+ *  clientBagToSimBag for the M1.5b PR 3 / 5b.3a Phase 2.5h save-side
+ *  client-shop-sourcing fix.
+ *
+ *  Arranging-entry quiescent invariant (Step 0 #1 confirmed): save
+ *  fires at arranging-entry transitions with client.shop slots all
+ *  non-null (combat_done regenerates a fresh shop on round advance;
+ *  initial mount uses generateInitialShop; restored mount reads
+ *  non-null slots guaranteed by the prior save). purchased stays empty
+ *  until the player buys this round; rerollsThisRound mirrors
+ *  state.rerollCount, which is reset to 0 in combat_done.
+ *
+ *  Terminal-outcome save fires from the same effect dep array
+ *  (state.state.outcome change) and may carry leftover null slots if
+ *  the player bought from shop in the terminal round — combat_done
+ *  leaves state.shop unchanged on runEnded. Those terminal saves are
+ *  load-filtered (useRun's load effect bails on outcome !== 'in_progress');
+ *  if they somehow round-trip, the validator (apps/client/src/
+ *  persistence/validate.ts) rejects null slots and the fresh-run path
+ *  fires. Cast is safe under the arranging-entry case; defended by
+ *  validator under the terminal-with-buys case. */
+export function clientShopToSimShop(
+  shop: ShopSlot[],
+  rerollsThisRound: number,
+): ShopState {
+  return {
+    slots: shop.map((s) => s.itemId as ItemId),
+    purchased: [],
+    rerollsThisRound,
+  };
 }
 
 /** Empty relic slots for M1.3.4a — the client renders a static

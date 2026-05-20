@@ -50,7 +50,12 @@ import {
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
-import { clientBagToSimBag, computeRerollCost, makeRunSeed } from './sim-bridge';
+import {
+  clientBagToSimBag,
+  clientShopToSimShop,
+  computeRerollCost,
+  makeRunSeed,
+} from './sim-bridge';
 import type { Recipe } from './types';
 import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
 import { clearLocal, loadLocal, saveLocal } from '../persistence';
@@ -453,9 +458,17 @@ export function useRun() {
   // rerolls/drags don't change round or outcome, so they don't trip
   // this effect — matching the quiescent invariant exactly.
   //
-  // Composition: snapshot.bag is REPLACED with the client's
-  // authoritative bag (sim's bag is empty in M1.5a per Q2 Amendment A;
-  // client owns bag) via clientBagToSimBag. rngState pulled from sim.
+  // Composition: snapshot.bag and snapshot.shop are REPLACED with the
+  // client's authoritative bag + shop (sim's bag is empty in M1.5a per
+  // Q2 Amendment A; sim's shop diverges from client's mid-round under
+  // the Amendment A authority split — rerolls aren't fully mirrored
+  // sim-side). Phase 2.5h (Catch 23 / Class B) restored shop to the
+  // client-sourced override list: pre-fix, save read sim's shop and
+  // restoreRun regenerated it via makeShop, producing a save→load→save
+  // cursor drift. Now: save reads client.shop verbatim, restoreRun
+  // restores verbatim, idempotent round-trip. rngState pulled from
+  // sim (post-advancePhase makeShop, which IS valid RNG consumption —
+  // advancePhase is a quiescent transition, not the restore branch).
   // rerollCount + trophy lifted from client state.state.
   //
   // Cross-session fields (trophies, dailyStreak, lastDailyAttempted,
@@ -467,12 +480,13 @@ export function useRun() {
     const serialized: SerializedRunState = {
       ...simSnap,
       // Client-authoritative overrides (per Phase 1 field-sourcing table
-      // under B2′). Sim's bag is empty; sim's gold/shop diverge mid-run.
-      // At save time (arranging-entry), client + sim shop have just been
-      // regenerated for the new round — they agree. gold and bag come
-      // straight from the client.
+      // under B2′; shop added at Phase 2.5h per the meta-audit
+      // remediation). At save time (arranging-entry) client.shop has
+      // non-null slots and rerollCount=0 per the quiescent invariant
+      // (Step 0 #1 confirmed); clientShopToSimShop maps directly.
       gold: state.state.gold,
       bag: clientBagToSimBag(state.bag, simSnap.ruleset.bagDimensions),
+      shop: clientShopToSimShop(state.shop, state.state.rerollCount),
       // SerializedRunState-only fields.
       rngState: simRun.getRngState(),
       rerollCount: state.state.rerollCount,
