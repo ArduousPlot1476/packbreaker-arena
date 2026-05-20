@@ -313,26 +313,39 @@ class RunControllerImpl implements RunController {
       // restore; subsequent buys/sells live client-side per Q2 Amendment A
       // and sim's gold drifts as usual. Sim's bag stays empty (client owns
       // bag per Q2 Amendment A); sim's placeItem is never called by client
-      // code in M1.5a/b. CF 34 closure would re-evaluate.
+      // code in M1.5a/b. CF 34 closure would re-evaluate (and amend B-F3 /
+      // E-F9 per Phase 2.5h meta-audit carry-forwards).
       this.gold = restoreFrom.gold;
       this.bag = {
         dimensions: this.effectiveRuleset.bagDimensions,
         placements: [],
       };
 
-      // Restore rng cursor to its saved position. SimSeed brand is just
-      // `number` at runtime; the cast satisfies createRng's signature
-      // without changing the bit pattern.
-      this.rng = createRng(restoreFrom.rngState as SimSeed);
+      // Restore shop VERBATIM from the serialized snapshot. Phase 2.5h
+      // (Catch 23 / Class B) fix: prior path regenerated shop via
+      // this.makeShop(currentRound) AFTER seeding rng, which (a) consumed
+      // rng post-seed and so violated the terminal-RNG-seed invariant
+      // (cursor drift by one makeShop worth of RNG consumption per
+      // save→load cycle) and (b) produced a sim-side shop that did not
+      // match serialized.shop. Verbatim restore makes the seeded rng
+      // cursor terminal in this branch and pins sim's shop to the
+      // client-authoritative shape persisted at save time (save-side
+      // sourcing fix in apps/client/src/run/useRun.ts persists client's
+      // shop into serialized.shop). Save→load→save is now byte-stable
+      // under zero player action (C-F1 / C-F2 idempotence falls out).
+      this.shop = {
+        slots: restoreFrom.shop.slots.slice(),
+        purchased: restoreFrom.shop.purchased.slice(),
+        rerollsThisRound: restoreFrom.shop.rerollsThisRound,
+      };
 
-      // Regenerate sim's shop deterministically from the restored seed +
-      // round + effective ruleset. Quiescent save fires at arranging-entry
-      // (post-combat shop regen), so the just-regenerated round-N shop
-      // matches what client's combat_done arm would have produced; we
-      // re-derive instead of trusting serialized.shop because sim's shop
-      // diverged from client's mid-round (rerolls aren't fully mirrored
-      // sim-side under the current authority split).
-      this.shop = this.makeShop(this.currentRound);
+      // Restore rng cursor to its saved position. TERMINAL: no rng
+      // consumption follows this line in the restore branch (verified at
+      // Phase 2.5h Step 0 #2; makeShop was the sole post-seed consumer
+      // and is removed above). SimSeed brand is just `number` at
+      // runtime; the cast satisfies createRng's signature without
+      // changing the bit pattern.
+      this.rng = createRng(restoreFrom.rngState as SimSeed);
 
       // No run_start / daily_contract_started / round_start telemetry on
       // restore — the run already started on the original session; restoring
@@ -1153,7 +1166,9 @@ export interface RestoreRunOptions {
  *
  *  Sim-side gold / bag / shop are restored as "match live invariant"
  *  per Phase 1 ratification — see constructor body for the per-field
- *  rationale. Client-owned authoritative gold / bag / shop / rerollCount
+ *  rationale. Shop is restored VERBATIM from serialized.shop (Phase
+ *  2.5h / Catch 23); the rngState seed is terminal in the restore
+ *  branch. Client-owned authoritative gold / bag / shop / rerollCount
  *  / trophy land back on ClientRunState through the save/load wrapper,
  *  NOT through this factory.
  *
