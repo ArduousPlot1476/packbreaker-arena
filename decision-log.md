@@ -4,6 +4,97 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-19 — M1.5b PR 2 closed (RunEndScreen + reset_run + CF 21 summary-side close)
+
+### Branch + commit topology
+
+Branch: `m1.5b-pr2-run-end-summary` off main `f9dc60e` (post-PR-2-scope docs commit + β hot-fix baseline e2d6c9f). 6 atomic branch commits + 1 docs-on-main commit (this entry) + 1 `--no-ff` merge commit.
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `8f81889` | Phase 1 docs ratification | docs(decision-log): M1.5b PR 2 Claude Design pass ratified. |
+| `6752cbb` | Step 1 — reducer arm | `reset_run` action variant + reducer case returning `createInitialState()`; 2 unit tests. |
+| `de826a2` | Step 2 — hook callback | `resetRun` callback in useRun: dispatches reset_run + nulls simRun useRef + nulls pendingRunInput. Two-axis reset. 2 integration tests in RunContext.test.tsx. |
+| `e8c1c4a` | Step 3 — component | `apps/client/src/screens/RunEndScreen.tsx` single responsive component with `.mobile` modifier via useViewport() per Q(d).ii. 8 ratified fields per Q(b). Lazy-loaded per ClassSelectScreen precedent. New chunk RunEndScreen-*.js 8.31 kB raw / 2.63 kB gz. |
+| `95c77fe` | Step 4 — RunProvider gate + RunEndOverlay deletion | RunProvider extended with third branch: simRun!==null && isRunEnded → RunEndScreen (inside RunContext.Provider). RunEndOverlay mount sites removed from DesktopRunScreen + MobileRunScreen. RunEndOverlay.tsx deleted; runEnd.ts + runEnd.test.ts preserved. 14 handler-guard tests skipped + 1 architectural-invariant replacement test. Main chunk −870 B from inlined-component removal offsetting lazy-import declaration. |
+| `bab104c` | Step 5 — tests | RunEndFlow.test.tsx (4 active + 1 skip; F.1 covered by component tests with stronger isolation) + RunEndScreen.test.tsx (17 tests). |
+| this entry | Closing log docs | docs(decision-log): M1.5b PR 2 close. |
+| merge commit | Merge | `--no-ff` merge of m1.5b-pr2-run-end-summary into main. Auto-closes PR #17 server-side. |
+
+### What landed (load-bearing surface summary)
+
+- **RunEndScreen at `apps/client/src/screens/RunEndScreen.tsx`** — single responsive component, lazy-loaded, mounts inside RunContext.Provider when sim's `outcome !== 'in_progress'`. Renders 8 ratified data fields with shape+fill differentiation across VICTORY / DEFEAT / RUN ABANDONED outcome states. HeartGlyph SVG component reused verbatim from in-run HUD (NOT Unicode — clarification 5 honored at Step 0 verification).
+- **reset_run action arm + resetRun hook callback** — two-axis reset (reducer state via createInitialState + simRun useRef disposal + pendingRunInput=null). LocalSaveV1 at 5b.3 reuses arm as the abandon-current-run handler per Phase 1 Q(c).i.
+- **RunProvider third-branch gate** — pre-run (ClassSelectScreen) / in-run (children) / post-run (RunEndScreen). RunEndScreen mounts inside RunContext.Provider so it consumes useRunContext directly for 8 fields (no prop-drilling; only onRestart is a prop).
+- **RunEndOverlay.tsx deleted** per Q(h).i. `runEnd.ts` mirrorsSimShouldEndRun helper + runEnd.test.ts preserved (load-bearing).
+- **Handler-guard defense-in-depth** — useRun's "if outcome !== 'in_progress' return" handler guards remain in code as defense-in-depth; structurally unreachable through normal mounting paths post-RunProvider-swap. 14 tests skipped with inline documentation; 1 architectural-invariant replacement test confirms terminal-state children don't render.
+
+### Pattern + catch + rule codification
+
+**Catch 18 (NEW, Rule 6 amended instance).** β prompt named vitest's `testTimeout` / `expect.poll.timeout` as Option B surface for the F.3 hot-fix; correct API was @testing-library/react's `configure({ asyncUtilTimeout })`. Subshape "test-library API vs test-runner API conflation" — distinct from Catches 11–15 (sim/client type drifts; testing-library API surface is a new axis). Caught at Step 0 surface verification of the β hot-fix prompt. Codified per Rule 6 amended's active scope (instances increment normally post-amendment); subshape itself first-instance, held for second-instance subshape codification.
+
+**Pattern candidate #9 (NEW, held first-instance).** Architectural-skip-with-replacement-invariant: when a refactor renders existing unit tests architecturally unreachable through normal React mounting paths, skip-with-inline-documentation + replacement architectural-invariant test at higher abstraction preserves coverage. Evidence: Step 4 RunProvider swap unmounted in-run children on terminal state, rendering 14 handler-guard click-no-op tests structurally unreachable. Resolved inline by Claude Code with 14 skips + 1 architectural-invariant test (proving terminal-state children don't render is strictly stronger than 14 individual click-no-op proofs). LocalSaveV1 (5b.3) is plausible second-instance trigger if further RunProvider restructuring renders more tests infeasible.
+
+**Catch candidate (held first-instance).** Latent-test-infra-flake-surfaced-by-next-PR-Phase-1-counter-rebaseline. F.3 Marauder ClassSelectFlow.test.tsx flake (latent in PR 1, surfaced by PR 2 Phase 1 Section 0.5 counter rebaseline against PR 1's 255/255 client baseline). Antidote candidate: "close-time test runs include N≥3 full-workspace runs under cold cache, not just isolation passes." Held for second-instance codification; if a second latent-flake surfaces at the next PR's Phase 1 counter rebaseline, codify both the catch shape and the antidote at that time.
+
+**Topic 2 candidates (held first-instance each).**
+- (a) Master-dev chat prompt references unverified upstream UI state ("above" referencing an Other-paste that didn't land in tool inputs). Surfaced by Claude Code's halt-when-foundation-missing discipline (Rule 8 working as intended; no damage).
+- (b) Phase 2 prompt did not enumerate existing tests assuming the pre-refactor mounting pattern; Step 4 refactor surfaced 14 test-coverage implications inline. Going-forward consideration: Phase 2 prompts for refactor-bearing PRs Step 0 should enumerate pre-refactor architectural-assumption tests for skip-or-replace decisions.
+
+Both held for second-instance codification.
+
+### CF dispositions
+
+- **CF 21 summary-side closes (Step 4)** — RunEndScreen replaces RunEndOverlay; full summary surface ships. Detection-side closed at M1.5a PR 3 Phase 2b (`mirrorsSimShouldEndRun`); summary-side closes here. CF 21 fully resolved.
+- **CF 35 (onTelemetryEvent wiring)** — deferred per Q(e); no new TelemetryEvent variants this PR. Stays open for the M1.5b telemetry milestone.
+- **CF 38 (resolution-panel reward display)** — parked for M2 polish per 2026-05-19 docs commit.
+- **CF 42 / 43 / 44** — held (unchanged from PR-open).
+
+### Counters at PR 2 close
+
+| Counter | Pre-PR-2 | Post-PR-2 |
+|---|---|---|
+| Architectural patterns codified | 6 | 6 |
+| Pattern candidates held | 2 (#7, #8) | 3 (#7, #8, +architectural-skip-with-replacement-invariant) |
+| Predicate-vs-name catches codified | 17 | 18 (+Catch 18 β-prompt API conflation under Rule 6 amended) |
+| Catch candidates held | 0 | 1 (F.3 latent-flake; antidote candidate logged) |
+| Locked answers | 32 | 32 |
+| Going-forward rules | 8 | 8 |
+| Master-dev chat drifts (Topic 2) | 20 | 20 (2 first-instance candidates held: "above" UI-ref + Phase 2 prompt completeness gap) |
+| Open carry-forwards | 31 | 30 (CF 21 closes) |
+| 4-finding ceiling | 0/4 | 0/4 (Codex clean first-pass) |
+
+### Codex review summary
+
+PR #17 Codex review (single pass, fresh top-level `@codex review` comment per convention): clean. "Didn't find any major issues. Swish!" No P0/P1/P2 findings. 4-finding ceiling not approached. No Phase 2.5 interlude required. Cleanest Codex pass of any M1.5 PR to date.
+
+### Process learnings (uncodified, logged for second-instance watch)
+
+- **Design-board-placeholder-vs-in-run-HUD-reality reconciliation.** Design board used Unicode placeholder ♥/♡ for hearts; Step 0 inspection of in-run HUD revealed HeartGlyph SVG component; Phase 2 implementation reused the SVG component verbatim per clarification 5. Design board → production reality divergence handled cleanly at Step 0; no master-dev round-trip needed. Pattern candidate first-instance; hold for second.
+- **Skip-with-inline-documentation discipline.** Preserves test code as a record of the prior contract while preventing CI red-lines from architecturally infeasible cases. Distinct from test deletion (which loses the documentation value). Pairs with replacement architectural-invariant tests at higher abstraction (Pattern candidate #9 tracks the recurring shape).
+- **Unexpected −870 B main chunk shrink.** RunEndOverlay.tsx (~1.2 kB raw inlined into the main chunk via DesktopRunScreen + MobileRunScreen direct imports) was deleted; the lazy-import declaration for RunEndScreen added ~330 B; net −870 B. M2 polish may revisit other in-run-but-rarely-used components (CombatOverlay at 1.5 MB is the prime candidate, but already lazy-loaded; other smaller candidates worth surveying).
+- **ABANDONED outcome not visually playtested at this PR.** No client UI path exists for `outcome === 'abandoned'` (no `abandon_run` action arm). Component test (RunEndScreen.test.tsx) + integration test (RunEndFlow.test.tsx F.3) cover the rendering. First visual playtest of ABANDONED waits for 5b.3's abandon-run UI surface.
+
+### M1.5b PR 3 fresh-chat pre-flags
+
+5b.3 — LocalSaveV1 persistence — opens next. Branch off main at the M1.5b PR 2 merge commit.
+
+Scope per PR 4 / 5b queue carry-context pre-flags (2026-05-17 § M1.5a PR 3 closed) + take-1 D amendment + this PR's resetRun precedent:
+
+- **LocalSaveV1 schema implementation** at `packages/shared/src/save.ts` per `tech-architecture.md` § 7.1 (already declared; no schema changes expected this PR).
+- **Persistence boundaries** — save on phase transitions (arranging→combat, combat→resolution, resolution→arranging next round, terminal outcome). Migration scaffolding at `apps/client/src/persistence/migrations/`.
+- **Re-opens take-1 D shop-generation ownership review** per take-1 D amendment ("revisit shop generation ownership at 5b.3 if LocalSaveV1 reveals need"). Phase 1 design pass required.
+- **CF 34** (gold/rerollCount/bag/shop authority migration) — likely in scope or surfaces as design contradiction. Phase 1 disposition.
+- **CF 37** (recipesRegistry sim-default vs client-filter divergence) — revisit alongside CF 34 if combine detection moves sim-side.
+- **CF 43** (Tinker recipeBornPlacementIds threading) — strong ride-along candidate per pre-PR-2 fresh-chat handoff. Decide at Phase 1.
+- **abandon-run UI path** — first concrete client-side trigger for `outcome === 'abandoned'`. resetRun arm (this PR) is the reducer-side foundation; a UI surface (settings menu? pause menu?) wires user intent to the dispatcher. First visual playtest of ABANDONED outcome lands here.
+
+Phase 1 architectural halt-gate (read-only Step 0) on the LocalSaveV1 + persistence surfaces. Likely 5b.3a (LocalSaveV1 + persistence scaffolding) / 5b.3b (CF 34/37 authority migration) split given full-stack scope.
+
+Fresh master-dev chat at 5b.3 open. Handoff includes counter snapshot + CF disposition table + take-1 D shop-gen review re-open flag.
+
+---
+
 ## 2026-05-19 — M1.5b PR 2 Phase 1 ratified
 
 Halt-gate: F.3 Marauder ClassSelectFlow.test.tsx flake (latent in PR 1,
