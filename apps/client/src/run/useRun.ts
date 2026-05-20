@@ -118,6 +118,17 @@ export function useRun() {
   // during the import window; the epoch comparison (Phase 2.5 P1 fix /
   // Catch 20) covers the race where a fresh run is started during the
   // window — see restoreEpochRef declaration above.
+  //
+  // Phase 2.5h (Catch 22 / Class A): the loaded payload has already
+  // passed the load-boundary shape validator (apps/client/src/
+  // persistence/validate.ts), so the obvious throws (relics undefined,
+  // history not-array, etc.) cannot reach restoreRun. The try/catch
+  // here is the residual belt — restoreRun's own contract throws
+  // (Unknown contractId / Unknown startingRelicId for content-registry
+  // gaps, etc., state.ts:262-278) and any future deref the validator
+  // doesn't yet cover fall through to a fresh-run fallback (simRun
+  // stays null → ClassSelectScreen mounts). Dev-only console.warn so
+  // the failure isn't silent during development.
   useEffect(() => {
     let cancelled = false;
     const myEpoch = restoreEpochRef.current;
@@ -132,12 +143,23 @@ export function useRun() {
       // restoreEpochRef.current past myEpoch. Bail without clobbering the
       // fresh run's setSimRun + init_from_sim dispatch.
       if (restoreEpochRef.current !== myEpoch) return;
-      const controller = restoreRun(snapshot, {
-        itemsRegistry: SHOP_POOL_ITEMS,
-        onTelemetryEvent: () => {
-          // CF 35 stub; mirrors fresh-run path.
-        },
-      });
+      let controller;
+      try {
+        controller = restoreRun(snapshot, {
+          itemsRegistry: SHOP_POOL_ITEMS,
+          onTelemetryEvent: () => {
+            // CF 35 stub; mirrors fresh-run path.
+          },
+        });
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            '[useRun] restoreRun threw on a validator-passing payload; falling back to fresh-run path:',
+            err,
+          );
+        }
+        return;
+      }
       setSimRun(controller);
       dispatch({ type: 'restore_from_save', snapshot });
     });

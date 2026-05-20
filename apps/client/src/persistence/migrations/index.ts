@@ -6,20 +6,31 @@
 // Future schema bumps add migration functions in vN.ts files and update
 // the dispatcher's switch.
 //
+// Phase 2.5h (Catch 22 / Class A): version routing alone is insufficient
+// — a schemaVersion===1 payload with arbitrary garbage inside would pass
+// the dispatcher's cast and throw downstream on field access (restoreRun
+// relics deref, constructor's history.slice, reducer arm's .map). The
+// per-version validator (../validate.ts) is applied after version
+// routing; structural mismatches return null.
+//
 // Returns null when:
 //   - parsed is not a plain object,
-//   - schemaVersion is missing or unrecognized.
+//   - schemaVersion is missing or unrecognized,
+//   - the routed payload fails the per-version shape validator.
 // Callers treat null as "no save / corrupt save" and proceed with a
 // fresh-run path.
 
 import type { LocalSaveV1 } from '@packbreaker/shared';
 import { migrateV1Identity } from './v1';
+import { validateLocalSaveV1 } from '../validate';
 
 export function migrate(parsed: unknown): LocalSaveV1 | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const versioned = parsed as { schemaVersion?: unknown };
   if (versioned.schemaVersion === 1) {
-    return migrateV1Identity(parsed as LocalSaveV1);
+    const validated = validateLocalSaveV1(parsed);
+    if (validated === null) return null;
+    return migrateV1Identity(validated);
   }
   return null;
 }
