@@ -53,6 +53,7 @@ import {
   type RunHistoryEntry,
   type RunOutcome,
   type RunState,
+  type SerializedRunState,
   type SimSeed,
   type Rotation,
   type TelemetryEvent,
@@ -133,6 +134,16 @@ export interface CreateRunInput {
 export interface RunController {
   getState(): RunState;
   getPhase(): RunPhase;
+  /** Returns the Mulberry32 rng cursor at its current position. Used by
+   *  M1.5b PR 3 / 5b.3a's save path to capture the rng state into
+   *  SerializedRunState.rngState; the rng can be reconstructed on
+   *  restoreRun() to the same cursor position. Production client/sim
+   *  split uses state.seed for combat seeding (constant) and client-side
+   *  shop regeneration, so rngState is not load-bearing for the
+   *  production replay path; sim's internal runCombatInternal IS
+   *  load-bearing (tests/replay fixtures). Forward-compat insurance per
+   *  Phase 1 ratification A4-minimal. */
+  getRngState(): number;
   advancePhase(): void;
   buyItem(slotIndex: number): void;
   sellItem(placementId: PlacementId): void;
@@ -247,7 +258,7 @@ class RunControllerImpl implements RunController {
   private nextPlacementCounter = 0;
   private lastCombatResult: CombatResult | null = null;
 
-  constructor(input: CreateRunInput) {
+  constructor(input: CreateRunInput, restoreFrom?: SerializedRunState) {
     const contract = CONTRACTS[input.contractId];
     if (!contract) throw new Error(`Unknown contractId: ${String(input.contractId)}`);
     this.contract = contract;
@@ -265,48 +276,101 @@ class RunControllerImpl implements RunController {
     if (!startingRelic) {
       throw new Error(`Unknown startingRelicId: ${String(input.startingRelicId)}`);
     }
-    this.relics = {
-      starter: input.startingRelicId,
-      mid: null,
-      boss: null,
-    };
 
+    // Relic slots: fresh run starts with starter only; restore takes all
+    // three slots from the serialized snapshot.
+    this.relics = restoreFrom
+      ? { ...restoreFrom.relics }
+      : {
+          starter: input.startingRelicId,
+          mid: null,
+          boss: null,
+        };
+
+    // Compose effective ruleset from the relic set (which differs by path
+    // — restore composes against all granted relics; fresh against starter
+    // alone). grantRelic recomposes at runtime; this is the initial pass.
     const composed = composeRuleset(contract, input.classId, this.relics);
     this.effectiveRuleset = composed.ruleset;
     this.derived = composed.derived;
 
-    this.hearts = this.effectiveRuleset.startingHearts;
-    this.gold = composed.bonusStartingGold + baseIncomeForRound(1, this.effectiveRuleset);
-    this.bag = {
-      dimensions: this.effectiveRuleset.bagDimensions,
-      placements: [],
-    };
+    if (restoreFrom) {
+      // Restore mutable sim-authoritative state from the serialized snapshot
+      // (Phase 1 ratification A4-minimal / B2′ persistence-time reconciliation).
+      this.hearts = restoreFrom.hearts;
+      this.currentRound = restoreFrom.currentRound;
+      this.history = restoreFrom.history.slice();
+      this.outcome = restoreFrom.outcome;
+      // Quiescent-save invariant: save fires at arranging-entry or terminal.
+      // Restored phase derives directly from outcome.
+      this.phase = restoreFrom.outcome === 'in_progress' ? 'arranging' : 'ended';
 
-    this.rng = createRng(input.seed);
-    this.shop = this.makeShop(1);
+      // Client-owned fields restored onto sim as non-authoritative mirrors
+      // per Phase 1 ("match live invariant"): sim's gold is consumed only as
+      // a delta source by onCombatDone's before/after observation, so the
+      // absolute value need not match the client's authoritative gold.
+      // Storing serialized.gold keeps the values aligned at the moment of
+      // restore; subsequent buys/sells live client-side per Q2 Amendment A
+      // and sim's gold drifts as usual. Sim's bag stays empty (client owns
+      // bag per Q2 Amendment A); sim's placeItem is never called by client
+      // code in M1.5a/b. CF 34 closure would re-evaluate.
+      this.gold = restoreFrom.gold;
+      this.bag = {
+        dimensions: this.effectiveRuleset.bagDimensions,
+        placements: [],
+      };
 
-    // Telemetry: run_start (always), daily_contract_started (if isDaily).
-    this.emit({
-      tsClient: this.startedAt,
-      sessionId: this.sessionId,
-      name: 'run_start',
-      runId: this.runId,
-      classId: input.classId,
-      contractId: input.contractId,
-      seed: input.seed,
-    });
-    if (contract.isDaily) {
+      // Restore rng cursor to its saved position. SimSeed brand is just
+      // `number` at runtime; the cast satisfies createRng's signature
+      // without changing the bit pattern.
+      this.rng = createRng(restoreFrom.rngState as SimSeed);
+
+      // Regenerate sim's shop deterministically from the restored seed +
+      // round + effective ruleset. Quiescent save fires at arranging-entry
+      // (post-combat shop regen), so the just-regenerated round-N shop
+      // matches what client's combat_done arm would have produced; we
+      // re-derive instead of trusting serialized.shop because sim's shop
+      // diverged from client's mid-round (rerolls aren't fully mirrored
+      // sim-side under the current authority split).
+      this.shop = this.makeShop(this.currentRound);
+
+      // No run_start / daily_contract_started / round_start telemetry on
+      // restore — the run already started on the original session; restoring
+      // is not a new run.
+    } else {
+      this.hearts = this.effectiveRuleset.startingHearts;
+      this.gold = composed.bonusStartingGold + baseIncomeForRound(1, this.effectiveRuleset);
+      this.bag = {
+        dimensions: this.effectiveRuleset.bagDimensions,
+        placements: [],
+      };
+
+      this.rng = createRng(input.seed);
+      this.shop = this.makeShop(1);
+
+      // Telemetry: run_start (always), daily_contract_started (if isDaily).
       this.emit({
         tsClient: this.startedAt,
         sessionId: this.sessionId,
-        name: 'daily_contract_started',
+        name: 'run_start',
+        runId: this.runId,
+        classId: input.classId,
         contractId: input.contractId,
-        // Sim has no calendar; reuse startedAt's date prefix when available,
-        // else a sentinel. M1.5 client supplies the real IsoDate.
-        date: this.dateFromTimestamp(this.startedAt),
+        seed: input.seed,
       });
+      if (contract.isDaily) {
+        this.emit({
+          tsClient: this.startedAt,
+          sessionId: this.sessionId,
+          name: 'daily_contract_started',
+          contractId: input.contractId,
+          // Sim has no calendar; reuse startedAt's date prefix when available,
+          // else a sentinel. M1.5 client supplies the real IsoDate.
+          date: this.dateFromTimestamp(this.startedAt),
+        });
+      }
+      this.emitRoundStart();
     }
-    this.emitRoundStart();
   }
 
   // ─── Public surface ──────────────────────────────────────────────────
@@ -350,6 +414,10 @@ class RunControllerImpl implements RunController {
 
   getPhase(): RunPhase {
     return this.phase;
+  }
+
+  getRngState(): number {
+    return this.rng.state;
   }
 
   advancePhase(): void {
@@ -1050,4 +1118,65 @@ function computeDamageStats(
 
 export function createRun(input: CreateRunInput): RunController {
   return new RunControllerImpl(input);
+}
+
+/** Optional rehydration-side configuration. Restored runs don't need a fresh
+ *  `seed` / `classId` / `contractId` / `startingRelicId` — those come from
+ *  the serialized snapshot. The client passes `sessionId` + `onTelemetryEvent`
+ *  to keep telemetry routing alive post-restore (run_start is NOT re-emitted;
+ *  subsequent round_start / shop_* / combat_* / run_end events flow through
+ *  the same callback). `itemsRegistry` + `recipesRegistry` are test-injection
+ *  hatches, symmetric with CreateRunInput. */
+export interface RestoreRunOptions {
+  readonly sessionId?: string;
+  readonly itemsRegistry?: Readonly<Record<ItemId, Item>>;
+  readonly recipesRegistry?: ReadonlyArray<Recipe>;
+  readonly onTelemetryEvent?: (event: TelemetryEvent) => void;
+}
+
+/** Rebuilds a live RunController from a SerializedRunState. Companion to
+ *  createRun() for the M1.5b PR 3 / 5b.3a LocalSaveV1 path: client loads
+ *  a persisted save and feeds it through restoreRun to get a controller
+ *  whose getState() matches the serialized snapshot's RunState slice.
+ *
+ *  Quiescent-save invariant: the serialized snapshot was captured at
+ *  arranging-entry (post-combat shop regen) or at terminal outcome.
+ *  Restored phase derives from outcome: 'arranging' iff outcome ===
+ *  'in_progress'; 'ended' otherwise. Other RunPhases ('combat',
+ *  'resolution') are not representable in the save and not produced by
+ *  this factory.
+ *
+ *  Sim-authoritative state restored: hearts, currentRound, history,
+ *  outcome, relics, rng cursor (via SerializedRunState.rngState).
+ *  effectiveRuleset + derived recomposed from the restored relic set
+ *  (constructor recomposes when restoreFrom is present).
+ *
+ *  Sim-side gold / bag / shop are restored as "match live invariant"
+ *  per Phase 1 ratification — see constructor body for the per-field
+ *  rationale. Client-owned authoritative gold / bag / shop / rerollCount
+ *  / trophy land back on ClientRunState through the save/load wrapper,
+ *  NOT through this factory.
+ *
+ *  Throws if serialized.relics.starter is null — every shipped save
+ *  should have a non-null starter (set at class-select time per M1.5b
+ *  PR 1); a null starter indicates corrupted save data. */
+export function restoreRun(
+  serialized: SerializedRunState,
+  options?: RestoreRunOptions,
+): RunController {
+  if (serialized.relics.starter === null) {
+    throw new Error('restoreRun: serialized.relics.starter is null; cannot rehydrate');
+  }
+  const input: CreateRunInput = {
+    seed: serialized.seed,
+    classId: serialized.classId,
+    contractId: serialized.contractId,
+    startingRelicId: serialized.relics.starter,
+    startedAt: serialized.startedAt,
+    sessionId: options?.sessionId,
+    itemsRegistry: options?.itemsRegistry,
+    recipesRegistry: options?.recipesRegistry,
+    onTelemetryEvent: options?.onTelemetryEvent,
+  };
+  return new RunControllerImpl(input, serialized);
 }

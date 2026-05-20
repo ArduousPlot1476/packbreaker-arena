@@ -67,6 +67,7 @@ export { simulateCombat } from './combat';
 export type {
   ApplyCombatOutcomeInput,
   CreateRunInput,
+  RestoreRunOptions,
   RunController,
   RunPhase,
   RecipeMatch,
@@ -76,6 +77,7 @@ export type {
 } from './run';
 export {
   createRun,
+  restoreRun,
   replayCombat,
   detectRecipes,
   composeRuleset,
