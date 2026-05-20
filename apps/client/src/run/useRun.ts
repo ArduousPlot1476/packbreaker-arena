@@ -12,7 +12,7 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { ClassId, CombatResult, ContractId, GhostId, RelicId } from '@packbreaker/content';
+import type { ClassId, CombatResult, ContractId, GhostId, IsoTimestamp, RelicId } from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
 // chunk-splits only on runtime imports). The runtime createRun call
@@ -102,6 +102,14 @@ export function useRun() {
         classId: pendingRunInput.classId,
         contractId: 'neutral' as ContractId,
         startingRelicId: pendingRunInput.startingRelicId,
+        // M1.5b PR 3 / 5b.3a Commit 3: inject real wall-clock timestamp.
+        // Sim's CreateRunInput.startedAt defaults to a fixed sentinel
+        // ('2025-01-01T00:00:00.000Z') when omitted (state.ts § 200) —
+        // fine for sim tests but wrong for production saves where
+        // startedAt is persisted into SerializedRunState and surfaced
+        // in telemetry. Client owns the clock per § 4.1 (sim is
+        // environment-free).
+        startedAt: new Date().toISOString() as IsoTimestamp,
         itemsRegistry: SHOP_POOL_ITEMS,
         onTelemetryEvent: () => {
           // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
