@@ -1365,3 +1365,53 @@ describe('RunProvider — resetRun two-axis reset (M1.5b PR 2)', () => {
     expect(queryByTestId('run-boot-fallback')).toBeNull();
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Commit 6 — quiescent-save integration.
+//
+// Verifies the architectural invariant: useRun's save-on-quiescent
+// useEffect writes to localStorage only on round/outcome transitions,
+// never on mid-round mutations (reroll, buy, sell). Mount-time write
+// counts as a transition (simRun goes from null to non-null +
+// round/outcome become defined for the first time).
+//
+// Spy on Storage.prototype.setItem to observe write timing without
+// reading actual storage content.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — save-on-quiescent timing (M1.5b PR 3 / 5b.3a)', () => {
+  it('writes a save to pba.v1.save after init + leaves it unchanged across a mid-round reroll', async () => {
+    const { getByTestId, queryByTestId } = render(
+      <RunProvider>
+        <GoldDisplay testId="q" />
+      </RunProvider>,
+    );
+
+    // Wait for the consumer to mount (post init_from_sim).
+    await waitFor(() => {
+      expect(queryByTestId('q')).toBeInTheDocument();
+    });
+
+    // The save useEffect runs after init_from_sim. Wait for it to write.
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
+    });
+    const savedAfterMount = localStorage.getItem('pba.v1.save');
+    expect(savedAfterMount).not.toBeNull();
+    const parsed = JSON.parse(savedAfterMount!) as { inProgressRun: { currentRound: number } };
+    expect(parsed.inProgressRun.currentRound).toBe(1);
+
+    // Reroll: state changes (rerollCount, shop, gold) but round + outcome
+    // do NOT change. Quiescent invariant: the saved payload remains
+    // identical (no re-write). Read again and assert byte-equality.
+    act(() => {
+      fireEvent.click(getByTestId('q-reroll'));
+    });
+    // Give any potential save useEffect a microtask to fire (it shouldn't,
+    // but we want to give it a chance to fail loudly if quiescent
+    // invariant is violated).
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const savedAfterReroll = localStorage.getItem('pba.v1.save');
+    expect(savedAfterReroll).toBe(savedAfterMount);
+  });
+});

@@ -14,6 +14,7 @@ import type {
   RunId,
   RunOutcome,
   RunState as SimRunState,
+  SerializedRunState,
   SimSeed,
 } from '@packbreaker/content';
 import { DEFAULT_RULESET } from '@packbreaker/content';
@@ -341,5 +342,119 @@ describe('clientRunReducer — applySimSnapshot CF 39 + Finding A regressions', 
     });
     expect(next.state.className).toBe('Marauder');
     expect(next.state.classId).toBe('marauder');
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Commit 6 — restore_from_save reducer arm.
+//
+// Mirrors the init_from_sim shape but also pulls SerializedRunState-only
+// fields (rerollCount, trophy) onto ClientRunState and inverse-impedance-
+// bridges snapshot.bag.placements (sim shape) back to BagItem[] (client
+// shape).
+// ────────────────────────────────────────────────────────────────────
+
+function makeSerializedSnapshot(
+  overrides: Partial<SerializedRunState> = {},
+): SerializedRunState {
+  return {
+    runId: 'restore-test-run' as RunId,
+    seed: 12345 as SimSeed,
+    classId: 'marauder' as ClassId,
+    contractId: 'neutral' as ContractId,
+    ruleset: { ...DEFAULT_RULESET, startingHearts: 4 },
+    derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+    startedAt: '2026-05-20T10:00:00.000Z' as IsoTimestamp,
+    hearts: 3,
+    gold: 42,
+    currentRound: 6 as RoundNumber,
+    bag: {
+      dimensions: { width: 6, height: 4 },
+      placements: [
+        { placementId: 'p-0' as ClassId, itemId: 'iron-sword' as ItemId, anchor: { col: 0, row: 0 }, rotation: 0 },
+        { placementId: 'p-1' as ClassId, itemId: 'wooden-shield' as ItemId, anchor: { col: 2, row: 1 }, rotation: 90 },
+      ] as unknown as SimRunState['bag']['placements'],
+    },
+    relics: {
+      starter: 'iron-will' as RelicId,
+      mid: 'berserkers-pendant' as RelicId,
+      boss: null,
+    },
+    shop: {
+      slots: ['copper-coin', 'leather-strap', 'iron-sword'] as unknown as SimRunState['shop']['slots'],
+      purchased: [],
+      rerollsThisRound: 0,
+    },
+    trophiesAtStart: 0,
+    history: [
+      { round: 1 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 4, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+      { round: 2 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 8, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+      { round: 3 as RoundNumber, outcome: 'loss', damageDealt: 12, damageTaken: 30, goldEarnedThisRound: 0, opponentGhostId: null, opponentClassId: null },
+      { round: 4 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 6, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+      { round: 5 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 4, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+    ],
+    outcome: 'in_progress' as RunOutcome,
+    rngState: 0xdeadbeef,
+    rerollCount: 2,
+    trophy: 72,
+    ...overrides,
+  };
+}
+
+describe('clientRunReducer — restore_from_save (M1.5b PR 3 / 5b.3a)', () => {
+  it('writes sim-authoritative fields from the serialized snapshot', () => {
+    const snapshot = makeSerializedSnapshot();
+    const next = clientRunReducer(freshInitial(), { type: 'restore_from_save', snapshot });
+    expect(next.state.hearts).toBe(3);
+    expect(next.state.round).toBe(6);
+    expect(next.state.classId).toBe('marauder');
+    expect(next.state.className).toBe('Marauder');
+    expect(next.state.maxHearts).toBe(4); // ruleset.startingHearts=4 (iron-will)
+    expect(next.state.relics.starter).toBe('iron-will');
+    expect(next.state.relics.mid).toBe('berserkers-pendant');
+    expect(next.state.outcome).toBe('in_progress');
+    expect(next.state.history).toHaveLength(5);
+    expect(next.state.history[2]!.outcome).toBe('loss');
+  });
+
+  it('lifts SerializedRunState-only fields (rerollCount, trophy, gold) onto state', () => {
+    const snapshot = makeSerializedSnapshot();
+    const next = clientRunReducer(freshInitial(), { type: 'restore_from_save', snapshot });
+    expect(next.state.gold).toBe(42); // includeGold=true on init/restore
+    expect(next.state.rerollCount).toBe(2); // SerializedRunState extension
+    expect(next.state.trophy).toBe(72); // SerializedRunState extension
+  });
+
+  it('inverse-impedance-bridges snapshot.bag.placements back to BagItem[] (uid/col/row/rot)', () => {
+    const snapshot = makeSerializedSnapshot();
+    const next = clientRunReducer(freshInitial(), { type: 'restore_from_save', snapshot });
+    expect(next.bag).toHaveLength(2);
+    expect(next.bag[0]).toEqual({
+      uid: 'p-0',
+      itemId: 'iron-sword',
+      col: 0,
+      row: 0,
+      rot: 0,
+    });
+    expect(next.bag[1]).toEqual({
+      uid: 'p-1',
+      itemId: 'wooden-shield',
+      col: 2,
+      row: 1,
+      rot: 90,
+    });
+  });
+
+  it('bootstraps top-level shop from snapshot.shop.slots (mirrors init_from_sim shape)', () => {
+    const snapshot = makeSerializedSnapshot();
+    const next = clientRunReducer(freshInitial(), { type: 'restore_from_save', snapshot });
+    expect(next.shop).toHaveLength(3);
+    expect(next.shop[0]!.itemId).toBe('copper-coin');
+    expect(next.shop[1]!.itemId).toBe('leather-strap');
+    expect(next.shop[2]!.itemId).toBe('iron-sword');
+    // UID convention: s{currentRound}-{rerollsThisRound}-{i}
+    expect(next.shop[0]!.uid).toBe('s6-0-0');
+    expect(next.shop[1]!.uid).toBe('s6-0-1');
+    expect(next.shop[2]!.uid).toBe('s6-0-2');
   });
 });
