@@ -4,6 +4,109 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3a CLOSED (LocalSaveV1 persistence core; Class A closed structurally via Zod schema-derived validator; 5b.3b abandon-run remains for M1.5b PR 3 / M1.5b close)
+
+### Framing
+
+**5b.3a closes this entry.** PR \#18 (`m1.5b-pr3-localsave-v1`) merged into `main` via `--no-ff` at merge commit `5ce6175cee5b435402d564b617619bce9e64d216` on 2026-05-21T23:39:41Z. The LocalSaveV1 persistence core ships — schema authored as `SerializedRunState`, sim `getRngState` + `restoreRun` + `RestoreRunOptions` exposed, real `startedAt` timestamp, client persistence layer + migration scaffold, save-on-quiescent + load-on-mount + clearLocal-on-reset wiring, schema-derived structural validator (Zod), three-layer safety (schema + dual-`satisfies` + restoreRun try/catch), verbatim-shop restore (Phase 2.5h Catch 23), terminal RNG seeding, cross-version restore field-divergence fix (Phase 2.5j-fix Catch 26), relic-slot semantic validation (Phase 2.5j-fix Codex finding B).
+
+**5b.3a is NOT the M1.5b PR 3 / M1.5b close.** 5b.3b — the abandon-run UI surface (first concrete client-side trigger for `outcome === 'abandoned'`) — remains. 5b.3b closes M1.5b PR 3 + M1.5b. Branch off `5ce6175` for 5b.3b.
+
+### Branch + commit topology
+
+- Branch: `m1.5b-pr3-localsave-v1` off main `49f7437` (post-M1.5b-PR-2-merge baseline).
+- Final branch tip: `86b626f` (28 atomic branch commits).
+- `--no-ff` merge commit: `5ce6175cee5b435402d564b617619bce9e64d216` on `main`.
+- GitHub: PR \#18 closed, merged. (Bare hashes escaped per Rule 10 — "PR \#18".)
+
+### Phase trajectory (28 branch commits)
+
+Phase 1 (design + ratification) → Phase 2 (7-commit implementation body) → master-dev pre-push gate (Catch 19 remediation `d4fd27c`) → Codex P1+P2 round 1 (Phase 2.5 — Catch 20 race + Catch 21 throw-safety) → Phase 2.5g meta-audit (4/4 ceiling tripped → comprehensive Class A enumeration close) → Phase 2.5h (Catch 22 version-only-validation + Catch 23 non-terminal-seed-via-mis-sourced-save + CF 46 NEW + Pattern \#7 2nd-instance accumulation) → Phase 2.5i (Catch 24 Class A residual + Rule 11 NEW + Pattern \#7 codified at 3rd instance) → Phase 2.5j (Zod schema-derived validator + Catch 25 Class A batch structural close + Rule 11 AMENDED to schema-derived + Pattern \#7 4th instance + tech-arch § 6.3/6.4 amendment) → **Phase 2.5j-fix TERMINAL reactive round** (Catch 26 cross-version restore field divergence + Rule 11 clarified [structural ≠ semantic completeness] + Pattern \#7 5th instance — first SEMANTIC variant; sub-pattern codified UNDER Pattern \#7, NOT promoted to Pattern \#8 + CF 47 NEW bundle-size deferred → Codex CLEAN → master-dev merge authorization).
+
+### Class A / 4-finding ceiling cycle (canonical record)
+
+The 4-finding ceiling tripped at Phase 2.5g → meta-audit comprehensive Class A enumeration → Phase 2.5h delivered structural fixes (Catch 22 + 23) → Codex round 2 surfaced finding 5 → Phase 2.5i remediated (Catch 24 + Rule 11) → Codex round 3 surfaced findings 6 / 7 / 8 (same Pattern \#7 enumeration-fragility class) → Phase 2.5j structural close via Zod (Catch 25 + Rule 11 AMENDED) → Codex terminal round surfaced findings A / B (different classes, neither Class A) → Phase 2.5j-fix closed both → Codex CLEAN. **Cycle complete.** The structural fix (Zod schema-derived validator + dual-`satisfies` bracket) makes Pattern \#7 structural variant unrecurrable on this surface by construction. Pattern \#7 semantic-variant sub-pattern codified at Phase 2.5j-fix: when a registry-typed field carries per-field semantic constraints beyond type + registry membership (slot, classAffinity, tier, etc.), each constraint needs an explicit `.refine` clause; dual-`satisfies` does not prove semantic completeness.
+
+### Final counter snapshot
+
+| Counter | Pre-5b.3a (post-M1.5b-PR-2-close) | Post-5b.3a |
+|---|---:|---:|
+| Predicate-vs-name catches codified | 18 | **26** (+8 net: Catch 19 types-only-package-runtime-leak; +20 P1 race; +21 P2 throw-safety; +22 version-only-validation; +23 non-terminal-seed-via-mis-sourced-save; +24 Class A residual; +25 Class A batch structural close; +26 cross-version restore field divergence) |
+| Going-forward rules codified | 10 | **11** (+1: Rule 11 complete-contract structural validation, codified Phase 2.5i, AMENDED Phase 2.5j to schema-derived, CLARIFIED Phase 2.5j-fix structural ≠ semantic completeness) |
+| Architectural patterns codified | 6 | **7** (+1: Pattern \#7 test/audit-asserts-proxy-not-invariant, codified at Phase 2.5i 3rd instance per `decision-log.md` 2026-05-21 § Phase 2.5i § Pattern \#7 — 3rd instance (codified). Phase 2.5j-fix added semantic-variant SUB-PATTERN under Pattern \#7; not promoted to Pattern \#8 this round.) |
+| Master-dev chat drifts (Topic 2) | 20 | **20** (unchanged this PR) |
+| 4-finding ceiling state | 0/4 | tripped → meta-audit → terminal-round-closed-clean (cycle complete) |
+| Open CFs (enumerated below — canonical) | 30 | **36** |
+
+**Tally-drift lesson (recorded as one-line discipline note, not a new rule):** the running CF counter "32" carried into this turn drifted from the true enumeration "36" — a proxy-vs-invariant instance applied to counter-keeping itself. Enumeration is canonical; the count is a derived quantity. Re-enumerate the CF list at each handoff rather than carrying a bare count forward — codify on second-instance per Rule 11's structural-over-procedural antidote (the proxy that drifted here was the count itself).
+
+### Open CF enumeration (one bullet per CF, no consolidation — canon rule)
+
+Grep of decision-log for explicit closure entries on CF 2 / CF 3 / CF 5 / CF 11: **zero matches**. All four remain open per canon — no implicit retirement. Enumeration walked forward from M1.4 close (26 carry-forwards) through every subsequent open / close entry; total 36 confirmed.
+
+**M1.4-era (21 open) — from M1.4-close enumeration minus subsequent explicit closures:**
+
+- CF 2 — Real character art in portraits → M2.
+- CF 3 — Real particle sprite sheets → post-M1.
+- CF 4b — `recipe_combine` event VFX (sim-emission-blocked) → M2 content sweep when sim emits the event. (CF 4a `item_trigger` closed M1.4b2.3.)
+- CF 5 — Music + SFX integration → post-M2.
+- CF 6 — Custom cubic-bezier easing function → M2 if designer flags.
+- CF 7 — BitmapText / pre-rasterized font atlas → post-M1 if floater spawn rate saturates Phaser glyph cache.
+- CF 8 — `>>` fast-forward indicator visual styling → M2 polish.
+- CF 9 — Telemetry event for "fast-forward triggered" → if `telemetry-plan.md` § 4 surfaces need.
+- CF 10 — Configurable per-user playback speed → M2+.
+- CF 11 — SKIP scene-level direct unit test coverage precedent → revisit if SKIP regresses.
+- CF 12 — Combat chunk Vite build non-determinism (~0.75 kB raw drift) → tracked.
+- CF 13 — Generation-side ghost-loadout filter → M2 ghost storage rework.
+- CF 16 — Server-side ghost record → M2.
+- CF 17 — Auto-rearrange hint affordance → M3.
+- CF 18 — Per-round trophy schedule + contract modifiers + win-streak multipliers → M2.
+- CF 19 — `RarityGem` for shop rarity dot → carries from M1.3.2.
+- CF 20 — `apps/client/src/index.css` `.glow-*` rgba palette derivatives → carries.
+- CF 22 — State-driven bag dimensions through pure helpers → M2.
+- CF 23 — Real-device drag-state screenshot capture → still carried.
+- CF 24 — Player portrait dying-state visual feedback (M1.4b2.2 partial closure — damage portrait hit-flash landed; progressive HP-curve tint still absent) → M2.
+- CF 30 — Particle-count consts promotion (§ 4.5 R2 spirit-extension sweep) → M2 telemetry-driven tuning.
+
+M1.4-era explicit closures since M1.4 close: CF 14 (M1.5a PR 3 Phase 2c), CF 15 (M1.5a PR 1 Phase 2), CF 21 (M1.5b PR 2), CF 27 (M1.5 retro), CF 31 (2026-05-07).
+
+**M1.5a-era (7 open):**
+
+- CF 32 — Expand mid/boss relic content to 3+ per class per slot for consistent 1-of-3 UI pattern → M1.6+ content fill or M2 polish.
+- CF 33 — Sim `state.ts` combat-coupling refactor for cleaner lazy-boundary → M2 architectural cleanup.
+- CF 34 — Gold/rerollCount/bag/shop authority migration to sim — **AMENDED Phase 2.5h:** closure must re-handle (a) sim restore bag-empty initialization at `state.ts:319-322` (B-F3 — currently forced empty; restore must read `restoreFrom.bag.placements` when sim regains bag authority); (b) `nextPlacementCounter` reset at `state.ts:258` (E-F9 — currently defaults to 0; must initialize past the highest saved placementId to avoid uid collision). → 5b.3b or beyond.
+- CF 35 — `onTelemetryEvent` client-pipeline wire-up (~16 telemetry event types) → M1.5b telemetry milestone.
+- CF 36 — `enterCombatPhase` consolidation surface (multiple call sites in `useRun.ts`) → opportunistic M1.5b client refactor.
+- CF 37 — `recipesRegistry` sim-default vs client-filter divergence → revisit alongside CF 34 if combine detection moves sim-side.
+- CF 38 — Resolution panel reward display sync (gold + trophy axes) → M2 polish.
+
+M1.5a-era explicit closures since M1.5a: CF 39 (M1.5b PR 1 Phase 2 D close).
+
+**M1.5b PR 1-era (5 open):**
+
+- CF 40 — `contractName` + `contractText` hardcoded literals at `createInitialState` → M2 contract system or first non-neutral contract.
+- CF 41 — `run_start` telemetry payload `startingRelicId` omission → folds into CF 35 scope at M1.5b telemetry milestone.
+- CF 42 — `buildCombatInput.startingHp: 30` Rule 6 violation (no current `passiveStats.maxHpBonus` items) → first M1 item with `maxHpBonus` ships.
+- CF 43 — `buildCombatInput.recipeBornPlacementIds` omission (Tinker class passive + Pocket Forge + Catalyst silently no-op in client-side combat) — **AMENDED Phase 2.5h:** restore loses sim's `bornFromRecipe` Set mid-round (E-F6); Set isn't JSON-roundtrippable; closure must persist + restore the membership (likely as `bornFromRecipe: PlacementId[]` array in `SerializedRunState`, schema-bump territory). → 5b.3b.
+- CF 44 — Mid + boss relic named glyphs (6 placeholder diamonds: `resonant-anchor`, `catalyst`, `worldforge-seed`, `berserkers-pendant`, `crimson-pact`, `conquerors-crown`) → M2 visual polish.
+
+**M1.5b PR 3 / 5b.3a-era (3 open):**
+
+- CF 45 — Client placement-id minting non-deterministic (`b${Date.now()+Math.random()}` at `useRun.ts:56-58`) — **AMENDED Phase 2.5h:** adjacent finding B-F4 — client reducer arm mints fresh shop-slot uids on restore (`s${currentRound}-${rerollsThisRound}-${i}`) rather than preserving from saved payload; `SerializedRunState` doesn't include slot uids; closure should consider bundling slot-uid preservation into the same authority pass. → M2 `/v1/replay/validate`.
+- CF 46 — Forward-version save clobber on downgrade. `apps/client/src/persistence/migrations/index.ts` returns null for `schemaVersion === N>1`; fresh-run path runs; next quiescent save overwrites forward-version payload irreversibly. Mitigation options at closure: (a) backup under `pba.v2.save.preserved`; (b) refuse to write until user explicit-abandon; (c) version-tagged migration chain with explicit downgrade-failure UX. → schema-bump territory, M2 likely.
+- **CF 47 NEW this round (Phase 2.5j-fix)** — Zod main-chunk bundle delta. Phase 2.5j Zod rewrite added +71.71 kB raw / +19.65 kB gzip to the main chunk (+27% / +24%). Accepted at Phase 2.5j as the cost of Class A structural closure. Long-term: main chunk shouldn't carry the full Zod runtime. Alternatives at closure: code-split `validate.ts` into the load-on-mount dynamic-import boundary; switch to a smaller schema lib (Valibot ~2 kB, ArkType ~10 kB gz); hand-rolled schema generator from TS types at build time (e.g. typia, ts-runtime, zod-from-ts). → M2 mobile-perf pass OR first user-visible TTFI complaint attributable to validator chunk.
+
+**ENUMERATED TOTAL: 36 open CFs.** This count is canonical; supersedes the running-counter "32" carried forward from prior closing entries.
+
+### M1.5b PR 3 / M1.5b post-5b.3a pre-flags
+
+- **5b.3b — abandon-run UI surface.** First concrete client-side trigger for `outcome === 'abandoned'`. Closes M1.5b PR 3 + M1.5b. Branch off `5ce6175`.
+- **Orphan `.gitignore` chore** — unstaged `.gitignore` modification from Phase 2.5 `1fd5424` (pattern presumably adds the `vite.config.ts.timestamp-*.mjs` ignore that paired with the orphan-tempfile deletion that turn). Pick up at 5b.3b ride-along or independent chore commit.
+- **Dev-env CA-cert hardening** — Phase 2.5j installed Zod via `pnpm add --config.strict-ssl=false` workaround for the corporate-cert TLS chain issue on `registry.npmjs.org`. Out of scope for 5b.3a; revisit independently.
+- **CF 47 optimization** — Zod bundle-size optimization deferred to M2 mobile-perf pass; tracked as CF 47 in the enumeration above.
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Catch 26; CF 47 NEW; Rule 11 clarified — TERMINAL reactive round)
 
 Codex re-review of `2337c7c` (Phase 2.5j Zod rewrite tip) returned
