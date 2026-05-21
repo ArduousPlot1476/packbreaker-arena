@@ -237,8 +237,12 @@ Local saves use `localStorage`, namespaced under `pba.v1.*`.
 - Pino for logging.
 - M1: single container, no DB. M2+: Postgres (RDS or Neon), Redis for ghost pool LRU.
 
+**Zod scope (amended 2026-05-21 / M1.5b PR 3 Phase 2.5j):** Zod also runs in `apps/client` for the LocalSaveV1 load-boundary validator (`apps/client/src/persistence/validate.ts`). The validator is schema-derived with dual-`satisfies` type-enforced completeness against the canonical `SerializedRunState` / `LocalSaveV1` types in `packages/content/src/schemas.ts`. This is the structural close for the Class A "validator-as-enumeration" failure family — see decision-log Catch 22 / 24 / 25 + Rule 11 for context. Future client-side persistence schema bumps (LocalSaveV2+) add a sibling Zod schema in the same module and route via the migration dispatcher.
+
 ### 6.4 API contract location
 All request/response types in `packages/shared/src/api/`. Server validates with Zod schemas; client imports the inferred TS types and uses a thin `fetch` wrapper. No tRPC, no GraphQL — overkill for this surface.
+
+Persistence types (`LocalSaveV1`, `SerializedRunState`) follow the same pattern: canonical TS in `packages/content`, Zod schema in `apps/client/src/persistence/validate.ts`. Both server-side request validation and client-side persistence validation share Zod as the schema runtime.
 
 ---
 
