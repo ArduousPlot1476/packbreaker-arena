@@ -1740,3 +1740,169 @@ describe('RunProvider — corrupt-payload mount fallback (M1.5b PR 3 / 5b.3a Pha
     }
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5i (Catch 24 / Class A residual) — full
+// contract validation, end-to-end fresh-fallback per new surface.
+//
+// Phase 2.5h's mount-fallback tests covered the original A-surface
+// flavors (missing relics + null shop slots). Phase 2.5i extends to
+// the new surfaces flagged by Codex finding #5 + Rule 11
+// enumeration: unknown classId / unknown contractId / missing
+// ruleset / missing derived / invalid relic ids. Each test
+// pre-populates localStorage with a v1 payload that's corrupt at
+// exactly one surface; the validator must reject at loadLocal time,
+// useRun's load-on-mount effect must bail without calling restoreRun,
+// the ClassSelectScreen mock auto-fires a fresh Tinker run, and no
+// console.error fires (which would indicate an uncaught throw landed
+// at React's error pipeline).
+// ────────────────────────────────────────────────────────────────────
+
+function makeCorruptV1Save(
+  overrides: Partial<{
+    classId: string;
+    contractId: string;
+    ruleset: unknown;
+    derived: unknown;
+    relicsStarter: unknown;
+    relicsMid: unknown;
+    relicsBoss: unknown;
+  }>,
+): unknown {
+  return {
+    schemaVersion: 1,
+    trophies: 0,
+    dailyStreak: 0,
+    lastDailyAttempted: null,
+    tutorialCompleted: false,
+    telemetryAnonId: '',
+    inProgressRun: {
+      runId: 'phase-2.5i-corrupt-test',
+      seed: 12345,
+      classId: overrides.classId ?? 'marauder',
+      contractId: overrides.contractId ?? 'neutral',
+      ruleset: 'ruleset' in overrides ? overrides.ruleset : DEFAULT_RULESET,
+      derived:
+        'derived' in overrides
+          ? overrides.derived
+          : { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+      startedAt: '2026-05-20T10:00:00.000Z',
+      hearts: 3,
+      gold: 14,
+      currentRound: 4,
+      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      relics: {
+        starter: 'relicsStarter' in overrides ? overrides.relicsStarter : 'iron-will',
+        mid: 'relicsMid' in overrides ? overrides.relicsMid : null,
+        boss: 'relicsBoss' in overrides ? overrides.relicsBoss : null,
+      },
+      shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      trophiesAtStart: 0,
+      history: [],
+      outcome: 'in_progress',
+      rngState: 0x42424242,
+      rerollCount: 0,
+      trophy: 36,
+    },
+  };
+}
+
+async function assertFreshTinkerMountsCleanly(): Promise<void> {
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const { queryByTestId, getByTestId } = render(
+      <RunProvider>
+        <RaceProbe testId="rp" />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(queryByTestId('rp')).toBeInTheDocument();
+    });
+    await new Promise<void>((r) => setTimeout(r, 10));
+    expect(getByTestId('rp-classid').textContent).toBe('tinker');
+    expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+    expect(getByTestId('rp-round').textContent).toBe('1');
+    expect(errorSpy).not.toHaveBeenCalled();
+    // The validator should have rejected at loadLocal time; restoreRun
+    // never ran, so the try/catch warn never fired either.
+    const restoreWarns = warnSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && call[0].startsWith('[useRun] restoreRun'),
+    );
+    expect(restoreWarns.length).toBe(0);
+  } finally {
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  }
+}
+
+describe('RunProvider — full-contract mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5i)', () => {
+  it('mount with unknown classId → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ classId: 'invented-class' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with unknown contractId → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ contractId: 'phantom-contract' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with missing ruleset → fresh Tinker, no throw', async () => {
+    // Setting ruleset to undefined; JSON.stringify drops the key,
+    // simulating a payload that lacks `ruleset` entirely. Validator
+    // rejects via isValidRuleset(undefined) → false. Pre-fix this
+    // would have thrown at RunController.ts:192 (snapshot.ruleset
+    // .startingHearts deref inside applySimSnapshot).
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ ruleset: undefined })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with non-object ruleset (string) → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ ruleset: 'not-a-ruleset-object' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with missing derived → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ derived: undefined })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid starter relic id → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsStarter: 'imaginary-starter' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid mid relic id (non-null but not in RELICS) → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsMid: 'imaginary-mid' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid boss relic id → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsBoss: 'imaginary-boss' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+});

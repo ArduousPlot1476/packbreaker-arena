@@ -366,6 +366,229 @@ describe('persistence — load-boundary shape validator (Phase 2.5h)', () => {
   });
 });
 
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5i (Catch 24 / Class A residual) — full
+// contract validation + registry membership.
+//
+// Phase 2.5h validator validated a field-subset (the surfaces the
+// 2.5g meta-audit enumerated). Codex finding #5 (P1) caught the gap:
+// validator only checked classId/contractId/relicId as strings, not
+// against CLASSES/CONTRACTS/RELICS, AND didn't validate ruleset or
+// derived shape at all. applySimSnapshot at RunController.ts:192-193
+// would then throw on `snapshot.ruleset.startingHearts` (undefined
+// ruleset) or `CLASSES[snapshot.classId]!.displayName` (unknown
+// classId), bypassing the fresh-run fallback.
+//
+// Rule 11 (codified at 5b.3a Phase 2.5i): a load-boundary validator
+// must validate the COMPLETE persisted contract. Deref-safety is
+// structural, not enumeration-dependent.
+// ────────────────────────────────────────────────────────────────────
+
+describe('persistence — full-contract validator + registry membership (Phase 2.5i)', () => {
+  it('rejects a payload with unknown classId (string but not in CLASSES)', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        classId: 'invented-class' as unknown,
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with unknown contractId', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        contractId: 'bogus-contract' as unknown,
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with unknown starter relic id', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'mythic-unknown', mid: null, boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with unknown mid relic id (non-null but not in RELICS)', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: 'not-a-real-mid-relic', boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with unknown boss relic id', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: null, boss: 'phantom-boss-relic' },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with undefined ruleset', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, ruleset: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with non-object ruleset (string)', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, ruleset: 'not-a-ruleset' as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with ruleset missing startingHearts', () => {
+    const partial = makeSave();
+    const ruleset = { ...DEFAULT_RULESET } as Record<string, unknown>;
+    delete ruleset.startingHearts;
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, ruleset },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with ruleset missing bagDimensions', () => {
+    const partial = makeSave();
+    const ruleset = { ...DEFAULT_RULESET } as Record<string, unknown>;
+    delete ruleset.bagDimensions;
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, ruleset },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with ruleset.bagDimensions missing width', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        ruleset: { ...DEFAULT_RULESET, bagDimensions: { height: 4 } },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with ruleset.mutators not-array', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        ruleset: { ...DEFAULT_RULESET, mutators: 'not-array' as unknown },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with ruleset.mutators containing unknown mutator type', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        ruleset: {
+          ...DEFAULT_RULESET,
+          mutators: [{ type: 'invented_mutator_type' }],
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts a payload with ruleset.mutators containing known boss_only mutator', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        ruleset: {
+          ...DEFAULT_RULESET,
+          mutators: [{ type: 'boss_only', hpOverride: 200, damageBonus: 5 }],
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+
+  it('rejects a payload with undefined derived', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, derived: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with derived missing extraRerollsPerRound', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        derived: { itemCostDelta: 0, bonusGoldOnWin: 2 } as unknown,
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with derived.bonusGoldOnWin as string', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: '2' as unknown },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+});
+
 describe('persistence — migration dispatcher', () => {
   it('migrate(v1 payload) returns the payload unchanged (identity)', () => {
     const v1 = makeSave({ telemetryAnonId: 'uuid-test' });
