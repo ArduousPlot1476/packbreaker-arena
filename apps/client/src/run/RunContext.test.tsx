@@ -47,6 +47,7 @@ import type {
   SimSeed,
 } from '@packbreaker/content';
 import { DEFAULT_RULESET } from '@packbreaker/content';
+import type { LocalSaveV1 } from '@packbreaker/shared';
 import { RunProvider, useRunContext } from './RunContext';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
 import { SHOP_POOL_ITEMS } from './content';
@@ -1363,5 +1364,641 @@ describe('RunProvider — resetRun two-axis reset (M1.5b PR 2)', () => {
       expect(queryByTestId('r')).toBeInTheDocument();
     });
     expect(queryByTestId('run-boot-fallback')).toBeNull();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Commit 6 — quiescent-save integration.
+//
+// Verifies the architectural invariant: useRun's save-on-quiescent
+// useEffect writes to localStorage only on round/outcome transitions,
+// never on mid-round mutations (reroll, buy, sell). Mount-time write
+// counts as a transition (simRun goes from null to non-null +
+// round/outcome become defined for the first time).
+//
+// Spy on Storage.prototype.setItem to observe write timing without
+// reading actual storage content.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — save-on-quiescent timing (M1.5b PR 3 / 5b.3a)', () => {
+  it('writes a save to pba.v1.save after init + leaves it unchanged across a mid-round reroll', async () => {
+    const { getByTestId, queryByTestId } = render(
+      <RunProvider>
+        <GoldDisplay testId="q" />
+      </RunProvider>,
+    );
+
+    // Wait for the consumer to mount (post init_from_sim).
+    await waitFor(() => {
+      expect(queryByTestId('q')).toBeInTheDocument();
+    });
+
+    // The save useEffect runs after init_from_sim. Wait for it to write.
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
+    });
+    const savedAfterMount = localStorage.getItem('pba.v1.save');
+    expect(savedAfterMount).not.toBeNull();
+    const parsed = JSON.parse(savedAfterMount!) as { inProgressRun: { currentRound: number } };
+    expect(parsed.inProgressRun.currentRound).toBe(1);
+
+    // Reroll: state changes (rerollCount, shop, gold) but round + outcome
+    // do NOT change. Quiescent invariant: the saved payload remains
+    // identical (no re-write). Read again and assert byte-equality.
+    act(() => {
+      fireEvent.click(getByTestId('q-reroll'));
+    });
+    // Give any potential save useEffect a microtask to fire (it shouldn't,
+    // but we want to give it a chance to fail loudly if quiescent
+    // invariant is violated).
+    await new Promise<void>((r) => setTimeout(r, 0));
+    const savedAfterReroll = localStorage.getItem('pba.v1.save');
+    expect(savedAfterReroll).toBe(savedAfterMount);
+  });
+
+  // D-F5 focused negative + positive: byte-equality above is sufficient
+  // for reroll specifically (rerollCount/shop/gold/rngState all change,
+  // so identical bytes ⟹ no fire) but the audit asked for a spy-based
+  // pin AND a positive case on round change. This test instruments
+  // localStorage.setItem to count save writes directly and drives a
+  // combat completion to bump the round.
+  it('setItem fires on initial mount + round change, NOT on reroll (D-F5 spy pin)', async () => {
+    // Spy on the localStorage instance directly. Spying on
+    // Storage.prototype doesn't work under happy-dom — the localStorage
+    // object's setItem isn't the prototype method.
+    const setItemSpy = vi.spyOn(localStorage, 'setItem');
+    try {
+      const { getCtx } = await renderAndCapture();
+      const ctx0 = getCtx();
+      expect(ctx0.simRun).not.toBeNull();
+
+      // Mount-time save fires when the save effect runs on the simRun
+      // null → controller transition. Wait for it to land.
+      await waitFor(() => {
+        const writes = setItemSpy.mock.calls.filter((c) => c[0] === 'pba.v1.save');
+        expect(writes.length).toBeGreaterThanOrEqual(1);
+      });
+      const writesAfterMount = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+
+      // ── Negative: reroll is mid-round mutation. Deps:
+      // [simRun, state.state.round, state.state.outcome] — none change
+      // on a reroll. Effect MUST NOT fire.
+      const rerollCountBefore = getCtx().state.state.rerollCount;
+      act(() => {
+        ctx0.onReroll();
+      });
+      await waitFor(() => {
+        expect(getCtx().state.state.rerollCount).toBe(rerollCountBefore + 1);
+      });
+      // Drain microtasks so any latent save effect has a chance to misfire.
+      await new Promise<void>((r) => setTimeout(r, 0));
+
+      const writesAfterReroll = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+      expect(writesAfterReroll).toBe(writesAfterMount);
+
+      // ── Positive: drive a combat completion. onContinue + onCombatDone
+      // → sim.advancePhase → state.state.round increments → save effect
+      // MUST fire.
+      act(() => ctx0.onContinue());
+      await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+      const roundBefore = getCtx().state.state.round;
+      act(() => {
+        ctx0.onCombatDone({
+          result: {
+            events: [],
+            outcome: 'player_win' as const,
+            finalHp: { player: 30, ghost: 0 },
+            endedAtTick: 5,
+          },
+          opponentGhostId: null,
+          opponentClassId: 'tinker' as ClassId,
+          damageDealt: 30,
+          damageTaken: 6,
+        });
+      });
+      await waitFor(() => {
+        expect(getCtx().state.state.round).toBe(roundBefore + 1);
+      });
+
+      const writesAfterRoundAdvance = setItemSpy.mock.calls.filter(
+        (c) => c[0] === 'pba.v1.save',
+      ).length;
+      expect(writesAfterRoundAdvance).toBeGreaterThan(writesAfterReroll);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5 P1 (Catch 20) — load-on-mount restore
+// race guard.
+//
+// Pre-fix: load-on-mount's dynamic-import resolution unconditionally
+// called setSimRun + dispatch(restore_from_save) once the import
+// resolved (the inline comment claimed race-guarding but the code only
+// checked an unmount-cancellation flag). If a fresh class-select pick
+// fired during the import window — exactly the auto-fire stub's
+// behavior on mount — the restore callback clobbered the freshly-
+// initialized run when the import eventually resolved.
+//
+// Post-fix: a monotonic restoreEpochRef in useRun is bumped
+// synchronously by the createRun useEffect before its dynamic-import.
+// Restore's resolve callback observes the bumped epoch (captured-vs-
+// current mismatch) and bails before setSimRun + dispatch, leaving the
+// fresh run intact.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — load-on-mount restore race guard (M1.5b PR 3 / 5b.3a Phase 2.5 P1)', () => {
+  it('fresh-run wins when class-select fires during a pending restore — saved Marauder is NOT applied over fresh Tinker', async () => {
+    // Stage a v1 Marauder save in localStorage. After mount, the auto-
+    // fire ClassSelectScreen stub (configured at the top of this file
+    // to fire Tinker + apprentices-loop) will race the restore's
+    // dynamic-import resolution. Pre-fix this clobbered to Marauder;
+    // post-fix the fresh Tinker run survives.
+    const maraudersSave: LocalSaveV1 = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'race-test-run' as RunId,
+        seed: 99999 as SimSeed,
+        classId: 'marauder' as ClassId,
+        contractId: 'neutral' as ContractId,
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z' as IsoTimestamp,
+        hearts: 3,
+        gold: 42,
+        currentRound: 5 as RoundNumber,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        relics: {
+          starter: 'iron-will' as RelicId,
+          mid: null,
+          boss: null,
+        },
+        shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress' as RunOutcome,
+        rngState: 0x12345678,
+        rerollCount: 0,
+        trophy: 0,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(maraudersSave));
+
+    const { queryByTestId, getByTestId } = render(
+      <RunProvider>
+        <RaceProbe testId="rp" />
+      </RunProvider>,
+    );
+
+    // Wait for both async paths to resolve and the consumer to mount.
+    await waitFor(() => {
+      expect(queryByTestId('rp')).toBeInTheDocument();
+    });
+
+    // Drive the eventLoop a few microtasks so any pending restore that
+    // bails (or stale clobber, in the broken pre-fix case) lands.
+    await new Promise<void>((r) => setTimeout(r, 10));
+
+    // Fresh Tinker run wins. Pre-fix this would have been 'marauder'
+    // because the restore callback fired second and overwrote the fresh
+    // controller's init_from_sim state.
+    expect(getByTestId('rp-classid').textContent).toBe('tinker');
+    expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+    // Round = 1 (fresh) NOT 5 (saved).
+    expect(getByTestId('rp-round').textContent).toBe('1');
+  });
+});
+
+function RaceProbe({ testId }: { testId: string }) {
+  const { state } = useRunContext();
+  return (
+    <div data-testid={testId}>
+      <span data-testid={`${testId}-classid`}>{String(state.state.classId)}</span>
+      <span data-testid={`${testId}-relic-starter`}>{String(state.state.relics.starter)}</span>
+      <span data-testid={`${testId}-round`}>{state.state.round}</span>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5h (Catch 22 / Class A) — end-to-end
+// corrupt-payload mount fallback.
+//
+// Pre-remediation, a {schemaVersion: 1, ...garbage} payload passed
+// the migrate dispatcher's version check and threw inside restoreRun
+// or downstream constructors. The throw lived in a Promise callback
+// (useRun's dynamic-import .then), so it surfaced as a console
+// unhandled-rejection — simRun stayed null and the fresh-run UI
+// mounted via the ClassSelectScreen mock, but with a dirtied console
+// that CI could have flagged as a regression.
+//
+// Post-fix: the load-boundary shape validator rejects the corrupt
+// payload at loadLocal time; useRun's load effect bails on
+// saved === null without ever calling restoreRun. End-to-end:
+// fresh Tinker run mounts, no throws.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — corrupt-payload mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5h)', () => {
+  it('mount with {schemaVersion: 1, inProgressRun missing relics} → fresh Tinker run, no throws', async () => {
+    // Corrupt-but-v1 payload: outcome is in_progress (so the load
+    // effect would attempt restore) but relics is omitted — the
+    // pre-fix path threw at restoreRun's `serialized.relics.starter`
+    // deref. The validator now rejects at loadLocal time.
+    const corrupt = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'corrupt-test',
+        seed: 12345,
+        classId: 'marauder',
+        contractId: 'neutral',
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z',
+        hearts: 3,
+        gold: 14,
+        currentRound: 4,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        // relics intentionally omitted — pre-fix throw vector A3/A6
+        shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress',
+        rngState: 0x42424242,
+        rerollCount: 0,
+        trophy: 36,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(corrupt));
+
+    // Spy on console.error / console.warn to assert no unhandled
+    // rejections or restoreRun warnings (validator should have caught
+    // the corruption upstream of the try/catch, so the warn never fires).
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const { queryByTestId, getByTestId } = render(
+        <RunProvider>
+          <RaceProbe testId="rp" />
+        </RunProvider>,
+      );
+
+      await waitFor(() => {
+        expect(queryByTestId('rp')).toBeInTheDocument();
+      });
+      await new Promise<void>((r) => setTimeout(r, 10));
+
+      // Fresh Tinker run (auto-fired by the ClassSelectScreen mock).
+      expect(getByTestId('rp-classid').textContent).toBe('tinker');
+      expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+      expect(getByTestId('rp-round').textContent).toBe('1');
+      // No restore attempts surfaced through the try/catch — validator
+      // rejected at loadLocal time, the load-effect bailed pre-import.
+      expect(errorSpy).not.toHaveBeenCalled();
+      const restoreWarns = warnSpy.mock.calls.filter(
+        (call) => typeof call[0] === 'string' && call[0].startsWith('[useRun] restoreRun'),
+      );
+      expect(restoreWarns.length).toBe(0);
+    } finally {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it('mount with shop.slots containing null (post-purchase terminal save) → fresh run, validator rejects', async () => {
+    // The terminal-save edge case from Step 0 #1: if a player buys
+    // from shop in the final round before run-end, state.shop has
+    // null slots; combat_done leaves state.shop unchanged on runEnded
+    // so the terminal save persists those nulls. clientShopToSimShop's
+    // cast preserves them as null in JSON; the validator on next load
+    // rejects (isStr fails for null slot). Fresh-run fallback.
+    const partialPurchase = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: {
+        runId: 'null-slot-test',
+        seed: 12345,
+        classId: 'marauder',
+        contractId: 'neutral',
+        ruleset: DEFAULT_RULESET,
+        derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+        startedAt: '2026-05-20T10:00:00.000Z',
+        hearts: 3,
+        gold: 14,
+        currentRound: 4,
+        bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+        relics: { starter: 'iron-will', mid: null, boss: null },
+        shop: { slots: ['iron-mace', null, 'iron-mace'], purchased: [], rerollsThisRound: 0 },
+        trophiesAtStart: 0,
+        history: [],
+        outcome: 'in_progress',
+        rngState: 0x42424242,
+        rerollCount: 0,
+        trophy: 36,
+      },
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(partialPurchase));
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { queryByTestId, getByTestId } = render(
+        <RunProvider>
+          <RaceProbe testId="rp" />
+        </RunProvider>,
+      );
+      await waitFor(() => {
+        expect(queryByTestId('rp')).toBeInTheDocument();
+      });
+      await new Promise<void>((r) => setTimeout(r, 10));
+
+      expect(getByTestId('rp-classid').textContent).toBe('tinker');
+      expect(getByTestId('rp-round').textContent).toBe('1');
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5i (Catch 24 / Class A residual) — full
+// contract validation, end-to-end fresh-fallback per new surface.
+//
+// Phase 2.5h's mount-fallback tests covered the original A-surface
+// flavors (missing relics + null shop slots). Phase 2.5i extends to
+// the new surfaces flagged by Codex finding #5 + Rule 11
+// enumeration: unknown classId / unknown contractId / missing
+// ruleset / missing derived / invalid relic ids. Each test
+// pre-populates localStorage with a v1 payload that's corrupt at
+// exactly one surface; the validator must reject at loadLocal time,
+// useRun's load-on-mount effect must bail without calling restoreRun,
+// the ClassSelectScreen mock auto-fires a fresh Tinker run, and no
+// console.error fires (which would indicate an uncaught throw landed
+// at React's error pipeline).
+// ────────────────────────────────────────────────────────────────────
+
+function makeCorruptV1Save(
+  overrides: Partial<{
+    classId: string;
+    contractId: string;
+    ruleset: unknown;
+    derived: unknown;
+    relicsStarter: unknown;
+    relicsMid: unknown;
+    relicsBoss: unknown;
+    bagPlacements: unknown;
+    shopSlots: unknown;
+    history: unknown;
+  }>,
+): unknown {
+  return {
+    schemaVersion: 1,
+    trophies: 0,
+    dailyStreak: 0,
+    lastDailyAttempted: null,
+    tutorialCompleted: false,
+    telemetryAnonId: '',
+    inProgressRun: {
+      runId: 'phase-2.5i-corrupt-test',
+      seed: 12345,
+      classId: overrides.classId ?? 'marauder',
+      contractId: overrides.contractId ?? 'neutral',
+      ruleset: 'ruleset' in overrides ? overrides.ruleset : DEFAULT_RULESET,
+      derived:
+        'derived' in overrides
+          ? overrides.derived
+          : { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 2 },
+      startedAt: '2026-05-20T10:00:00.000Z',
+      hearts: 3,
+      gold: 14,
+      currentRound: 4,
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: 'bagPlacements' in overrides ? overrides.bagPlacements : [],
+      },
+      relics: {
+        starter: 'relicsStarter' in overrides ? overrides.relicsStarter : 'iron-will',
+        mid: 'relicsMid' in overrides ? overrides.relicsMid : null,
+        boss: 'relicsBoss' in overrides ? overrides.relicsBoss : null,
+      },
+      shop: {
+        slots: 'shopSlots' in overrides ? overrides.shopSlots : [],
+        purchased: [],
+        rerollsThisRound: 0,
+      },
+      trophiesAtStart: 0,
+      history: 'history' in overrides ? overrides.history : [],
+      outcome: 'in_progress',
+      rngState: 0x42424242,
+      rerollCount: 0,
+      trophy: 36,
+    },
+  };
+}
+
+async function assertFreshTinkerMountsCleanly(): Promise<void> {
+  const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  try {
+    const { queryByTestId, getByTestId } = render(
+      <RunProvider>
+        <RaceProbe testId="rp" />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(queryByTestId('rp')).toBeInTheDocument();
+    });
+    await new Promise<void>((r) => setTimeout(r, 10));
+    expect(getByTestId('rp-classid').textContent).toBe('tinker');
+    expect(getByTestId('rp-relic-starter').textContent).toBe('apprentices-loop');
+    expect(getByTestId('rp-round').textContent).toBe('1');
+    expect(errorSpy).not.toHaveBeenCalled();
+    // The validator should have rejected at loadLocal time; restoreRun
+    // never ran, so the try/catch warn never fired either.
+    const restoreWarns = warnSpy.mock.calls.filter(
+      (call) => typeof call[0] === 'string' && call[0].startsWith('[useRun] restoreRun'),
+    );
+    expect(restoreWarns.length).toBe(0);
+  } finally {
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  }
+}
+
+describe('RunProvider — full-contract mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5i)', () => {
+  it('mount with unknown classId → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ classId: 'invented-class' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with unknown contractId → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ contractId: 'phantom-contract' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with missing ruleset → fresh Tinker, no throw', async () => {
+    // Setting ruleset to undefined; JSON.stringify drops the key,
+    // simulating a payload that lacks `ruleset` entirely. Validator
+    // rejects via isValidRuleset(undefined) → false. Pre-fix this
+    // would have thrown at RunController.ts:192 (snapshot.ruleset
+    // .startingHearts deref inside applySimSnapshot).
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ ruleset: undefined })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with non-object ruleset (string) → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ ruleset: 'not-a-ruleset-object' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with missing derived → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ derived: undefined })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid starter relic id → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsStarter: 'imaginary-starter' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid mid relic id (non-null but not in RELICS) → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsMid: 'imaginary-mid' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with invalid boss relic id → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ relicsBoss: 'imaginary-boss' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5j (Catch 25 / Class A structural close) —
+// end-to-end fresh-fallback for the three surfaces Codex finding #6/#7/#8
+// flagged. Hand-rolled Phase 2.5h/2.5i validators accepted any string
+// for bag.placements[].itemId and shop.slots[], and accepted
+// history: [null] (only checked array type) — letting the corrupt save
+// reach DraggableItem.tsx / ShopSlot.tsx / useRun relic-offer gating
+// where the unguarded deref crashed the mount. The Zod schema closes
+// all three structurally.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — schema-derived mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5j)', () => {
+  it('mount with bag.placements[].itemId not in ITEMS → fresh Tinker, no throw (Codex 6)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({
+          bagPlacements: [
+            {
+              placementId: 'p-0',
+              itemId: 'imaginary-bag-item',
+              anchor: { col: 0, row: 0 },
+              rotation: 0,
+            },
+          ],
+        }),
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with shop.slots containing unknown ITEMS id → fresh Tinker, no throw (Codex 7)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({ shopSlots: ['iron-mace', 'imaginary-shop-item'] }),
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with history: [null] → fresh Tinker, no throw (Codex 8)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ history: [null] })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with history element missing round → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({
+          history: [
+            {
+              outcome: 'win',
+              damageDealt: 30,
+              damageTaken: 5,
+              goldEarnedThisRound: 2,
+              opponentGhostId: null,
+              opponentClassId: null,
+            },
+          ],
+        }),
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  // Phase 2.5j-fix / Codex finding B: mis-slotted relic. Pre-fix, a
+  // boss-tier relic in the starter slot passed the validator (id ∈
+  // RELICS but slot not checked); composeRuleset would fold the boss
+  // modifiers in → progression bypass. Post-fix, the slot-compat
+  // refines on RelicSlotsSchema reject + fresh-fallback.
+  it('mount with boss-tier relic in the starter slot → fresh Tinker, no throw (Codex B)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({ relicsStarter: 'worldforge-seed' }), // boss-tier
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
   });
 });

@@ -1,8 +1,8 @@
 // run/ barrel — public surface for the M1.2.4 run-state machine and the
 // M1.2.5 determinism action-stream API.
 
-export type { ApplyCombatOutcomeInput, CreateRunInput, RunController, RunPhase } from './state';
-export { createRun } from './state';
+export type { ApplyCombatOutcomeInput, CreateRunInput, RestoreRunOptions, RunController, RunPhase } from './state';
+export { createRun, restoreRun } from './state';
 
 export type { RecipeMatch } from './recipes';
 export { detectRecipes } from './recipes';

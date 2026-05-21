@@ -12,7 +12,7 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { ClassId, CombatResult, ContractId, GhostId, RelicId } from '@packbreaker/content';
+import type { ClassId, CombatResult, ContractId, GhostId, IsoTimestamp, RelicId } from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
 // chunk-splits only on runtime imports). The runtime createRun call
@@ -50,8 +50,15 @@ import {
   type ClientRunState,
 } from './RunController';
 import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
-import { computeRerollCost, makeRunSeed } from './sim-bridge';
+import {
+  clientBagToSimBag,
+  clientShopToSimShop,
+  computeRerollCost,
+  makeRunSeed,
+} from './sim-bridge';
 import type { Recipe } from './types';
+import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
+import { clearLocal, loadLocal, saveLocal } from '../persistence';
 
 function makeUid(prefix: 'b' | 's'): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -87,13 +94,105 @@ export function useRun() {
     null,
   );
 
+  // M1.5b PR 3 / 5b.3a Phase 2.5 P1 fix (Catch 20): monotonic epoch ref
+  // shared between the load-on-mount restore effect and the fresh-run
+  // createRun effect. The restore effect captures epochRef.current at
+  // start; the createRun effect bumps it synchronously when a fresh run
+  // is initiated. If a fresh run starts during the restore's dynamic-
+  // import window, the resolve callback observes a stale captured epoch
+  // and aborts before setSimRun + dispatch, leaving the fresh run intact.
+  //
+  // useRef vs. state: React state captured in the closure would always
+  // read null at effect-start (mount). A simRun-dep wouldn't help either
+  // (it would re-fire the restore on transition). The ref is leaner and
+  // mirrors the React idiom for "out-of-render mutable handles."
+  const restoreEpochRef = useRef(0);
+
   const beginRun = useCallback((input: PendingRunInput) => {
     setPendingRunInput(input);
+  }, []);
+
+  // M1.5b PR 3 / 5b.3a Commit 5: load-on-mount. Before the class-select
+  // gate fires, check localStorage for a v1 in-progress save. Per Phase 1
+  // ratification: "if inProgressRun present and outcome==='in_progress',
+  // restore; else fresh." Terminal saves are discarded by the predicate
+  // here — the next saveLocal call (post-fresh-run arranging-entry)
+  // overwrites the stale terminal save.
+  //
+  // Mount-only effect (empty deps). The `cancelled` flag covers unmount
+  // during the import window; the epoch comparison (Phase 2.5 P1 fix /
+  // Catch 20) covers the race where a fresh run is started during the
+  // window — see restoreEpochRef declaration above.
+  //
+  // Phase 2.5h (Catch 22 / Class A): the loaded payload has already
+  // passed the load-boundary shape validator (apps/client/src/
+  // persistence/validate.ts), so the obvious throws (relics undefined,
+  // history not-array, etc.) cannot reach restoreRun. The try/catch
+  // here is the residual belt — restoreRun's own contract throws
+  // (Unknown contractId / Unknown startingRelicId for content-registry
+  // gaps, etc., state.ts:262-278) and any future deref the validator
+  // doesn't yet cover fall through to a fresh-run fallback (simRun
+  // stays null → ClassSelectScreen mounts). Dev-only console.warn so
+  // the failure isn't silent during development.
+  useEffect(() => {
+    let cancelled = false;
+    const myEpoch = restoreEpochRef.current;
+    const saved = loadLocal();
+    if (saved === null || saved.inProgressRun === null) return;
+    if (saved.inProgressRun.outcome !== 'in_progress') return;
+    const snapshot = saved.inProgressRun;
+    void import('@packbreaker/sim').then(({ restoreRun }) => {
+      if (cancelled) return;
+      // Phase 2.5 P1 race-guard: if a fresh run was initiated during the
+      // dynamic-import window, the createRun effect synchronously bumped
+      // restoreEpochRef.current past myEpoch. Bail without clobbering the
+      // fresh run's setSimRun + init_from_sim dispatch.
+      if (restoreEpochRef.current !== myEpoch) return;
+      let controller;
+      try {
+        controller = restoreRun(snapshot, {
+          itemsRegistry: SHOP_POOL_ITEMS,
+          onTelemetryEvent: () => {
+            // CF 35 stub; mirrors fresh-run path.
+          },
+        });
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            '[useRun] restoreRun threw on a validator-passing payload; falling back to fresh-run path:',
+            err,
+          );
+        }
+        return;
+      }
+      setSimRun(controller);
+      // Phase 2.5j-fix (Catch 26): pass the post-restoreRun controller
+      // snapshot alongside the persisted snapshot. The reducer reads
+      // sim-authoritative fields (ruleset, derived, maxHearts, etc.)
+      // from controllerSnapshot — restoreRun recomposes them from
+      // current registries via composeRuleset, so this is the cross-
+      // version-safe source. snapshot is still canonical for
+      // client-authoritative fields (bag, shop) + SerializedRunState-
+      // only fields (rerollCount, trophy). See decision-log Catch 26
+      // for the partition.
+      dispatch({
+        type: 'restore_from_save',
+        snapshot,
+        controllerSnapshot: controller.getState(),
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (pendingRunInput === null) return;
     if (simRun !== null) return;
+    // Phase 2.5 P1 race-guard companion: synchronously invalidate any
+    // pending restore BEFORE the dynamic import. Restore's resolve
+    // callback observes the bumped epoch and bails.
+    restoreEpochRef.current += 1;
     let cancelled = false;
     void import('@packbreaker/sim').then(({ createRun }) => {
       if (cancelled) return;
@@ -102,6 +201,14 @@ export function useRun() {
         classId: pendingRunInput.classId,
         contractId: 'neutral' as ContractId,
         startingRelicId: pendingRunInput.startingRelicId,
+        // M1.5b PR 3 / 5b.3a Commit 3: inject real wall-clock timestamp.
+        // Sim's CreateRunInput.startedAt defaults to a fixed sentinel
+        // ('2025-01-01T00:00:00.000Z') when omitted (state.ts § 200) —
+        // fine for sim tests but wrong for production saves where
+        // startedAt is persisted into SerializedRunState and surfaced
+        // in telemetry. Client owns the clock per § 4.1 (sim is
+        // environment-free).
+        startedAt: new Date().toISOString() as IsoTimestamp,
         itemsRegistry: SHOP_POOL_ITEMS,
         onTelemetryEvent: () => {
           // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
@@ -340,10 +447,82 @@ export function useRun() {
   // 5b.3 LocalSaveV1 reuses this callback shape as the "abandon current
   // run" handler — same two-axis discard.
   const resetRun = useCallback(() => {
+    // M1.5b PR 3 / 5b.3a: clear the persisted save before discarding
+    // in-memory state. The next saveLocal (post-fresh-run arranging-entry)
+    // would overwrite anyway, but explicit clear is belt-and-suspenders
+    // for the "user explicitly chose to start fresh" intent and prevents
+    // a stale save from briefly being load-on-mount-eligible if the user
+    // reloads between resetRun and a fresh beginRun.
+    clearLocal();
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     setPendingRunInput(null);
   }, []);
+
+  // M1.5b PR 3 / 5b.3a Commit 5: save-on-quiescent. Persist a
+  // LocalSaveV1 whenever simRun is non-null AND (round or outcome)
+  // transitions. Per Phase 1 ratification, quiescent points are
+  // arranging-entry (round advanced) + terminal outcome — both
+  // observable as React state changes through the dependency array.
+  //
+  // Initial mount fires once (simRun goes from null to non-null),
+  // capturing the round-1 arranging-entry. Subsequent combat_done
+  // dispatches that flip round or outcome fire again. Buys/sells/
+  // rerolls/drags don't change round or outcome, so they don't trip
+  // this effect — matching the quiescent invariant exactly.
+  //
+  // Composition: snapshot.bag and snapshot.shop are REPLACED with the
+  // client's authoritative bag + shop (sim's bag is empty in M1.5a per
+  // Q2 Amendment A; sim's shop diverges from client's mid-round under
+  // the Amendment A authority split — rerolls aren't fully mirrored
+  // sim-side). Phase 2.5h (Catch 23 / Class B) restored shop to the
+  // client-sourced override list: pre-fix, save read sim's shop and
+  // restoreRun regenerated it via makeShop, producing a save→load→save
+  // cursor drift. Now: save reads client.shop verbatim, restoreRun
+  // restores verbatim, idempotent round-trip. rngState pulled from
+  // sim (post-advancePhase makeShop, which IS valid RNG consumption —
+  // advancePhase is a quiescent transition, not the restore branch).
+  // rerollCount + trophy lifted from client state.state.
+  //
+  // Cross-session fields (trophies, dailyStreak, lastDailyAttempted,
+  // tutorialCompleted, telemetryAnonId) are stubbed for 5b.3a — no
+  // surfaces exist yet to mutate them. M2 / CF 35 will wire them.
+  useEffect(() => {
+    if (simRun === null) return;
+    const simSnap = simRun.getState();
+    const serialized: SerializedRunState = {
+      ...simSnap,
+      // Client-authoritative overrides (per Phase 1 field-sourcing table
+      // under B2′; shop added at Phase 2.5h per the meta-audit
+      // remediation). At save time (arranging-entry) client.shop has
+      // non-null slots and rerollCount=0 per the quiescent invariant
+      // (Step 0 #1 confirmed); clientShopToSimShop maps directly.
+      gold: state.state.gold,
+      bag: clientBagToSimBag(state.bag, simSnap.ruleset.bagDimensions),
+      shop: clientShopToSimShop(state.shop, state.state.rerollCount),
+      // SerializedRunState-only fields.
+      rngState: simRun.getRngState(),
+      rerollCount: state.state.rerollCount,
+      trophy: state.state.trophy,
+    };
+    const payload: LocalSaveV1 = {
+      schemaVersion: 1,
+      trophies: 0,
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+      tutorialCompleted: false,
+      telemetryAnonId: '',
+      inProgressRun: serialized,
+    };
+    saveLocal(payload);
+    // Deps intentionally narrow: round + outcome are the only
+    // quiescent-transition signals. state.state.gold/bag/rerollCount
+    // /trophy ARE read inside the effect (via closure) but are NOT in
+    // deps — adding them would fire save on every buy/sell/reroll
+    // (violating the quiescent invariant). React reads the latest
+    // closure values when the effect runs, so the saved payload is
+    // current relative to round/outcome transitions.
+  }, [simRun, state.state.round, state.state.outcome]);
 
   // Dispatches sim's grantRelic + sync_from_sim. Sim's M1.2.6 phase
   // gates are authoritative — client does NOT re-validate against the

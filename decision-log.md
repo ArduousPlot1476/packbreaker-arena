@@ -4,6 +4,1158 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Catch 26; CF 47 NEW; Rule 11 clarified — TERMINAL reactive round)
+
+Codex re-review of `2337c7c` (Phase 2.5j Zod rewrite tip) returned
+two findings — **neither Class A**. Pattern 7 structural close
+(Phase 2.5j) held: no validator-enumeration regression. The two
+findings are different classes entirely:
+
+- **Finding A** (P1, useRun.ts:102): cross-version restore field
+  divergence. Restore reducer dispatched raw snapshot;
+  applySimSnapshot assigned ruleset/derived from persisted-time
+  composition; sim's restoreRun recomposed them via composeRuleset
+  from current registries → client.state.ruleset diverged from
+  simRun's effectiveRuleset across version bumps / hot-fixes →
+  wrong reroll cost / shop gen.
+- **Finding B** (P2, validate.ts:155): relic-slot semantic
+  validation gap. Schema checked relic id ∈ RELICS but not that
+  RELICS[id].slot matched the field's expected slot. A boss-tier
+  relic in the starter slot would pass; composeRuleset folds boss
+  modifiers in → progression bypass.
+
+**TERMINAL reactive round** by master-dev ratification — finding
+count this PR reaches 10 / reactive budget long-spent. Both
+findings fixed this turn; on a clean self-check, re-Codex once
+more; on clean → merge; on a finding tied to the A/B changes →
+fix only Class A / manifest-now P1, else CF-and-ship.
+
+### Step 0 confirms (verified pre-implementation)
+
+(a) Dispatch site: `apps/client/src/run/useRun.ts:169` dispatches
+    raw `snapshot`. Restore reducer arm at
+    `apps/client/src/run/RunController.ts:478-498` calls
+    `applySimSnapshot(state, s, true)` at L479; applySimSnapshot
+    at L181-200 assigns `ruleset: snapshot.ruleset` /
+    `derived: snapshot.derived` / `maxHearts:
+    snapshot.ruleset.startingHearts` at L189-192 — all raw from
+    persisted snapshot. ✓ Finding A surface confirmed.
+(b) `packages/sim/src/run/state.ts:293-295` calls
+    `composeRuleset(contract, input.classId, this.relics)`,
+    storing `this.effectiveRuleset` + `this.derived` — recomposed
+    from current registries. `controller.getState()` at L391-425
+    returns `ruleset: this.effectiveRuleset` + `derived: { ... }`
+    (the recomposed values). ✓ Recomposition confirmed.
+(c) Field partition for restore (Step 0 enumeration):
+    | Source | Fields |
+    |---|---|
+    | controller.getState() (sim-authoritative, recomposed) | ruleset, derived; downstream-derived maxHearts (ruleset.startingHearts) + className (CLASSES[classId]) |
+    | controller.getState() (sim-verbatim — equal to snapshot) | runId, seed, classId, contractId, startedAt, hearts, currentRound, relics, outcome, history |
+    | snapshot (client-authoritative per Q2 Amendment A) | bag.placements, shop.slots — sim's are non-authoritative mirrors |
+    | snapshot (SerializedRunState-only, NOT in RunState) | rngState (sim-internal rng cursor), rerollCount, trophy |
+    | snapshot.gold via includeGold (Amendment A; sim mirrors snapshot.gold on restore — equivalent) | gold |
+
+    **No ambiguity.** Inspection-only halt authority not exercised.
+
+### Catch 26 (NEW — cross-version restore field divergence; NOT Class A; NOT CF 34)
+
+**Class diagnosis.** Not Class A (no throw — silent semantic
+desync). Not CF 34 (Q2 Amendment A authority model isn't changing;
+ruleset/derived ARE sim-owned today; the bug is that the reducer
+read the persisted shadow instead of sim's current truth). Not CF
+46 (CF 46 is about forward-version-save backup-on-downgrade; this
+is about same-or-later-version load where the recomposed values
+drift from the persisted ones). Genuinely new class.
+
+**Fix.** Extend `restore_from_save` RunAction with a
+`controllerSnapshot: SimRunState` field. useRun's load-on-mount
+dispatch passes `controller.getState()` alongside the persisted
+`snapshot`. Reducer arm reads sim-authoritative fields (ruleset,
+derived, maxHearts, className) from controllerSnapshot through
+applySimSnapshot; client-authoritative (bag, shop) + SerializedRun
+State-only (rerollCount, trophy) continue to come from snapshot.
+
+**Regression guard verified.** The Catch 23 cursor-preservation
+invariant (restored.getRngState() === snapshot.rngState) is
+unaffected: rngState lives sim-internal (not in RunState, not in
+controller.getState()), the constructor's restoreFrom branch
+seeds `this.rng = createRng(restoreFrom.rngState)` terminally
+(state.ts:326), and the reducer doesn't touch rngState. Phase
+2.5h verbatim-shop also unaffected: shop continues to come from
+snapshot.shop.slots in the reducer arm. D-F5 save-on-quiescent
+timing untouched — Catch 26 only changes the restore-side
+hydration, not save-fire timing.
+
+### Codex finding B (P2, schema strictness)
+
+**Fix.** Three `.refine` clauses on RelicSlotsSchema — one per
+non-null slot field — asserting `RELICS[id].slot ===
+expected_slot`. Mis-slotted save → safeParse fails → fresh fallback.
+
+### Rule 11 clarification (NOT amendment — refinement)
+
+Rule 11 codified at 2.5i and amended at 2.5j defined STRUCTURAL
+completeness (every field present with the right primitive type +
+nested-object shape + registry membership for id-typed fields).
+Finding B reveals a class beyond structural: SEMANTIC completeness
+— the field MAY be the right type and id may be a registry member,
+but the value carries semantic constraints beyond type (a relic id
+in the `starter` field must reference a relic whose `.slot ===
+'starter'`).
+
+**Clarification (added 2026-05-21 / Phase 2.5j-fix):** Rule 11's
+structural completeness CLOSES the Pattern 7 STRUCTURAL VARIANT
+(hand-rolled per-field-presence validators missing surfaces).
+Pattern 7 SEMANTIC variant — schema accepts structurally valid
+but semantically wrong payloads — remains possible and must be
+caught via `.refine` clauses encoding the semantic constraints.
+The compile-time dual-`satisfies` bracket does NOT prove semantic
+completeness; semantic refinements are case-by-case and must be
+audited per-field.
+
+Pattern 7 instance taxonomy now:
+- Instances 1-3 (M1.5a PR 3, Phase 2.5g, Phase 2.5i): structural
+  enumeration gaps in hand-rolled validators → closed by Catch 25
+  / Rule 11 / Zod.
+- Instance 4 (Phase 2.5j discipline-only fix insufficient): closed
+  by Phase 2.5j Zod structural fix.
+- **Instance 5 (Phase 2.5j-fix / Finding B): first SEMANTIC
+  variant.** Schema validated structure + registry membership;
+  missed the per-field semantic constraint (RELICS[id].slot ===
+  field name). Codified as a SUB-PATTERN: when a registry-typed
+  field has additional per-field semantic constraints (slot,
+  classAffinity, tier, etc.), add `.refine` for each constraint.
+
+### CF 47 NEW
+
+**Surface.** Phase 2.5j Zod rewrite added +71.71 kB raw / +19.65
+kB gzip to the main chunk (+27% / +24%). The bundle delta was
+explicitly accepted at Phase 2.5j as the cost of structural
+Class A closure. Long-term, the main chunk shouldn't carry the
+full Zod runtime — alternatives include:
+- Code-splitting validate.ts into the load-on-mount dynamic-import
+  boundary (alongside `import('@packbreaker/sim')`).
+- Switching to a smaller schema lib (Valibot ~2 kB, ArkType
+  ~10 kB gz) once the Pattern 7 closure is battle-tested.
+- Hand-rolled schema generator that derives runtime checks from
+  TS types at build time (e.g. typia, ts-runtime, zod-from-ts).
+
+**Disposition.** DEFERRED to M2 / future optimization. CF 47
+trigger: M2 mobile-perf pass OR first user-visible TTFI complaint
+attributable to the validator chunk.
+
+### Cross-version desync test — pins the INVARIANT (Pattern 7 discipline)
+
+The new test in `apps/client/src/run/RunController.test.ts`
+intentionally DIVERGES the snapshot.ruleset/derived from the
+controllerSnapshot.ruleset/derived (simulating restoreRun's
+composeRuleset producing different values from the persisted
+composition). Asserts the reducer output reads from controllerSnapshot:
+- `state.ruleset.startingHearts === 5` (controller's recomposed,
+  NOT snapshot's stale 3).
+- `state.maxHearts === 5` (derived from controller.ruleset).
+- `state.derived.extraRerollsPerRound === 2` (NOT snapshot's 99).
+
+Plus a companion test diverging bag/shop on controllerSnapshot to
+prove client-authoritative fields IGNORE controller and pull from
+snapshot. This is the INVARIANT (sim-authoritative ← controller;
+client-owned ← snapshot), not a round-trip equality proxy.
+
+### Findings 9 / 10 dispositions
+
+(Bare hash escaped per Rule 10.)
+
+- **Codex finding A / 9** (P1, Catch 26 — cross-version restore
+  field divergence). **Closed** via the controllerSnapshot
+  hydration fix above.
+- **Codex finding B / 10** (P2, mis-slotted relic). **Closed** via
+  the three RelicSlotsSchema `.refine` clauses.
+
+Finding count this PR: 10 since the 4/4 ceiling tripped. Reactive
+budget remains spent. Master-dev marked this round TERMINAL.
+
+### Counter updates
+
+| Counter | Pre-2.5j-fix | Post-2.5j-fix |
+|---|---:|---:|
+| Catches codified | 25 | **26** (+Catch 26 cross-version restore field divergence) |
+| Rules codified | 11 | **11** (Rule 11 CLARIFIED, not added — structural completeness ≠ semantic completeness) |
+| Pattern 7 instances | 4 | **5** (5th instance: first SEMANTIC variant — sub-pattern codified) |
+| Tracked CFs | 31 | **32** (+CF 47 bundle-size optimization) |
+| 4-finding ceiling | 4/4 closed via meta-audit (Phase 2.5g) | unchanged — terminal reactive round; finding count 10/10 since ceiling, all incomplete-fix or different-class |
+
+### Branch state at Phase 2.5j-fix close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 28 atomic
+branch commits (25 pre-2.5j-fix + 3 this turn: `c7c1f14` +
+`984b544` + this docs commit).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `c7c1f14` | 2.5j-fix commit 1 — Finding A | RunAction.restore_from_save extended with `controllerSnapshot: SimRunState`; useRun dispatch passes `controller.getState()`; reducer arm uses controllerSnapshot for applySimSnapshot. +2 cross-version invariant tests in RunController.test.ts (pin sim-authoritative ← controller AND client-owned ← snapshot). Helper `controllerSnapshotFrom(s: SerializedRunState): SimRunState` for existing tests. |
+| `984b544` | 2.5j-fix commit 2 — Finding B | RelicSlotsSchema three `.refine` clauses (starter/mid/boss slot-compatibility). +7 unit-level slot-validity tests; +1 e2e mount-fallback test (worldforge-seed boss-tier relic in starter slot rejects + fresh-fallback). |
+| this entry | 2.5j-fix commit 3 — docs | Catch 26 + Rule 11 clarification + Pattern 7 5th instance (first semantic variant; sub-pattern codified) + CF 47 (Zod bundle-size deferred to M2). |
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
+## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5j (schema-derived validator — Catch 25; Rule 11 amended)
+
+Codex re-review of `5a2dfd4` (post-Phase-2.5i) returned **three more
+P1 findings** on the same Class A surface — bag.placements[].itemId
+not ITEMS-checked, shop.slots[] not ITEMS-checked, history validated
+as array only (not per-element). Findings 6 / 7 / 8 since the
+4-finding ceiling tripped at Phase 2.5g; Pattern 7
+(test/audit-asserts-proxy-not-invariant) materialized for the third
+time within this PR. The discipline alone — Rule 11 codified mid-PR
+at Phase 2.5i — did not prevent the next iteration from instantiating
+the same enumeration-fragility failure.
+
+**Root cause:** hand-rolled per-field validators are structurally
+enumeration-dependent by construction. Each iteration of Phase
+2.5h → 2.5i traded one set of forgotten surfaces for another:
+2.5h missed registry membership; 2.5i closed CLASSES/CONTRACTS/
+RELICS but missed ITEMS + history element shape. The fix had to
+be structural, not procedural.
+
+**Master-dev decision (reversal):** Zod is now a client-persistence
+dep (was: server-side only per tech-arch § 6.3 pre-amendment). The
+evidence — three same-PR Codex rounds finding the same family of
+gaps in successively-expanded hand-rolled validators — justifies
+pulling Zod forward.
+
+### Step 0 confirms (verified pre-implementation)
+
+1. **Canonical type locations.** `SerializedRunState` at
+   `packages/content/src/schemas.ts:760` + `LocalSaveV1` at L767;
+   re-exported types-only via `@packbreaker/shared/save/index.ts`.
+   Byte-synced root mirror at `content-schemas.ts`. ✓
+2. **validate.ts internals + call site.** `validateLocalSaveV1` at
+   `apps/client/src/persistence/validate.ts` (a `parsed is
+   LocalSaveV1` type predicate post-Phase-2.5i); called from
+   `apps/client/src/persistence/migrations/index.ts:34` after
+   `schemaVersion === 1` routing. ✓
+3. **useRun load-on-mount restoreRun try/catch placement.** Present
+   at `apps/client/src/run/useRun.ts:151-167` (the Phase 2.5h
+   addition); wraps the `restoreRun(snapshot, ...)` call inside the
+   dynamic-import `.then` callback. Dev-only `console.warn` on
+   throw; `simRun` stays null → fresh-fallback. **Preserved
+   unchanged in this remediation** per spec — schema is the
+   structural close, try/catch is the defense-in-depth belt for
+   Catch 22 surfaces A4/A5 (restoreRun's own contract throws on
+   `CONTRACTS[id]` / `RELICS[id]` lookups, kept for any future
+   client/sim registry divergence). ✓
+
+No framing refutation. Inspection-only halt authority not exercised.
+
+### Catch 25 (NEW, Class A batch — structural close)
+
+**Three Codex findings, single root cause.** Same Class A family as
+Catch 22 (`schemaVersion`-only validation) and Catch 24 (validator-
+validates-subset). The remediation pattern that broke down:
+
+| Phase | Validator | Gap exposed by Codex |
+|---|---|---|
+| 2.5h | Validates outcome/relics.starter/history-is-array/bag.placements-shape/shop.slots-are-strings | Misses registry membership on classId/contractId/relics; misses ruleset / derived shape entirely → Codex P1 round 2 |
+| 2.5i | + Ruleset/DerivedModifiers shape + CLASSES/CONTRACTS/RELICS registry membership | Misses ITEMS registry on bag/shop itemIds; misses history element shape → Codex P1 findings 6/7/8 |
+| **2.5j** | **Zod schema-derived; dual-`satisfies` proves bidirectional structural equivalence to canonical types; ITEMS membership baked in** | **Structurally complete; no further enumeration gap possible without schema-vs-canonical compile-time mismatch.** |
+
+### Three layers of safety (Phase 2.5j shipped state)
+
+1. **Schema-derived validator** (`apps/client/src/persistence/validate.ts`).
+   Zod `LocalSaveV1Schema` + nested `SerializedRunStateSchema` /
+   `RulesetSchema` / `DerivedModifiersSchema` / `BagStateSchema` /
+   `ShopStateSchema` / `RelicSlotsSchema` / `RunHistoryEntrySchema`
+   / `ContractMutatorSchema` (discriminated union on `.type`).
+   Five id-field registry refinements baked in via
+   `z.custom<BrandedId>(predicate)`:
+   - `classId` ∈ `CLASSES`
+   - `contractId` ∈ `CONTRACTS`
+   - `relics.{starter,mid,boss}` ∈ `RELICS` (starter non-null via refine)
+   - `bag.placements[].itemId` ∈ `ITEMS`  (closes Codex 6)
+   - `shop.slots[].itemId` ∈ `ITEMS`  (closes Codex 7)
+   - `history` element fully validated  (closes Codex 8)
+2. **Dual-`satisfies` type-enforced completeness.** Four `satisfies`
+   clauses at module bottom prove bidirectional structural equivalence
+   between the schema's `z.infer` and the canonical types:
+   - `InferredSerializedRunState satisfies SerializedRunState`
+   - `SerializedRunState satisfies InferredSerializedRunState`
+   - `InferredLocalSaveV1 satisfies LocalSaveV1`
+   - `LocalSaveV1 satisfies InferredLocalSaveV1`
+   **Sanity-check (mandatory; performed and reverted):** removing
+   `hearts: z.number()` from `SerializedRunStateSchema` causes TS
+   code 1360 to fire on both `_canonicalSatisfiesInferredSRS` and
+   `_canonicalSatisfiesInferredLSV1` clauses with the verbatim
+   error `"Property 'hearts' is missing in type ... but required in
+   type 'SerializedRunState'"`. Field restored; assertion is
+   load-bearing for the type checker, not decorative.
+3. **useRun restoreRun try/catch** (unchanged from Phase 2.5h).
+   Documented defense-in-depth for restoreRun's own contract throws
+   on `CONTRACTS[id]` / `RELICS[id]` lookups if client/sim registries
+   ever diverge, and for any future deref the schema doesn't
+   structurally express (currently: none — the schema is complete).
+
+### Rule 11 AMENDED
+
+**Pre-amendment (Phase 2.5i codification):** "A load/deserialization
+boundary validator must validate the COMPLETE persisted contract —
+every field's presence + type, full structural validity of nested
+objects, and registry membership for id-typed fields. Deref-safety
+must be STRUCTURAL, never enumeration-dependent."
+
+**Post-amendment (Phase 2.5j):** "**Large persisted contracts MUST
+use a schema-derived validator (Zod or equivalent). Completeness
+must be type-enforced via dual-`satisfies` on the schema's `z.infer`
+vs the canonical type — not enumeration-dependent.** Hand-rolled
+per-field validators are admissible only for trivially-small
+single-field contracts; larger surfaces must derive the validator
+from a schema and prove bidirectional structural equivalence at
+compile time. The discipline 'validate the full contract' is not
+sufficient on its own — when applied to a hand-rolled validator
+across iteration cycles, it has been empirically observed to drift
+into enumeration-as-proxy (Pattern 7) within the same PR."
+
+### Pattern 7 recurrence within this PR — process learning
+
+| Instance | Surface | Phase |
+|---|---|---|
+| 1 (M1.5a PR 3 — pre-PR-3) | Test asserted field-roundtrip, not cursor-preservation | M1.5a PR 3 close |
+| 2 (Phase 2.5g) | Drift-as-expected test mask | Caught at Phase 2.5g meta-audit |
+| **3 (Phase 2.5i)** | Meta-audit ITSELF asserted enumeration (subset of dispatch tree) instead of structural invariant | Codified at Phase 2.5i; sub-rule "audits cover the full dispatch tree" |
+| **4 (Phase 2.5j)** | **Hand-rolled validator iteration ALSO asserted enumeration even after Phase 2.5i's discipline fix** | This entry: discipline alone insufficient → structural fix supersedes |
+
+**Codification:** When the same pattern has recurred 3+ times within
+a single PR despite discipline-level fixes, the next remediation
+must change the structure (mechanism / abstraction / dep), not the
+discipline (audit scope / rule wording / process tightening). The
+structural fix at Phase 2.5j (Zod) makes Pattern 7 unrecurrable on
+this surface — by construction, a passing schema means the
+inferred type equals the canonical type, which means no
+enumeration gap is possible.
+
+### Findings 6 / 7 / 8 dispositions
+
+(Bare hash escaped per Rule 10 — "finding 6 / 7 / 8" rather than
+"finding \#6 / \#7 / \#8".)
+
+- **Codex finding 6** (P1, validate.ts:62, isValidPlacement) —
+  `bag.placements[].itemId` was string-only. Throw site:
+  [DraggableItem.tsx:55](apps/client/src/bag/DraggableItem.tsx#L55)
+  `def.rarity` after `ITEMS[item.itemId]`. **Closed:** Zod
+  `BagPlacementSchema.itemId` is `ItemIdSchema` (z.custom with
+  `Object.prototype.hasOwnProperty.call(ITEMS, v)`).
+- **Codex finding 7** (P1, validate.ts:214, shop slots) —
+  `shop.slots[]` was string-only. Throw site:
+  [ShopSlot.tsx:49](apps/client/src/shop/ShopSlot.tsx#L49) `def.rarity`
+  after `ITEMS[slot.itemId]`. **Closed:** Zod
+  `ShopStateSchema.slots = z.array(ItemIdSchema).readonly()`.
+- **Codex finding 8** (P1, validate.ts:195, history array-only) —
+  `history` was `isArr` only, no element validation. Throw site:
+  [useRun.ts:397-398](apps/client/src/run/useRun.ts#L397-L398) —
+  `last !== undefined && last.round === 11` (`!== undefined` lets
+  null through; `null.round` throws). **Closed:** Zod
+  `RunHistoryEntrySchema` validates each element's `round / outcome
+  / damageDealt / damageTaken / goldEarnedThisRound / opponentGhostId
+  / opponentClassId` fields.
+
+### Tests (commit `02fdf9c`)
+
+**Unit-level** (`persistence.test.ts`, +8 tests):
+bag.placements[].itemId not in ITEMS rejected; known itemId accepted.
+shop.slots[] unknown id rejected; populated with known items
+accepted. history: [null] rejected; element missing round rejected;
+element with invalid outcome ('draw') rejected; fully-valid element
+accepted.
+
+**End-to-end** (`RunContext.test.tsx`, +4 tests):
+Each of the three Codex finding surfaces gets a mount-fallback test
+(bag itemId, shop slot id, history: [null]). Plus a history-missing-
+round mount test. Helper `makeCorruptV1Save` extended with
+`bagPlacements / shopSlots / history` overrides so each new surface
+is a one-line test body. All prior 93 persistence + RunContext tests
+remain green (behavioral parity with the schema validator confirmed
+pre-commit).
+
+### Tech-arch amendment (§ 6.3 / § 6.4)
+
+Zod scope extended from "server-side request validation" to "server-
+side request validation + client-side persistence validation". Same
+TS-canonical + Zod-schema pattern on both sides:
+`packages/content/src/schemas.ts` is canonical for both API DTO
+shapes and persistence shapes; Zod schemas live alongside their
+consumers (`packages/shared/src/api/` for server, `apps/client/src/
+persistence/` for client). Committed in this turn.
+
+### Counter updates
+
+| Counter | Pre-2.5j | Post-2.5j |
+|---|---:|---:|
+| Catches codified | 24 | **25** (+Catch 25 Class A batch structural close) |
+| Rules codified | 11 | **11** (Rule 11 AMENDED, not added) |
+| Pattern 7 instances | 3 | **4** (4th instance: same-PR discipline-only fix insufficient) |
+| Tracked CFs | 31 | unchanged |
+| 4-finding ceiling | 4/4 closed via meta-audit (Phase 2.5g) | unchanged — findings 5/6/7/8 are incomplete-fix remediation, reactive budget remains spent |
+
+### Branch state at Phase 2.5j close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 25 atomic
+branch commits (21 pre-2.5j + 4 this turn: `2ce1759` + `96e325d` +
+`02fdf9c` + this docs commit).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `2ce1759` | 2.5j commit 1 — dep | `pnpm add zod ^4.4.3` to `apps/client`. (Installed via `pnpm add --config.strict-ssl=false` workaround for the Windows + corporate-cert chain TLS issue on `registry.npmjs.org`. Lockfile + package.json delta only; no source.) |
+| `96e325d` | 2.5j commit 2 — schema swap | `validate.ts` rewritten: Zod schemas for `LocalSaveV1` / `SerializedRunState` + 7 nested types; 4-clause dual-`satisfies` bracket; `validateLocalSaveV1` is `safeParse(...).success` (preserved as `parsed is LocalSaveV1` predicate). Caller `migrations/index.ts` unchanged. useRun try/catch unchanged. |
+| `02fdf9c` | 2.5j commit 3 — tests | +8 unit-level persistence + +4 e2e RunContext mount-fallback tests covering the three Codex finding surfaces. Helper `makeCorruptV1Save` extended. All prior 93 persistence + RunContext tests stay green. |
+| this entry | 2.5j commit 4 — docs | Catch 25 + Rule 11 amendment + Pattern 7 4th instance + Codex finding 6/7/8 dispositions. Tech-arch § 6.3 / § 6.4 amendment (Zod now also client-side). |
+
+### Codex engagement note (folded forward)
+
+Codex bot posts via `/pulls/{n}/reviews` with `state=COMMENTED`
+(NOT `/issues/{n}/comments`). Line-level findings live under
+`/pulls/{n}/reviews/{review_id}/comments`. The Phase 2.5h
+post-trigger poll watched the wrong endpoint and falsely reported
+a 15-min timeout; Codex had actually responded in ~10 min. Phase
+2.5i poll switched to `/pulls/{n}/reviews` and confirmed the
+~5-10 min response window. Phase 2.5j poll: same endpoint.
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
+## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5i (Codex finding #5; Catch 24)
+
+Codex re-review of `91fe6f3` (post-Phase-2.5h) returned 1 P1 finding
+on the load-boundary validator: `isValidSerializedRunState` checked
+`classId/contractId/startedAt` as strings only, never validated
+`ruleset`/`derived` shape, and never checked `classId ∈ CLASSES`. A
+corrupt `schemaVersion: 1` payload could then pass `loadLocal()` and
+throw inside `applySimSnapshot` ([RunController.ts:192-193](apps/client/src/run/RunController.ts#L192-L193))
+at `snapshot.ruleset.startingHearts` or
+`CLASSES[snapshot.classId]!.displayName` — bypassing the intended
+fresh-run fallback (the throw landed in React's reducer dispatch,
+not inside useRun's restoreRun try/catch).
+
+**Diagnosis.** Catch 22's resolution was incomplete because the
+Phase 2.5g meta-audit's A8 enumeration covered the restore-call-tree
++ reducer bag/shop arms but missed `applySimSnapshot` upstream in
+the same `restore_from_save` dispatch. Validator validated a
+**field-subset** (the surfaces the meta-audit enumerated), not the
+**complete contract**.
+
+**Finding #5 since the ceiling tripped.** Reactive budget remains
+spent; this is incomplete-fix remediation, not a new reactive cycle.
+Catch 24 completes the class started by Catch 22.
+
+### Step 0 — complete enumeration (the sweep the meta-audit should have done)
+
+Every deref / registry lookup reachable on the client-side load
+dispatch tree (sim-side derefs covered by useRun's restoreRun
+try/catch; noted but not in this validator's scope):
+
+**A. `restore_from_save` reducer arm** ([RunController.ts:460-499](apps/client/src/run/RunController.ts#L460-L499)):
+- `s.bag.placements.map(p => ... p.anchor.col / p.anchor.row ...)` — A8 (covered by Phase 2.5h `isValidPlacement`).
+- `s.shop.slots.map((itemId, i) => ...)` — A8 (covered by `isStr` on each slot).
+- `s.currentRound`, `s.shop.rerollsThisRound` (uid template) — covered by `isNum`.
+- `s.rerollCount`, `s.trophy` — covered by `isNum`.
+
+**B. `applySimSnapshot`** ([RunController.ts:181-200](apps/client/src/run/RunController.ts#L181-L200)) — **THE GAP THE META-AUDIT MISSED**:
+- `snapshot.runId` (L185), `snapshot.seed` (L186), `snapshot.contractId` (L188), `snapshot.relics` (L195), `snapshot.outcome` (L196), `snapshot.gold` (L198), `snapshot.currentRound` (L194), `snapshot.hearts` (L191) — pure assignments, safe if present.
+- `snapshot.ruleset` (L189), `snapshot.derived` (L190) — assigned by reference; downstream consumers deref.
+- **`snapshot.ruleset.startingHearts` (L192)** — DEREF on ruleset. **Codex P1 surface A8a.**
+- **`CLASSES[snapshot.classId]!.displayName` (L193)** — REGISTRY LOOKUP + non-null assertion. **Codex P1 surface A8b.**
+- `snapshot.history.slice()` (L197) — array method. Covered by `isArr`.
+
+**C. Downstream consumers of the restored client state** (any place that reads `state.state.X` post-restore):
+- `state.state.ruleset.bagDimensions` — [CombatOverlay.tsx:157,170,272](apps/client/src/combat/CombatOverlay.tsx#L157), [CombatOverlay.tsx:96-97](apps/client/src/combat/CombatOverlay.tsx#L96-L97), [useRun.ts:335](apps/client/src/run/useRun.ts#L335).
+- `state.state.ruleset.rerollCostStart` / `rerollCostIncrement` — [ShopPanel.tsx:27-28](apps/client/src/shop/ShopPanel.tsx#L27-L28), [ShopTab.tsx:30-31](apps/client/src/screens/mobile/tabs/ShopTab.tsx#L30-L31), [useRun.ts:302-303](apps/client/src/run/useRun.ts#L302-L303), [RunController.ts:363-364](apps/client/src/run/RunController.ts#L363-L364).
+- `state.state.ruleset.startingHearts` — propagated as `maxHearts` ([RunController.ts:192](apps/client/src/run/RunController.ts#L192)).
+- `state.state.derived.extraRerollsPerRound` — [ShopPanel.tsx:29](apps/client/src/shop/ShopPanel.tsx#L29), [ShopTab.tsx:32](apps/client/src/screens/mobile/tabs/ShopTab.tsx#L32), [useRun.ts:306](apps/client/src/run/useRun.ts#L306), [RunController.ts:365](apps/client/src/run/RunController.ts#L365).
+- `CLASSES[state.state.classId]!` — [LeftRail.tsx:104](apps/client/src/hud/LeftRail.tsx#L104), [RelicsTab.tsx:82](apps/client/src/screens/mobile/tabs/RelicsTab.tsx#L82).
+- `RELICS[state.state.relics.starter]!` / `mid` / `boss` — [LeftRail.tsx:106-108](apps/client/src/hud/LeftRail.tsx#L106-L108), [RelicsTab.tsx:83-85](apps/client/src/screens/mobile/tabs/RelicsTab.tsx#L83-L85). (`RunEndScreen.tsx:187-191` is optional-chained; safe.)
+- `CONTRACTS[...]` — no current client-side consumer (sim-side only, behind useRun try/catch).
+
+**D. Sim-side restoreRun derefs** (NOTE: covered by [useRun.ts try/catch](apps/client/src/run/useRun.ts#L150-L160) — out of validator scope):
+- `serialized.relics.starter` ([state.ts:1180](packages/sim/src/run/state.ts#L1180)).
+- `{ ...restoreFrom.relics }` ([state.ts:283](packages/sim/src/run/state.ts#L283)).
+- `restoreFrom.history.slice()` ([state.ts:302](packages/sim/src/run/state.ts#L302)).
+- `CONTRACTS[input.contractId]` ([state.ts:262](packages/sim/src/run/state.ts#L262)).
+- `RELICS[input.startingRelicId]` ([state.ts:275](packages/sim/src/run/state.ts#L275)).
+
+### Completeness proof — every enumerated deref/lookup → validator guard
+
+| Surface | Deref / lookup | Validator guard |
+|---|---|---|
+| A8 reducer bag map | `p.anchor.col / p.anchor.row / p.placementId / p.itemId / p.rotation` | `isValidPlacement(p)` for each `p` in `bag.placements` |
+| A8 reducer shop map | `itemId` (cast as ItemId) | `isStr(slot)` for each `slot` in `shop.slots` |
+| A8a applySimSnapshot | `snapshot.ruleset.startingHearts` | `isValidRuleset(x.ruleset)` — checks `startingHearts` numeric + 11 other Ruleset levers + bagDimensions structure + mutators array |
+| A8b applySimSnapshot | `CLASSES[snapshot.classId]!.displayName` | `isKnownClassId(x.classId)` — `Object.hasOwnProperty.call(CLASSES, id)` |
+| A8c applySimSnapshot | `snapshot.history.slice()` | `isArr(x.history)` |
+| C ShopPanel/ShopTab | `state.ruleset.rerollCostStart`, `rerollCostIncrement` | `isValidRuleset(x.ruleset)` — covers both fields as numeric |
+| C ShopPanel/ShopTab/useRun/reducer | `state.derived.extraRerollsPerRound` | `isValidDerived(x.derived)` — covers all 3 DerivedModifiers fields |
+| C CombatOverlay | `state.ruleset.bagDimensions.{width,height}` | `isValidRuleset` validates `bagDimensions` shape including both axes |
+| C LeftRail/RelicsTab | `CLASSES[state.classId]!` | `isKnownClassId(x.classId)` |
+| C LeftRail/RelicsTab | `RELICS[state.relics.starter / mid / boss]!` | `isKnownRelicId(x.relics.starter)` required; `isKnownRelicId(x.relics.mid)` if non-null; `isKnownRelicId(x.relics.boss)` if non-null |
+| (future) CONTRACTS lookup | `CONTRACTS[state.contractId]` | `isKnownContractId(x.contractId)` — added per Rule 11 even though no current client consumer (deref-safety structural, not enumeration-dependent) |
+| D sim restoreRun | sim-side derefs | `isValidSerializedRunState` covers the same structural surfaces (relics, history, etc.); sim's `CONTRACTS[id]` + `RELICS[id]` throws also covered by useRun try/catch as a defense-in-depth belt |
+
+**Every enumerated deref/lookup maps to a guard.** No flagged gaps.
+Mutator nested optional fields (`boss_only.hpOverride/damageBonus/lifestealPctBonus`) are NOT validated; they're consumed only by sim's combat path (covered by useRun's try/catch) and no client-side surface derefs them. If a future client consumer reads them, it should either optional-chain or the validator should be extended — flagged here so the next M2/CF closure that grows mutator usage knows to extend.
+
+### Fix (commit `caa3282`)
+
+Expanded `isValidSerializedRunState` per Rule 11. New helpers:
+- `isValidRuleset` — 12 scalar numeric levers + bagDimensions structural + mutators array of valid ContractMutator entries.
+- `isValidDerived` — all 3 fields finite numerics.
+- `isValidMutator` — `.type` ∈ `{adjacent_double, recipe_discount, no_rerolls, boss_only}`.
+- `isKnownClassId` / `isKnownContractId` / `isKnownRelicId` — registry membership via `Object.prototype.hasOwnProperty.call`.
+
+Validator stays a `parsed is LocalSaveV1` type predicate. No cast
+regression. Caller in `migrations/index.ts` unchanged.
+
+### Tests (commit `2f2201d`)
+
+**Unit-level** (`apps/client/src/persistence/persistence.test.ts`, +16 tests):
+- Registry membership: unknown classId / contractId / starter / mid / boss relic ids → `loadLocal` returns null.
+- Ruleset shape: undefined / non-object / missing startingHearts / missing bagDimensions / bagDimensions missing width / mutators not-array / mutators containing unknown type → null. Positive: valid `boss_only` mutator accepted.
+- DerivedModifiers shape: undefined / missing extraRerollsPerRound / bonusGoldOnWin as string → null.
+
+**End-to-end** (`apps/client/src/run/RunContext.test.tsx`, +8 tests):
+8 mount-fallback flavors covering each new corrupt-surface variant
+(unknown classId, unknown contractId, missing ruleset, non-object
+ruleset, missing derived, invalid starter/mid/boss relic ids).
+Each asserts fresh Tinker mounts via the ClassSelectScreen mock,
+no `console.error`, no `[useRun] restoreRun` warn (validator
+rejected upstream of the try/catch). Factored helpers
+`makeCorruptV1Save` + `assertFreshTinkerMountsCleanly` for
+single-test-body brevity per surface.
+
+### Rule 11 (NEW, codified)
+
+> A load/deserialization boundary validator must validate the
+> COMPLETE persisted contract — every field's presence + type, full
+> structural validity of nested objects, and registry membership for
+> id-typed fields. Deref-safety must be STRUCTURAL (any consumer is
+> safe on a validated payload), never dependent on enumerating known
+> consumers.
+
+Reason: enumeration-dependent validators leak gaps whenever (a) the
+audit's enumeration is incomplete, or (b) a new consumer is added
+that derefs a previously-unvalidated field. Both pathways materialized
+between Phase 2.5g (enumeration incomplete → missed `applySimSnapshot`)
+and Phase 2.5i (Codex found the gap). Structural validation removes
+both failure modes.
+
+### Pattern #7 — 3rd instance (codified)
+
+Pattern #7: "Tests / audits asserting proxies rather than invariants."
+- Instance 1 (M1.5a PR 3): a test asserted field-roundtrip instead of cursor-preservation.
+- Instance 2 (Phase 2.5g): drift-as-expected test (`restoreRun.test.ts:174-192` pre-fix) codified the drift as the invariant — masked the cursor-drift bug.
+- **Instance 3 (Phase 2.5i, NEW)**: the Phase 2.5g meta-audit ITSELF asserted a proxy (enumerated A8 surfaces in the reducer arm's bag/shop calls) rather than the full invariant (every deref site in the entire load dispatch tree, including upstream calls like `applySimSnapshot`). The audit's enumeration was the proxy; the invariant was "no consumer in the load dispatch tree throws on a validated payload."
+
+**Codification.** Audit scope must cover the FULL DISPATCH TREE
+reachable from the load entry point, not just the topmost call site.
+Audits that enumerate only direct call-site derefs leak upstream-call
+deref gaps. Pair with Rule 11: even a complete audit isn't sufficient
+on its own — the validator must be structural so new consumers stay
+safe by construction, not by re-running the audit.
+
+### Catch 24 (NEW, Class A residual)
+
+| Catch | Class | Description |
+|---|---|---|
+| 22 | A | Version-only validation passes schemaVersion-N-with-garbage downstream (Phase 2.5h). |
+| **24** | A residual | Validator validates a field-subset, not the complete contract. Codex finding #5 caught two upstream surfaces (`snapshot.ruleset.startingHearts`, `CLASSES[snapshot.classId]!.displayName`) that the Phase 2.5g meta-audit's A8 enumeration missed because it scoped to direct reducer-arm `.map` calls only. |
+
+Catch 22's resolution was **incomplete**; Catch 24 **completes** the
+class via Rule 11's structural-validation discipline.
+
+### Counter updates
+
+| Counter | Pre-2.5i | Post-2.5i |
+|---|---:|---:|
+| Catches codified | 23 | **24** (+Catch 24 Class A residual) |
+| Rules codified | 10 (last: Rule 10 verbatim-evidence at decision-log meta) | **11** (+Rule 11 complete-contract structural validation) |
+| Pattern #7 instances | 2 | **3** (3rd instance — audit-enumeration-as-proxy) |
+| Open CFs | 31 | unchanged (no CF impact) |
+| 4-finding ceiling | 4/4 (closed via Phase 2.5g meta-audit) | unchanged — finding #5 is incomplete-fix remediation (reactive budget remains spent); not a new reactive cycle |
+
+### Branch state at Phase 2.5i close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 21 atomic branch
+commits (17 pre-2.5i + 3 this turn: `caa3282` + `2f2201d` + this
+docs commit). Plus the D-F5 follow-up `3e1a13d` between Phase 2.5h
+and Phase 2.5i, and the predicate refactor `91fe6f3` (which was the
+tip Codex reviewed).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `caa3282` | Phase 2.5i commit 1 — validator expansion | `isValidRuleset` + `isValidDerived` + registry-membership checks (`isKnownClassId/ContractId/RelicId`) folded into `isValidSerializedRunState`. Validator stays a type predicate. |
+| `2f2201d` | Phase 2.5i commit 2 — tests | +16 unit-level persistence tests (registry membership × 5, Ruleset shape × 8, DerivedModifiers shape × 3). +8 e2e RunContext mount-fallback tests, one per new surface. |
+| this entry | Phase 2.5i commit 3 — docs | Catch 24 + Rule 11 + Pattern #7 3rd instance. Counters 23→24 / 10→11. |
+
+### Codex engagement note (lesson, uncodified)
+
+Phase 2.5h's post-trigger poll watched `/issues/{n}/comments` and
+reported timeout at 15 min. Codex actually responded ~10 min after
+the trigger as a PR REVIEW (`/pulls/{n}/reviews` with
+`state=COMMENTED`), not as an issue comment. The bot account is
+`chatgpt-codex-connector[bot]`. Line-level findings live under
+`/pulls/{n}/reviews/{review_id}/comments`. Future Codex polls
+should hit the reviews endpoint; the issue-comments endpoint sees
+only the human-posted `@codex review` triggers, not Codex's
+responses. Folding into the project's Codex-engagement notes.
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
+## 2026-05-20 — M1.5b PR 3 / 5b.3a Phase 2.5h (meta-audit remediation)
+
+Codex re-review of `a3b3c0d2` (round 2) returned a 4th + 5th finding on
+the persistence load/restore surface — both confirmed by master-dev as
+instances of two distinct failure classes (load-on-mount throw-safety;
+restore fidelity / RNG discipline). 4-finding ceiling tripped → reactive
+iteration halted; a comprehensive read-only meta-audit (Phase 2.5g, tip
+`a35c6cb`) enumerated **24 findings → 3 code roots**, of which 4 were the
+Codex-confirmed instances and 20 were net-new (same two classes plus
+Class D test-fidelity masks + Class E general items, mostly latent /
+documented / out-of-scope).
+
+This Phase 2.5h pass implements the ratified consolidated remediation:
+single bundled fix across the 3 code roots + test overhaul + docs. No
+reactive iteration; no @codex re-trigger.
+
+### Step 0 confirms (verified pre-implementation)
+
+1. **ShopSlot[] → ShopState lossless at arranging-entry quiescent moments.**
+   Verified: at every save trigger that fires at arranging-entry
+   (initial-mount + round-change + restored-mount), client `state.shop`
+   slots have non-null `itemId` (combat_done regenerates fresh shop on
+   round advance; initial mount uses generateInitialShop; restored mount
+   reads non-null slots guaranteed by the prior save). `purchased: []`
+   and `rerollsThisRound: state.state.rerollCount` (0 at quiescent).
+   **Terminal-outcome saves** may carry leftover null slots if the
+   player bought from shop in the final round (combat_done leaves
+   state.shop unchanged on runEnded). Those terminal saves are
+   load-filtered by `outcome !== 'in_progress'`; if they somehow
+   round-trip, the validator catches and falls back to fresh-run.
+2. **makeShop was the SOLE post-seed RNG consumer in restoreRun's
+   restore branch.** Verified at `state.ts:297-339` — L326 seeds rng,
+   L335 (pre-fix) called makeShop, and all other lines were pure
+   assignments / array slice / telemetry comments.
+3. **No sim-internal consumer reads `this.shop` after restore before
+   the client reducer arm overrides.** Production read of
+   `simRun.getState().shop` is only in useRun's save effect, which
+   this remediation redirects to read client's `state.shop`. The only
+   other reader is the existing test `RunContext.test.tsx:231,246`,
+   asserting init_from_sim's shop sync — unaffected by the restore-
+   path change.
+
+### Catch 22 (NEW, Class A — load-on-mount throw-safety)
+
+**Surface (round-2 P1 + 7 additional enumerated vectors).** The
+migration dispatcher routed by `schemaVersion === 1` alone and cast
+the parsed payload to `LocalSaveV1` with zero structural validation.
+Any payload that happened to carry schemaVersion=1 then threw
+downstream at one of 8 enumerated deref points:
+
+| # | Surface | Throw |
+|---|---|---|
+| A1 | `migrations/index.ts:22-23` | The cast itself — root cause; no runtime guarantee. |
+| A2 | `useRun.ts:125-126` | `saved.inProgressRun === null` check missed `undefined` inProgressRun. |
+| A3 | `state.ts:1180` | `serialized.relics.starter === null` deref — Codex-confirmed instance. |
+| A4 | `state.ts:262-263` | `CONTRACTS[input.contractId]` lookup throw on unknown id. |
+| A5 | `state.ts:275-278` | `RELICS[input.startingRelicId]` lookup throw on unknown id. |
+| A6 | `state.ts:283` | `{ ...restoreFrom.relics }` spread on undefined relics. |
+| A7 | `state.ts:302` | `restoreFrom.history.slice()` on non-array. |
+| A8 | `RunController.ts:482-491` | Reducer arm `s.bag.placements.map(... p.anchor.col ...)` / `s.shop.slots.map(...)` on undefined sub-shape. |
+
+The throws lived inside a Promise callback (useRun's dynamic-import
+`.then`), surfacing as console unhandled-rejections rather than React
+crashes — `simRun` stayed null and the fresh-run UI mounted, but with
+a dirtied console. This is why CI passed despite Class A being
+present.
+
+**Fix (commit `bfd4079`).** Hand-rolled load-boundary shape validator
+in `apps/client/src/persistence/validate.ts` validating LocalSaveV1 +
+SerializedRunState to the depth that guarantees the load+restore path
+cannot throw: schemaVersion=1; inProgressRun null OR fully-structured
+SerializedRunState (outcome ∈ RunOutcome; relics.starter non-null;
+relics.mid/boss string|null; history array; bag.placements array of
+valid placements with anchor.col/row numeric, rotation numeric, ids
+string; shop slots/purchased arrays + rerollsThisRound numeric; all
+numerics finite via `Number.isFinite`; all branded identifiers
+present). Wired through `migrate()` after the existing schemaVersion
+routing. Covers A1-A3, A6-A8 + the A2 undefined gap.
+
+useRun's load-on-mount effect wraps restoreRun in `try/catch` with a
+dev-only `console.warn` — covers A4-A5 (restoreRun's own contract
+throws for content-registry gaps) and any residual deref the
+validator doesn't yet catch. Either failure mode lands at the
+fresh-run path (`simRun` stays null → ClassSelectScreen mounts).
+restoreRun's contract throws are preserved as documented behavior.
+
+**Zod note.** Tech-architecture.md § 6.3 plans Zod as a server-side
+dep, but Zod is NOT installed in any workspace `package.json`
+(verified via `grep -Ri "zod" --include="package.json"`). Adding Zod
+was out of scope for 5b.3a; the hand-rolled validator is the
+in-scope solution. M2 may revisit if Zod lands for the server's
+request-validation surface.
+
+### Catch 23 (NEW, Class B — restore fidelity / non-terminal RNG seed)
+
+**Root cause (round-2 P2 + 3 additional Class B vectors).** Two
+coupled bugs in the restore branch:
+
+1. **Non-terminal RNG seed.** `state.ts:326` seeded rng via
+   `createRng(restoreFrom.rngState)` but L335 then called
+   `this.shop = this.makeShop(this.currentRound)`, which consumed N
+   rng nexts post-seed. Cursor drift by one makeShop's worth per
+   save→load cycle.
+2. **Non-verbatim shop restore.** The same makeShop call regenerated
+   sim's shop instead of trusting `restoreFrom.shop`. The
+   pre-remediation comment justified this as "sim's shop diverged
+   from client's mid-round (rerolls aren't fully mirrored
+   sim-side)" — true for the existing authority split, but the price
+   paid was cursor drift and a sim-side shop that didn't match the
+   persisted shop.
+
+The deeper root: the **save** side sourced `serialized.shop` from
+`simSnap.shop` (sim-authoritative read) rather than from client's
+authoritative `state.shop`, deviating from the Phase 1 ratification
+call C field-sourcing table. Because sim's shop diverged from
+client's mid-round under Q2 Amendment A, the persisted shop was
+already wrong by the time restore tried to use it — hence the
+regeneration patch on the restore side. Fixing the save-side
+sourcing makes the restore-side regeneration unnecessary; combined,
+both fixes restore the verbatim-restore + terminal-seed contract.
+
+**Fix (commits `3049ea5` + `9a8052d`).** Two coordinated changes:
+
+- **Sim** (`packages/sim/src/run/state.ts`): restore branch now
+  copies `restoreFrom.shop` verbatim (slots/purchased/rerollsThisRound
+  via `.slice()` to mutable arrays); `createRng(restoreFrom.rngState)`
+  is the terminal RNG-relevant op in the branch. `this.makeShop(...)`
+  removed.
+- **Client** (`apps/client/src/run/sim-bridge.ts` +
+  `apps/client/src/run/useRun.ts`): new `clientShopToSimShop` helper
+  (mirrors `clientBagToSimBag`) maps `ShopSlot[]` → `ShopState`. Save
+  effect now writes `shop: clientShopToSimShop(state.shop,
+  state.state.rerollCount)` to the persisted payload alongside the
+  existing gold + bag client-sourced overrides.
+
+**Falls out — C-F1 / C-F2 idempotence.** Save→load→save under zero
+player action is now byte-stable. Pre-fix: each idle reload advanced
+the persisted rngState by `M` (one makeShop's RNG consumption);
+shop drifted in lockstep. Post-fix: verbatim-restore + terminal-seed
+means restored cursor == saved cursor, and sim's shop == saved shop.
+
+### Class D test-fidelity (encoded under Catches 22/23)
+
+The audit found two tests that asserted proxies rather than the real
+invariants — these are the source of why CI passed despite the bugs
+being present:
+
+- **D-F1 (drift-as-expected mask).** `restoreRun.test.ts:174-192`
+  asserted that two restores produce identical rng cursors. True under
+  any deterministic transformation including the buggy drift. The
+  test's comment block explicitly documented makeShop's post-seed
+  advancement as the expected invariant. **Pattern #7 second
+  instance** (tests asserting proxies, not invariants). Codified
+  earlier at M1.5a PR 3 close.
+- **D-F2 (untested garbage-payload).** The persistence corruption-
+  tolerance section tested four well-known corruption families (absent
+  key, malformed JSON, unknown schemaVersion, non-object) but never
+  `{schemaVersion: 1, ...arbitrary-garbage}` — exactly the
+  schemaVersion=1-cast-without-validation surface.
+
+**Test overhaul (commit `2d50b4e`).**
+
+- `restoreRun.test.ts`: flipped the determinism test to assert
+  `restored.getRngState() === snapshot.rngState` (cursor-preservation
+  invariant); kept the two-restores-identical test as a regression
+  sentinel; removed the misleading drift-as-expected comment block;
+  added a new describe block for verbatim-shop slots/purchased/
+  rerollsThisRound + save→load→save idempotence.
+- `persistence.test.ts`: new describe block "load-boundary shape
+  validator" — 13 corrupt-payload cases covering A2 (undefined
+  inProgressRun) + A3/A6/A7/A8 vectors (undefined relics, null
+  relics.starter, undefined history, undefined bag, bag.placements
+  not-array, placement missing anchor, undefined shop, shop.slots
+  not-array, shop.slots containing null, invalid outcome string,
+  non-numeric hearts, NaN rngState) + 2 positive cases asserting
+  validator doesn't over-reject.
+- `RunContext.test.tsx`: new describe block "corrupt-payload mount
+  fallback" — 2 end-to-end tests asserting fresh Tinker mounts
+  cleanly (no console.error, no restoreRun warn) under
+  schemaVersion=1+missing-relics and shop.slots-with-null corrupt
+  payloads.
+
+D-F5 (save-on-quiescent timing) was already covered by the existing
+`RunProvider — save-on-quiescent timing` test (mid-round reroll
+doesn't change saved bytes; initial mount fires).
+
+### 20 net-new meta-audit findings — disposition
+
+Of the 24 findings enumerated in Phase 2.5g, 4 were the Codex-
+confirmed instances of Classes A and B and the test-fidelity masks.
+The remaining 20 are dispositioned here:
+
+- **Class A vectors A2 / A4 / A5 / A6 / A7 / A8 (6 NEW)** — all closed
+  by the validator + try/catch fix.
+- **Class B vectors B-F3 (sim bag empty on restore) / B-F4 (client
+  shop slot uid fresh-mint)** — DEFERRED. B-F3 amends CF 34's carry-
+  forward (CF 34 must re-handle bag emptiness on restore when sim
+  regains bag authority). B-F4 amends CF 45's carry-forward (CF 45
+  client placement-id minting non-deterministic — same family).
+- **Class C C-F1 / C-F2 (idempotence)** — closed by Catch 23 root fix
+  (no separate code change needed).
+- **Class D D-F1 / D-F2 / D-F3 / D-F4 / D-F6 (test-fidelity)** —
+  closed by the test overhaul. D-F5 was already covered.
+- **Class E** — 10 general items:
+  - E-F1 (migration identity stub by-reference) — current behavior
+    asserted by existing test, no change.
+  - E-F2 (downgrade clobbers forward-version save) — NEW CF 46
+    opened, deferred to schema-bump.
+  - E-F3 (epoch guard interaction with corrupt-payload throw) —
+    explains pre-fix CI passing; closed structurally by Catch 22.
+  - E-F4 (partial-write recovery) — already covered by Catch 21's
+    storage-layer try/catch (JSON.parse-fail → null fallback).
+  - E-F5 (clearLocal in resetRun) — already throw-safe (Catch 21).
+  - E-F6 (bornFromRecipe Set restoration gap) — DEFERRED, amends
+    CF 43's carry-forward.
+  - E-F7 (rerollCount + trophy authority) — verbatim-restored;
+    confirmed correct.
+  - E-F8 (telemetry not re-emitted on restore) — documented behavior,
+    CF 35 scope.
+  - E-F9 (`nextPlacementCounter` reset on restore) — DEFERRED, amends
+    CF 34's carry-forward (same as B-F3).
+  - E-F10 (`lastCombatResult` reset on restore) — documented behavior,
+    no change.
+
+### CF 46 (NEW)
+
+**Surface.** `apps/client/src/persistence/migrations/index.ts` —
+`schemaVersion === N>1` returns null. On a forward-version save (user
+downgrades client), the migration returns null → the user sees a
+fresh-run path. The next quiescent save **overwrites** the forward-
+version payload with the older v1 shape, irreversibly losing the
+forward-version state.
+
+**Disposition.** DEFERRED to schema-bump (M2 likely). Mitigation
+options when CF 46 closes: (a) back up the forward-version payload
+under a versioned key (`pba.v2.save.preserved`) before overwriting;
+(b) refuse to write any save until the user explicitly chooses to
+abandon the forward-version save; (c) version-tagged migration
+chain with explicit downgrade-failure UX. Picking the right option
+depends on M2's cloud-save semantics — not enough information yet
+to lock the decision.
+
+### CF amendments
+
+- **CF 34** (sim/client authority migration — bag) — AMENDED. Closure
+  must re-handle (a) sim restore bag-empty initialization at
+  `state.ts:319-322` (B-F3 — currently forced empty; restore must
+  read from `restoreFrom.bag.placements` when sim regains bag
+  authority); (b) `nextPlacementCounter` reset at `state.ts:258`
+  (E-F9 — currently defaults to 0; must initialize past the highest
+  saved placementId to avoid uid collision).
+- **CF 43** (recipe-bonus tracking client mirror) — AMENDED. Restore
+  loses sim's `bornFromRecipe` Set mid-round (E-F6). Set isn't
+  JSON-roundtrippable; closure must persist + restore the membership
+  (likely as `bornFromRecipe: PlacementId[]` array in
+  SerializedRunState, schema-bump territory).
+- **CF 45** (non-deterministic client placement-id minting) —
+  AMENDED. Adjacent finding B-F4: client reducer arm mints fresh
+  shop-slot uids on restore (``s${currentRound}-${rerollsThisRound}-${i}``)
+  rather than preserving uids from the saved payload. SerializedRunState
+  doesn't currently include slot uids; CF 45's closure should consider
+  bundling slot-uid preservation into the same authority pass.
+
+### Pattern + catch + rule codification
+
+- **Catch 22** (NEW, Class C2): "version-only validation passes
+  schemaVersion-N-with-garbage downstream where it throws on field
+  access — version presence is NOT shape validation." Antidote: at
+  load boundaries with versioned envelopes, the migration dispatcher
+  MUST be paired with a per-version structural validator; the
+  shape-cast must follow the validator, not precede it.
+- **Catch 23** (NEW, Class C2): "restore that regenerates a
+  bifurcated-authority field via post-seed RNG consumption violates
+  both verbatim-restore and terminal-seed invariants. Root: save was
+  sourcing the field from the wrong authority side; restore-side
+  regeneration was patching the symptom." Antidote: when authority
+  is bifurcated per Phase 1 field-sourcing table, BOTH save and
+  restore must source the field from the documented owner; restore-
+  side regeneration is a smell that points back at save-side
+  sourcing.
+- **Process learning** (uncodified, second-instance watch): the
+  4-finding ceiling meta-audit rule surfaced same-class instances
+  that reactive Codex loops miss. Round 1's P1+P2 fixed two
+  surface-level findings, but the underlying class structure (Class A
+  throw-safety; Class B restore fidelity) wasn't enumerated. Round 2
+  surfaced two more instances; without the ceiling rule, the loop
+  would have continued indefinitely. Pattern candidate: "After 2+
+  rounds of reactive findings, halt and run a class-enumeration
+  audit." Hold pending second-instance trigger.
+- **Phase 1 learning** (uncodified): A4-minimal under-pinned the
+  restore semantics. The Phase 1 ratification document specified
+  "verbatim restore of sim-authoritative fields" but did not state
+  "rngState seed is terminal" or "shop is restored verbatim from
+  serialized.shop." The implementation followed letter-of-Phase-1 but
+  not spirit; meta-audit surfaced the gap. Pattern candidate:
+  "When Phase 1 ratifies a contract, the invariants enforcing the
+  contract must be explicitly listed alongside the contract — not
+  left as implementation detail." Hold pending second-instance.
+
+### Counter updates
+
+| Counter | Pre-2.5h | Post-2.5h |
+|---|---:|---:|
+| Predicate-vs-name catches codified | 21 | **23** (+Catch 22 version-only-validation; +Catch 23 non-terminal-seed-via-mis-sourced-save) |
+| 4-finding ceiling | 2/4 | **4/4 → meta-audit closed** (no reactive iteration; comprehensive sweep complete) |
+| Open CFs | 30 | **31** (+CF 46 downgrade clobbers forward-version save) |
+| Class D test masks codified (Pattern #7) | 1 (D-F1 from M1.5a PR 3) | **2** (D-F1 second instance; reinforces Pattern #7) |
+
+### Branch state at Phase 2.5h close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 17 atomic branch
+commits (12 pre-2.5h + 5 this turn: `bfd4079` + `3049ea5` + `9a8052d`
++ `2d50b4e` + this docs commit).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `bfd4079` | Phase 2.5h commit 1 — validator + try/catch | Shape validator (apps/client/src/persistence/validate.ts) + migrate() wiring + useRun load-effect try/catch. Covers Catch 22 surfaces A1-A3, A6-A8 + A2 undefined gap; restoreRun contract throws (A4-A5) covered by try/catch. |
+| `3049ea5` | Phase 2.5h commit 2 — sim verbatim shop + terminal seed | restoreRun's restore branch now copies restoreFrom.shop verbatim (slots/purchased/rerollsThisRound); `createRng(restoreFrom.rngState)` is the terminal RNG op in the branch. makeShop call removed. Catch 23 root fix. |
+| `9a8052d` | Phase 2.5h commit 3 — save-side client shop sourcing | clientShopToSimShop helper in sim-bridge.ts; useRun save effect writes `shop: clientShopToSimShop(...)` alongside existing gold + bag client overrides. Restores Phase 1 call C field-sourcing. Catch 23 save-side fix. |
+| `2d50b4e` | Phase 2.5h commit 4 — test overhaul | Sim cursor-preservation + verbatim-shop + idempotence; persistence 13 corrupt-payload + 2 positive validator tests; RunContext 2 end-to-end mount fallback tests. Class D test-fidelity masks corrected. |
+| this entry | Phase 2.5h commit 5 — docs | docs(decision-log): Catch 22/23 + CF 46 + CF 34/43/45 amendments + 20 net-new findings dispositioned. |
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
+## 2026-05-20 — M1.5b PR 3 / 5b.3a Phase 2.5 — Codex P1+P2 (Catch 20+21)
+
+Codex review of `a5f6149` returned two findings — both confirmed by
+master-dev and fixed in this interlude. 4-finding ceiling at 2/4
+(reactive). Pipeline triple-green; ready for Codex re-request once
+master-dev confirms.
+
+### P1 — load-on-mount restore race (Catch 20)
+
+**Surface.** `useRun.ts` load-on-mount useEffect (~lines 107-129
+pre-fix) carried an inline race-guard comment claiming protection
+against "user may have begun a fresh class-select pick while the
+dynamic import was resolving" — but the actual code only checked an
+unmount-cancellation flag. The two async paths (restore's
+`import('@packbreaker/sim').then(restoreRun)` and createRun's
+`.then(createRun)`) share the same cached module promise but have no
+explicit synchronization. A structural race: if a fresh run is
+initiated during restore's import window, the restore's resolve
+callback unconditionally calls setSimRun + dispatch(restore_from_save),
+clobbering the fresh run's setSimRun(controller) + dispatch(
+init_from_sim).
+
+**Comment-vs-code discrepancy.** The Codex finding caught the
+documentation lying about the implementation — the comment
+described an invariant that the code did NOT enforce. Logged
+separately from the architectural race itself; both close together.
+
+**Fix (commit `1fd5424`).** Monotonic epoch ref (lean Option A per
+the prompt) shared between the two async paths:
+
+- `restoreEpochRef = useRef(0)` declared at the useRun top-level.
+- Restore useEffect captures `myEpoch = restoreEpochRef.current` at
+  effect-start (synchronously, before the dynamic-import).
+- createRun useEffect synchronously bumps `restoreEpochRef.current +=
+  1` BEFORE its dynamic-import, even though the import resolution is
+  async — the ref bump is visible to restore's resolve closure by the
+  time it would run.
+- Restore's resolve callback compares `restoreEpochRef.current !==
+  myEpoch` and bails before setSimRun + dispatch if a fresh run was
+  initiated. Fresh run's init_from_sim dispatch survives intact.
+
+State-check guard alternative (simRun !== null read via useRef
+mirror) rejected as heavier than the epoch ref. False race-guard
+comment replaced with an accurate description of the implemented
+guard; cross-reference at the restoreEpochRef declaration documents
+the synchronous handshake.
+
+**Test (RunContext.test.tsx).** Pre-populate localStorage with a v1
+Marauder save → mount RunProvider with the auto-fire ClassSelectScreen
+stub configured to fire Tinker + apprentices-loop. Both async paths
+race; assert final state is the fresh Tinker run (classId='tinker',
+relics.starter='apprentices-loop', round=1) NOT the restored Marauder
+save (classId='marauder', round=5).
+
+### P2 — storage access + read/write throw-safety (Catch 21)
+
+**Surface.** `apps/client/src/persistence/storage.ts` (pre-fix):
+
+```
+function getDefaultStorage(): SaveStorageAdapter | null {
+  if (typeof globalThis === 'undefined') return null;
+  const g = globalThis as { localStorage?: SaveStorageAdapter };
+  return g.localStorage ?? null;   // ← can throw SecurityError
+}
+
+export function loadRaw(storage?): unknown {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return null;
+  const raw = adapter.getItem(SAVE_STORAGE_KEY);  // ← can throw
+  ...
+}
+
+export function save(payload, storage?): void {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return;
+  adapter.setItem(SAVE_STORAGE_KEY, JSON.stringify(payload));  // ← QuotaExceededError
+}
+
+export function clearSave(storage?): void {
+  const adapter = storage ?? getDefaultStorage();
+  if (!adapter) return;
+  adapter.removeItem(SAVE_STORAGE_KEY);  // ← can throw
+}
+```
+
+The `typeof globalThis === 'undefined'` check guards against
+undefined globalThis but NOT against the property access throwing.
+In Safari private-browsing / opaque-origin / blocked-storage
+contexts, reading `globalThis.localStorage` itself raises
+SecurityError. Plus `getItem`/`setItem`/`removeItem` can throw at
+runtime under QuotaExceededError / mid-session storage block. Net
+result: a single throw propagates through loadLocal → useRun's
+load-on-mount useEffect and breaks the mount path, violating the
+no-op fallback contract under exactly the conditions where it was
+supposed to engage.
+
+**Fix (commit `5263d0f`).** Wrap every browser-storage touchpoint
+in try/catch with a null/no-op fallback:
+
+- getDefaultStorage: try/catch around the property read; null on
+  throw (same as the SSR / no-localStorage branch).
+- save(): try/catch around adapter.setItem; silent no-op on throw.
+- loadRaw(): try/catch around adapter.getItem; null on throw,
+  treating the failure same as "no save present" → fresh-run path.
+- clearSave(): try/catch around adapter.removeItem; silent no-op
+  on throw.
+
+Doc comment expanded with the explicit runtime conditions that
+trigger throws (Safari private-browsing, opaque origins,
+QuotaExceededError, blocked storage).
+
+**Tests (persistence.test.ts).** Five new throw-safety cases:
+
+1. loadLocal returns null when adapter.getItem throws.
+2. saveLocal is silent no-op when adapter.setItem throws (e.g.
+   QuotaExceededError).
+3. clearLocal is silent no-op when adapter.removeItem throws.
+4. Full mount path (save → load → clear) survives a fully-throwing
+   adapter without propagation.
+5. `globalThis.localStorage` access itself throwing — simulated via
+   `Object.defineProperty` with a getter throwing SecurityError —
+   is caught by getDefaultStorage's defensive try/catch; loadLocal,
+   saveLocal, clearLocal all no-op without propagation.
+
+### Counter updates
+
+| Counter | Pre-2.5 | Post-2.5 |
+|---|---:|---:|
+| Predicate-vs-name catches codified | 19 | **21** (+Catch 20 P1 race; +Catch 21 P2 throw-safety) |
+| 4-finding ceiling | 0/4 | **2/4** (reactive) |
+| Open CFs | 30 (CF 34, CF 35, CF 37, CF 38, CF 42, CF 43, CF 45 + 23 earlier) | unchanged |
+
+Catch 20 + 21 both Class C2 (architectural / structural concerns vs.
+isolated logic bugs). Antidote candidates held pending second-instance
+triggers — no codification this turn.
+
+### Branch state at Phase 2.5 close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 10 atomic branch
+commits (7 original + d4fd27c layering fix + 1fd5424 P1 + 5263d0f
+P2) + 2 docs commits (a5f6149 + this entry).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `1fd5424` | Phase 2.5 P1 — race guard | Monotonic restoreEpochRef in useRun; restore's resolve callback bails on epoch mismatch; createRun useEffect synchronously bumps before its dynamic-import. False race-guard comment corrected. +1 regression test (race interleave with auto-fire stub). |
+| `5263d0f` | Phase 2.5 P2 — throw-safety | try/catch wrapping for getDefaultStorage property read + adapter.getItem/setItem/removeItem in storage.ts. +5 throw-safety tests (3 method-level + 1 full-path + 1 globalThis-getter-throws). |
+| this entry | Phase 2.5 docs | docs(decision-log): 5b.3a Phase 2.5 — Codex P1+P2 (Catch 20+21). |
+
+### Working-tree note (orphaned cleanup ride-along)
+
+Commit `1fd5424` incidentally landed the previously-orphaned
+`apps/client/vite.config.ts.timestamp-*.mjs` deletion (a Vite-
+generated tempfile that had been staged-for-deletion in the index
+since before this conversation started). The deletion was already
+staged when I added the P1 fix files; `git commit -m` picked up the
+full index. Net effect: a stale tempfile no longer tracked in git
+history — harmless, arguably correct. The matching `.gitignore`
+modification (which presumably adds the pattern) remains in the
+working tree unstaged.
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
+## 2026-05-20 — M1.5b PR 3 / 5b.3a pre-push gate clearance (LocalSaveV1 persistence core)
+
+5b.3a's 7-commit body of work (LocalSaveV1 schema authored as
+SerializedRunState; sim getRngState + restoreRun + RestoreRunOptions;
+real startedAt timestamp; client persistence layer + migration scaffold;
+save-on-quiescent + load-on-mount + clearLocal-on-reset wiring;
+round-trip + post-load-combat + migration + quiescent-timing test
+coverage) cleared the master-dev pre-push gate matrix with one
+remediation (item D layering fix).
+
+### Pre-push gate results
+
+| Item | Disposition |
+|---|---|
+| **A** tech-architecture.md § 7.1 amendment | NO-OP — already amended in Commit 1 (4200be6); SerializedRunState authored, `inProgressRun: SerializedRunState \| null` (readonly, non-optional, nullable), path comment points at `packages/content/src/schemas.ts § 13` + `packages/shared/src/save/index.ts` |
+| **B** LocalSaveV1.inProgressRun = SerializedRunState \| null end-to-end | CONFIRMED — both content-schemas.ts § 13 and packages/content/src/schemas.ts § 13 byte-identical; save/load round-trips snapshot through LocalSaveV1.inProgressRun; `pnpm check-schemas-sync: OK` |
+| **C** sim barrel exports restoreRun + RestoreRunOptions + RunController | CONFIRMED — both Rule 7 barrels (`packages/sim/src/run/index.ts` + `packages/sim/src/index.ts`) export restoreRun + RestoreRunOptions; getRngState is an instance method on the barrel-exported RunController interface (no separate top-level export needed) |
+| **D** packages/shared layering | **REMEDIATED — Catch 19 + Commit d4fd27c**. Master-dev grep surfaced runtime `globalThis.localStorage` access inside `packages/shared/src/save/storage.ts:32-36`. Shared package must stay types-only since apps/server imports it. Storage runtime relocated to `apps/client/src/persistence/storage.ts` (Option 1 ratified); `packages/shared/src/save/index.ts` reverts to pure types-only re-exports; `packages/shared/src/save/storage.ts` deleted. Post-fix `git grep "localStorage\|window.\|globalThis." packages/shared/` returns exactly one hit — a comment line inside `shared/save/index.ts` describing the new layering invariant — zero runtime hits. |
+| **E** quiescent-save granularity | PASS — saves fire only at arranging-entry + terminal (useEffect deps `[simRun, state.state.round, state.state.outcome]`); no design-level loss surface. Purchases are atomic in `drop_bag` (debit gold + append bag + null shop slot all in one reducer arm); `state.drag` is a transient UI ghost with no shop/gold mutation. Round-boundary granularity loses at most one round's purchases on crash mid-shopping — the clean tradeoff. |
+| **F** test concurrency config | REPORTED (no change) — `turbo.json` has no `concurrency` setting (defaults to N=cores); `vite.config.ts` files have no `testTimeout` / `pool` overrides; per-package `test` script is bare `vitest run`. The 5b.3a triple-green pipeline pass required `--concurrency=1` to avoid a V8 zone OOM under stacked happy-dom + vitest concurrency. Logged as CI-watch — if CI exhibits the same OOM post-push, a follow-up CF tracks pinning concurrency in turbo.json or vitest's pool config. |
+
+### Catch 19 (NEW)
+
+**Catch 19 (C2 — types-only-package-runtime-leak).** `packages/shared/src/save/storage.ts` (Commit `f08b339`) introduced runtime `globalThis.localStorage` access into the types-only cross-boundary shared package (Node server imports it). SSR-defensive but architecturally wrong. Caught at master-dev pre-push layering gate (Rule 8 inspection), not Codex. Fix: storage runtime moved to `apps/client/src/persistence/storage.ts`; `shared/save` reverted to types-only. **Antidote candidate (held):** lint / dependency-cruiser guard forbidding platform-global access in `packages/shared` — second-instance trigger.
+
+Catch counter: 18 → 19 at 5b.3a pre-push.
+
+### CF dispositions
+
+- **CF 34** (gold/rerollCount/bag/shop authority migration to sim) — carried forward; explicitly deferred per Phase 1 B2′ ratification (persistence-time reconciliation; live-mutation authority stays client-parallel). Revisit at 5b.3b or beyond.
+- **CF 35** (onTelemetryEvent wiring) — unchanged; still stubbed.
+- **CF 43** (Tinker recipeBornPlacementIds threading) — unchanged; decoupled from 5b.3a's persistence path per Phase 1 (Set\<PlacementId\> doesn't round-trip JSON; restoreRun yields empty Set matching fresh-controller shape).
+- **CF 45 (NEW, latent)** — Client placement-id minting uses `b${Date.now()+Math.random()}` (useRun.ts:56-58), non-deterministic state flowing into CombatInput.bag → replay ItemRefs. M1-safe: persisted verbatim across save/load; no cross-client replay until M2 /v1/replay/validate. Revisit M2. Not a 5b.3a defect.
+
+### Branch state at pre-push
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437` (post-M1.5b PR 2 merge baseline). 7 atomic branch commits + this docs commit + (next) closing/counter entry at merge.
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `4200be6` | Commit 1 — SCHEMA | Authored `SerializedRunState extends RunState { rngState; rerollCount; trophy }` in content-schemas.ts § 13 + byte-synced packages/content/src/schemas.ts; amended tech-arch § 7.1 (phantom SerializedRunState → real type; path comment fixed); re-exported through @packbreaker/shared. |
+| `5336d19` | Commit 2 — SIM API | `getRngState(): number` method on RunController + `restoreRun(serialized, options?): RunController` factory + `RestoreRunOptions` type. Optional `restoreFrom` parameter on RunControllerImpl constructor branches the init flow (no run_start telemetry on restore; rng restored via `createRng(restoreFrom.rngState as SimSeed)`; relics recomposed against all 3 slots; sim's bag stays empty per Q2 Amendment A live invariant). Rule 7 barrel sweep both sub-barrel + root barrel. |
+| `54c2a15` | Commit 3 — STARTEDAT FIX | `new Date().toISOString() as IsoTimestamp` injected at the createRun call site in useRun.ts; sim's `'2025-01-01T00:00:00.000Z'` sentinel default no longer reached in production. |
+| `f08b339` | Commit 4 — SAVE/LOAD primitives | Shared-package `storage.ts` with save/loadRaw/clearSave + SaveStorageAdapter; `pba.v1.save` localStorage key; SSR-defensive (silent no-op when globalThis.localStorage undefined). Migration scaffold at apps/client/src/persistence/migrations/ (v1 identity stub + dispatcher). Client composer (saveLocal/loadLocal/clearLocal) wraps shared primitives + migration. ⚠ This commit introduced Catch 19's layering bug — remediated in d4fd27c. |
+| `9e265b8` | Commit 5 — WIRING | useRun load-on-mount useEffect (dynamic-import restoreRun if v1 in-progress save present); save-on-quiescent useEffect (deps narrowed to `[simRun, round, outcome]`); clearLocal in resetRun; new `restore_from_save` reducer arm (snapshot.bag → BagItem[] inverse impedance, snapshot.shop → ShopSlot[] mirror of init_from_sim shape, rerollCount + trophy lifted). Test setup adds `localStorage.clear()` in afterEach. |
+| `5175662` | Commit 6 — TESTS | Round-trip + post-load-combat coverage at `packages/sim/test/restoreRun.test.ts` (+12 sim tests). Save/loadLocal round-trip + migration dispatcher + corruption tolerance at `apps/client/src/persistence/persistence.test.ts` (+15 client tests). restore_from_save reducer arm at `apps/client/src/run/RunController.test.ts` (+4 client tests). Quiescent-save timing integration at `apps/client/src/run/RunContext.test.tsx` (+1 client test). |
+| `d4fd27c` | Catch 19 — LAYERING FIX | Storage runtime relocated `packages/shared/src/save/storage.ts` → `apps/client/src/persistence/storage.ts`. shared/save/index.ts reverted to types-only re-export. SaveStorageAdapter type moved with the runtime (no server consumer). Importers rewired (persistence/index.ts + persistence.test.ts). Migration index.ts comment updated. Zero runtime localStorage/window/globalThis in packages/shared post-fix. |
+| this entry | Item G docs | docs(decision-log): 5b.3a pre-push gate clearance + CF 45 + Catch 19. |
+
+### Closing / counter entry
+
+Defers to merge per the project closing-log convention (pattern + counter updates land at PR close, not at intermediate push). Catch 19 is recorded inline above; CF 45 opens; CF 34 carries; counters update at merge.
+
+---
+
 ## 2026-05-19 — M1.5b PR 2 closed (RunEndScreen + reset_run + CF 21 summary-side close)
 
 ### Branch + commit topology
