@@ -166,7 +166,20 @@ export function useRun() {
         return;
       }
       setSimRun(controller);
-      dispatch({ type: 'restore_from_save', snapshot });
+      // Phase 2.5j-fix (Catch 26): pass the post-restoreRun controller
+      // snapshot alongside the persisted snapshot. The reducer reads
+      // sim-authoritative fields (ruleset, derived, maxHearts, etc.)
+      // from controllerSnapshot — restoreRun recomposes them from
+      // current registries via composeRuleset, so this is the cross-
+      // version-safe source. snapshot is still canonical for
+      // client-authoritative fields (bag, shop) + SerializedRunState-
+      // only fields (rerollCount, trophy). See decision-log Catch 26
+      // for the partition.
+      dispatch({
+        type: 'restore_from_save',
+        snapshot,
+        controllerSnapshot: controller.getState(),
+      });
     });
     return () => {
       cancelled = true;

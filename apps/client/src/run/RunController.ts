@@ -140,7 +140,23 @@ export type RunAction =
   | { type: 'init_from_sim'; snapshot: SimRunState }
   | { type: 'sync_from_sim'; snapshot: SimRunState }
   | { type: 'reset_run' }
-  | { type: 'restore_from_save'; snapshot: SerializedRunState };
+  | {
+      type: 'restore_from_save';
+      /** Persisted SerializedRunState — canonical source for
+       *  client-authoritative + SerializedRunState-only fields
+       *  (bag.placements, shop.slots, rerollCount, trophy). */
+      snapshot: SerializedRunState;
+      /** Post-restoreRun controller snapshot — canonical source for
+       *  sim-authoritative fields that restoreRun RECOMPOSES from
+       *  current registries (ruleset, derived, derived maxHearts /
+       *  className). Phase 2.5j-fix (Catch 26): cross-version restore
+       *  must not let the stale persisted ruleset/derived leak into
+       *  client.state.* — they'd diverge from sim's recomposed
+       *  values, producing wrong reroll cost / shop gen on app-version
+       *  bumps or content hot-fixes. See decision-log Catch 26 for
+       *  the partition. */
+      controllerSnapshot: SimRunState;
+    };
 
 /** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
  *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
@@ -458,11 +474,34 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       return INITIAL_CLIENT_STATE;
 
     case 'restore_from_save': {
-      // M1.5b PR 3 / 5b.3a Commit 5: rehydrate ClientRunState from a
-      // SerializedRunState (loaded via apps/client/src/persistence). The
-      // snapshot's sim-authoritative slice (RunState fields) flows through
-      // applySimSnapshot exactly like init_from_sim; the SerializedRunState-
-      // only fields (rerollCount, trophy) are written on top of state.
+      // M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Catch 26): hydrate
+      // sim-authoritative fields (ruleset, derived, derived maxHearts/
+      // className) from the POST-restoreRun controller snapshot — NOT
+      // the persisted snapshot. The persisted ruleset/derived were
+      // composed at save time and may be stale relative to the current
+      // content registries (cross-version load, hot-fixes). sim's
+      // restoreRun recomposes via composeRuleset(contract, classId,
+      // relics) at construction time (state.ts:293-295); the recomposed
+      // values are surfaced via controller.getState() and travel
+      // through applySimSnapshot here. Client-authoritative fields
+      // (bag.placements, shop.slots, gold via Amendment A) + the
+      // SerializedRunState-only fields (rerollCount, trophy) continue
+      // to come from `s` (the persisted snapshot).
+      //
+      // Field partition (Step 0 confirmed pre-fix):
+      //   - controller (recomposed): ruleset, derived, maxHearts,
+      //     className. Verbatim from controller: runId, seed, classId,
+      //     contractId, startedAt, hearts, currentRound, relics,
+      //     outcome, history (these match snapshot but pulling from
+      //     controller keeps the source consistent).
+      //   - snapshot (persisted): bag.placements, shop.slots,
+      //     rerollCount, trophy. (gold via applySimSnapshot includeGold
+      //     reads from `c` — which on restore equals snapshot.gold since
+      //     the constructor restoreFrom branch sets this.gold =
+      //     restoreFrom.gold; equivalent.)
+      //   - SerializedRunState-only (NOT in RunState): rngState owned
+      //     by sim internally, not in state.state. rerollCount + trophy
+      //     are client-owned and overlaid below.
       //
       // Top-level bag is restored by converting BagState.placements (sim
       // shape: placementId/itemId/anchor/rotation) back to BagItem[] (client
@@ -476,7 +515,8 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       // (arranging-entry only) guarantees purchased=[] and
       // rerollsThisRound=0, so no purchased-null masking is needed.
       const s = action.snapshot;
-      const base = applySimSnapshot(state, s, /* includeGold */ true);
+      const c = action.controllerSnapshot;
+      const base = applySimSnapshot(state, c, /* includeGold */ true);
       return {
         ...base,
         bag: s.bag.placements.map((p) => ({
