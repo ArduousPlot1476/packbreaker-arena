@@ -4,6 +4,193 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5i (Codex finding #5; Catch 24)
+
+Codex re-review of `91fe6f3` (post-Phase-2.5h) returned 1 P1 finding
+on the load-boundary validator: `isValidSerializedRunState` checked
+`classId/contractId/startedAt` as strings only, never validated
+`ruleset`/`derived` shape, and never checked `classId ∈ CLASSES`. A
+corrupt `schemaVersion: 1` payload could then pass `loadLocal()` and
+throw inside `applySimSnapshot` ([RunController.ts:192-193](apps/client/src/run/RunController.ts#L192-L193))
+at `snapshot.ruleset.startingHearts` or
+`CLASSES[snapshot.classId]!.displayName` — bypassing the intended
+fresh-run fallback (the throw landed in React's reducer dispatch,
+not inside useRun's restoreRun try/catch).
+
+**Diagnosis.** Catch 22's resolution was incomplete because the
+Phase 2.5g meta-audit's A8 enumeration covered the restore-call-tree
++ reducer bag/shop arms but missed `applySimSnapshot` upstream in
+the same `restore_from_save` dispatch. Validator validated a
+**field-subset** (the surfaces the meta-audit enumerated), not the
+**complete contract**.
+
+**Finding #5 since the ceiling tripped.** Reactive budget remains
+spent; this is incomplete-fix remediation, not a new reactive cycle.
+Catch 24 completes the class started by Catch 22.
+
+### Step 0 — complete enumeration (the sweep the meta-audit should have done)
+
+Every deref / registry lookup reachable on the client-side load
+dispatch tree (sim-side derefs covered by useRun's restoreRun
+try/catch; noted but not in this validator's scope):
+
+**A. `restore_from_save` reducer arm** ([RunController.ts:460-499](apps/client/src/run/RunController.ts#L460-L499)):
+- `s.bag.placements.map(p => ... p.anchor.col / p.anchor.row ...)` — A8 (covered by Phase 2.5h `isValidPlacement`).
+- `s.shop.slots.map((itemId, i) => ...)` — A8 (covered by `isStr` on each slot).
+- `s.currentRound`, `s.shop.rerollsThisRound` (uid template) — covered by `isNum`.
+- `s.rerollCount`, `s.trophy` — covered by `isNum`.
+
+**B. `applySimSnapshot`** ([RunController.ts:181-200](apps/client/src/run/RunController.ts#L181-L200)) — **THE GAP THE META-AUDIT MISSED**:
+- `snapshot.runId` (L185), `snapshot.seed` (L186), `snapshot.contractId` (L188), `snapshot.relics` (L195), `snapshot.outcome` (L196), `snapshot.gold` (L198), `snapshot.currentRound` (L194), `snapshot.hearts` (L191) — pure assignments, safe if present.
+- `snapshot.ruleset` (L189), `snapshot.derived` (L190) — assigned by reference; downstream consumers deref.
+- **`snapshot.ruleset.startingHearts` (L192)** — DEREF on ruleset. **Codex P1 surface A8a.**
+- **`CLASSES[snapshot.classId]!.displayName` (L193)** — REGISTRY LOOKUP + non-null assertion. **Codex P1 surface A8b.**
+- `snapshot.history.slice()` (L197) — array method. Covered by `isArr`.
+
+**C. Downstream consumers of the restored client state** (any place that reads `state.state.X` post-restore):
+- `state.state.ruleset.bagDimensions` — [CombatOverlay.tsx:157,170,272](apps/client/src/combat/CombatOverlay.tsx#L157), [CombatOverlay.tsx:96-97](apps/client/src/combat/CombatOverlay.tsx#L96-L97), [useRun.ts:335](apps/client/src/run/useRun.ts#L335).
+- `state.state.ruleset.rerollCostStart` / `rerollCostIncrement` — [ShopPanel.tsx:27-28](apps/client/src/shop/ShopPanel.tsx#L27-L28), [ShopTab.tsx:30-31](apps/client/src/screens/mobile/tabs/ShopTab.tsx#L30-L31), [useRun.ts:302-303](apps/client/src/run/useRun.ts#L302-L303), [RunController.ts:363-364](apps/client/src/run/RunController.ts#L363-L364).
+- `state.state.ruleset.startingHearts` — propagated as `maxHearts` ([RunController.ts:192](apps/client/src/run/RunController.ts#L192)).
+- `state.state.derived.extraRerollsPerRound` — [ShopPanel.tsx:29](apps/client/src/shop/ShopPanel.tsx#L29), [ShopTab.tsx:32](apps/client/src/screens/mobile/tabs/ShopTab.tsx#L32), [useRun.ts:306](apps/client/src/run/useRun.ts#L306), [RunController.ts:365](apps/client/src/run/RunController.ts#L365).
+- `CLASSES[state.state.classId]!` — [LeftRail.tsx:104](apps/client/src/hud/LeftRail.tsx#L104), [RelicsTab.tsx:82](apps/client/src/screens/mobile/tabs/RelicsTab.tsx#L82).
+- `RELICS[state.state.relics.starter]!` / `mid` / `boss` — [LeftRail.tsx:106-108](apps/client/src/hud/LeftRail.tsx#L106-L108), [RelicsTab.tsx:83-85](apps/client/src/screens/mobile/tabs/RelicsTab.tsx#L83-L85). (`RunEndScreen.tsx:187-191` is optional-chained; safe.)
+- `CONTRACTS[...]` — no current client-side consumer (sim-side only, behind useRun try/catch).
+
+**D. Sim-side restoreRun derefs** (NOTE: covered by [useRun.ts try/catch](apps/client/src/run/useRun.ts#L150-L160) — out of validator scope):
+- `serialized.relics.starter` ([state.ts:1180](packages/sim/src/run/state.ts#L1180)).
+- `{ ...restoreFrom.relics }` ([state.ts:283](packages/sim/src/run/state.ts#L283)).
+- `restoreFrom.history.slice()` ([state.ts:302](packages/sim/src/run/state.ts#L302)).
+- `CONTRACTS[input.contractId]` ([state.ts:262](packages/sim/src/run/state.ts#L262)).
+- `RELICS[input.startingRelicId]` ([state.ts:275](packages/sim/src/run/state.ts#L275)).
+
+### Completeness proof — every enumerated deref/lookup → validator guard
+
+| Surface | Deref / lookup | Validator guard |
+|---|---|---|
+| A8 reducer bag map | `p.anchor.col / p.anchor.row / p.placementId / p.itemId / p.rotation` | `isValidPlacement(p)` for each `p` in `bag.placements` |
+| A8 reducer shop map | `itemId` (cast as ItemId) | `isStr(slot)` for each `slot` in `shop.slots` |
+| A8a applySimSnapshot | `snapshot.ruleset.startingHearts` | `isValidRuleset(x.ruleset)` — checks `startingHearts` numeric + 11 other Ruleset levers + bagDimensions structure + mutators array |
+| A8b applySimSnapshot | `CLASSES[snapshot.classId]!.displayName` | `isKnownClassId(x.classId)` — `Object.hasOwnProperty.call(CLASSES, id)` |
+| A8c applySimSnapshot | `snapshot.history.slice()` | `isArr(x.history)` |
+| C ShopPanel/ShopTab | `state.ruleset.rerollCostStart`, `rerollCostIncrement` | `isValidRuleset(x.ruleset)` — covers both fields as numeric |
+| C ShopPanel/ShopTab/useRun/reducer | `state.derived.extraRerollsPerRound` | `isValidDerived(x.derived)` — covers all 3 DerivedModifiers fields |
+| C CombatOverlay | `state.ruleset.bagDimensions.{width,height}` | `isValidRuleset` validates `bagDimensions` shape including both axes |
+| C LeftRail/RelicsTab | `CLASSES[state.classId]!` | `isKnownClassId(x.classId)` |
+| C LeftRail/RelicsTab | `RELICS[state.relics.starter / mid / boss]!` | `isKnownRelicId(x.relics.starter)` required; `isKnownRelicId(x.relics.mid)` if non-null; `isKnownRelicId(x.relics.boss)` if non-null |
+| (future) CONTRACTS lookup | `CONTRACTS[state.contractId]` | `isKnownContractId(x.contractId)` — added per Rule 11 even though no current client consumer (deref-safety structural, not enumeration-dependent) |
+| D sim restoreRun | sim-side derefs | `isValidSerializedRunState` covers the same structural surfaces (relics, history, etc.); sim's `CONTRACTS[id]` + `RELICS[id]` throws also covered by useRun try/catch as a defense-in-depth belt |
+
+**Every enumerated deref/lookup maps to a guard.** No flagged gaps.
+Mutator nested optional fields (`boss_only.hpOverride/damageBonus/lifestealPctBonus`) are NOT validated; they're consumed only by sim's combat path (covered by useRun's try/catch) and no client-side surface derefs them. If a future client consumer reads them, it should either optional-chain or the validator should be extended — flagged here so the next M2/CF closure that grows mutator usage knows to extend.
+
+### Fix (commit `caa3282`)
+
+Expanded `isValidSerializedRunState` per Rule 11. New helpers:
+- `isValidRuleset` — 12 scalar numeric levers + bagDimensions structural + mutators array of valid ContractMutator entries.
+- `isValidDerived` — all 3 fields finite numerics.
+- `isValidMutator` — `.type` ∈ `{adjacent_double, recipe_discount, no_rerolls, boss_only}`.
+- `isKnownClassId` / `isKnownContractId` / `isKnownRelicId` — registry membership via `Object.prototype.hasOwnProperty.call`.
+
+Validator stays a `parsed is LocalSaveV1` type predicate. No cast
+regression. Caller in `migrations/index.ts` unchanged.
+
+### Tests (commit `2f2201d`)
+
+**Unit-level** (`apps/client/src/persistence/persistence.test.ts`, +16 tests):
+- Registry membership: unknown classId / contractId / starter / mid / boss relic ids → `loadLocal` returns null.
+- Ruleset shape: undefined / non-object / missing startingHearts / missing bagDimensions / bagDimensions missing width / mutators not-array / mutators containing unknown type → null. Positive: valid `boss_only` mutator accepted.
+- DerivedModifiers shape: undefined / missing extraRerollsPerRound / bonusGoldOnWin as string → null.
+
+**End-to-end** (`apps/client/src/run/RunContext.test.tsx`, +8 tests):
+8 mount-fallback flavors covering each new corrupt-surface variant
+(unknown classId, unknown contractId, missing ruleset, non-object
+ruleset, missing derived, invalid starter/mid/boss relic ids).
+Each asserts fresh Tinker mounts via the ClassSelectScreen mock,
+no `console.error`, no `[useRun] restoreRun` warn (validator
+rejected upstream of the try/catch). Factored helpers
+`makeCorruptV1Save` + `assertFreshTinkerMountsCleanly` for
+single-test-body brevity per surface.
+
+### Rule 11 (NEW, codified)
+
+> A load/deserialization boundary validator must validate the
+> COMPLETE persisted contract — every field's presence + type, full
+> structural validity of nested objects, and registry membership for
+> id-typed fields. Deref-safety must be STRUCTURAL (any consumer is
+> safe on a validated payload), never dependent on enumerating known
+> consumers.
+
+Reason: enumeration-dependent validators leak gaps whenever (a) the
+audit's enumeration is incomplete, or (b) a new consumer is added
+that derefs a previously-unvalidated field. Both pathways materialized
+between Phase 2.5g (enumeration incomplete → missed `applySimSnapshot`)
+and Phase 2.5i (Codex found the gap). Structural validation removes
+both failure modes.
+
+### Pattern #7 — 3rd instance (codified)
+
+Pattern #7: "Tests / audits asserting proxies rather than invariants."
+- Instance 1 (M1.5a PR 3): a test asserted field-roundtrip instead of cursor-preservation.
+- Instance 2 (Phase 2.5g): drift-as-expected test (`restoreRun.test.ts:174-192` pre-fix) codified the drift as the invariant — masked the cursor-drift bug.
+- **Instance 3 (Phase 2.5i, NEW)**: the Phase 2.5g meta-audit ITSELF asserted a proxy (enumerated A8 surfaces in the reducer arm's bag/shop calls) rather than the full invariant (every deref site in the entire load dispatch tree, including upstream calls like `applySimSnapshot`). The audit's enumeration was the proxy; the invariant was "no consumer in the load dispatch tree throws on a validated payload."
+
+**Codification.** Audit scope must cover the FULL DISPATCH TREE
+reachable from the load entry point, not just the topmost call site.
+Audits that enumerate only direct call-site derefs leak upstream-call
+deref gaps. Pair with Rule 11: even a complete audit isn't sufficient
+on its own — the validator must be structural so new consumers stay
+safe by construction, not by re-running the audit.
+
+### Catch 24 (NEW, Class A residual)
+
+| Catch | Class | Description |
+|---|---|---|
+| 22 | A | Version-only validation passes schemaVersion-N-with-garbage downstream (Phase 2.5h). |
+| **24** | A residual | Validator validates a field-subset, not the complete contract. Codex finding #5 caught two upstream surfaces (`snapshot.ruleset.startingHearts`, `CLASSES[snapshot.classId]!.displayName`) that the Phase 2.5g meta-audit's A8 enumeration missed because it scoped to direct reducer-arm `.map` calls only. |
+
+Catch 22's resolution was **incomplete**; Catch 24 **completes** the
+class via Rule 11's structural-validation discipline.
+
+### Counter updates
+
+| Counter | Pre-2.5i | Post-2.5i |
+|---|---:|---:|
+| Catches codified | 23 | **24** (+Catch 24 Class A residual) |
+| Rules codified | 10 (last: Rule 10 verbatim-evidence at decision-log meta) | **11** (+Rule 11 complete-contract structural validation) |
+| Pattern #7 instances | 2 | **3** (3rd instance — audit-enumeration-as-proxy) |
+| Open CFs | 31 | unchanged (no CF impact) |
+| 4-finding ceiling | 4/4 (closed via Phase 2.5g meta-audit) | unchanged — finding #5 is incomplete-fix remediation (reactive budget remains spent); not a new reactive cycle |
+
+### Branch state at Phase 2.5i close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 21 atomic branch
+commits (17 pre-2.5i + 3 this turn: `caa3282` + `2f2201d` + this
+docs commit). Plus the D-F5 follow-up `3e1a13d` between Phase 2.5h
+and Phase 2.5i, and the predicate refactor `91fe6f3` (which was the
+tip Codex reviewed).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `caa3282` | Phase 2.5i commit 1 — validator expansion | `isValidRuleset` + `isValidDerived` + registry-membership checks (`isKnownClassId/ContractId/RelicId`) folded into `isValidSerializedRunState`. Validator stays a type predicate. |
+| `2f2201d` | Phase 2.5i commit 2 — tests | +16 unit-level persistence tests (registry membership × 5, Ruleset shape × 8, DerivedModifiers shape × 3). +8 e2e RunContext mount-fallback tests, one per new surface. |
+| this entry | Phase 2.5i commit 3 — docs | Catch 24 + Rule 11 + Pattern #7 3rd instance. Counters 23→24 / 10→11. |
+
+### Codex engagement note (lesson, uncodified)
+
+Phase 2.5h's post-trigger poll watched `/issues/{n}/comments` and
+reported timeout at 15 min. Codex actually responded ~10 min after
+the trigger as a PR REVIEW (`/pulls/{n}/reviews` with
+`state=COMMENTED`), not as an issue comment. The bot account is
+`chatgpt-codex-connector[bot]`. Line-level findings live under
+`/pulls/{n}/reviews/{review_id}/comments`. Future Codex polls
+should hit the reviews endpoint; the issue-comments endpoint sees
+only the human-posted `@codex review` triggers, not Codex's
+responses. Folding into the project's Codex-engagement notes.
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
 ## 2026-05-20 — M1.5b PR 3 / 5b.3a Phase 2.5h (meta-audit remediation)
 
 Codex re-review of `a3b3c0d2` (round 2) returned a 4th + 5th finding on
