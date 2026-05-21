@@ -1,249 +1,306 @@
 // Load-boundary shape validator for LocalSaveV1 + nested SerializedRunState.
 //
-// M1.5b PR 3 / 5b.3a Phase 2.5h (Catch 22 / Class A; load-boundary
-// shape validator + restore try/catch). Phase 2.5i (Catch 24 — same
-// class, completes the contract per the new Rule 11): validator now
-// validates the COMPLETE persisted contract — every field present
-// with the correct primitive type, full structural validation of
-// nested objects (Ruleset, DerivedModifiers, BagState, ShopState,
-// RelicSlots), AND registry membership for id-typed fields
-// (classId ∈ CLASSES, contractId ∈ CONTRACTS, relics.* ∈ RELICS
-// where non-null).
+// M1.5b PR 3 / 5b.3a Phase 2.5j (Catch 25 — Class A batch, structural close).
 //
-// Rule 11 (codified at 5b.3a Phase 2.5i): a load/deserialization
-// boundary validator must validate the COMPLETE persisted contract
-// — every field's presence + type, full structural validity of
-// nested objects, and registry membership for id-typed fields.
-// Deref-safety must be STRUCTURAL (any consumer is safe on a
-// validated payload), never dependent on enumerating known
-// consumers. The Phase 2.5h validator validated a field-subset
-// (the surfaces the Phase 2.5g meta-audit enumerated); Codex
-// finding #5 caught the gap (applySimSnapshot derefs
-// snapshot.ruleset.startingHearts + CLASSES[snapshot.classId] —
-// neither was structurally validated). Catch 24 closes the class
-// by validating the full contract regardless of which consumer
-// might deref it.
+// Replaces the hand-rolled per-field validator from Phase 2.5h/2.5i with
+// a Zod schema-derived validator. The hand-rolled approach is structurally
+// enumeration-fragile by construction — each iteration trades one set of
+// forgotten surfaces for another (Phase 2.5h missed registry membership,
+// Phase 2.5i closed CLASSES/CONTRACTS/RELICS but missed ITEMS + history
+// element shape, etc.). Pattern 7 recurred three times within this PR
+// despite mid-PR Rule 11 codification — the discipline alone was not
+// sufficient, the fix had to be structural.
 //
-// Hand-rolled (no Zod — not a workspace dep, and adding one is out
-// of scope for 5b.3a; tech-architecture.md § 6.3 plans Zod as a
-// server-side dep but it is not installed). Forward-compat: when
-// LocalSaveV2 lands, add validateLocalSaveV2 here and route via the
-// migration dispatcher.
+// Rule 11 (amended at 5b.3a Phase 2.5j): "Large persisted contracts MUST
+// use a schema-derived validator (Zod or equivalent). Completeness must
+// be type-enforced via dual-satisfies on the schema's z.infer vs the
+// canonical type — not enumeration-dependent." See decision-log entry
+// for Phase 2.5j.
+//
+// Three layers of safety:
+//   1. The Zod schema below validates the FULL contract (shape +
+//      primitive types + registry membership for the 5 id-field
+//      surfaces: classId / contractId / relics.starter|mid|boss /
+//      bag.placements[].itemId / shop.slots[].itemId).
+//   2. The dual-satisfies type assertions below prove the schema's
+//      inferred type is bidirectionally structurally equivalent to
+//      the canonical SerializedRunState + LocalSaveV1 — a compile-
+//      time guarantee that a passing payload is structurally complete.
+//   3. useRun's load-on-mount restoreRun call remains wrapped in
+//      try/catch (decision-log Catch 22 surface A4/A5: defense-in-
+//      depth for restoreRun's own contract throws on unknown
+//      registry ids if the registries ever diverge between client
+//      and sim, or for any future deref the validator doesn't
+//      structurally express).
 
-import type { LocalSaveV1 } from '@packbreaker/shared';
-import { CLASSES, CONTRACTS, RELICS } from '@packbreaker/content';
+import { z } from 'zod';
+import {
+  CLASSES,
+  CONTRACTS,
+  ITEMS,
+  RELICS,
+  type ClassId,
+  type ContractId,
+  type GhostId,
+  type IsoDate,
+  type IsoTimestamp,
+  type ItemId,
+  type PlacementId,
+  type RelicId,
+  type RoundNumber,
+  type RunId,
+  type SimSeed,
+} from '@packbreaker/content';
+import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
 
-const RUN_OUTCOMES = new Set([
-  'in_progress',
-  'won',
-  'eliminated',
-  'abandoned',
+// ─── Branded-ID validators ──────────────────────────────────────────
+// z.custom<BrandedType>(predicate) preserves the brand on the inferred
+// type while running the predicate at parse time. Registry-checked ids
+// land their `.refine` (effectively) inline via the predicate.
+
+const ClassIdSchema = z.custom<ClassId>(
+  (v): v is ClassId =>
+    typeof v === 'string' && Object.prototype.hasOwnProperty.call(CLASSES, v),
+  { message: 'classId must be a known CLASSES key' },
+);
+const ContractIdSchema = z.custom<ContractId>(
+  (v): v is ContractId =>
+    typeof v === 'string' && Object.prototype.hasOwnProperty.call(CONTRACTS, v),
+  { message: 'contractId must be a known CONTRACTS key' },
+);
+const RelicIdSchema = z.custom<RelicId>(
+  (v): v is RelicId =>
+    typeof v === 'string' && Object.prototype.hasOwnProperty.call(RELICS, v),
+  { message: 'relicId must be a known RELICS key' },
+);
+const ItemIdSchema = z.custom<ItemId>(
+  (v): v is ItemId =>
+    typeof v === 'string' && Object.prototype.hasOwnProperty.call(ITEMS, v),
+  { message: 'itemId must be a known ITEMS key' },
+);
+
+// Pass-through branded ids (no registry — type-only brands).
+const RunIdSchema = z.custom<RunId>((v): v is RunId => typeof v === 'string');
+const SimSeedSchema = z.custom<SimSeed>(
+  (v): v is SimSeed => typeof v === 'number' && Number.isFinite(v),
+);
+const PlacementIdSchema = z.custom<PlacementId>(
+  (v): v is PlacementId => typeof v === 'string',
+);
+const IsoTimestampSchema = z.custom<IsoTimestamp>(
+  (v): v is IsoTimestamp => typeof v === 'string',
+);
+const IsoDateSchema = z.custom<IsoDate>((v): v is IsoDate => typeof v === 'string');
+const GhostIdSchema = z.custom<GhostId>((v): v is GhostId => typeof v === 'string');
+const RoundNumberSchema = z.custom<RoundNumber>(
+  (v): v is RoundNumber => typeof v === 'number' && Number.isFinite(v),
+);
+
+// ─── Constrained literals ───────────────────────────────────────────
+
+const RotationSchema = z.union([
+  z.literal(0),
+  z.literal(90),
+  z.literal(180),
+  z.literal(270),
 ]);
 
-function isObj(x: unknown): x is Record<string, unknown> {
-  return typeof x === 'object' && x !== null && !Array.isArray(x);
-}
-
-function isNum(x: unknown): x is number {
-  return typeof x === 'number' && Number.isFinite(x);
-}
-
-function isStr(x: unknown): x is string {
-  return typeof x === 'string';
-}
-
-function isArr(x: unknown): x is unknown[] {
-  return Array.isArray(x);
-}
-
-function isValidPlacement(x: unknown): boolean {
-  if (!isObj(x)) return false;
-  if (!isStr(x.placementId)) return false;
-  if (!isStr(x.itemId)) return false;
-  if (!isNum(x.rotation)) return false;
-  const anchor = x.anchor;
-  if (!isObj(anchor)) return false;
-  if (!isNum(anchor.col)) return false;
-  if (!isNum(anchor.row)) return false;
-  return true;
-}
-
-// Known ContractMutator variants (content-schemas.ts § 8). Validator
-// requires .type ∈ this set so future client-side mutator iteration
-// can safely switch on type without runtime surprise. Nested optional
-// fields of 'boss_only' are not validated — they're consumed only by
-// sim's combat path (sim-side, behind useRun's restoreRun try/catch).
-const KNOWN_MUTATOR_TYPES = new Set([
-  'adjacent_double',
-  'recipe_discount',
-  'no_rerolls',
-  'boss_only',
+const RunOutcomeSchema = z.union([
+  z.literal('in_progress'),
+  z.literal('won'),
+  z.literal('eliminated'),
+  z.literal('abandoned'),
 ]);
 
-function isValidMutator(x: unknown): boolean {
-  if (!isObj(x)) return false;
-  if (!isStr(x.type)) return false;
-  if (!KNOWN_MUTATOR_TYPES.has(x.type)) return false;
-  return true;
-}
+const RoundOutcomeSchema = z.union([z.literal('win'), z.literal('loss')]);
 
-function isValidRuleset(x: unknown): boolean {
-  if (!isObj(x)) return false;
-  // bagDimensions: {width, height} numeric.
-  const dims = x.bagDimensions;
-  if (!isObj(dims)) return false;
-  if (!isNum(dims.width)) return false;
-  if (!isNum(dims.height)) return false;
-  // 12 scalar numeric levers (content-schemas.ts § Ruleset).
-  if (!isNum(x.maxRounds)) return false;
-  if (!isNum(x.bossRound)) return false;
-  if (!isNum(x.startingHearts)) return false;
-  if (!isNum(x.shopSize)) return false;
-  if (!isNum(x.baseGoldPerRound)) return false;
-  if (!isNum(x.goldStepRounds)) return false;
-  if (!isNum(x.goldStepAmount)) return false;
-  if (!isNum(x.rerollCostStart)) return false;
-  if (!isNum(x.rerollCostIncrement)) return false;
-  if (!isNum(x.itemCostMultiplierBp)) return false;
-  if (!isNum(x.winBonusGold)) return false;
-  if (!isNum(x.sellRecoveryBp)) return false;
-  // mutators: array of valid ContractMutator entries.
-  if (!isArr(x.mutators)) return false;
-  for (const m of x.mutators) {
-    if (!isValidMutator(m)) return false;
-  }
-  return true;
-}
+// ─── Leaf object schemas ────────────────────────────────────────────
 
-function isValidDerived(x: unknown): boolean {
-  if (!isObj(x)) return false;
-  if (!isNum(x.extraRerollsPerRound)) return false;
-  if (!isNum(x.itemCostDelta)) return false;
-  if (!isNum(x.bonusGoldOnWin)) return false;
-  return true;
-}
+const CellCoordSchema = z
+  .object({
+    col: z.number(),
+    row: z.number(),
+  })
+  .readonly();
 
-function isKnownClassId(x: unknown): boolean {
-  return isStr(x) && Object.prototype.hasOwnProperty.call(CLASSES, x);
-}
+const BagDimensionsSchema = z
+  .object({
+    width: z.number(),
+    height: z.number(),
+  })
+  .readonly();
 
-function isKnownContractId(x: unknown): boolean {
-  return isStr(x) && Object.prototype.hasOwnProperty.call(CONTRACTS, x);
-}
+const BagPlacementSchema = z
+  .object({
+    placementId: PlacementIdSchema,
+    itemId: ItemIdSchema,
+    anchor: CellCoordSchema,
+    rotation: RotationSchema,
+  })
+  .readonly();
 
-function isKnownRelicId(x: unknown): boolean {
-  return isStr(x) && Object.prototype.hasOwnProperty.call(RELICS, x);
-}
+const BagStateSchema = z
+  .object({
+    dimensions: BagDimensionsSchema,
+    placements: z.array(BagPlacementSchema).readonly(),
+  })
+  .readonly();
 
-function isValidSerializedRunState(x: unknown): boolean {
-  if (!isObj(x)) return false;
+// RelicSlots: canonical type allows starter null but restoreRun's
+// contract requires it non-null. Schema rejects null starter (refine).
+const RelicSlotsSchema = z
+  .object({
+    starter: RelicIdSchema.nullable(),
+    mid: RelicIdSchema.nullable(),
+    boss: RelicIdSchema.nullable(),
+  })
+  .readonly()
+  .refine((r) => r.starter !== null, {
+    message: 'relics.starter must be non-null',
+    path: ['starter'],
+  });
 
-  // Outcome (constrained string).
-  if (!isStr(x.outcome) || !RUN_OUTCOMES.has(x.outcome)) return false;
+const ShopStateSchema = z
+  .object({
+    slots: z.array(ItemIdSchema).readonly(),
+    purchased: z.array(z.number()).readonly(),
+    rerollsThisRound: z.number(),
+  })
+  .readonly();
 
-  // Numerics (must be finite — NaN/Infinity rejected).
-  if (!isNum(x.hearts)) return false;
-  if (!isNum(x.gold)) return false;
-  if (!isNum(x.currentRound)) return false;
-  if (!isNum(x.rngState)) return false;
-  if (!isNum(x.rerollCount)) return false;
-  if (!isNum(x.trophy)) return false;
-  if (!isNum(x.seed)) return false;
+// ContractMutator — discriminated union on .type. Optional nested
+// fields of 'boss_only' are validated when present.
+const ContractMutatorSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('adjacent_double') }).readonly(),
+  z.object({ type: z.literal('recipe_discount'), amount: z.number() }).readonly(),
+  z.object({ type: z.literal('no_rerolls') }).readonly(),
+  z
+    .object({
+      type: z.literal('boss_only'),
+      hpOverride: z.number().optional(),
+      damageBonus: z.number().optional(),
+      lifestealPctBonus: z.number().optional(),
+    })
+    .readonly(),
+]);
 
-  // Branded id-typed fields: registry-membership-checked. Phase 2.5i
-  // / Catch 24: previously only string-typed; Codex finding #5
-  // caught that `CLASSES[snapshot.classId]!.displayName` at
-  // RunController.ts:193 throws on unknown classId. Validate against
-  // the registries so downstream `REGISTRY[id]!` lookups (LeftRail /
-  // RelicsTab / RunEndScreen) cannot throw on a passing payload.
-  // contractId currently has no client-side REGISTRY[id] consumer
-  // (sim-side CONTRACTS lookup is behind useRun's restoreRun
-  // try/catch) — validated structurally per Rule 11 (deref-safety
-  // is structural, not enumeration-dependent; future client
-  // consumers stay safe by construction).
-  if (!isKnownClassId(x.classId)) return false;
-  if (!isKnownContractId(x.contractId)) return false;
-  if (!isStr(x.startedAt)) return false;
+const RulesetSchema = z
+  .object({
+    bagDimensions: BagDimensionsSchema,
+    maxRounds: z.number(),
+    bossRound: z.number(),
+    startingHearts: z.number(),
+    shopSize: z.number(),
+    baseGoldPerRound: z.number(),
+    goldStepRounds: z.number(),
+    goldStepAmount: z.number(),
+    rerollCostStart: z.number(),
+    rerollCostIncrement: z.number(),
+    itemCostMultiplierBp: z.number(),
+    winBonusGold: z.number(),
+    sellRecoveryBp: z.number(),
+    mutators: z.array(ContractMutatorSchema).readonly(),
+  })
+  .readonly();
 
-  // Relics: starter must be a known non-null RelicId (restoreRun's
-  // contract). mid/boss may be null but if present must also be
-  // known. Downstream consumers (LeftRail.tsx:104-108,
-  // RelicsTab.tsx:82-85) eagerly do `RELICS[id]!` lookups.
-  const relics = x.relics;
-  if (!isObj(relics)) return false;
-  if (!isKnownRelicId(relics.starter)) return false;
-  if (relics.mid !== null && !isKnownRelicId(relics.mid)) return false;
-  if (relics.boss !== null && !isKnownRelicId(relics.boss)) return false;
+const DerivedModifiersSchema = z
+  .object({
+    extraRerollsPerRound: z.number(),
+    itemCostDelta: z.number(),
+    bonusGoldOnWin: z.number(),
+  })
+  .readonly();
 
-  // Ruleset (Phase 2.5i / Catch 24): full structural validation.
-  // applySimSnapshot at RunController.ts:192 derefs
-  // `snapshot.ruleset.startingHearts`; ShopPanel / ShopTab /
-  // CombatOverlay / useRun all deref further fields
-  // (`bagDimensions.width/height`, `rerollCostStart`,
-  // `rerollCostIncrement`, etc.). Full Ruleset validation per
-  // Rule 11.
-  if (!isValidRuleset(x.ruleset)) return false;
+const RunHistoryEntrySchema = z
+  .object({
+    round: RoundNumberSchema,
+    outcome: RoundOutcomeSchema,
+    damageDealt: z.number(),
+    damageTaken: z.number(),
+    goldEarnedThisRound: z.number(),
+    opponentGhostId: GhostIdSchema.nullable(),
+    opponentClassId: ClassIdSchema.nullable(),
+  })
+  .readonly();
 
-  // DerivedModifiers (Phase 2.5i / Catch 24): full shape validation.
-  // ShopPanel / ShopTab / RunController reducer / useRun all deref
-  // `derived.extraRerollsPerRound`; sim consumers (combat path)
-  // read itemCostDelta + bonusGoldOnWin.
-  if (!isValidDerived(x.derived)) return false;
+// ─── SerializedRunState + LocalSaveV1 ───────────────────────────────
 
-  // History: array. Element shape is not load-bearing for restore (sim's
-  // history.slice() is array-safe; downstream consumers optional-chain).
-  if (!isArr(x.history)) return false;
+const SerializedRunStateSchema = z
+  .object({
+    runId: RunIdSchema,
+    seed: SimSeedSchema,
+    classId: ClassIdSchema,
+    contractId: ContractIdSchema,
+    ruleset: RulesetSchema,
+    derived: DerivedModifiersSchema,
+    startedAt: IsoTimestampSchema,
+    hearts: z.number(),
+    gold: z.number(),
+    currentRound: RoundNumberSchema,
+    bag: BagStateSchema,
+    relics: RelicSlotsSchema,
+    shop: ShopStateSchema,
+    trophiesAtStart: z.number(),
+    history: z.array(RunHistoryEntrySchema).readonly(),
+    outcome: RunOutcomeSchema,
+    rngState: z.number(),
+    rerollCount: z.number(),
+    trophy: z.number(),
+  })
+  .readonly();
 
-  // Bag: dimensions are recomposed from effective ruleset, so not
-  // validated; placements must be array AND each element must have a
-  // valid shape because the restore_from_save reducer arm dereferences
-  // p.anchor.col / p.anchor.row inside .map (A8).
-  const bag = x.bag;
-  if (!isObj(bag)) return false;
-  if (!isArr(bag.placements)) return false;
-  for (const p of bag.placements) {
-    if (!isValidPlacement(p)) return false;
-  }
+const LocalSaveV1Schema = z
+  .object({
+    schemaVersion: z.literal(1),
+    trophies: z.number(),
+    dailyStreak: z.number(),
+    lastDailyAttempted: IsoDateSchema.nullable(),
+    tutorialCompleted: z.boolean(),
+    telemetryAnonId: z.string(),
+    inProgressRun: SerializedRunStateSchema.nullable(),
+  })
+  .readonly();
 
-  // Shop: slots must be array of strings (ItemId at runtime); purchased
-  // array of numbers; rerollsThisRound numeric.
-  const shop = x.shop;
-  if (!isObj(shop)) return false;
-  if (!isArr(shop.slots)) return false;
-  for (const slot of shop.slots) {
-    if (!isStr(slot)) return false;
-  }
-  if (!isArr(shop.purchased)) return false;
-  for (const idx of shop.purchased) {
-    if (!isNum(idx)) return false;
-  }
-  if (!isNum(shop.rerollsThisRound)) return false;
+// ─── Type-enforced completeness (dual-satisfies bracket) ────────────
+// These assertions prove that the schema's inferred type is structurally
+// EQUAL to the canonical SerializedRunState + LocalSaveV1, in both
+// directions. If a field is missing from the schema OR an extra field is
+// present OR a primitive type differs OR a brand is mis-mapped, one of
+// the four `satisfies` clauses fails to compile.
+//
+// Sanity check: removing a field from any schema above (e.g. deleting
+// `hearts: z.number(),` from SerializedRunStateSchema) causes
+// the `_canonicalSatisfiesInferredSRS` assertion to fail at compile
+// time with a "Property 'hearts' is missing" error. Verified locally
+// pre-commit; do NOT regress.
+//
+// Prefer this dual-`satisfies` bracket over `Expect<Equal<A,B>>` — the
+// latter is brittle on readonly/optional/index-signature variance and
+// produces spurious failures. The dual-satisfies pattern is what
+// TypeScript itself uses to verify bidirectional structural equality
+// in test fixtures.
 
-  return true;
-}
+type InferredSerializedRunState = z.infer<typeof SerializedRunStateSchema>;
+type InferredLocalSaveV1 = z.infer<typeof LocalSaveV1Schema>;
+
+const _inferredSRSSatisfiesCanonical = null as unknown as InferredSerializedRunState satisfies SerializedRunState;
+const _canonicalSatisfiesInferredSRS = null as unknown as SerializedRunState satisfies InferredSerializedRunState;
+const _inferredLSV1SatisfiesCanonical = null as unknown as InferredLocalSaveV1 satisfies LocalSaveV1;
+const _canonicalSatisfiesInferredLSV1 = null as unknown as LocalSaveV1 satisfies InferredLocalSaveV1;
+// Consume the bindings to satisfy `no-unused-vars` while keeping the
+// assertions load-bearing for the type checker.
+void _inferredSRSSatisfiesCanonical;
+void _canonicalSatisfiesInferredSRS;
+void _inferredLSV1SatisfiesCanonical;
+void _canonicalSatisfiesInferredLSV1;
 
 /** Type predicate: narrows `parsed: unknown` to `LocalSaveV1` iff the
- *  payload is structurally valid. Validation depth: enough to guarantee
- *  the load + restore path (loadLocal → migrate → useRun load effect →
- *  restoreRun → reducer restore_from_save arm) cannot throw.
- *
- *  Envelope fields not consumed by the restore path (trophies,
- *  dailyStreak, lastDailyAttempted, tutorialCompleted, telemetryAnonId)
- *  are not validated — they pass through and surface in client state
- *  as-is. M2 will tighten when those fields gain consumers.
- *
- *  Returning a `parsed is LocalSaveV1` predicate (vs `LocalSaveV1 | null`)
- *  lets callers narrow `parsed` in-place without a structural cast,
- *  dropping the `as unknown as LocalSaveV1` smell that the value-form
- *  needed because `Record<string, unknown>` doesn't structurally overlap
- *  with LocalSaveV1 to TypeScript's eye. */
+ *  payload passes the Zod schema. The schema validates the FULL
+ *  contract (shape, primitive types, registry membership for id fields),
+ *  so a true return guarantees that every downstream consumer's deref
+ *  (`snapshot.ruleset.startingHearts`, `CLASSES[snapshot.classId]`,
+ *  `ITEMS[bag.placements[i].itemId]`, `state.history[i].round`, etc.)
+ *  is safe by construction. */
 export function validateLocalSaveV1(parsed: unknown): parsed is LocalSaveV1 {
-  if (!isObj(parsed)) return false;
-  if (parsed.schemaVersion !== 1) return false;
-
-  // inProgressRun: null OR a fully-validated SerializedRunState.
-  const ip = parsed.inProgressRun;
-  if (ip !== null && !isValidSerializedRunState(ip)) return false;
-
-  return true;
+  return LocalSaveV1Schema.safeParse(parsed).success;
 }
