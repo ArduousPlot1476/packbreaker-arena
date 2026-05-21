@@ -589,6 +589,184 @@ describe('persistence — full-contract validator + registry membership (Phase 2
   });
 });
 
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5j (Catch 25 / Class A structural close) —
+// Zod schema-derived validator closes the three Codex finding #6/#7/#8
+// surfaces that the Phase 2.5h/2.5i hand-rolled validators missed.
+//
+// The hand-rolled approach validated id-typed fields as strings only;
+// downstream code derefs ITEMS[id] / history[i].round and throws at
+// render/usage time when the id is unknown or the entry is null. The
+// schema-derived validator + ItemIdSchema (z.custom checking
+// ITEMS-membership) + RunHistoryEntrySchema (full element shape)
+// rejects the payloads upstream.
+// ────────────────────────────────────────────────────────────────────
+
+describe('persistence — schema-derived validator: Codex finding #6/#7/#8 surfaces (Phase 2.5j)', () => {
+  // Codex finding #6: bag.placements[].itemId must be a known ITEMS id.
+  it('rejects a payload with bag.placements[].itemId not in ITEMS', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        bag: {
+          dimensions: { width: 6, height: 4 },
+          placements: [
+            {
+              placementId: 'p-0',
+              itemId: 'imaginary-bag-item',
+              anchor: { col: 0, row: 0 },
+              rotation: 0,
+            },
+          ],
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts a payload with a known bag itemId (validator does not over-reject)', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        bag: {
+          dimensions: { width: 6, height: 4 },
+          placements: [
+            {
+              placementId: 'p-0',
+              itemId: 'iron-mace',
+              anchor: { col: 0, row: 0 },
+              rotation: 0,
+            },
+          ],
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+
+  // Codex finding #7: shop.slots[] elements must each be a known ITEMS id.
+  it('rejects a payload with shop.slots containing an unknown ITEMS id', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        shop: {
+          slots: ['iron-mace', 'imaginary-shop-item'],
+          purchased: [],
+          rerollsThisRound: 0,
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts a payload with shop.slots populated by known item ids', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        shop: {
+          slots: ['iron-mace', 'iron-mace', 'iron-mace'],
+          purchased: [],
+          rerollsThisRound: 0,
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+
+  // Codex finding #8: history elements fully validated. Pre-Catch-25
+  // `history: [null]` passed validation, then useRun's relic-offer
+  // gating did `last.round === 11` on null and threw.
+  it('rejects a payload with history: [null] (Codex finding 8)', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, history: [null] as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with history element missing round', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        history: [
+          {
+            outcome: 'win',
+            damageDealt: 30,
+            damageTaken: 5,
+            goldEarnedThisRound: 2,
+            opponentGhostId: null,
+            opponentClassId: null,
+          },
+        ],
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a payload with history element invalid outcome (not "win" | "loss")', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        history: [
+          {
+            round: 1,
+            outcome: 'draw',
+            damageDealt: 30,
+            damageTaken: 5,
+            goldEarnedThisRound: 2,
+            opponentGhostId: null,
+            opponentClassId: null,
+          },
+        ],
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts a payload with a fully-valid history entry', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        history: [
+          {
+            round: 1,
+            outcome: 'win',
+            damageDealt: 30,
+            damageTaken: 5,
+            goldEarnedThisRound: 2,
+            opponentGhostId: null,
+            opponentClassId: 'marauder',
+          },
+        ],
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+});
+
 describe('persistence — migration dispatcher', () => {
   it('migrate(v1 payload) returns the payload unchanged (identity)', () => {
     const v1 = makeSave({ telemetryAnonId: 'uuid-test' });

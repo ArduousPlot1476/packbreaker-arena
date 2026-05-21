@@ -1767,6 +1767,9 @@ function makeCorruptV1Save(
     relicsStarter: unknown;
     relicsMid: unknown;
     relicsBoss: unknown;
+    bagPlacements: unknown;
+    shopSlots: unknown;
+    history: unknown;
   }>,
 ): unknown {
   return {
@@ -1790,15 +1793,22 @@ function makeCorruptV1Save(
       hearts: 3,
       gold: 14,
       currentRound: 4,
-      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: 'bagPlacements' in overrides ? overrides.bagPlacements : [],
+      },
       relics: {
         starter: 'relicsStarter' in overrides ? overrides.relicsStarter : 'iron-will',
         mid: 'relicsMid' in overrides ? overrides.relicsMid : null,
         boss: 'relicsBoss' in overrides ? overrides.relicsBoss : null,
       },
-      shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      shop: {
+        slots: 'shopSlots' in overrides ? overrides.shopSlots : [],
+        purchased: [],
+        rerollsThisRound: 0,
+      },
       trophiesAtStart: 0,
-      history: [],
+      history: 'history' in overrides ? overrides.history : [],
       outcome: 'in_progress',
       rngState: 0x42424242,
       rerollCount: 0,
@@ -1902,6 +1912,77 @@ describe('RunProvider — full-contract mount fallback (M1.5b PR 3 / 5b.3a Phase
     localStorage.setItem(
       'pba.v1.save',
       JSON.stringify(makeCorruptV1Save({ relicsBoss: 'imaginary-boss' })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5j (Catch 25 / Class A structural close) —
+// end-to-end fresh-fallback for the three surfaces Codex finding #6/#7/#8
+// flagged. Hand-rolled Phase 2.5h/2.5i validators accepted any string
+// for bag.placements[].itemId and shop.slots[], and accepted
+// history: [null] (only checked array type) — letting the corrupt save
+// reach DraggableItem.tsx / ShopSlot.tsx / useRun relic-offer gating
+// where the unguarded deref crashed the mount. The Zod schema closes
+// all three structurally.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — schema-derived mount fallback (M1.5b PR 3 / 5b.3a Phase 2.5j)', () => {
+  it('mount with bag.placements[].itemId not in ITEMS → fresh Tinker, no throw (Codex 6)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({
+          bagPlacements: [
+            {
+              placementId: 'p-0',
+              itemId: 'imaginary-bag-item',
+              anchor: { col: 0, row: 0 },
+              rotation: 0,
+            },
+          ],
+        }),
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with shop.slots containing unknown ITEMS id → fresh Tinker, no throw (Codex 7)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({ shopSlots: ['iron-mace', 'imaginary-shop-item'] }),
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with history: [null] → fresh Tinker, no throw (Codex 8)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(makeCorruptV1Save({ history: [null] })),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
+
+  it('mount with history element missing round → fresh Tinker, no throw', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({
+          history: [
+            {
+              outcome: 'win',
+              damageDealt: 30,
+              damageTaken: 5,
+              goldEarnedThisRound: 2,
+              opponentGhostId: null,
+              opponentClassId: null,
+            },
+          ],
+        }),
+      ),
     );
     await assertFreshTinkerMountsCleanly();
   });
