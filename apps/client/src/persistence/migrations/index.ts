@@ -28,9 +28,11 @@ export function migrate(parsed: unknown): LocalSaveV1 | null {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const versioned = parsed as { schemaVersion?: unknown };
   if (versioned.schemaVersion === 1) {
-    const validated = validateLocalSaveV1(parsed);
-    if (validated === null) return null;
-    return migrateV1Identity(validated);
+    // validateLocalSaveV1 is a `parsed is LocalSaveV1` type predicate —
+    // a true return narrows `parsed` to LocalSaveV1 in this branch, so
+    // migrateV1Identity can receive it without a structural cast.
+    if (!validateLocalSaveV1(parsed)) return null;
+    return migrateV1Identity(parsed);
   }
   return null;
 }

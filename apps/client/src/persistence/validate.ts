@@ -121,22 +121,28 @@ function isValidSerializedRunState(x: unknown): boolean {
   return true;
 }
 
-/** Validates the parsed JSON against the LocalSaveV1 shape contract.
- *  Returns the payload typed as LocalSaveV1 iff structurally valid; null
- *  otherwise. Validation depth: enough to guarantee the load + restore
- *  path (loadLocal → migrate → useRun load effect → restoreRun → reducer
- *  restore_from_save arm) cannot throw. Envelope fields not consumed by
- *  the restore path (trophies, dailyStreak, lastDailyAttempted,
- *  tutorialCompleted, telemetryAnonId) are not validated — they pass
- *  through and surface in client state as-is. M2 will tighten when those
- *  fields gain consumers. */
-export function validateLocalSaveV1(parsed: unknown): LocalSaveV1 | null {
-  if (!isObj(parsed)) return null;
-  if (parsed.schemaVersion !== 1) return null;
+/** Type predicate: narrows `parsed: unknown` to `LocalSaveV1` iff the
+ *  payload is structurally valid. Validation depth: enough to guarantee
+ *  the load + restore path (loadLocal → migrate → useRun load effect →
+ *  restoreRun → reducer restore_from_save arm) cannot throw.
+ *
+ *  Envelope fields not consumed by the restore path (trophies,
+ *  dailyStreak, lastDailyAttempted, tutorialCompleted, telemetryAnonId)
+ *  are not validated — they pass through and surface in client state
+ *  as-is. M2 will tighten when those fields gain consumers.
+ *
+ *  Returning a `parsed is LocalSaveV1` predicate (vs `LocalSaveV1 | null`)
+ *  lets callers narrow `parsed` in-place without a structural cast,
+ *  dropping the `as unknown as LocalSaveV1` smell that the value-form
+ *  needed because `Record<string, unknown>` doesn't structurally overlap
+ *  with LocalSaveV1 to TypeScript's eye. */
+export function validateLocalSaveV1(parsed: unknown): parsed is LocalSaveV1 {
+  if (!isObj(parsed)) return false;
+  if (parsed.schemaVersion !== 1) return false;
 
   // inProgressRun: null OR a fully-validated SerializedRunState.
   const ip = parsed.inProgressRun;
-  if (ip !== null && !isValidSerializedRunState(ip)) return null;
+  if (ip !== null && !isValidSerializedRunState(ip)) return false;
 
-  return parsed as unknown as LocalSaveV1;
+  return true;
 }
