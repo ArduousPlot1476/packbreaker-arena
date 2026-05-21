@@ -158,7 +158,32 @@ const RelicSlotsSchema = z
   .refine((r) => r.starter !== null, {
     message: 'relics.starter must be non-null',
     path: ['starter'],
-  });
+  })
+  // Phase 2.5j-fix (Codex finding B, P2): registry membership alone
+  // is insufficient — the relic's RELICS[id].slot must match the
+  // field's expected slot. Pre-fix, a structurally valid save with
+  // a boss-tier relic in the starter field would pass; composeRuleset
+  // would happily fold the boss modifiers in, granting a progression
+  // bypass. This refine rejects mis-slotted relics so safeParse fails
+  // and useRun's load-on-mount falls back to a fresh run.
+  .refine(
+    (r) =>
+      r.starter === null ||
+      (RELICS[r.starter] !== undefined && RELICS[r.starter]!.slot === 'starter'),
+    { message: "relics.starter must reference a relic with slot 'starter'", path: ['starter'] },
+  )
+  .refine(
+    (r) =>
+      r.mid === null ||
+      (RELICS[r.mid] !== undefined && RELICS[r.mid]!.slot === 'mid'),
+    { message: "relics.mid must reference a relic with slot 'mid'", path: ['mid'] },
+  )
+  .refine(
+    (r) =>
+      r.boss === null ||
+      (RELICS[r.boss] !== undefined && RELICS[r.boss]!.slot === 'boss'),
+    { message: "relics.boss must reference a relic with slot 'boss'", path: ['boss'] },
+  );
 
 const ShopStateSchema = z
   .object({

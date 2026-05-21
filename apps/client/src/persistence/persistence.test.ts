@@ -767,6 +767,118 @@ describe('persistence — schema-derived validator: Codex finding #6/#7/#8 surfa
   });
 });
 
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Codex finding B, P2) — relic-slot
+// semantic validation.
+//
+// Pre-fix, RelicSlotsSchema validated id ∈ RELICS via z.custom but did
+// NOT enforce that RELICS[id].slot matched the field's expected slot.
+// A boss-tier relic in the starter field would pass loadLocal, then
+// composeRuleset would fold the boss modifiers in — granting modifier-
+// stack bypass progression. Three new refines on RelicSlotsSchema:
+// one per non-null slot field.
+// ────────────────────────────────────────────────────────────────────
+
+describe('persistence — relic-slot semantic validation (Phase 2.5j-fix / Finding B)', () => {
+  it('rejects a boss-tier relic in the starter slot', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        // worldforge-seed: slot='boss'. Putting it in starter is mis-slotted.
+        relics: { starter: 'worldforge-seed', mid: null, boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a mid-tier relic in the starter slot', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        // berserkers-pendant: slot='mid'.
+        relics: { starter: 'berserkers-pendant', mid: null, boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a starter-tier relic in the mid slot', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: 'iron-will', boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a starter-tier relic in the boss slot', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: null, boss: 'iron-will' },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('rejects a mid-tier relic in the boss slot', () => {
+    const partial = makeSave();
+    const corrupted = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: null, boss: 'berserkers-pendant' },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(corrupted) });
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('accepts correctly-slotted relics (starter + mid + boss)', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        // iron-will: starter; berserkers-pendant: mid; conquerors-crown: boss.
+        relics: {
+          starter: 'iron-will',
+          mid: 'berserkers-pendant',
+          boss: 'conquerors-crown',
+        },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+
+  it('accepts null mid/boss (optional slots still null)', () => {
+    const partial = makeSave();
+    const valid = {
+      ...partial,
+      inProgressRun: {
+        ...partial.inProgressRun,
+        relics: { starter: 'iron-will', mid: null, boss: null },
+      },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(valid) });
+    expect(loadLocal(adapter)).not.toBeNull();
+  });
+});
+
 describe('persistence — migration dispatcher', () => {
   it('migrate(v1 payload) returns the payload unchanged (identity)', () => {
     const v1 = makeSave({ telemetryAnonId: 'uuid-test' });

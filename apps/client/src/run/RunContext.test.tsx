@@ -1986,4 +1986,19 @@ describe('RunProvider — schema-derived mount fallback (M1.5b PR 3 / 5b.3a Phas
     );
     await assertFreshTinkerMountsCleanly();
   });
+
+  // Phase 2.5j-fix / Codex finding B: mis-slotted relic. Pre-fix, a
+  // boss-tier relic in the starter slot passed the validator (id ∈
+  // RELICS but slot not checked); composeRuleset would fold the boss
+  // modifiers in → progression bypass. Post-fix, the slot-compat
+  // refines on RelicSlotsSchema reject + fresh-fallback.
+  it('mount with boss-tier relic in the starter slot → fresh Tinker, no throw (Codex B)', async () => {
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify(
+        makeCorruptV1Save({ relicsStarter: 'worldforge-seed' }), // boss-tier
+      ),
+    );
+    await assertFreshTinkerMountsCleanly();
+  });
 });
