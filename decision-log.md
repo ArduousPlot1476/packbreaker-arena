@@ -4,6 +4,202 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Catch 26; CF 47 NEW; Rule 11 clarified — TERMINAL reactive round)
+
+Codex re-review of `2337c7c` (Phase 2.5j Zod rewrite tip) returned
+two findings — **neither Class A**. Pattern 7 structural close
+(Phase 2.5j) held: no validator-enumeration regression. The two
+findings are different classes entirely:
+
+- **Finding A** (P1, useRun.ts:102): cross-version restore field
+  divergence. Restore reducer dispatched raw snapshot;
+  applySimSnapshot assigned ruleset/derived from persisted-time
+  composition; sim's restoreRun recomposed them via composeRuleset
+  from current registries → client.state.ruleset diverged from
+  simRun's effectiveRuleset across version bumps / hot-fixes →
+  wrong reroll cost / shop gen.
+- **Finding B** (P2, validate.ts:155): relic-slot semantic
+  validation gap. Schema checked relic id ∈ RELICS but not that
+  RELICS[id].slot matched the field's expected slot. A boss-tier
+  relic in the starter slot would pass; composeRuleset folds boss
+  modifiers in → progression bypass.
+
+**TERMINAL reactive round** by master-dev ratification — finding
+count this PR reaches 10 / reactive budget long-spent. Both
+findings fixed this turn; on a clean self-check, re-Codex once
+more; on clean → merge; on a finding tied to the A/B changes →
+fix only Class A / manifest-now P1, else CF-and-ship.
+
+### Step 0 confirms (verified pre-implementation)
+
+(a) Dispatch site: `apps/client/src/run/useRun.ts:169` dispatches
+    raw `snapshot`. Restore reducer arm at
+    `apps/client/src/run/RunController.ts:478-498` calls
+    `applySimSnapshot(state, s, true)` at L479; applySimSnapshot
+    at L181-200 assigns `ruleset: snapshot.ruleset` /
+    `derived: snapshot.derived` / `maxHearts:
+    snapshot.ruleset.startingHearts` at L189-192 — all raw from
+    persisted snapshot. ✓ Finding A surface confirmed.
+(b) `packages/sim/src/run/state.ts:293-295` calls
+    `composeRuleset(contract, input.classId, this.relics)`,
+    storing `this.effectiveRuleset` + `this.derived` — recomposed
+    from current registries. `controller.getState()` at L391-425
+    returns `ruleset: this.effectiveRuleset` + `derived: { ... }`
+    (the recomposed values). ✓ Recomposition confirmed.
+(c) Field partition for restore (Step 0 enumeration):
+    | Source | Fields |
+    |---|---|
+    | controller.getState() (sim-authoritative, recomposed) | ruleset, derived; downstream-derived maxHearts (ruleset.startingHearts) + className (CLASSES[classId]) |
+    | controller.getState() (sim-verbatim — equal to snapshot) | runId, seed, classId, contractId, startedAt, hearts, currentRound, relics, outcome, history |
+    | snapshot (client-authoritative per Q2 Amendment A) | bag.placements, shop.slots — sim's are non-authoritative mirrors |
+    | snapshot (SerializedRunState-only, NOT in RunState) | rngState (sim-internal rng cursor), rerollCount, trophy |
+    | snapshot.gold via includeGold (Amendment A; sim mirrors snapshot.gold on restore — equivalent) | gold |
+
+    **No ambiguity.** Inspection-only halt authority not exercised.
+
+### Catch 26 (NEW — cross-version restore field divergence; NOT Class A; NOT CF 34)
+
+**Class diagnosis.** Not Class A (no throw — silent semantic
+desync). Not CF 34 (Q2 Amendment A authority model isn't changing;
+ruleset/derived ARE sim-owned today; the bug is that the reducer
+read the persisted shadow instead of sim's current truth). Not CF
+46 (CF 46 is about forward-version-save backup-on-downgrade; this
+is about same-or-later-version load where the recomposed values
+drift from the persisted ones). Genuinely new class.
+
+**Fix.** Extend `restore_from_save` RunAction with a
+`controllerSnapshot: SimRunState` field. useRun's load-on-mount
+dispatch passes `controller.getState()` alongside the persisted
+`snapshot`. Reducer arm reads sim-authoritative fields (ruleset,
+derived, maxHearts, className) from controllerSnapshot through
+applySimSnapshot; client-authoritative (bag, shop) + SerializedRun
+State-only (rerollCount, trophy) continue to come from snapshot.
+
+**Regression guard verified.** The Catch 23 cursor-preservation
+invariant (restored.getRngState() === snapshot.rngState) is
+unaffected: rngState lives sim-internal (not in RunState, not in
+controller.getState()), the constructor's restoreFrom branch
+seeds `this.rng = createRng(restoreFrom.rngState)` terminally
+(state.ts:326), and the reducer doesn't touch rngState. Phase
+2.5h verbatim-shop also unaffected: shop continues to come from
+snapshot.shop.slots in the reducer arm. D-F5 save-on-quiescent
+timing untouched — Catch 26 only changes the restore-side
+hydration, not save-fire timing.
+
+### Codex finding B (P2, schema strictness)
+
+**Fix.** Three `.refine` clauses on RelicSlotsSchema — one per
+non-null slot field — asserting `RELICS[id].slot ===
+expected_slot`. Mis-slotted save → safeParse fails → fresh fallback.
+
+### Rule 11 clarification (NOT amendment — refinement)
+
+Rule 11 codified at 2.5i and amended at 2.5j defined STRUCTURAL
+completeness (every field present with the right primitive type +
+nested-object shape + registry membership for id-typed fields).
+Finding B reveals a class beyond structural: SEMANTIC completeness
+— the field MAY be the right type and id may be a registry member,
+but the value carries semantic constraints beyond type (a relic id
+in the `starter` field must reference a relic whose `.slot ===
+'starter'`).
+
+**Clarification (added 2026-05-21 / Phase 2.5j-fix):** Rule 11's
+structural completeness CLOSES the Pattern 7 STRUCTURAL VARIANT
+(hand-rolled per-field-presence validators missing surfaces).
+Pattern 7 SEMANTIC variant — schema accepts structurally valid
+but semantically wrong payloads — remains possible and must be
+caught via `.refine` clauses encoding the semantic constraints.
+The compile-time dual-`satisfies` bracket does NOT prove semantic
+completeness; semantic refinements are case-by-case and must be
+audited per-field.
+
+Pattern 7 instance taxonomy now:
+- Instances 1-3 (M1.5a PR 3, Phase 2.5g, Phase 2.5i): structural
+  enumeration gaps in hand-rolled validators → closed by Catch 25
+  / Rule 11 / Zod.
+- Instance 4 (Phase 2.5j discipline-only fix insufficient): closed
+  by Phase 2.5j Zod structural fix.
+- **Instance 5 (Phase 2.5j-fix / Finding B): first SEMANTIC
+  variant.** Schema validated structure + registry membership;
+  missed the per-field semantic constraint (RELICS[id].slot ===
+  field name). Codified as a SUB-PATTERN: when a registry-typed
+  field has additional per-field semantic constraints (slot,
+  classAffinity, tier, etc.), add `.refine` for each constraint.
+
+### CF 47 NEW
+
+**Surface.** Phase 2.5j Zod rewrite added +71.71 kB raw / +19.65
+kB gzip to the main chunk (+27% / +24%). The bundle delta was
+explicitly accepted at Phase 2.5j as the cost of structural
+Class A closure. Long-term, the main chunk shouldn't carry the
+full Zod runtime — alternatives include:
+- Code-splitting validate.ts into the load-on-mount dynamic-import
+  boundary (alongside `import('@packbreaker/sim')`).
+- Switching to a smaller schema lib (Valibot ~2 kB, ArkType
+  ~10 kB gz) once the Pattern 7 closure is battle-tested.
+- Hand-rolled schema generator that derives runtime checks from
+  TS types at build time (e.g. typia, ts-runtime, zod-from-ts).
+
+**Disposition.** DEFERRED to M2 / future optimization. CF 47
+trigger: M2 mobile-perf pass OR first user-visible TTFI complaint
+attributable to the validator chunk.
+
+### Cross-version desync test — pins the INVARIANT (Pattern 7 discipline)
+
+The new test in `apps/client/src/run/RunController.test.ts`
+intentionally DIVERGES the snapshot.ruleset/derived from the
+controllerSnapshot.ruleset/derived (simulating restoreRun's
+composeRuleset producing different values from the persisted
+composition). Asserts the reducer output reads from controllerSnapshot:
+- `state.ruleset.startingHearts === 5` (controller's recomposed,
+  NOT snapshot's stale 3).
+- `state.maxHearts === 5` (derived from controller.ruleset).
+- `state.derived.extraRerollsPerRound === 2` (NOT snapshot's 99).
+
+Plus a companion test diverging bag/shop on controllerSnapshot to
+prove client-authoritative fields IGNORE controller and pull from
+snapshot. This is the INVARIANT (sim-authoritative ← controller;
+client-owned ← snapshot), not a round-trip equality proxy.
+
+### Findings 9 / 10 dispositions
+
+(Bare hash escaped per Rule 10.)
+
+- **Codex finding A / 9** (P1, Catch 26 — cross-version restore
+  field divergence). **Closed** via the controllerSnapshot
+  hydration fix above.
+- **Codex finding B / 10** (P2, mis-slotted relic). **Closed** via
+  the three RelicSlotsSchema `.refine` clauses.
+
+Finding count this PR: 10 since the 4/4 ceiling tripped. Reactive
+budget remains spent. Master-dev marked this round TERMINAL.
+
+### Counter updates
+
+| Counter | Pre-2.5j-fix | Post-2.5j-fix |
+|---|---:|---:|
+| Catches codified | 25 | **26** (+Catch 26 cross-version restore field divergence) |
+| Rules codified | 11 | **11** (Rule 11 CLARIFIED, not added — structural completeness ≠ semantic completeness) |
+| Pattern 7 instances | 4 | **5** (5th instance: first SEMANTIC variant — sub-pattern codified) |
+| Tracked CFs | 31 | **32** (+CF 47 bundle-size optimization) |
+| 4-finding ceiling | 4/4 closed via meta-audit (Phase 2.5g) | unchanged — terminal reactive round; finding count 10/10 since ceiling, all incomplete-fix or different-class |
+
+### Branch state at Phase 2.5j-fix close
+
+Branch `m1.5b-pr3-localsave-v1` off main `49f7437`. 28 atomic
+branch commits (25 pre-2.5j-fix + 3 this turn: `c7c1f14` +
+`984b544` + this docs commit).
+
+| SHA | Sub-phase | Scope |
+|---|---|---|
+| `c7c1f14` | 2.5j-fix commit 1 — Finding A | RunAction.restore_from_save extended with `controllerSnapshot: SimRunState`; useRun dispatch passes `controller.getState()`; reducer arm uses controllerSnapshot for applySimSnapshot. +2 cross-version invariant tests in RunController.test.ts (pin sim-authoritative ← controller AND client-owned ← snapshot). Helper `controllerSnapshotFrom(s: SerializedRunState): SimRunState` for existing tests. |
+| `984b544` | 2.5j-fix commit 2 — Finding B | RelicSlotsSchema three `.refine` clauses (starter/mid/boss slot-compatibility). +7 unit-level slot-validity tests; +1 e2e mount-fallback test (worldforge-seed boss-tier relic in starter slot rejects + fresh-fallback). |
+| this entry | 2.5j-fix commit 3 — docs | Catch 26 + Rule 11 clarification + Pattern 7 5th instance (first semantic variant; sub-pattern codified) + CF 47 (Zod bundle-size deferred to M2). |
+
+Closing tally / final counter snapshot defers to merge.
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3a Phase 2.5j (schema-derived validator — Catch 25; Rule 11 amended)
 
 Codex re-review of `5a2dfd4` (post-Phase-2.5i) returned **three more
