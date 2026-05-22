@@ -181,6 +181,7 @@ export function AbandonRunMenu() {
       <button
         ref={triggerRef}
         type="button"
+        className="focus-ring"
         data-testid="abandon-trigger"
         aria-label={COPY.triggerLabel}
         // Phase 2.5 round 2 (Codex P2 + ARIA audit). Trigger's IMMEDIATE
@@ -423,6 +424,7 @@ function ConfirmContent({
         <button
           ref={confirmRef}
           type="button"
+          className="focus-ring"
           data-testid="abandon-confirm"
           onClick={onConfirm}
           style={{
@@ -447,6 +449,7 @@ function ConfirmContent({
         <button
           ref={cancelRef}
           type="button"
+          className="focus-ring"
           data-testid="abandon-cancel"
           onClick={onCancel}
           style={{

@@ -394,6 +394,21 @@ describe('AbandonRunMenu — desktop (two-step: ⋯ → menu → confirm dialog)
     expect(getByTestId('abandon-scrim').getAttribute('aria-hidden')).toBe('true');
   });
 
+  // Phase 2.5 meta-audit A.4: focus-visible indicator. The trigger
+  // and both confirm-surface buttons carry the .focus-ring class
+  // backed by a single :focus-visible rule in index.css. happy-dom
+  // does not compute :focus-visible nor resolve var(--accent) at
+  // layout time — assert class presence rather than computed style.
+  it('focus-ring class present on trigger + both confirm buttons (keyboard-only outline)', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    expect(getByTestId('abandon-trigger').className).toContain('focus-ring');
+    fireEvent.click(getByTestId('abandon-trigger'));
+    fireEvent.click(getByTestId('abandon-menuitem'));
+    expect(getByTestId('abandon-cancel').className).toContain('focus-ring');
+    expect(getByTestId('abandon-confirm').className).toContain('focus-ring');
+  });
+
   it('Abandon button confirms — fires abandonRun (RunEndScreen mounts via RunProvider gate)', async () => {
     const { getByTestId, findByTestId } = renderMenu();
     await waitForTrigger(getByTestId);
