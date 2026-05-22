@@ -417,7 +417,7 @@ describe('AbandonRunMenu — desktop (two-step: ⋯ → menu → confirm dialog)
     fireEvent.click(getByTestId('abandon-confirm'));
     // RunProvider's isRunEnded gate routes to RunEndScreen; data-outcome
     // is the joint witness of reducer flip + simRun preservation.
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 
@@ -496,7 +496,7 @@ describe('AbandonRunMenu — mobile (one-step: ⋯ → bottom-sheet)', () => {
     await waitForTrigger(getByTestId);
     fireEvent.click(getByTestId('abandon-trigger'));
     fireEvent.click(getByTestId('abandon-confirm'));
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 });

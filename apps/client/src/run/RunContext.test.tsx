@@ -2052,7 +2052,7 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
     // simRun !== null) routed to RunEndScreen. If simRun were nulled
     // (resetRun's contract), the gate would route to ClassSelectScreen
     // and the test would never find run-end-screen.
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
     // simRun preservation cross-check via the still-stable captured
     // reference — the value is frozen at last-emit but simRun is the
@@ -2133,7 +2133,7 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
     // The breadcrumb is in DOM as 11 round pips per totalRounds; if
     // totalRounds had reset, would still be 11 (DEFAULT_RULESET) —
     // but if history wiped to [], every pip would be 'untouched'.
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 
@@ -2161,7 +2161,7 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
     act(() => {
       captured!.abandonRun();
     });
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 });
@@ -2204,7 +2204,7 @@ describe('save-on-quiescent — terminal-outcome guard regression (5b.3b Phase 2
     });
     // RunEndScreen mounts → outcome flip committed → save effect
     // re-fired with terminal outcome → cleared.
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
 
     // End-state invariant: save is null.

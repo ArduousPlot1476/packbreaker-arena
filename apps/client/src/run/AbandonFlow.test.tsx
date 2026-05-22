@@ -97,7 +97,7 @@ describe('Abandon full-flow integration (Step 5) — desktop', () => {
     fireEvent.click(await findByTestId('abandon-trigger'));
     fireEvent.click(await findByTestId('abandon-menuitem'));
     fireEvent.click(await findByTestId('abandon-confirm'));
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
     expect(screen.getAttribute('data-viewport')).toBe('desktop');
     // RUN ABANDONED label per RunEndScreen OUTCOME_LABELS.
@@ -147,7 +147,7 @@ describe('Abandon full-flow integration (Step 5) — desktop', () => {
     fireEvent.click(await findByTestId('abandon-menuitem'));
     fireEvent.click(await findByTestId('abandon-confirm'));
     // Field 1: outcome (data-outcome attribute on the screen root).
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
     // Field 3: classId → className via CLASSES lookup ("Tinker").
     const klass = await findByTestId('runend-class');
@@ -178,7 +178,7 @@ describe('Abandon full-flow integration (Step 5) — mobile', () => {
     const { findByTestId } = renderTopBar('mobile');
     fireEvent.click(await findByTestId('abandon-trigger'));
     fireEvent.click(await findByTestId('abandon-confirm'));
-    const screen = await findByTestId('run-end-screen');
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
     expect(screen.getAttribute('data-viewport')).toBe('mobile');
   });
@@ -268,10 +268,13 @@ describe('Abandon UI — 4-state DOM capture (visual-playtest reference)', () =>
     fireEvent.click(await findByTestId('abandon-trigger'));
     fireEvent.click(await findByTestId('abandon-menuitem'));
     fireEvent.click(await findByTestId('abandon-confirm'));
+    // Wait on the RunEndScreen lazy-import boundary FIRST so the
+    // subsequent runend-* children resolve from already-mounted DOM
+    // (no separate lazy wait needed for the children).
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
+    expect(screen.getAttribute('data-outcome')).toBe('abandoned');
     expect((await findByTestId('runend-glyph')).textContent).toBe('⊘');
     expect((await findByTestId('runend-label')).textContent).toBe('RUN ABANDONED');
     expect((await findByTestId('runend-sub')).textContent).toBe('Quit at Round 1');
-    const screen = await findByTestId('run-end-screen');
-    expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 });
