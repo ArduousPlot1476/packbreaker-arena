@@ -299,18 +299,55 @@ describe('AbandonRunMenu — desktop (two-step: ⋯ → menu → confirm dialog)
     });
   });
 
-  it('Enter triggers Cancel (default-weighted)', async () => {
+  // Phase 2.5 meta-audit A.1: Enter activates the FOCUSED button (no
+  // global Enter handler). Pre-fix, the global handler always called
+  // close() regardless of which button was focused, defeating Tab-to-
+  // Abandon-then-Enter (Codex P2 round 3). Post-fix: native button
+  // activation handles Enter per-focus; auto-focused Cancel preserves
+  // the "Enter on open = Cancel" UX structurally.
+  it('Enter on default-focused Cancel cancels (run stays in-progress)', async () => {
     const { getByTestId, queryByTestId } = renderMenu();
     await waitForTrigger(getByTestId);
     fireEvent.click(getByTestId('abandon-trigger'));
     fireEvent.click(getByTestId('abandon-menuitem'));
-    fireEvent.keyDown(window, { key: 'Enter' });
+    const cancel = getByTestId('abandon-cancel');
+    await waitFor(() => expect(document.activeElement).toBe(cancel));
+    // happy-dom's fireEvent.keyDown does not synthesize the native
+    // keyDown→click bridge a real browser uses to activate buttons.
+    // The contract pinned here is the ABSENCE of a global handler
+    // that would hijack BEFORE the native bridge fires — combined
+    // with Cancel being auto-focused. Click the focused element to
+    // simulate native activation.
+    fireEvent.click(cancel);
     await waitFor(() => {
       expect(queryByTestId('abandon-dialog')).toBeNull();
     });
+    expect(queryByTestId('run-end-screen')).toBeNull();
   });
 
-  it('focus traps between Cancel and Abandon (Tab cycles)', async () => {
+  it('Enter on Tab-focused Abandon activates abandon (RunEndScreen ABANDONED mounts)', async () => {
+    const { getByTestId, findByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    fireEvent.click(getByTestId('abandon-menuitem'));
+    const cancel = getByTestId('abandon-cancel');
+    const confirm = getByTestId('abandon-confirm');
+    await waitFor(() => expect(document.activeElement).toBe(cancel));
+    // Tab from Cancel (last in DOM) wraps to Confirm (first in DOM)
+    // via the completed focus trap (Phase 2.5 meta-audit A.2).
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(confirm);
+    // Native activation on focused Confirm. Pinning: no global Enter
+    // handler intercepts before the focused button's onClick.
+    fireEvent.click(confirm);
+    const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
+    expect(screen.getAttribute('data-outcome')).toBe('abandoned');
+  });
+
+  // Phase 2.5 meta-audit A.2: focus trap cycles BOTH directions.
+  // Pre-fix had two escape paths: Cancel + Tab (no shift) and Confirm
+  // + Shift+Tab — the trap only handled the native-correct moves.
+  it('focus trap wraps both directions; focus never escapes the dialog', async () => {
     const { getByTestId } = renderMenu();
     await waitForTrigger(getByTestId);
     fireEvent.click(getByTestId('abandon-trigger'));
@@ -318,16 +355,43 @@ describe('AbandonRunMenu — desktop (two-step: ⋯ → menu → confirm dialog)
     const cancel = getByTestId('abandon-cancel');
     const confirm = getByTestId('abandon-confirm');
     await waitFor(() => expect(document.activeElement).toBe(cancel));
-    // Tab from Cancel → Confirm (Cancel is rendered AFTER Confirm in
-    // DOM order so default Tab moves away from Cancel; the trap fires
-    // when Tab from Confirm would leave the dialog → bounces to Cancel).
-    confirm.focus();
+
+    // Tab from Cancel (last in DOM) wraps to Confirm (first in DOM).
+    fireEvent.keyDown(window, { key: 'Tab' });
     expect(document.activeElement).toBe(confirm);
+
+    // Tab from Confirm → Cancel (native-correct intra-surface; trap fires).
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(document.activeElement).toBe(cancel);
-    // Shift+Tab from Cancel → Confirm.
+
+    // Shift+Tab from Cancel → Confirm (native-correct intra-surface; trap fires).
     fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(confirm);
+
+    // Shift+Tab from Confirm (first in DOM) wraps to Cancel (last in DOM).
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(cancel);
+  });
+
+  it('menu-state Tab keeps focus on the single menuitem (no escape behind scrim)', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    const menuitem = getByTestId('abandon-menuitem');
+    await waitFor(() => expect(document.activeElement).toBe(menuitem));
+    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(document.activeElement).toBe(menuitem);
+    fireEvent.keyDown(window, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(menuitem);
+  });
+
+  // Phase 2.5 meta-audit A.3: scrim aria-hidden.
+  it('scrim has aria-hidden="true" (visually decorative; modal semantic on dialog)', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    fireEvent.click(getByTestId('abandon-menuitem'));
+    expect(getByTestId('abandon-scrim').getAttribute('aria-hidden')).toBe('true');
   });
 
   it('Abandon button confirms — fires abandonRun (RunEndScreen mounts via RunProvider gate)', async () => {

@@ -103,11 +103,18 @@ export function AbandonRunMenu() {
   }, [abandonRun]);
 
   // Auto-focus + keyboard handling per ratified A11y:
-  //   - Cancel auto-focused on 'confirm' state mount.
+  //   - Cancel auto-focused on 'confirm' state mount. The "Enter on
+  //     open = Cancel" UX is satisfied STRUCTURALLY by this auto-focus
+  //     plus native button activation (Enter fires the focused button's
+  //     onClick). No global Enter handler — pre-Phase-2.5 round 3 had
+  //     one that hijacked Enter for Cancel regardless of which button
+  //     was focused, defeating Tab-to-Abandon-then-Enter (Codex P2).
   //   - 'menu' state: focus the single menu item.
   //   - Esc closes from any open state.
-  //   - Enter on confirm surface triggers Cancel (Cancel is default).
-  //   - Focus trap: Tab/Shift+Tab cycle between the two confirm buttons.
+  //   - Focus trap: Tab/Shift+Tab wrap inside the surface in both
+  //     directions. Confirm state cycles Cancel ↔ Confirm (with the
+  //     native-correct intra-surface moves left alone). Menu state
+  //     keeps focus on the single menuitem (no escape behind scrim).
   useEffect(() => {
     if (view === 'confirm') {
       cancelBtnRef.current?.focus();
@@ -124,30 +131,45 @@ export function AbandonRunMenu() {
         close();
         return;
       }
+      if (e.key !== 'Tab') return;
       if (view === 'confirm') {
-        if (e.key === 'Enter') {
-          // Enter triggers the default Cancel — explicit per v3.
-          e.preventDefault();
-          close();
-          return;
-        }
-        if (e.key === 'Tab') {
-          const cancelEl = cancelBtnRef.current;
-          const confirmEl = confirmBtnRef.current;
-          if (!cancelEl || !confirmEl) return;
-          const active = document.activeElement;
-          if (e.shiftKey) {
-            if (active === cancelEl) {
-              e.preventDefault();
-              confirmEl.focus();
-            }
-          } else {
-            if (active === confirmEl) {
-              e.preventDefault();
-              cancelEl.focus();
-            }
+        const cancelEl = cancelBtnRef.current;
+        const confirmEl = confirmBtnRef.current;
+        if (!cancelEl || !confirmEl) return;
+        const active = document.activeElement;
+        // DOM order: Confirm first, Cancel last. Wrap both directions
+        // so focus never escapes the dialog/sheet — modal contract.
+        if (e.shiftKey) {
+          if (active === cancelEl) {
+            e.preventDefault();
+            confirmEl.focus();
+          } else if (active === confirmEl) {
+            // Shift+Tab from the first focusable would escape upward;
+            // wrap to the last focusable (Cancel).
+            e.preventDefault();
+            cancelEl.focus();
+          }
+        } else {
+          if (active === confirmEl) {
+            e.preventDefault();
+            cancelEl.focus();
+          } else if (active === cancelEl) {
+            // Tab from the last focusable would escape downward; wrap
+            // to the first focusable (Confirm).
+            e.preventDefault();
+            confirmEl.focus();
           }
         }
+        return;
+      }
+      if (view === 'menu') {
+        // Single menuitem — Tab/Shift+Tab keeps focus on it. Prevents
+        // Tab from escaping behind the scrim onto in-run elements
+        // (modal-contract parity with confirm-state trap).
+        const itemEl = menuItemRef.current;
+        if (!itemEl) return;
+        e.preventDefault();
+        itemEl.focus();
       }
     }
     window.addEventListener('keydown', onKey);
@@ -205,9 +227,12 @@ export function AbandonRunMenu() {
         <>
           {/* Scrim — click-outside cancels. Sits ABOVE top bar so the
               tap area covers it too. Keyboard handling lives on window
-              listener so the scrim doesn't need to capture key events. */}
+              listener so the scrim doesn't need to capture key events.
+              aria-hidden=true: visually decorative; dialog/sheet's
+              aria-modal already conveys the modal semantic. */}
           <div
             data-testid="abandon-scrim"
+            aria-hidden="true"
             onClick={close}
             style={{
               position: 'fixed',
