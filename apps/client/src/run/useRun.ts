@@ -444,8 +444,15 @@ export function useRun() {
   // `if (simRun !== null) return;` guard would skip the next sim
   // construction even after a fresh class-select pick.
   //
-  // 5b.3 LocalSaveV1 reuses this callback shape as the "abandon current
-  // run" handler — same two-axis discard.
+  // 5b.3b SUPERSESSION (decision-log.md 2026-05-21 § 5b.3b Phase 1
+  // halt-gate RATIFIED): the prior framing here noted that 5b.3
+  // would reuse this callback shape as the "abandon current run"
+  // handler. That was incorrect. abandon's destination is
+  // RunEndScreen ABANDONED (RunProvider's isRunEnded gate, requires
+  // simRun !== null + outcome 'abandoned'); reset_run's destination
+  // is ClassSelectScreen (requires simRun === null). The two
+  // contracts diverge on simRun handling: abandonRun (below)
+  // PRESERVES simRun; resetRun NULLS it.
   const resetRun = useCallback(() => {
     // M1.5b PR 3 / 5b.3a: clear the persisted save before discarding
     // in-memory state. The next saveLocal (post-fresh-run arranging-entry)
@@ -457,6 +464,28 @@ export function useRun() {
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     setPendingRunInput(null);
+  }, []);
+
+  // M1.5b PR 3 / 5b.3b Step 2: abandon current run.
+  // Mirrors resetRun's clearLocal-before-dispatch pattern (prevents
+  // reload-resurrection between abandon-confirm and RunEndScreen mount),
+  // but DOES NOT null simRun / pendingRunInput — abandon's destination
+  // is RunEndScreen ABANDONED which requires simRun !== null to pass
+  // RunProvider's first block (RunContext.tsx:69). Reducer's abandon_run
+  // arm flips outcome to 'abandoned' while preserving the 7
+  // RunEndScreen-read display fields. From the terminal screen, the
+  // restart affordance (onRestart={value.resetRun}) is the path back
+  // to ClassSelect — abandon ends here.
+  //
+  // TODO(CF 35): emit run_end{outcome:'abandoned',
+  //   roundReached:state.state.round, heartsRemaining:state.state.hearts}
+  // per telemetry-plan.md:54-57. Under the client-side-flip lean abandon
+  // never reaches sim, so this site (not sim's onTelemetryEvent stub)
+  // owns the abandon emit. Comment-only TODO per Phase 1 ratification —
+  // wires when CF 35's pipeline lands.
+  const abandonRun = useCallback(() => {
+    clearLocal();
+    dispatch({ type: 'abandon_run' });
   }, []);
 
   // M1.5b PR 3 / 5b.3a Commit 5: save-on-quiescent. Persist a
@@ -489,6 +518,31 @@ export function useRun() {
   // surfaces exist yet to mutate them. M2 / CF 35 will wire them.
   useEffect(() => {
     if (simRun === null) return;
+    // Phase 2.5 (5b.3b Codex round 1, P1): when client outcome is
+    // terminal, clear the persisted save and bail. Two reasons it
+    // CANNOT be an in_progress write:
+    //   - The 5b.3b client-side-flip lean (decision-log.md 2026-05-21
+    //     § 5b.3b Phase 1 halt-gate RATIFIED) leaves sim's outcome at
+    //     'in_progress' even after abandon. The serializer below
+    //     reads simSnap.outcome via the spread — pre-fix, abandon's
+    //     re-fire here wrote `outcome:'in_progress'` over the
+    //     pre-dispatch clearLocal, so reload re-imported the run and
+    //     defeated user-confirmed abandon (Codex P1).
+    //   - For natural terminals (won/eliminated), sim does flip its
+    //     own outcome correctly, but the load-on-mount restore guard
+    //     above already skips any save with outcome !== 'in_progress'
+    //     — those persisted terminal saves were dead storage. Clearing
+    //     them uniformly is hygiene.
+    // The client outcome is the single source of truth for the
+    // user-visible run state (sim's outcome may lag under the
+    // client-side-flip lean), so the guard reads state.state.outcome.
+    // abandonRun's explicit pre-dispatch clearLocal stays as belt-
+    // and-suspenders for the window between dispatch and this
+    // effect's re-fire.
+    if (state.state.outcome !== 'in_progress') {
+      clearLocal();
+      return;
+    }
     const simSnap = simRun.getState();
     const serialized: SerializedRunState = {
       ...simSnap,
@@ -617,5 +671,6 @@ export function useRun() {
     isRunEnded,
     grantSelectedRelic,
     resetRun,
+    abandonRun,
   };
 }
