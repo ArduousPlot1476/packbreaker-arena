@@ -304,9 +304,14 @@ export function AbandonRunMenu() {
           left: 0,
           right: 0,
           bottom: 0,
-          // ~35% of 844px = ~295px per v3 design; min ensures touch
-          // targets remain comfortable on shorter viewports.
-          minHeight: 'min(35vh, 295px)',
+          // v3 design reference: ~35% of an 844px viewport = ~295px.
+          // max() floors at 295px so touch targets stay comfortable on
+          // short viewports (35vh would shrink the sheet on anything
+          // under 844px); on taller viewports it grows proportionally
+          // with 35vh. Pre-fix `min(35vh, 295px)` was the inverse — it
+          // CAPPED at 295px and shrank to 35vh on short viewports,
+          // opposite of the touch-target guarantee (5b.3b Codex P2).
+          minHeight: 'max(35vh, 295px)',
           background: 'var(--surface-elev)',
           borderTopLeftRadius: 14,
           borderTopRightRadius: 14,
