@@ -4,6 +4,90 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3b CLOSED (abandon-run UI; client-side outcome flip; Codex 4-finding ceiling tripped → meta-audit → terminal clean)
+
+### Framing
+
+5b.3b ships the abandon-run UI surface — first concrete client-side trigger for `outcome === 'abandoned'`. Dedicated `abandon_run` reducer arm (outcome flip, 7 RunEndScreen fields preserved); `abandonRun` dispatcher (`clearLocal()` + dispatch, simRun PRESERVED); save-on-quiescent guarded to clear on all terminal outcomes; ⋯ overflow trigger + confirm dialog (desktop) / bottom-sheet (mobile) per locked v3; full keyboard/focus/ARIA contract. Closes M1.5b PR 3. (M1.5b-milestone-close pends the CF 35 telemetry-milestone scope question — see Carry-forwards.)
+
+### Branch + commit topology
+
+Branch: `m1.5b-pr3-5b.3b-abandon-run` off main `4a704ac` (5b.3a-close baseline). 16 atomic branch commits from `git log --oneline 4a704ac..HEAD`:
+
+| SHA | Phase | Scope |
+|---|---|---|
+| `29077fb` | Preamble | docs(decision-log): opening — \#DC2626 destructive-accent REJECTED (SETTLED) + abandon_run client-side flip (PROVISIONAL) |
+| `58fd4b4` | Phase 1 | docs(decision-log): halt-gate RATIFIED (provisional → settled) |
+| `b2c2442` | Phase 2 Step 1 | feat(run): abandon_run reducer arm — client-side outcome flip preserving 7 RunEndScreen fields |
+| `ea24987` | Phase 2 Step 2 | feat(run): abandonRun hook callback + supersede L447-448 comment; simRun preserved |
+| `439ba25` | Phase 2 Step 3 | feat(run): AbandonRunMenu overflow trigger + confirm dialog + bottom-sheet (v3 locked) |
+| `bfaa352` | Phase 2 Step 4 | feat(hud): wire AbandonRunMenu into TopBar (post-trophy + hairline divider) + MobileTopBar (right-cluster wrap) |
+| `8c72948` | Phase 2 Step 5 | test(run): abandon full-flow integration + 4-state visual-playtest DOM capture |
+| `8e93e1f` | Phase 2.5 r1 | fix(run): gate save-on-quiescent on client outcome (Codex P1 resurrection) |
+| `5387582` | Phase 2.5 r1 | fix(run): AbandonRunMenu sheet minHeight `max(35vh, 295px)` floor (Codex P2) |
+| `7b26d31` | Phase 2.5 r1 | test(run): no-resurrection + natural-terminal + sheet-floor regressions |
+| `10daaab` | Phase 2.5 r2 | fix(run): viewport-conditional aria-haspopup / aria-controls / aria-expanded + ids (Codex P2) |
+| `e221b6c` | Phase 2.5 r2 | test(run): aria contract per viewport + bump lazy-boundary timeout (round-2 mitigation) |
+| `ad366e4` | Phase 2.5 meta | fix(run): A.1 remove global Enter handler + A.2 complete focus trap (bidirectional + menu) + A.3 scrim aria-hidden |
+| `e6bdedd` | Phase 2.5 meta | feat(run): A.4 focus-visible CSS rule on trigger + confirm buttons |
+| `3f65b6f` | Phase 2.5 meta | docs(run): C.1 abandon_run combatActive-inert inline note |
+| `46cfbac` | Phase 2.5 meta | test(client): D surgical timeout — revert global, per-call `{ timeout: 3000 }` on 10 lazy-RunEndScreen waits |
+
+`--no-ff` merge commit on main pending (Step 2 of this entry's authoring prompt).
+
+### Phase trajectory
+
+Phase 1 halt-gate (RATIFIED clean; `abandon_run` supersedes the PR 2 "reset_run-reused-as-abandon" phrasing) → Phase 2 (5-step impl) → Phase 2.5 round 1 (Codex P1 resurrection + P2 sheet floor) → Phase 2.5 round 2 (Codex P2 aria-haspopup) → Codex round 3 (P2 Enter) = 4th finding → 4-finding ceiling tripped → comprehensive pre-merge meta-audit (enumerate-ratify-batch, READ-ONLY enumeration then atomic-commit batch fix) → Codex round 4 CLEAN ("Didn't find any major issues 🎉").
+
+### Codifications
+
+- **Catch 27 (Class C2)** — client-flip-outcome vs sim-authoritative-serializer divergence defeating clearLocal. Fix: save-on-quiescent gates on client `state.state.outcome !== 'in_progress'` → `clearLocal()` + bail. Closes the P1 resurrection mechanism.
+- **Catch 28 (Class A)** — adjacent-comment-vs-implementation inversion: mobile sheet `min(35vh, 295px)` where the touch-target comment intended a floor (`min()` picks the SMALLER value). Fix: `max(35vh, 295px)`.
+- **Catch 29 (Class A)** — advertised-vs-actual: `aria-haspopup="dialog"` on a desktop trigger whose IMMEDIATE popup is `role="menu"` (the dialog is the menu's onward chain, not the trigger's direct popup). Fix: viewport-conditional via `useViewport`.
+- **Catch 30 (Class A)** — global window Enter handler defeats native focused-button activation; Tab-to-Abandon-then-Enter cancels instead of confirming. Fix: remove the handler; auto-focused Cancel preserves "Enter on open = Cancel" structurally.
+- **Catch 31 (meta-audit SELF-CATCH)** — incomplete focus trap (Cancel+Tab AND Confirm+Shift+Tab both escape natively to elements behind the scrim; no Tab trap in menu state at all). Surfaced by the meta-audit sweep, NOT Codex — validation that the meta-audit preempts what would have been Codex finding 5 / 6. Fix: bidirectional wrap in confirm state + Tab handler moved out of confirm-only branch so menu-state trap also fires.
+- **Catch 32 (Class C2 / test-env, 2nd instance — CODIFIED)** — `findByTestId` waits on a `React.lazy` boundary flake under concurrent vitest pool contention. First instance: PR 2 F.3 latent-flake (`decision-log.md` 2026-05-19 § M1.5b PR 2 closing log "F.3 latent-flake; antidote candidate logged"). Antidote applied: per-call `{ timeout: 3000 }` at the 10 lazy-wait sites + global `asyncUtilTimeout` reverted to TL default (surgical, not blunt mask).
+- **Pattern 8 (NEW codified — ordinal 8 of codified patterns)** — interactive-overlay a11y contract gaps surface reactively one-at-a-time when not holistically audited at design/build time. (Three of four Codex findings this PR were AbandonRunMenu a11y, surfaced across three reactive rounds; the meta-audit catalog found Catch 31 + scrim aria + focus-visible in one sweep.) **Numbering note:** the candidate label space is separate from the codified ordinal space. Held candidates #8 (M1.5b PR 1 — master-dev factual-claim source-verify) and #9 (M1.5b PR 2 — skip-with-replacement-invariant) remain held; the new codified Pattern 8 is interactive-overlay-a11y, unrelated to either candidate slot. Renumbering held candidates is out of scope.
+- **Rule 12 (NEW)** — any new interactive / overlay component (modal, sheet, menu, popover, tooltip with focusable content, etc.) carries a full keyboard + focus + ARIA contract audit as a Phase 2 DoD item — covering: trigger ARIA per immediate-popup role/state, focus trap in both directions, auto-focus on mount, focus return on every close path (cancel/scrim/Esc/confirm), Enter/Space activation per focused element (no global key hijacks), Esc cancels, scrim `aria-hidden`, focus-visible indicator on all focusable elements. Antidote to Pattern 8.
+- **Rule 13 (NEW)** — close-gate test runs include N≥3 full-workspace runs under COLD turbo cache (`--force`), not just isolation passes or warm-cache runs. Antidote to Catch 32 / F.3 lineage — single-file and warm-cache passes hide the lazy-boundary timing class. The `--concurrency=1` clause stays as the happy-dom OOM mitigation (additive, not substitutive).
+- **Topic 2 drift +2** —
+  - **Drift 21 (Phase 1 sequencing — already recorded in `decision-log.md` 2026-05-21 § 5b.3b Phase 1 halt-gate RATIFIED):** Phase 1 prompt referenced an un-landed decision-log entry as already-on-branch; halt-and-surface caught it. Corrected by re-issued prompt's preamble fold.
+  - **Drift 22 (closing-time):** Phase 1 ratification over-asserted clearLocal-on-abandon sufficiency without tracing the save-on-quiescent re-fire on the `state.state.outcome` dep — the re-fire wrote a stale in_progress save over the clearLocal, surfaced reactively as Codex P1. The trace was structurally available at Phase 1 (the effect's deps were already shipped) but wasn't walked.
+
+### HELD candidates (not codified)
+
+- **Going-forward candidate** "trace effects that re-fire on the state a clear/persist hook precedes" — 1st instance (Drift 22 mechanism). Codify on second instance. Would have caught Catch 27 at Phase 1.
+- **Going-forward candidate** "assert-invariant-not-mechanism" test rewrites — 2 instances this PR ("exactly once" clearLocal call-count → no-resurrection end-state invariant; "Enter triggers Cancel" call-count → focused-button-activation behavior invariant). Second-instance watch — codify on next-PR instance per the standing two-distinct-PRs convention.
+
+### Carry-forwards
+
+- **CF 48 OPENED (NEW)** — `RunEndScreen` + modal-equivalent a11y: no auto-focus on terminal-outcome mount (focus falls to `document.body` after any abandon/win/eliminate, all three outcomes); siblings not `inert` when modal-equivalent open. The completed Phase 2.5-meta focus trap + `aria-modal="true"` mitigate but don't fully discharge. → M2 polish. (A.5 + A.6 from the meta-audit catalog, bundled.)
+- **CF 35 OPEN (unchanged scope question)** — `onTelemetryEvent` client-pipeline wire-up. Abandon `run_end` emit rides dormant: comment-only `TODO(CF 35)` at the `abandonRun` dispatcher (`useRun.ts:480-485`) carrying the `{outcome:'abandoned', roundReached:state.state.round, heartsRemaining:state.state.hearts}` payload shape per `telemetry-plan.md:54-57`. **M1.5b-milestone-close scope question:** confirm whether the CF 35 telemetry milestone is in-M1.5b (→ M1.5b not yet closed; PR 3 is the second-to-last) or re-scoped (→ update CF 35 tag and close M1.5b at this PR's merge). Resolve at next scoping.
+- **CF 34 / 43 / 45 / 46 / 47 untouched** — abandon DISCARDS, does not restore. No restore-side work pulled in.
+
+### Counters (log-walked totals; deltas match)
+
+Re-enumerated by walking `decision-log.md` forward from the 5b.3a-close baseline (Catches 26 / Rules 11 / Patterns codified 7 / Topic-2 drifts 20 / Open CFs 36) through the on-disk 5b.3b Phase 1 ratification entry (drifts +1 → 21) and this closing entry's deltas. No baseline discrepancies.
+
+| Counter | 5b.3a-close baseline | 5b.3b deltas (this PR) | 5b.3b-close total |
+|---|---:|---:|---:|
+| Predicate-vs-name catches codified | 26 | +6 (Catch 27 / 28 / 29 / 30 / 31 / 32) | **32** |
+| Going-forward rules codified | 11 | +2 (Rule 12 / Rule 13) | **13** |
+| Architectural patterns codified | 7 | +1 (Pattern 8 — interactive-overlay-a11y; ordinal 8) | **8** |
+| Master-dev chat drifts (Topic 2) | 20 | +2 (Drift 21 Phase 1 sequencing + Drift 22 closing-time clearLocal over-assert) | **22** |
+| Open CFs (canonical enumeration) | 36 | +1 (CF 48 opens; no closures) | **37** |
+| 4-finding ceiling state | n/a | tripped 4/4 → meta-audit → terminal clean (cycle complete) | — |
+
+**4-finding ceiling cycle (canonical record):** 2nd meta-audit cycle of the project; first was 5b.3a Phase 2.5g (Class A persistence-validator enumeration). 5b.3b's cycle: 4 reactive Codex findings (P1 resurrection / P2 sheet floor / P2 aria-haspopup / P2 Enter) tripped the ceiling → READ-ONLY enumeration sweep cataloged A.1–A.6 + B + C.1 + D → atomic-commit batch landed A.1/A.2/A.3 + A.4 + C.1 + D (A.5/A.6 → CF 48) → Codex round 4 clean. Validates the ceiling-rule's predictive power for the second time.
+
+### Post-5b.3b-close pre-flags (M1.5b PR 4 + close)
+
+- **CF 35 telemetry milestone scope question** is the gating decision for whether M1.5b closes at PR 3 merge or extends to a PR 4. Address at next scoping fresh chat.
+- **Pattern 8 / Rule 12 application** lands at the next interactive/overlay surface introduced (likely M2 polish or M2 content surfaces).
+- **Rule 13 application** is immediate: all close-gates from here forward run N≥3 cold under `--force --concurrency=1`.
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3b Phase 1 architectural halt-gate RATIFIED (provisional → settled)
 
 Step 0 (read-only, branch 29077fb) returned zero contradictions. All three pivots RATIFY against shipped code.
