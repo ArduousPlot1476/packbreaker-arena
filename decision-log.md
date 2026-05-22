@@ -4,6 +4,24 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3b Phase 1 architectural halt-gate RATIFIED (provisional → settled)
+
+Step 0 (read-only, branch 29077fb) returned zero contradictions. All three pivots RATIFY against shipped code.
+
+abandon_run arm — RATIFIED. Supersession confirmed verbatim: reset_run returns INITIAL_CLIENT_STATE → createInitialState('tinker') which sets outcome:'in_progress' and wipes all 8 fields RunEndScreen reads (RunController.ts:473-474/:93/:107-109). Dispatching reset_run as abandon routes RunProvider to ClassSelectScreen (simRun===null && pendingRunInput===null, RunContext.tsx:70-75), never RunEndScreen ABANDONED. Dedicated abandon_run arm required: sets outcome:'abandoned' while PRESERVING the other 7 display fields (NO createInitialState). Gate keys off outcome !== 'in_progress' (single boolean via mirrorsSimShouldEndRun, runEnd.ts:22-24; useRun.ts:436) — no separate client flag. Superseded comment at useRun.ts:447-448 corrected in Phase 2.
+
+simRun-preservation contract — abandonRun callback does clearLocal() + dispatch abandon_run ONLY; it must NOT setSimRun(null)/setPendingRunInput(null) (that is resetRun's contract, whose destination is ClassSelect). Abandon's destination is RunEndScreen ABANDONED, which requires simRun !== null to pass RunProvider's first block.
+
+clearLocal-on-abandon — RATIFIED. Dispatcher wrapper calls clearLocal() BEFORE dispatch, mirroring resetRun (useRun.ts:456). clearLocal idempotent/safe-on-missing-save (missing-adapter no-op + try/catch + spec-idempotent removeItem; storage.ts:108-117; tests persistence.test.ts:956/970/991). Prevents reload-resurrection between abandon-confirm and RunEndScreen mount.
+
+telemetry — RATIFIED dormant, REFINED shape. Open-item-1 ("real stubbed onTelemetryEvent call-site") refined by Step 0 item 6: abandon never reaches sim under the client-side-flip lean, so no sim onTelemetryEvent path exists to stub. A real stub = net-new prop-threaded client plumbing, zero runtime, that CF 35's unified pipeline would have to reconcile. Refined disposition: comment-only TODO(CF 35) at the abandon dispatcher carrying run_end{outcome:'abandoned', roundReached:state.state.round, heartsRemaining:state.state.hearts} (telemetry-plan.md:54-57). Lower surface, lower future cost. "Defer shape to Step 0" worked as designed.
+
+Mobile layout (Phase 2 structural choice) — RATIFIED. MobileTopBar uses justify-between with two children (left cluster + OpponentSilhouette, MobileTopBar.tsx:53-89). ⋯ trigger wraps with OpponentSilhouette in a new right-side flex cluster so justify-between doesn't separate them — consistent with v3 "past the ghost+sword+shield cluster." Desktop: ⋯ as new sibling after the trophy display in the right cluster (TopBar.tsx:55-56) with the v3 hairline divider so it never reads as a stat.
+
+Counters: no new catches/rules/patterns this gate (clean). Topic 2 drift +1 (→21) for the prior-turn sequencing error (Phase 1 prompt referenced a decision-log entry as already-landed on an uncut branch; corrected by folding the docs preamble into the re-issued prompt). CF 35 stays open (dormant emit). No CF closures. Final snapshot at PR close.
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3b open: #DC2626 destructive-accent REJECTED (SETTLED)
 
 Abandon confirm dialog uses a neutral low-emphasis ghost button (border-default #2D3854 / text-secondary #94A3B8, hover → text-primary #F0F4FA), NOT a #DC2626 danger color. Destructive weight is carried structurally — auto-focused accent Cancel ("Keep playing", filled #3B82F6, Enter-triggers) + explicit-loss copy ("Your bag, relics, trophies, and contract progress will be lost.") — not by a new color token. Per visual-direction.md § 3 (only life-red + coin-gold approved; "No other extensions without a decision-log.md entry") + 2026-04-26 precedent (rejected third semantic extension; victory CTA → accent blue). No new token added. Claude Design v3 verifier-clean; design pass closed.
