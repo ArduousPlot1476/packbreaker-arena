@@ -2061,7 +2061,16 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
     expect(simRunBefore).not.toBeNull();
   });
 
-  it('invokes clearLocal exactly once BEFORE dispatch (prevents reload-resurrection)', async () => {
+  it('invokes clearLocal before dispatch AND save-effect re-fire clears on terminal outcome (no resurrection)', async () => {
+    // Phase 2.5 (5b.3b Codex round 1, P1): pre-fix this assertion
+    // expected exactly one clearLocal — the pre-dispatch call. That
+    // was insufficient because the save-on-quiescent effect re-fired
+    // after the outcome flip and wrote a stale in_progress save back.
+    // Post-fix the effect ITSELF calls clearLocal when client outcome
+    // is terminal; abandonRun's pre-dispatch clear remains as belt-
+    // and-suspenders. End-state observable property: save is null
+    // after the dispatch settles (this is the actual reload-
+    // resurrection guard).
     const { getCtx } = await renderAndCapture();
     const ctx0 = getCtx();
     await waitFor(() => {
@@ -2072,13 +2081,19 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
       act(() => {
         ctx0.abandonRun();
       });
-      // clearLocal is sync; the removal call fires before dispatch
-      // commits. Quiescent-save useEffect re-fires after the outcome
-      // transition, overwriting the slot with a terminal save shape —
-      // but the BEFORE-dispatch clear is the reload-resurrection guard
-      // we're pinning here.
-      const removeCalls = removeItemSpy.mock.calls.filter((c) => c[0] === 'pba.v1.save');
-      expect(removeCalls.length).toBe(1);
+      // Pre-dispatch clearLocal fires synchronously; effect-side
+      // clearLocal fires when the dispatch's outcome flip commits.
+      // Both target the same SAVE_STORAGE_KEY. Two calls total.
+      await waitFor(() => {
+        const removeCalls = removeItemSpy.mock.calls.filter(
+          (c) => c[0] === 'pba.v1.save',
+        );
+        expect(removeCalls.length).toBe(2);
+      });
+      // The structural guarantee: after the dispatch settles, the
+      // slot is empty — load-on-mount on a hypothetical reload would
+      // see null and route to ClassSelectScreen (no resurrection).
+      expect(localStorage.getItem('pba.v1.save')).toBeNull();
     } finally {
       removeItemSpy.mockRestore();
     }
