@@ -2165,3 +2165,193 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3b Phase 2.5 / Codex round 1 — regression tests.
+//
+// P1: save-on-quiescent re-fire was writing in_progress saves after
+// abandon's clearLocal, defeating user-confirmed abandon on reload.
+// These tests pin the fix as the END-STATE INVARIANT:
+//   - After abandon, the persisted save is null (or non-in_progress).
+//   - load-on-mount on a hypothetical reload would NOT resurrect.
+//   - Natural terminals (win / eliminated) also clear (hygiene, since
+//     load-on-mount would have skipped them anyway).
+// And verifies the 5b.3a legitimate in_progress resume still works.
+// ────────────────────────────────────────────────────────────────────
+
+describe('save-on-quiescent — terminal-outcome guard regression (5b.3b Phase 2.5 / Codex P1)', () => {
+  it('abandon → persisted save is null after dispatch settles (no reload resurrection)', async () => {
+    let captured: ReturnType<typeof useRunContext> | null = null;
+    const onCtx = (c: ReturnType<typeof useRunContext>) => {
+      captured = c;
+    };
+    const { findByTestId } = render(
+      <RunProvider>
+        <CaptureContext onCtx={onCtx} />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(captured).not.toBeNull();
+      expect(captured!.simRun).not.toBeNull();
+    });
+    // Mount-time save lands first (legitimate in_progress save).
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
+    });
+
+    act(() => {
+      captured!.abandonRun();
+    });
+    // RunEndScreen mounts → outcome flip committed → save effect
+    // re-fired with terminal outcome → cleared.
+    const screen = await findByTestId('run-end-screen');
+    expect(screen.getAttribute('data-outcome')).toBe('abandoned');
+
+    // End-state invariant: save is null.
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).toBeNull();
+    });
+
+    // Simulate load-on-mount on the next session: loadLocal returns
+    // null → the restore guard's first arm bails → no resurrection.
+    // (We assert via the storage state, not by re-rendering — re-
+    // mounting RunProvider in the same test would race with the
+    // current RunProvider's auto-fire beginRun.)
+    const { loadLocal } = await import('../persistence');
+    expect(loadLocal()).toBeNull();
+  });
+
+  it('natural terminal (sim outcome flips to won via combat) clears persisted save (hygiene)', async () => {
+    // Drive a terminal outcome via the standard "mock applyCombatOutcome
+    // + advancePhase + spied getState returning outcome:'won'" pattern
+    // used by the skipped terminal-outcome handler-guard tests above.
+    // onContinue → onCombatDone → sync_from_sim dispatches with the
+    // spied snapshot → client outcome flips to 'won' → save-effect
+    // re-fires → guard fires → clearLocal.
+    //
+    // Pre-fix, load-on-mount would have skipped the won save via the
+    // restore guard (outcome !== 'in_progress'), so this is a hygiene
+    // improvement, not a behavior fix — but the structural mechanism
+    // is the same as P1's abandon path, so a passing assertion here
+    // pins the natural-terminal arm of the same guard.
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
+    });
+
+    // Enter combat so applyCombatOutcome's phase guard would pass.
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'advancePhase').mockImplementation(() => {});
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      outcome: 'won',
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+
+    // Client outcome flip + save-effect re-fire + guard → clearLocal.
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).toBeNull();
+    });
+
+    vi.restoreAllMocks();
+  });
+
+  it('legitimate in-progress save/restore round-trip from 5b.3a still works (no regression)', async () => {
+    // Stage a fresh in_progress save via the normal save-effect path
+    // (Tinker mount → arranging-entry round 1 → save fires). Read the
+    // payload, assert its outcome is 'in_progress' and survives the
+    // guard. Then call loadLocal directly to confirm the round-trip.
+    let captured: ReturnType<typeof useRunContext> | null = null;
+    const onCtx = (c: ReturnType<typeof useRunContext>) => {
+      captured = c;
+    };
+    render(
+      <RunProvider>
+        <CaptureContext onCtx={onCtx} />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(captured).not.toBeNull();
+      expect(captured!.simRun).not.toBeNull();
+    });
+    await waitFor(() => {
+      expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
+    });
+
+    const { loadLocal } = await import('../persistence');
+    const loaded = loadLocal();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.inProgressRun).not.toBeNull();
+    expect(loaded!.inProgressRun!.outcome).toBe('in_progress');
+    // Restore guard at useRun.ts:142 keys off this field — proving it
+    // stays 'in_progress' under the new guard proves the resume path
+    // is unaffected.
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3b Phase 2.5 / Codex round 1 — sheet floor (P2).
+//
+// Pre-fix: minHeight 'min(35vh, 295px)' undershot the 295px touch-
+// target floor on short viewports (min picks the smaller value).
+// Post-fix: 'max(35vh, 295px)' (floor at 295px, grows above on tall
+// viewports).
+// ────────────────────────────────────────────────────────────────────
+
+describe('AbandonRunMenu sheet floor (5b.3b Phase 2.5 / Codex P2)', () => {
+  it('mobile bottom-sheet minHeight uses max() floor (not min() cap)', async () => {
+    // happy-dom doesn't compute CSS-functional layout, so we assert
+    // against the raw style attribute — the contract is the function
+    // identifier, not the resolved pixel value.
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query.includes('max-width: 767px'),
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    // Render the menu standalone; open the sheet.
+    const { AbandonRunMenu } = await import('./AbandonRunMenu');
+    const { findByTestId } = render(
+      <RunProvider>
+        <AbandonRunMenu />
+      </RunProvider>,
+    );
+    const trigger = await findByTestId('abandon-trigger');
+    act(() => {
+      trigger.click();
+    });
+    const sheet = await findByTestId('abandon-sheet');
+    const styleStr = sheet.getAttribute('style') ?? '';
+    // Positive assertion: max(35vh, 295px) is the floor function.
+    expect(styleStr).toContain('max(35vh, 295px)');
+    // Negative assertion: the pre-fix min() cap is gone.
+    expect(styleStr).not.toContain('min(35vh, 295px)');
+  });
+});
