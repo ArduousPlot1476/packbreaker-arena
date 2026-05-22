@@ -40,6 +40,19 @@ const COPY = {
   menuItem: 'Abandon run',
 } as const;
 
+// DOM ids for the ARIA contract — each popup surface has a stable id
+// that the trigger's aria-controls points at. Per Phase 2.5 round 2
+// (Codex P2 + audit pass), the trigger's IMMEDIATE popup is viewport-
+// dependent: desktop → menu; mobile → sheet (the dialog is the
+// menu's onward chain on desktop, NOT a direct popup of the trigger).
+// aria-controls therefore points at MENU_ID on desktop and SHEET_ID
+// on mobile, regardless of which intermediate state ('menu' /
+// 'confirm') is currently rendered. The data-testid values reuse the
+// same strings so tests can rely on a single identifier per surface.
+const MENU_ID = 'abandon-menu';
+const DIALOG_ID = 'abandon-dialog';
+const SHEET_ID = 'abandon-sheet';
+
 // Z-stack budget — coordinates with top-bar layering:
 //   - TopBar / MobileTopBar: implicit z=0 (no explicit z-index)
 //   - Scrim:                   z=200 (above top bar so click-outside
@@ -148,8 +161,21 @@ export function AbandonRunMenu() {
         type="button"
         data-testid="abandon-trigger"
         aria-label={COPY.triggerLabel}
-        aria-haspopup="dialog"
-        aria-expanded={view !== 'closed'}
+        // Phase 2.5 round 2 (Codex P2 + ARIA audit). Trigger's IMMEDIATE
+        // popup is viewport-conditional: desktop opens a single-item
+        // menu (role="menu") first; mobile opens the sheet (role=
+        // "dialog") directly. aria-haspopup must match the role of the
+        // popup the trigger opens. aria-controls follows the same logic
+        // (always points at the immediate popup's id). aria-expanded
+        // reflects ONLY the immediate popup's open state — on desktop,
+        // that means it goes false again when state advances 'menu' →
+        // 'confirm' (menu unmounts; the dialog is the menu's onward
+        // chain, not the trigger's direct popup).
+        aria-haspopup={viewport === 'mobile' ? 'dialog' : 'menu'}
+        aria-controls={viewport === 'mobile' ? SHEET_ID : MENU_ID}
+        aria-expanded={
+          viewport === 'mobile' ? view === 'confirm' : view === 'menu'
+        }
         onClick={openFromTrigger}
         style={{
           width: 28,
@@ -201,6 +227,7 @@ export function AbandonRunMenu() {
   function DesktopMenu() {
     return (
       <div
+        id={MENU_ID}
         data-testid="abandon-menu"
         role="menu"
         style={{
@@ -254,6 +281,7 @@ export function AbandonRunMenu() {
   function DesktopDialog() {
     return (
       <div
+        id={DIALOG_ID}
         data-testid="abandon-dialog"
         role="dialog"
         aria-modal="true"
@@ -294,6 +322,7 @@ export function AbandonRunMenu() {
   function MobileSheet() {
     return (
       <div
+        id={SHEET_ID}
         data-testid="abandon-sheet"
         role="dialog"
         aria-modal="true"
