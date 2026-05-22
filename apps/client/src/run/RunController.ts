@@ -486,6 +486,17 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       // clearLocal-before-dispatch pattern); per Phase 1 ratification,
       // the callback does NOT setSimRun(null) — abandon's destination
       // requires simRun !== null to pass RunProvider's first block.
+      //
+      // combatActive note (Phase 2.5 meta-audit C.1): this arm does not
+      // touch combatActive. If the user abandons during combat (⋯ is
+      // accessible from TopBar regardless of phase), the value stays
+      // true in state, but RunProvider's terminal gate unmounts the
+      // entire in-run subtree (including CombatOverlay) on the same
+      // render — so the stale flag is inert until the user clicks
+      // Restart from RunEndScreen, which dispatches reset_run and
+      // returns INITIAL_CLIENT_STATE (combatActive: false). Functionally
+      // clean; explicit note here so future readers don't add a defensive
+      // combatActive reset that would shadow the unmount semantics.
       return { ...state, state: { ...state.state, outcome: 'abandoned' } };
 
     case 'restore_from_save': {
