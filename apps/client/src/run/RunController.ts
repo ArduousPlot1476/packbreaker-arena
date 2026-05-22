@@ -140,6 +140,7 @@ export type RunAction =
   | { type: 'init_from_sim'; snapshot: SimRunState }
   | { type: 'sync_from_sim'; snapshot: SimRunState }
   | { type: 'reset_run' }
+  | { type: 'abandon_run' }
   | {
       type: 'restore_from_save';
       /** Persisted SerializedRunState — canonical source for
@@ -472,6 +473,20 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
 
     case 'reset_run':
       return INITIAL_CLIENT_STATE;
+
+    case 'abandon_run':
+      // M1.5b PR 3 / 5b.3b: client-side outcome flip to 'abandoned'.
+      // Distinct from reset_run by contract: reset_run wipes ALL state
+      // via createInitialState (destination ClassSelectScreen); abandon
+      // preserves the 7 RunEndScreen-read display fields (round /
+      // classId / relics / totalRounds / history / maxHearts / hearts)
+      // and ONLY flips outcome so RunProvider's isRunEnded gate routes
+      // to RunEndScreen ABANDONED. The clearLocal-on-abandon hook lives
+      // in useRun.ts's abandonRun callback (mirrors resetRun's
+      // clearLocal-before-dispatch pattern); per Phase 1 ratification,
+      // the callback does NOT setSimRun(null) — abandon's destination
+      // requires simRun !== null to pass RunProvider's first block.
+      return { ...state, state: { ...state.state, outcome: 'abandoned' } };
 
     case 'restore_from_save': {
       // M1.5b PR 3 / 5b.3a Phase 2.5j-fix (Catch 26): hydrate

@@ -586,3 +586,95 @@ describe('clientRunReducer — cross-version restore hydration (Phase 2.5j-fix /
     expect(next.state.trophy).toBe(72); // snapshot.trophy
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5b PR 3 / 5b.3b Step 1 — abandon_run reducer arm.
+//
+// Phase 1 ratification (decision-log.md 2026-05-21 § 5b.3b Phase 1
+// halt-gate RATIFIED): client-side outcome flip; preserves the 7
+// RunEndScreen-read fields beyond outcome. Distinct from reset_run
+// (which wipes ALL state via createInitialState — destination
+// ClassSelectScreen). abandon's destination is RunEndScreen ABANDONED.
+// ────────────────────────────────────────────────────────────────────
+
+describe('clientRunReducer — abandon_run (M1.5b PR 3 / 5b.3b Step 1)', () => {
+  it('sets outcome to "abandoned" from a mid-run state', () => {
+    const initial = freshInitial();
+    const next = clientRunReducer(initial, { type: 'abandon_run' });
+    expect(next.state.outcome).toBe('abandoned');
+  });
+
+  it('preserves the 7 RunEndScreen-read display fields byte-identical to pre-dispatch', () => {
+    // Construct a mid-run state with non-default values across all 7
+    // RunEndScreen-read fields beyond outcome (round, classId, relics,
+    // totalRounds, history, maxHearts, hearts — see Step 0 item 3).
+    const mid: ClientRunState = {
+      ...freshInitial(),
+      state: {
+        ...freshInitial().state,
+        outcome: 'in_progress' as RunOutcome,
+        round: 7,
+        classId: 'marauder' as ClassId,
+        relics: {
+          starter: 'iron-will' as RelicId,
+          mid: 'berserkers-pendant' as RelicId,
+          boss: 'conquerors-crown' as RelicId,
+        },
+        totalRounds: 11,
+        history: [
+          { round: 1 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 4, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+          { round: 2 as RoundNumber, outcome: 'loss', damageDealt: 12, damageTaken: 30, goldEarnedThisRound: 0, opponentGhostId: null, opponentClassId: null },
+        ],
+        maxHearts: 5,
+        hearts: 2,
+      },
+    };
+    const next = clientRunReducer(mid, { type: 'abandon_run' });
+    expect(next.state.outcome).toBe('abandoned');
+    // 7 display fields preserved verbatim (round / classId / relics /
+    // totalRounds / history / maxHearts / hearts).
+    expect(next.state.round).toBe(mid.state.round);
+    expect(next.state.classId).toBe(mid.state.classId);
+    expect(next.state.relics).toBe(mid.state.relics);
+    expect(next.state.totalRounds).toBe(mid.state.totalRounds);
+    expect(next.state.history).toBe(mid.state.history);
+    expect(next.state.maxHearts).toBe(mid.state.maxHearts);
+    expect(next.state.hearts).toBe(mid.state.hearts);
+  });
+
+  it('is idempotent: abandon_run on an already-abandoned state stays abandoned with the same 7 fields', () => {
+    const initial = freshInitial();
+    const once = clientRunReducer(initial, { type: 'abandon_run' });
+    const twice = clientRunReducer(once, { type: 'abandon_run' });
+    expect(twice.state.outcome).toBe('abandoned');
+    expect(twice.state.round).toBe(once.state.round);
+    expect(twice.state.classId).toBe(once.state.classId);
+    expect(twice.state.relics).toBe(once.state.relics);
+    expect(twice.state.totalRounds).toBe(once.state.totalRounds);
+    expect(twice.state.history).toBe(once.state.history);
+    expect(twice.state.maxHearts).toBe(once.state.maxHearts);
+    expect(twice.state.hearts).toBe(once.state.hearts);
+  });
+
+  it('does NOT wipe state via createInitialState (regression vs reset_run)', () => {
+    // The supersession test: reset_run returns INITIAL_CLIENT_STATE
+    // (createInitialState('tinker')) which sets classId 'tinker',
+    // round 1, history []. abandon_run on a marauder mid-run state
+    // must NOT mutate any of those toward those reset values.
+    const marauder: ClientRunState = {
+      ...freshInitial(),
+      state: {
+        ...freshInitial().state,
+        classId: 'marauder' as ClassId,
+        round: 9,
+        history: [
+          { round: 1 as RoundNumber, outcome: 'win', damageDealt: 30, damageTaken: 4, goldEarnedThisRound: 5, opponentGhostId: null, opponentClassId: null },
+        ],
+      },
+    };
+    const next = clientRunReducer(marauder, { type: 'abandon_run' });
+    expect(next.state.classId).toBe('marauder'); // NOT 'tinker'
+    expect(next.state.round).toBe(9); // NOT 1
+    expect(next.state.history).toHaveLength(1); // NOT []
+  });
+});
