@@ -1,7 +1,8 @@
-// Top bar: title + gold + hearts + round/totalRounds + contract objective + trophy.
+// Top bar: title + gold + hearts + round/totalRounds + contract objective + trophy + ⋯ run-options trigger.
 
 import type { RunState } from '../run/types';
 import { CoinGlyph, HeartGlyph } from '../icons/icons';
+import { AbandonRunMenu } from '../run/AbandonRunMenu';
 
 export function TopBar({ state }: { state: RunState }) {
   return (
@@ -53,6 +54,20 @@ export function TopBar({ state }: { state: RunState }) {
         >
           ◆ <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{state.trophy}</span>
         </div>
+        {/* v3 hairline divider — separates the ⋯ run-options trigger
+            from the trophy stat so the icon never reads as a stat
+            glyph. 1px-wide vertical rule in --border-default. */}
+        <div
+          aria-hidden="true"
+          data-testid="topbar-divider"
+          style={{
+            width: 1,
+            height: 18,
+            background: 'var(--border-default)',
+            marginLeft: 4,
+          }}
+        />
+        <AbandonRunMenu />
       </div>
     </div>
   );

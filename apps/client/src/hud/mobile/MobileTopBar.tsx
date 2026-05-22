@@ -1,11 +1,13 @@
 // Mobile compact top bar (390-wide vertical) per gdd.md § 14 +
 // M1.3.3 layout-audit decision 1 (revised). Left side: gold, hearts,
 // round. Right side: opponent intent — `GhostGlyph` + two 20px mono
-// silhouette swatches (sword/shield default). Class is implied by
-// the silhouette pair pattern, not text.
+// silhouette swatches (sword/shield default) — grouped with the
+// 5b.3b ⋯ run-options trigger so justify-between keeps them clustered.
+// Class is implied by the silhouette pair pattern, not text.
 
 import type { RunState } from '../../run/types';
 import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS } from '../../icons/icons';
+import { AbandonRunMenu } from '../../run/AbandonRunMenu';
 
 function OpponentSilhouette() {
   // Default opponent silhouettes for the M1 prototype: sword + shield
@@ -85,7 +87,13 @@ export function MobileTopBar({ state }: { state: RunState }) {
           <span style={{ color: 'var(--text-muted)' }}>/{state.totalRounds}</span>
         </div>
       </div>
-      <OpponentSilhouette />
+      {/* 5b.3b ratification: wrap silhouette + ⋯ in a right-side
+          cluster so the outer justify-between keeps them grouped
+          (otherwise it would push them to opposite edges). */}
+      <div className="flex items-center gap-2">
+        <OpponentSilhouette />
+        <AbandonRunMenu />
+      </div>
     </div>
   );
 }
