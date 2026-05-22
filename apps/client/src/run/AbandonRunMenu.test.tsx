@@ -81,24 +81,127 @@ afterEach(() => {
 
 // ─── Trigger surface ─────────────────────────────────────────────────
 
-describe('AbandonRunMenu — ⋯ trigger', () => {
+describe('AbandonRunMenu — ⋯ trigger (universal)', () => {
   it('renders with accessible label "Run options"', async () => {
     mockViewport('desktop');
     const { getByTestId } = renderMenu();
     await waitForTrigger(getByTestId);
     const trigger = getByTestId('abandon-trigger');
     expect(trigger.getAttribute('aria-label')).toBe('Run options');
-    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+    // Closed-state: aria-expanded false on every viewport.
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
+});
 
-  it('aria-expanded flips true when menu opens', async () => {
-    mockViewport('desktop');
+// ─── Phase 2.5 round 2 — ARIA contract per viewport ─────────────────
+//
+// Per decision-log.md 2026-05-21 § 5b.3b Phase 1 halt-gate RATIFIED
+// + this round's Codex P2 audit. The trigger's IMMEDIATE popup is
+// viewport-dependent: desktop opens a single-item menu (role="menu")
+// first; mobile opens a sheet (role="dialog") directly. aria-haspopup,
+// aria-controls, and aria-expanded must reflect that — strictly.
+
+describe('AbandonRunMenu — ARIA contract: desktop trigger ↔ menu', () => {
+  beforeEach(() => mockViewport('desktop'));
+
+  it('aria-haspopup="menu" (immediate popup is the menu, NOT the dialog)', async () => {
     const { getByTestId } = renderMenu();
     await waitForTrigger(getByTestId);
     const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu');
+  });
+
+  it('aria-controls points at the menu id (id="abandon-menu")', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-controls')).toBe('abandon-menu');
+  });
+
+  it('aria-expanded false in closed; true while menu rendered; FALSE again after promotion to confirm dialog', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true'); // menu open
+    expect(getByTestId('abandon-menu').getAttribute('id')).toBe('abandon-menu');
+
+    fireEvent.click(getByTestId('abandon-menuitem'));
+    // Menu unmounted; trigger's IMMEDIATE popup (menu) is no longer
+    // open. Dialog is the menu's onward chain, NOT the trigger's
+    // direct popup — strict aria-expanded semantics flip back to false.
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('menu has role="menu" + id="abandon-menu"; menuitem has role="menuitem"', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    const menu = getByTestId('abandon-menu');
+    expect(menu.getAttribute('role')).toBe('menu');
+    expect(menu.getAttribute('id')).toBe('abandon-menu');
+    const item = getByTestId('abandon-menuitem');
+    expect(item.getAttribute('role')).toBe('menuitem');
+  });
+
+  it('confirm dialog has role="dialog" + aria-modal="true" + labelledby/describedby + id', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    fireEvent.click(getByTestId('abandon-menuitem'));
+    const dialog = getByTestId('abandon-dialog');
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('abandon-title');
+    expect(dialog.getAttribute('aria-describedby')).toBe('abandon-body');
+    expect(dialog.getAttribute('id')).toBe('abandon-dialog');
+    // labelledby + describedby resolve to live DOM nodes with matching text.
+    expect(getByTestId('abandon-title').getAttribute('id')).toBe('abandon-title');
+    expect(getByTestId('abandon-body').getAttribute('id')).toBe('abandon-body');
+  });
+});
+
+describe('AbandonRunMenu — ARIA contract: mobile trigger ↔ sheet', () => {
+  beforeEach(() => mockViewport('mobile'));
+
+  it('aria-haspopup="dialog" (sheet IS a dialog on mobile)', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+  });
+
+  it('aria-controls points at the sheet id (id="abandon-sheet")', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-controls')).toBe('abandon-sheet');
+  });
+
+  it('aria-expanded false in closed; true once sheet is open (one-step)', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(trigger);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(getByTestId('abandon-sheet').getAttribute('id')).toBe('abandon-sheet');
+  });
+
+  it('sheet has role="dialog" + aria-modal="true" + labelledby/describedby + id', async () => {
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    fireEvent.click(getByTestId('abandon-trigger'));
+    const sheet = getByTestId('abandon-sheet');
+    expect(sheet.getAttribute('role')).toBe('dialog');
+    expect(sheet.getAttribute('aria-modal')).toBe('true');
+    expect(sheet.getAttribute('aria-labelledby')).toBe('abandon-title');
+    expect(sheet.getAttribute('aria-describedby')).toBe('abandon-body');
+    expect(sheet.getAttribute('id')).toBe('abandon-sheet');
+    expect(getByTestId('abandon-title').getAttribute('id')).toBe('abandon-title');
+    expect(getByTestId('abandon-body').getAttribute('id')).toBe('abandon-body');
   });
 });
 
