@@ -4,6 +4,22 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-21 — M1.5b PR 3 / 5b.3b open: #DC2626 destructive-accent REJECTED (SETTLED)
+
+Abandon confirm dialog uses a neutral low-emphasis ghost button (border-default #2D3854 / text-secondary #94A3B8, hover → text-primary #F0F4FA), NOT a #DC2626 danger color. Destructive weight is carried structurally — auto-focused accent Cancel ("Keep playing", filled #3B82F6, Enter-triggers) + explicit-loss copy ("Your bag, relics, trophies, and contract progress will be lost.") — not by a new color token. Per visual-direction.md § 3 (only life-red + coin-gold approved; "No other extensions without a decision-log.md entry") + 2026-04-26 precedent (rejected third semantic extension; victory CTA → accent blue). No new token added. Claude Design v3 verifier-clean; design pass closed.
+
+---
+
+## 2026-05-21 — M1.5b PR 3 / 5b.3b: abandon_run client-side flip (PROVISIONAL → ratify at Phase 1 gate)
+
+Lean: outcome === 'abandoned' flips CLIENT-SIDE via a DEDICATED abandon_run reducer arm — not sim abandonRun(), not reset_run overloaded with an outcome param. RunProvider's terminal-outcome gate (outcome !== 'in_progress') routes to the already-specced RunEndScreen ABANDONED variant (do NOT rebuild). abandon_run must (a) preserve terminal display state for the summary and (b) invoke the 5b.3a clearLocal so a reload cannot resurrect the run.
+
+SUPERSESSION FLAG: this revises the imprecise PR 2 Phase 1 disposition ("reset_run reused as abandon handler", 2026-05-19). reset_run returns createInitialState() — it resets outcome to in_progress (routes to ClassSelectScreen, not ABANDONED) and destroys the state the summary reads. reset_run is the new-run/restart handler; abandon needs its own arm. Phase 1 gate to confirm against shipped reducer + RunProvider code; halt if refuted.
+
+OUT (stay deferred — abandon DISCARDS, doesn't restore): CF 34, CF 43, CF 45. Telemetry: CF 35 pipeline open/unwired; abandon run-end emit call-site rides dormant per telemetry-plan.md until CF 35 lands (confirm disposition at gate).
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3a CLOSED (LocalSaveV1 persistence core; Class A closed structurally via Zod schema-derived validator; 5b.3b abandon-run remains for M1.5b PR 3 / M1.5b close)
 
 ### Framing
