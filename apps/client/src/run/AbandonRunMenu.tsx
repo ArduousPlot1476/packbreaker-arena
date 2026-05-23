@@ -201,8 +201,13 @@ export function AbandonRunMenu() {
         }
         onClick={openFromTrigger}
         style={{
-          width: 28,
-          height: 28,
+          // CF 53 (M1.5c follow-on): trigger sized per viewport —
+          // 40×40 desktop, 36×36 mobile — keyed off the SAME useViewport()
+          // signal that drives openFromTrigger + the aria-* attrs above
+          // (no new viewport mechanism). Replaces the shipped 28×28
+          // uniform. Tap-target ≥44 deferred to M2 with mobile-vertical.
+          width: viewport === 'mobile' ? 36 : 40,
+          height: viewport === 'mobile' ? 36 : 40,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
