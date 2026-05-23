@@ -14,6 +14,7 @@
 
 import Fastify, { type FastifyInstance } from 'fastify'
 import type { TelemetrySink } from './posthog/client.js'
+import { registerTelemetryRoute } from './routes/telemetry.js'
 
 /** Body cap for incoming batches. Comfortably exceeds the client's
  *  32 KiB byte-size flush threshold + envelope (emit.ts
@@ -36,8 +37,7 @@ export function createApp(opts: AppOptions): FastifyInstance {
     bodyLimit: opts.bodyLimit ?? DEFAULT_BODY_LIMIT,
   })
 
-  // POST /v1/telemetry/batch is registered in step 4 (routes/telemetry.ts);
-  // it reads the injected sink (opts.posthog) for the forward.
+  registerTelemetryRoute(app, opts.posthog)
 
   // Drain the sink's buffer on graceful shutdown. Without this, events
   // queued inside posthog-node (per flushAt/flushInterval) are dropped
