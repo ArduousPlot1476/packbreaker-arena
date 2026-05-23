@@ -85,7 +85,8 @@
       "runId": "run-17",
       "classId": "tinker",
       "contractId": "neutral",
-      "seed": 17
+      "seed": 17,
+      "startingRelicId": "apprentices-loop"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

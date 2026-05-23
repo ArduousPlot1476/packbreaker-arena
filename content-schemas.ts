@@ -814,6 +814,7 @@ export type TelemetryEvent =
       readonly classId: ClassId
       readonly contractId: ContractId
       readonly seed: SimSeed
+      readonly startingRelicId: RelicId  // CF 41 closure (M1.5c PR 1)
     })
   | (TelemetryBase & {
       readonly name: 'run_end'

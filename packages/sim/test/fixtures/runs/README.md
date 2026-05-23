@@ -51,3 +51,18 @@ Revisit triggers (encoded in the `BOSS_RELIC_PAIR_EXCEPTIONS` comment block in `
 ## Schema version
 
 Fixture header `schemaVersion: 4` matches `content-schemas.ts` v0.4 (Combatant.recipeBornPlacementIds, M1.2.4). The M1.2.5/M1.2.6 fixtures are v4-compatible by content — `relic_granted` (schema v0.5, M1.2.6) is a telemetry event, not a stored field, so v0.5 features don't surface in the .jsonl content. A fixture whose `schemaVersion` no longer matches the content schema is a regen trigger after a deliberate schema bump.
+
+## Additive telemetry-field re-baseline (precedent: M1.5c PR 1 / CF 41)
+
+The 6 `.json` scenario fixtures (M1.2.4 corpus, replayed by `run-fixtures.test.ts`) snapshot `expectedTelemetryEvents` deep-equal. When the `TelemetryEvent` schema gains an additive field on an existing variant (CF 41 added `startingRelicId` to `run_start`), each fixture's snapshot of that event must be updated to match the new payload — a **surgical, single-field re-baseline**, NOT a regeneration.
+
+The fixture lock (above) protects the deterministic run trajectory (`input → output` bijection). Adding a telemetry field is an output-schema expansion, not a trajectory drift; every action, state transition, event type, and other field stays byte-identical. The re-baseline workflow:
+
+1. Identify each fixture's `run_start` (or whichever variant gained the field) inside `expectedTelemetryEvents`.
+2. Append the new field with the value matching `fixture.input.<field>` (or whatever sim threads).
+3. Diff each fixture: change must be the single added line (plus a trailing comma on the prior line).
+4. Re-run `pnpm test` and verify only the deep-equal expanded — no other assertions changed.
+
+This is distinct from a regeneration: regeneration re-runs the strategy generators against the current sim and discards the locked corpus; re-baseline keeps every byte of the corpus except the additive-schema delta. Decision-log entry for the precedent: 2026-05-22 § M1.5c PR 1.
+
+The `.jsonl` corpus has no telemetry payloads (terminal-state diff only), so additive telemetry fields never affect it.

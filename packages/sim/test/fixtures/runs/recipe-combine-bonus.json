@@ -197,7 +197,8 @@
       "runId": "run-19",
       "classId": "tinker",
       "contractId": "neutral",
-      "seed": 19
+      "seed": 19,
+      "startingRelicId": "pocket-forge"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

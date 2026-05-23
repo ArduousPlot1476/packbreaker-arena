@@ -50,6 +50,7 @@ Events are grouped by lifecycle. Property shapes are codified in `content-schema
 - `classId` — for class-balance KPIs.
 - `contractId` — distinguishes neutral runs from daily contracts.
 - `seed` — reproducibility. With seed + bag history we can replay any run.
+- `startingRelicId` — starter-relic choice (CF 41 closure, M1.5c PR 1). Correlates relic pick with run outcome / completion rate; without this, the funnel can't distinguish Iron Will vs Razor's Edge starts on the same class.
 
 **`run_end`** — fires when run resolves to one of `won` / `eliminated` / `abandoned`.
 - `outcome` — the headline funnel metric.
@@ -235,6 +236,18 @@ Drop-off below any step → file an investigation ticket. Below 90% step-to-step
 - All ID properties use the branded types from `content-schemas.ts` (serialized as plain strings on the wire, type-checked on emit).
 - All events carry `sessionId` (a uuid generated on app load, distinct from `telemetryAnonId`). One session = one tab/visit.
 - Boolean properties are explicit `true`/`false`, never `0`/`1` or `null`.
+
+### Identifier provenance + scope (M1.5c PR 1)
+
+- **`telemetryAnonId`** — uuid v4 persisted in `LocalSaveV1.telemetryAnonId` (`content-schemas.ts` § 13). Resolved at `useRun` mount: read the persisted value via `loadLocal()`; if empty/absent, generate via `crypto.randomUUID()` and persist on the next quiescent save (no `schemaVersion` bump, no CF 46 interaction — within-version field init). If the user closes the tab before the first quiescent save fires, the uuid is regenerated next session — acceptable for an anonymous identifier. Maps to `TelemetryBatchRequest.anonId` on the wire.
+- **`sessionId`** — uuid v4 stored in `sessionStorage` under `pba.telemetry.sessionId`. Generated once per tab via `getOrCreateSessionId()`; survives soft reloads (same tab) and is distinct per new tab. Threaded into both `CreateRunInput.sessionId` (so sim emits with it) and `apps/client/src/telemetry/emit.ts` (so client-side emits — abandon `run_end` — carry it). emit.ts's enrichment overrides `sessionId` on every captured event as defense-in-depth.
+
+### Transport (M1.5c PR 1 ships the client half)
+
+- emit.ts owns batching + flush triggers + transport (`apps/client/src/telemetry/emit.ts`). Three flush triggers: interval (30s default), document `visibilitychange` → hidden (best-effort tab-close send via `fetch` `keepalive`), explicit `flush()` / `shutdown()`.
+- Default transport: `fetch` POST to `/v1/telemetry/batch` with `keepalive: true`. Transport failure is swallowed (Catch 21 throw-safety) — telemetry must never crash the app or affect gameplay.
+- The server endpoint + PostHog forward land in M1.5c PR 2 (CF 49). Pre-PR-2, the default transport hits a 404 and silently no-ops; events are dropped (acceptable for graybox).
+- Tests inject a capturing transport (`TelemetryTransport` interface, no network).
 
 ---
 

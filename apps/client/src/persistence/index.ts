@@ -20,11 +20,7 @@
 
 import type { LocalSaveV1 } from '@packbreaker/shared';
 import type { SaveStorageAdapter } from './storage';
-import {
-  clearSave as storageClear,
-  loadRaw,
-  save as storageSave,
-} from './storage';
+import { loadRaw, save as storageSave } from './storage';
 import { migrate } from './migrations';
 
 export type { LocalSaveV1 } from '@packbreaker/shared';
@@ -46,7 +42,47 @@ export function loadLocal(storage?: SaveStorageAdapter): LocalSaveV1 | null {
   return migrate(loadRaw(storage));
 }
 
-/** Remove the persisted save. SSR-safe (silent no-op). */
+/** Clear the in-progress run from the persisted save while
+ *  PRESERVING all device-scoped envelope fields.
+ *
+ *  Per Phase 2.5g meta-audit (decision-log.md 2026-05-23 §
+ *  M1.5c PR 1 Phase 2.5g / Codex P1 round 3): `LocalSaveV1`
+ *  encodes two lifetime classes in one envelope — `inProgressRun`
+ *  (run-scoped; cleared on terminal/abandon/reset) and the
+ *  top-level cross-session fields (`telemetryAnonId`, `trophies`,
+ *  `dailyStreak`, `lastDailyAttempted`, `tutorialCompleted`;
+ *  device-scoped; survive run resets). The pre-fix removeItem
+ *  primitive collapsed both classes into one operation,
+ *  fragmenting `telemetryAnonId` across sessions (regenerated on
+ *  every fresh mount after any terminal that cleared the key).
+ *  The latent siblings (currently stubbed) would have hit the
+ *  same bug when wired (cumulative trophies resetting on every
+ *  abandon, daily streak resetting, tutorial re-firing, etc.).
+ *
+ *  New semantic: load → mutate → save the same envelope with
+ *  `inProgressRun: null`. The resurrection guard at
+ *  `useRun.ts:188` (`saved.inProgressRun === null`) already
+ *  bails the restore branch on this shape — no changes needed
+ *  to load-on-mount logic.
+ *
+ *  Throw-safety (Catch 21 lineage):
+ *    - Read (loadLocal) is already throw-safe; returns null on
+ *      any failure.
+ *    - Read returns null when no save exists: NO-OP. Do NOT
+ *      write a phantom envelope (that would create a save where
+ *      there was none, surfacing as an unexpected pba.v1.save
+ *      to consumers).
+ *    - Write (saveLocal → storageSave) is already throw-safe;
+ *      silent no-op on storage errors. If the write throws, the
+ *      prior envelope persists — restore at next mount would see
+ *      a terminal/abandoned outcome and bail at the resurrection
+ *      guard's outcome check. Identical edge to the old
+ *      removeItem-throws case; not a new regression.
+ *
+ *  Edge: `clearLocal` with no existing save = no-op (loadLocal
+ *  returns null; we bail). Matches prior observable behavior. */
 export function clearLocal(storage?: SaveStorageAdapter): void {
-  storageClear(storage);
+  const loaded = loadLocal(storage);
+  if (loaded === null) return;
+  saveLocal({ ...loaded, inProgressRun: null }, storage);
 }

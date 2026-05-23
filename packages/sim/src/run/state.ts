@@ -362,6 +362,9 @@ class RunControllerImpl implements RunController {
       this.shop = this.makeShop(1);
 
       // Telemetry: run_start (always), daily_contract_started (if isDaily).
+      // CF 41 closure (M1.5c PR 1): startingRelicId added to the payload.
+      // input.startingRelicId is the validated relic at this.relics.starter
+      // (state.ts:285); plumbed through from client beginRun → createRun.
       this.emit({
         tsClient: this.startedAt,
         sessionId: this.sessionId,
@@ -370,6 +373,7 @@ class RunControllerImpl implements RunController {
         classId: input.classId,
         contractId: input.contractId,
         seed: input.seed,
+        startingRelicId: input.startingRelicId,
       });
       if (contract.isDaily) {
         this.emit({

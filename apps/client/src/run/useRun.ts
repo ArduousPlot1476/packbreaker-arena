@@ -58,7 +58,14 @@ import {
 } from './sim-bridge';
 import type { Recipe } from './types';
 import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
+import type { RoundNumber } from '@packbreaker/content';
 import { clearLocal, loadLocal, saveLocal } from '../persistence';
+import {
+  capture as telemetryCapture,
+  defaultFetchTransport,
+  initTelemetry,
+} from '../telemetry/emit';
+import { getOrCreateSessionId, resolveAnonId } from '../telemetry/identifiers';
 
 function makeUid(prefix: 'b' | 's'): string {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -93,6 +100,46 @@ export function useRun() {
   const [pendingRunInput, setPendingRunInput] = useState<PendingRunInput | null>(
     null,
   );
+
+  // M1.5c PR 1: telemetry identifiers resolved once at mount.
+  //
+  // anonId — device-scoped uuid v4 persisted in LocalSaveV1.
+  //   telemetryAnonId (schemas.ts:773). Lazy useState initializer
+  //   reads loadLocal()?.telemetryAnonId; if empty/absent, generates
+  //   a fresh uuid (resolveAnonId helper). Within-version field init —
+  //   no schemaVersion bump, no CF 46 interaction. The save composer
+  //   below writes this stateful value into the LocalSaveV1 envelope
+  //   on the next quiescent save (round advance / terminal), so a
+  //   freshly-minted anonId persists at the first natural save point.
+  //   If the user closes the tab pre-first-save, the uuid is lost and
+  //   regenerated next session — acceptable for an anon identifier.
+  //
+  // sessionId — per-tab uuid v4 stored in sessionStorage. Survives
+  //   soft reloads (same tab), distinct per new tab. Generated once
+  //   per tab via getOrCreateSessionId; threaded into sim's
+  //   CreateRunInput.sessionId AND into emit.ts via initTelemetry so
+  //   sim-emitted events and client-emitted events carry the same
+  //   value. (emit.ts's enrich override is a no-op when both wire
+  //   to the same value.)
+  const [anonId] = useState<string>(() =>
+    resolveAnonId(loadLocal()?.telemetryAnonId),
+  );
+  const [sessionId] = useState<string>(() => getOrCreateSessionId());
+
+  // M1.5c PR 1: initialize the telemetry singleton once at mount with
+  // the resolved identifiers + default fetch transport (POST /v1/
+  // telemetry/batch). Idempotent — subsequent renders no-op via the
+  // initTelemetry guard. Server endpoint lands in PR 2 (CF 49); the
+  // default transport swallows fetch errors so an absent endpoint is
+  // a silent no-op rather than a user-visible crash (Catch 21
+  // throw-safety lineage).
+  useEffect(() => {
+    initTelemetry({
+      transport: defaultFetchTransport(),
+      sessionId,
+      anonId,
+    });
+  }, [sessionId, anonId]);
 
   // M1.5b PR 3 / 5b.3a Phase 2.5 P1 fix (Catch 20): monotonic epoch ref
   // shared between the load-on-mount restore effect and the fresh-run
@@ -152,9 +199,8 @@ export function useRun() {
       try {
         controller = restoreRun(snapshot, {
           itemsRegistry: SHOP_POOL_ITEMS,
-          onTelemetryEvent: () => {
-            // CF 35 stub; mirrors fresh-run path.
-          },
+          sessionId,
+          onTelemetryEvent: telemetryCapture,
         });
       } catch (err) {
         if (import.meta.env.DEV) {
@@ -210,11 +256,14 @@ export function useRun() {
         // environment-free).
         startedAt: new Date().toISOString() as IsoTimestamp,
         itemsRegistry: SHOP_POOL_ITEMS,
-        onTelemetryEvent: () => {
-          // Q6 disposition: stubbed in PR 2; M1.5b telemetry milestone
-          // wires sim's emit surface to the client's PostHog pipeline
-          // (CF 35). Currently a no-op to satisfy the optional callback.
-        },
+        sessionId,
+        // M1.5c PR 1: sim's onTelemetryEvent wires through the
+        // emit.ts chokepoint. Sim emits with this.sessionId (which
+        // equals the value we passed in CreateRunInput.sessionId);
+        // emit.ts re-stamps tsClient and enriches per the TelemetryBase
+        // contract before batching to /v1/telemetry/batch. OUT-only —
+        // no data flows back into sim.
+        onTelemetryEvent: telemetryCapture,
       });
       setSimRun(controller);
       dispatch({ type: 'init_from_sim', snapshot: controller.getState() });
@@ -239,6 +288,16 @@ export function useRun() {
 
   const dragRef = useRef<ClientRunState['drag']>(null);
   dragRef.current = state.drag;
+
+  // M1.5c PR 1: latest-state ref for stable callbacks that emit
+  // telemetry (today: abandonRun). useCallback(..., []) gives a
+  // stable identity for consumers but closes over the first-render
+  // state; the ref pattern (mirrors dragRef above) gives those
+  // callbacks read-access to the current state without triggering
+  // re-renders or breaking the stable identity. Updated every render
+  // so the next callback invocation reads the latest values.
+  const stateRef = useRef<ClientRunState>(state);
+  stateRef.current = state;
 
   useEffect(() => {
     function key(e: KeyboardEvent) {
@@ -477,13 +536,27 @@ export function useRun() {
   // restart affordance (onRestart={value.resetRun}) is the path back
   // to ClassSelect — abandon ends here.
   //
-  // TODO(CF 35): emit run_end{outcome:'abandoned',
-  //   roundReached:state.state.round, heartsRemaining:state.state.hearts}
-  // per telemetry-plan.md:54-57. Under the client-side-flip lean abandon
-  // never reaches sim, so this site (not sim's onTelemetryEvent stub)
-  // owns the abandon emit. Comment-only TODO per Phase 1 ratification —
-  // wires when CF 35's pipeline lands.
+  // M1.5c PR 1 (CF 35 closure surface): client-side emit of
+  // run_end{outcome:'abandoned'} BEFORE the dispatch. The
+  // client-side-flip lean means sim never sees the abandon, so sim's
+  // own onTelemetryEvent path doesn't fire — this site owns the
+  // abandon emit. capture() flows through emit.ts's enrich pipeline
+  // (re-stamp tsClient, inject sessionId) and into the batched
+  // transport. Read run-state via stateRef (latest), not closure —
+  // the useCallback's empty deps keep abandonRun stable; the ref
+  // mirrors the dragRef pattern at L289-290.
   const abandonRun = useCallback(() => {
+    const runState = stateRef.current.state;
+    telemetryCapture({
+      // TelemetryBase placeholders — emit.ts.enrich overrides both.
+      tsClient: '' as IsoTimestamp,
+      sessionId: '',
+      name: 'run_end',
+      runId: runState.runId,
+      outcome: 'abandoned',
+      roundReached: runState.round as RoundNumber,
+      heartsRemaining: runState.hearts,
+    });
     clearLocal();
     dispatch({ type: 'abandon_run' });
   }, []);
@@ -514,8 +587,14 @@ export function useRun() {
   // rerollCount + trophy lifted from client state.state.
   //
   // Cross-session fields (trophies, dailyStreak, lastDailyAttempted,
-  // tutorialCompleted, telemetryAnonId) are stubbed for 5b.3a — no
-  // surfaces exist yet to mutate them. M2 / CF 35 will wire them.
+  // tutorialCompleted) are stubbed for 5b.3a — no surfaces exist yet
+  // to mutate them. M2 will wire them. telemetryAnonId is resolved
+  // and persisted as of M1.5c PR 1: useState lazy initializer reads
+  // the existing persisted value via loadLocal() and falls back to a
+  // fresh crypto.randomUUID() (resolveAnonId helper), then this
+  // composer writes the stateful `anonId` into the LocalSaveV1
+  // envelope on every quiescent save. Within-version field init;
+  // no schemaVersion bump.
   useEffect(() => {
     if (simRun === null) return;
     // Phase 2.5 (5b.3b Codex round 1, P1): when client outcome is
@@ -565,7 +644,7 @@ export function useRun() {
       dailyStreak: 0,
       lastDailyAttempted: null,
       tutorialCompleted: false,
-      telemetryAnonId: '',
+      telemetryAnonId: anonId,
       inProgressRun: serialized,
     };
     saveLocal(payload);

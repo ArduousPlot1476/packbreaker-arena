@@ -477,6 +477,21 @@ describe('telemetry callback', () => {
     expect(events.find((e) => e.name === 'round_start' && e.round === 1)).toBeDefined();
   });
 
+  // CF 41 closure (M1.5c PR 1): run_start payload includes startingRelicId
+  // so funnel analysis can correlate starter choice with run outcome.
+  // input.startingRelicId comes from client beginRun → createRun and is
+  // already validated against RELICS at state.ts:275; the emit site adds
+  // the field to the payload at state.ts:365-374.
+  it('run_start payload includes startingRelicId (CF 41)', () => {
+    const events: TelemetryEvent[] = [];
+    createRun(baseInput({ startingRelicId: APPRENTICES_LOOP, onTelemetryEvent: (e) => events.push(e) }));
+    const runStart = events.find((e) => e.name === 'run_start');
+    expect(runStart).toBeDefined();
+    if (runStart?.name === 'run_start') {
+      expect(runStart.startingRelicId).toBe(APPRENTICES_LOOP);
+    }
+  });
+
   it('buyItem records shop_purchase with correct itemId / cost / round', () => {
     const events: TelemetryEvent[] = [];
     const ctrl = createRun(baseInput({ onTelemetryEvent: (e) => events.push(e) }));
