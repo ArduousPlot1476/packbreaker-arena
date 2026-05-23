@@ -4,6 +4,168 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-23 — M1.5c PR 1 CLOSED (telemetry client wiring; CF 35 + CF 41 closures; 3-Codex-P1 cycle closed under-ceiling)
+
+### Framing
+
+PR \#20 (`m1.5c-pr1-telemetry-client`) merged into `main` via `--no-ff` at merge commit `fb42abe7a19201d4f341aa752d59a9d09eb5ed65` on 2026-05-23T18:39:39Z. Branches deleted local + remote. 12 atomic branch commits (7 implementation + 4 Phase-2.5 fixes + 1 docs) off main `f16d1b6` (the M1.5b CLOSE merge tip).
+
+M1.5c PR 1 lands the **client half** of the telemetry pipeline per `tech-architecture.md` § 12 (L350-353) Option B (server-mediated) ratified at Phase 1. CF 35 closure surface end-to-end on the client side; CF 41 closure schema-side + sim-emit. PostHog server-forward via `/v1/telemetry/batch` is CF 49 → M1.5c PR 2 (not this close).
+
+### Branch + commit topology
+
+Verified via `git log --oneline f16d1b6..d0f6a77` (branch tip pre-merge). 12 commits:
+
+| SHA | Phase | Scope |
+|---|---|---|
+| `dd5ab09` | Step 1 — schema | feat(schemas): run_start +startingRelicId (CF 41 closure); byte-identical mirror; check-schemas-sync OK |
+| `cf53963` | Step 2 — sim emit | feat(sim): thread `input.startingRelicId` into run_start emit; +1 sim test; 6 .json scenario fixtures surgically re-baselined (single-field additive diff each; .jsonl corpus byte-stable) |
+| `d848dd2` | Step 3 — emit.ts | feat(telemetry): `apps/client/src/telemetry/emit.ts` client chokepoint — factory + module-singleton; enrichment (re-stamp tsClient + override sessionId); batched flush on (interval / pagehide / shutdown); injectable transport (default: throw-safe POST /v1/telemetry/batch with keepalive); Pattern \#7 OUT-only invariant |
+| `330aeeb` | Step 4 — identifiers | feat(telemetry): `apps/client/src/telemetry/identifiers.ts` — `getOrCreateSessionId` (sessionStorage `pba.telemetry.sessionId`, per-tab) + `resolveAnonId` (LocalSaveV1-backed, lazy generate) |
+| `f65b091` | Step 5 — wiring | feat(run): lazy useState for sessionId + anonId; mount-once `initTelemetry`; both `onTelemetryEvent` stubs → `telemetryCapture`; abandon dispatcher emits `run_end{outcome:'abandoned'}` via `stateRef` (mirrors `dragRef` pattern); save composer telemetryAnonId stateful |
+| `54540d6` | Step 6 — tests | test(telemetry): +13 emit.ts + +10 identifiers + +3 wiring; captured-array transport pattern; no-network anywhere |
+| `4e07088` | Step 7 — docs | docs(telemetry): plan § 3 run_start + § 8 identifier provenance + transport subsection; fixture README "additive-field re-baseline" precedent |
+| `dc015f7` | Phase 2.5 r1 | fix(telemetry): keepalive ⊆ pagehide + byte-size flush trigger (Codex P1 r1) — FlushReason discriminator; `BYTE_SIZE_FLUSH_THRESHOLD = 32 * 1024`; new pagehide listener; +8 tests |
+| `0b8986f` | Phase 2.5 r2 | fix(telemetry): sessionStorage property-read under try + memoized fallback (Codex P1 r2) — mirrors `storage.ts:51-63` `getDefaultStorage`; `_fallbackSessionId` module memo; +4 tests, 1 existing flipped to memo contract |
+| `d0f6a77` | Phase 2.5g | fix(persistence): clearLocal preserves device-scoped envelope; nulls only inProgressRun (Codex P1 r3 / meta-audit) — `load → mutate → write`; latent siblings inherit; +4 new tests, 4 re-baselined |
+
+(Twelfth slot is the merge commit `fb42abe`, this docs commit pending.)
+
+### Phase trajectory
+
+Phase 1 (read-only Step 0 investigation; Q1-Q7 evidence + Step 0(c) anonId scope) → Phase 2 (5-step implementation; CF 35 + CF 41 closures) → Phase 2.5 round 1 (Codex P1 keepalive cap + invisible data loss) → Phase 2.5 round 2 (Codex P1 sessionStorage property-read outside try) → Phase 2.5g meta-audit (Codex P1 round 3 — clearLocal envelope-wipe / anonId fragmentation; preemptive meta-audit at round 3 / **bent from the 4-finding ceiling** because the third P1 was structural rather than tactical) → Codex round 4 CLEAN. **3 Codex P1 rounds + 1 preventive self-catch; closed under-ceiling.** 3rd meta-audit-adjacent cycle of M1.5 (after 5b.3a Phase 2.5g and 5b.3b Phase 2.5-meta).
+
+### Codifications (catches)
+
+- **Catch 33 (Class C2)** — `fetch keepalive` cap × throw-safe-swallow = invisible data loss. Codex P1 round 1. `defaultFetchTransport` set `keepalive:true` on every batch; the 64 KiB browser-spec body cap silently dropped large/bursty batches via the (correct) throw-safe swallow. Insight: when a transport flag has a spec-defined cap AND failure mode is silent-by-design, scope the flag to only the path that needs it. Fix: `FlushReason` discriminator; `keepalive ⊆ 'pagehide'` only; live paths (interval / terminal) use normal fetch; byte-size flush trigger at half the cap so the page-dying batch stays under the limit.
+- **Catch 34 (Class C2)** — direct Web Storage property access outside try/catch. Codex P1 round 2. `typeof sessionStorage !== 'undefined' ? sessionStorage : null` ternary evaluates the property dereference BEFORE entering the try block; opaque-origin / sandboxed-iframe / blocked-storage contexts throw `SecurityError` on the dereference itself (not on the getItem/setItem method calls). `typeof` guards undefined globals; it does NOT guard against property-access throws. Existing `storage.ts:51-63` `getDefaultStorage` was the established pattern (Catch 19 lineage); the new identifiers.ts code didn't apply it. Fix: mirror the pattern. Module-memoized fallback uuid for stable storage-denied sessions (one tab visit = one sessionId regardless of storage availability).
+- **Catch 35 (Class A — preventive self-catch; not Codex)** — `crypto.randomUUID()` throws in non-secure contexts (HTTP non-localhost). `typeof crypto.randomUUID === 'function'` is true even when the call would throw — the function exists but requires a secure context. Surface: `identifiers.ts § generateUuid`. Same self-catch class as 5b.3b meta-audit A.2 (focus trap incompletion surfaced by our own sweep, not Codex). Recommended for count by master-dev preemptively after Phase 2.5g. Fix status: NOT shipped this PR (latent risk in non-secure contexts; M1 ships on HTTPS so live impact deferred). No CF opened — taxonomy-only entry; CF would be opened if a real surface needed it.
+- **Catch 36 (Class C2 / Pattern \#7 lineage)** — schema-shape proxy ≠ runtime-operation lifetime invariant. Codex P1 round 3 + meta-audit ratification. `LocalSaveV1` encodes two lifetime classes in its SHAPE (device-scoped envelope fields + run-scoped `inProgressRun`); the runtime OPERATION (`removeItem(SAVE_STORAGE_KEY)`) is single-lifetime and collapses both into one wipe. Confirming the schema's lifetime distinction is NOT confirming the lifetime invariant under operations. Step 0(c) ratified the proxy ("device-scoped on a device-scoped envelope") without tracing `clearLocal`'s operation against each class — this round's Topic 2 drift. Fix: `clearLocal` reimplemented as `load → mutate → write`, preserving the envelope and nulling only `inProgressRun`. Latent siblings (`trophies`, `dailyStreak`, `lastDailyAttempted`, `tutorialCompleted`) inherit the preserve semantic for free.
+
+### Rules
+
+- **Rule 6 AMENDED (codified now)** — Step 0 surface verification extends to tracing each lifecycle operation against every lifetime class a multi-lifetime container encodes; field-presence ≠ lifetime-durability. Amendment, not a new rule — rule count UNCHANGED at 13. The amendment directly addresses the Catch 36 / Topic-2-drift-24 mechanism: Step 0(c) had confirmed the schema field is on the device-scoped envelope but had not walked `clearLocal` against that claim. Future Step 0s on multi-lifetime containers must enumerate the lifetime classes AND trace each runtime op (`save`, `load`, `clear`, `migrate`) against each class.
+
+### Patterns
+
+- **Pattern \#7 sub-instance recorded** (schema-shape ≠ runtime-lifetime, the Catch 36 mechanism). Under Pattern \#7's "test/audit asserts proxy not invariant" family. Distinct sub-instance from the semantic variant codified at 5b.3a Phase 2.5j-fix; logged as additional instance evidence. **NOT promoted to Pattern \#8 — pattern count UNCHANGED at 8.**
+- **Pattern \#7 self-correction instance** — the sessionId fallback-uuid memoization fix flipped an existing test's assertion from `id2 !== id` (mechanism — "regenerate per call") to `id2 === id` (invariant — "single session, one sessionId"). Instance evidence; not counted.
+
+### Topic 2 drifts (+2 — both mine)
+
+- **Drift 23 (closing-time precedent)** — Phase 1 prompt asserted "no fixture impact" for the sim emit change without grounding against the `.json` scenario fixtures that snapshot `expectedTelemetryEvents` deep-equal. The `.jsonl` corpus (terminal-state-only) was correctly identified as byte-stable; the `.json` corpus (telemetry-payload snapshot) was not considered. Surfaced as a halt-and-surface on the first fixture-suite run. Master-dev ratified Path A (surgical re-baseline) — the closing entry's "additive-telemetry-field re-baseline" precedent codification followed.
+- **Drift 24 (Step 0(c) wrong ratification)** — confirmed the schema-shape proxy ("device-scoped envelope field") and ratified the "device-scoped, durable" conclusion without walking `clearLocal` against the envelope-shape claim. Codex P1 round 3 surfaced the gap. The proxy was the shape; the invariant was operation-class behavior; Rule 6 amendment now requires the operation-vs-lifetime walk in Step 0.
+
+### 4-finding ceiling state
+
+3 Codex P1s (rounds 1 / 2 / 3) + 1 preventive self-catch (Catch 35). Meta-audit (Phase 2.5g) done PREEMPTIVELY at round 3 — **bent from the 4-finding ceiling** because round 3's P1 was structural (multi-lifetime envelope architecture) rather than tactical (which is what the 4-finding ceiling rule is designed for — patch-loops on the same surface). Round 4 CLEAN. **Closed UNDER ceiling.** Cycle counts as the 3rd meta-audit-adjacent cycle of M1.5 (after 5b.3a Phase 2.5g comprehensive Class A enumeration and 5b.3b Phase 2.5-meta a11y sweep).
+
+### CF closures + openings
+
+- **CF 35 CLOSED** — `onTelemetryEvent` client-pipeline wire-up. emit.ts chokepoint live; both `useRun` `onTelemetryEvent` stubs (createRun + restoreRun paths) routed through `telemetryCapture`; abandon `run_end` TODO at `useRun.ts:480-485` (5b.3b carry) wired through the same capture pipeline; sessionId + anonId enrichment per Phase 1 ratification; batched flush per Phase 2.5 r1; throw-safe transport. **Server-forward to PostHog is CF 49** (NOT this close — M1.5c PR 2).
+- **CF 41 CLOSED** — `run_start` telemetry payload `startingRelicId` omission. Schema bump byte-synced (`content-schemas.ts` + `packages/content/src/schemas.ts`); sim emit threads `input.startingRelicId`; 6 `.json` scenario fixtures additively re-baselined (single-field diff per fixture; `.jsonl` byte-stable). Pre-PR-1 disposition was "folds into CF 35"; in-fact landed standalone alongside CF 35 here.
+- **CF 49 OPENED (NEW)** — server `/v1/telemetry/batch` endpoint + PostHog forward. Client transport defaults to `fetch` POST `/v1/telemetry/batch` (throw-safe; pre-endpoint state = silent 404 no-op). PR 2 lands server endpoint, request validation (Zod `TelemetryBatchRequest`), PostHog forward + clientVersion auth header, retries / batching policy. → **M1.5c PR 2.**
+- **CF 50 OPENED (NEW)** — 4 schema-only telemetry variants have no emit site: `error_boundary_caught` (needs React error boundary; none exists), `tutorial_step_reached` / `tutorial_completed` / `tutorial_abandoned` (needs tutorial system; none exists). Schema variants ratified at M1.4b2.3 + later; wire when those subsystems ship. → **M2** (tutorial M1.5d / M2; error-boundary M2 polish).
+- **CF 51 OPENED (NEW)** — tighten `validate.ts` `telemetryAnonId: z.string()` → `z.string().uuid()` post-backfill-window. Today's validator accepts `''` so legacy v1 saves with the empty-string telemetryAnonId stub load cleanly; once enough sessions have completed a first quiescent save (anonId generated + persisted), the stricter validator can land without forcing migration. → **M2.**
+- **CF 52 OPENED (NEW)** — separate device-profile envelope from run-save envelope (two-lifetime architectural split). Today the lifetime distinction is encoded in shape only (`inProgressRun: SerializedRunState | null` field inside `LocalSaveV1`); `clearLocal` now preserves device fields via load-mutate-write (Catch 36 closure). Architectural cleanup would split into two storage keys (`pba.device.v1` for device-scoped + `pba.run.v1` for run-scoped) — eliminates the multi-lifetime container entirely and removes the Step-0 amendment burden going forward. → **M2.**
+- **CF 53 OPENED (NEW)** — abandon dialog v3 de-reddened treatment (Claude Design v3, verifier-clean — neutral ghost Abandon + auto-focused accent Cancel + explicit-loss copy, no \#DC2626). Ratified at 5b.3b Phase 1 but the in-prod styling could still benefit from one more visual polish pass. → standalone micro-PR or M1.6 ride-along.
+
+### HELD (not counted)
+
+- **Fixture-lock predicate clarification (1st instance)** — the fixture-suite README at `packages/sim/test/fixtures/runs/README.md` now distinguishes trajectory-determinism lock (immutable) from output-schema additivity (re-baselineable). 1st instance held; codify on second-instance per the standing convention.
+
+### Counters (log-walked totals; deltas match)
+
+Re-enumerated by walking `decision-log.md` forward from the 5b.3b-close baseline through this entry's deltas.
+
+| Counter | 5b.3b-close baseline | M1.5c PR 1 deltas | M1.5c PR 1-close total |
+|---|---:|---:|---:|
+| Predicate-vs-name catches codified | 32 | +4 (Catch 33 / 34 / 35 / 36) | **36** |
+| Going-forward rules codified | 13 | 0 (Rule 6 AMENDED, no count change) | **13** |
+| Architectural patterns codified | 8 | 0 (Pattern \#7 sub-instance recorded; not promoted) | **8** |
+| Master-dev chat drifts (Topic 2) | 22 | +2 (Drift 23 fixture-impact assertion + Drift 24 Step 0(c) device-durable wrong ratification) | **24** |
+| Open CFs (enumerated below — canonical) | 37 | -2 closed (CF 35, CF 41) + 5 opened (CF 49 / 50 / 51 / 52 / 53) | **40** |
+| 4-finding ceiling state | n/a | 3 Codex P1s + 1 preventive; meta-audit preemptively at 3 (bent from 4); round-4 clean → closed under-ceiling | — |
+
+No tally drift vs the working baseline (32/13/8/22/37) — matches the M1.5b PR 3 / 5b.3b CLOSED entry's final-counter table exactly.
+
+### Open CF enumeration (one bullet per CF, no consolidation — canon rule)
+
+Walked from the 5b.3b CLOSED enumeration (36 + CF 48 = 37 baseline), applying this PR's -2 closures + 5 openings.
+
+**M1.4-era (21 open, unchanged from 5b.3a CLOSED):**
+
+- CF 2 — Real character art in portraits → M2.
+- CF 3 — Real particle sprite sheets → post-M1.
+- CF 4b — `recipe_combine` event VFX (sim-emission-blocked) → M2 content sweep.
+- CF 5 — Music + SFX integration → post-M2.
+- CF 6 — Custom cubic-bezier easing function → M2 if designer flags.
+- CF 7 — BitmapText / pre-rasterized font atlas → post-M1 if floater spawn rate saturates.
+- CF 8 — `>>` fast-forward indicator visual styling → M2 polish.
+- CF 9 — Telemetry event for "fast-forward triggered" → if `telemetry-plan.md` § 4 surfaces need.
+- CF 10 — Configurable per-user playback speed → M2+.
+- CF 11 — SKIP scene-level direct unit test coverage precedent → revisit if SKIP regresses.
+- CF 12 — Combat chunk Vite build non-determinism (~0.75 kB raw drift) → tracked.
+- CF 13 — Generation-side ghost-loadout filter → M2 ghost storage rework.
+- CF 16 — Server-side ghost record → M2.
+- CF 17 — Auto-rearrange hint affordance → M3.
+- CF 18 — Per-round trophy schedule + contract modifiers + win-streak multipliers → M2.
+- CF 19 — `RarityGem` for shop rarity dot → carries from M1.3.2.
+- CF 20 — `apps/client/src/index.css` `.glow-*` rgba palette derivatives → carries.
+- CF 22 — State-driven bag dimensions through pure helpers → M2.
+- CF 23 — Real-device drag-state screenshot capture → still carried.
+- CF 24 — Player portrait dying-state visual feedback → M2.
+- CF 30 — Particle-count consts promotion (§ 4.5 R2 spirit-extension sweep) → M2 telemetry-driven tuning.
+
+**M1.5a-era (6 open; CF 35 CLOSED this PR):**
+
+- CF 32 — Expand mid/boss relic content to 3+ per class per slot → M1.6+ content fill or M2 polish.
+- CF 33 — Sim `state.ts` combat-coupling refactor for cleaner lazy-boundary → M2 architectural cleanup.
+- CF 34 — Gold/rerollCount/bag/shop authority migration to sim — AMENDED Phase 2.5h (B-F3 + E-F9). → 5b.3b-or-beyond carry; reconsider scope at M1.5c PR 2 / M1.5d.
+- CF 36 — `enterCombatPhase` consolidation surface → opportunistic M1.5b/M1.5c client refactor.
+- CF 37 — `recipesRegistry` sim-default vs client-filter divergence → revisit alongside CF 34.
+- CF 38 — Resolution panel reward display sync (gold + trophy axes) → M2 polish.
+
+M1.5a-era closures this PR: **CF 35** (telemetry pipeline wire-up; client half landed; server-forward = CF 49).
+
+**M1.5b PR 1-era (4 open; CF 41 CLOSED this PR):**
+
+- CF 40 — `contractName` + `contractText` hardcoded literals at `createInitialState` → M2 contract system or first non-neutral contract.
+- CF 42 — `buildCombatInput.startingHp: 30` Rule 6 violation → first M1 item with `maxHpBonus` ships.
+- CF 43 — `buildCombatInput.recipeBornPlacementIds` omission (Tinker recipe-bonus no-op) — AMENDED Phase 2.5h (E-F6). → 5b.3b-or-beyond carry; reconsider at M1.5c PR 2 / M1.5d.
+- CF 44 — Mid + boss relic named glyphs (6 placeholder diamonds) → M2 visual polish.
+
+M1.5b PR 1-era closures this PR: **CF 41** (run_start startingRelicId schema + emit).
+
+**M1.5b PR 3 / 5b.3a-era (3 open, unchanged):**
+
+- CF 45 — Client placement-id minting non-deterministic — AMENDED Phase 2.5h (B-F4). → M2 `/v1/replay/validate`.
+- CF 46 — Forward-version save clobber on downgrade. → schema-bump territory, M2 likely.
+- CF 47 — Zod main-chunk bundle delta (+19.65 kB gz / +24%). → M2 mobile-perf pass.
+
+**M1.5b PR 3 / 5b.3b-era (1 open, unchanged):**
+
+- CF 48 — `RunEndScreen` + modal-equivalent a11y (no auto-focus on terminal-outcome mount; siblings not `inert` when modal-equivalent open). → M2 polish.
+
+**M1.5c PR 1-era (5 OPENED this PR):**
+
+- **CF 49 NEW** — Server `/v1/telemetry/batch` endpoint + PostHog forward. Client transport defaults to throw-safe POST; pre-endpoint = silent 404 no-op. Endpoint lands request validation (Zod `TelemetryBatchRequest`), PostHog forward + clientVersion header, retries/batching policy. → **M1.5c PR 2.**
+- **CF 50 NEW** — 4 schema-only telemetry variants (`error_boundary_caught`, `tutorial_step_reached`, `tutorial_completed`, `tutorial_abandoned`) have no emit site. Wire when those subsystems ship. → **M2** (tutorial M1.5d/M2; error-boundary M2 polish).
+- **CF 51 NEW** — Tighten `validate.ts` `telemetryAnonId: z.string()` → `.uuid()` after the backfill window (enough sessions have generated + persisted a real uuid). → **M2.**
+- **CF 52 NEW** — Architectural split: separate device-profile envelope from run-save envelope (two-lifetime → two-storage-keys). Eliminates the multi-lifetime container entirely; removes the Rule 6 amendment's Step-0 walk burden for this surface going forward. → **M2.**
+- **CF 53 NEW** — Abandon dialog v3 visual polish pass (de-reddened treatment ratified at 5b.3b Phase 1; one more polish pass on the in-prod styling). → standalone micro-PR or M1.6 ride-along.
+
+**ENUMERATED TOTAL: 40 open CFs.** Walks: 21 + 6 + 4 + 3 + 1 + 5 = 40. ✓
+
+### Post-M1.5c-PR-1 pre-flags (M1.5c PR 2 + close)
+
+- **M1.5c PR 2 — server `/v1/telemetry/batch` endpoint** (CF 49). Zod request validation; PostHog forward; rate-limit / batching policy; integration test against the client's default transport. Branch off `fb42abe`.
+- **CF 35 + CF 49 together close the M1.5c telemetry milestone.** M1.5c-CLOSE pends CF 49 landing.
+- **Rule 6 amendment application** is immediate: every M1.5c PR 2 + M1.5d Step 0 walks lifetime classes × runtime operations for any multi-lifetime container touched (server's PostHog forward state, M1.5d's run-end / restart surfaces, etc.).
+- **CF 53 micro-PR window:** if a polish pass fits, slot before M1.5c PR 2 ratification.
+
+---
+
 ## 2026-05-21 — M1.5b PR 3 / 5b.3b CLOSED (abandon-run UI; client-side outcome flip; Codex 4-finding ceiling tripped → meta-audit → terminal clean)
 
 ### Framing
