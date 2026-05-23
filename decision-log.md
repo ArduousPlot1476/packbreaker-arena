@@ -4,6 +4,14 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-23 — CF 53 CLOSED (abandon-run ⋯ trigger size → viewport-conditional 40×40 desktop / 36×36 mobile; M1.5c follow-on micro-PR)
+
+CF 53 closed (PR #22, branch m1.5c-cf53-trigger-size, +36/−2, turbo 17/17 + CI green, Codex clean/no findings). ⋯ trigger now viewport-conditional 40×40 desktop / 36×36 mobile via existing useViewport() branch in AbandonRunMenu.tsx; new per-viewport size test (suite 34→36); #DC2626 guard intact. No pre-existing size assertion existed — prompt's assumed assertion was unfounded; new test added, DoD met identically. Second assert-from-prose instance this CF → board-ratification shipped-state gate extended: code/test state cited in a scoping prompt must trace to verified code, not prior prose. Branched off current main (a4561c2 + 3 doc-only commits, zero code delta). Episode: a board was ratified and CF carried for 6 abandon-flow surfaces when 5 were already shipped/locked; only the trigger size was genuine.
+
+### Counters (running line — deltas applied to the M1.5c PR-2-close baseline)
+
+CF-53-close totals: **37/14/8/26/39** (catches / rules / patterns / drifts / open-CFs). Deltas from the PR-2-close baseline (36/13/8/25/40): **+1 catch** (A-family, Step 0 framing-refutation — the scoping prompt asserted a trigger-size test that did not exist), **+1 rule** (board-ratification shipped-state gate — code/test state cited in a scoping prompt must trace to verified code, not prior prose), **+1 Topic-2 drift** (board ratified + CF carried for 6 abandon-flow surfaces when 5 were already shipped/locked), **Open CFs −1** (CF 53 closed). Patterns unchanged.
+
 ## 2026-05-23 — M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)
 
 ### Framing
