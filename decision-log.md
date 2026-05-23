@@ -66,9 +66,9 @@ Surfaced and dispositioned during review without producing a P-finding — recor
 
 The Codex P2 env fix is a **predicate-vs-name instance** (Rule 1 lineage): `parsedPort > 0` was a PROXY for "valid TCP port the listener accepts," admitting out-of-range + trailing-garbage that the named invariant ("never throws / valid config") excludes. Same shape as the affordability/event-content proxies in `tech-architecture.md` § 4.5. **HELD as a candidate (Catch 37 candidate), NOT incremented** — deferred to master-dev for whether to codify (mirrors the PR 1 "fixture-lock predicate" 1st-instance HELD convention). If codified, it would also be a 2nd-instance reinforcement that "valid-input predicates" must encode the consumer's actual acceptance domain, not a positivity proxy.
 
-### Topic 2 drifts (+0)
+### Topic 2 drifts (+1 — Drift 25, mine)
 
-The Phase-1-report "17-vs-20" variant miscount was **Claude-Code-report-internal** (my own design report's prose contradicted its own enumeration), caught by the Step-0 verbatim-paste discipline working as designed BEFORE any code mutation. It is NOT a master-dev-chat (Topic 2) drift and is **not counted**. No master-dev chat drifts this PR.
+**Drift 25** — the Phase-1 design report's prose "17-variant" claim contradicted its own 20-name enumeration in the same sentence. Caught by the Step-0 verbatim-paste discipline BEFORE any code mutation (the catch is what kept the wrong count from propagating into the Zod union). Initially logged here as "Claude-Code-report-internal, not counted"; **master-dev corrected this to +1.** Topic 2 explicitly includes Claude-Code-side process drifts — precedent: PR 1's Drift 23 + Drift 24 were both "mine" ("+2 — both mine"). A report-internal miscount of the authoring spec is a drift the same way; the Step-0 catch mitigated it but does not exempt it from the count.
 
 ### Counters (log-walked totals; deltas match)
 
@@ -79,11 +79,11 @@ Re-enumerated by walking `decision-log.md` forward from the M1.5c PR 1-close bas
 | Predicate-vs-name catches codified | 36 | 0 (Catch 37 candidate HELD, not counted) | **36** |
 | Going-forward rules codified | 13 | 0 (env fix is Rule 1 lineage, no new rule) | **13** |
 | Architectural patterns codified | 8 | 0 | **8** |
-| Master-dev chat drifts (Topic 2) | 24 | 0 (17-vs-20 was Claude-Code-report-internal, Step-0-caught, not counted) | **24** |
+| Master-dev chat drifts (Topic 2) | 24 | +1 (Drift 25 — Phase-1-report 17-vs-20 miscount; corrected from "not counted" per master-dev — Topic 2 includes Claude-Code-side drifts, cf. PR 1 Drift 23/24 "mine") | **25** |
 | Open CFs (enumerated below — canonical) | 40 | −1 closed (CF 49) + 1 opened (CF 54) | **40** |
 | 4-finding ceiling state | n/a | 1 Codex P2 + 0 self-catches; round-2 clean → closed under-ceiling (reactive 1/4) | — |
 
-No tally drift vs the working baseline (36/13/8/24/40) — matches the M1.5c PR 1 CLOSED entry's final-counter table exactly.
+PR-2-close totals: **36/13/8/25/40**. Deltas from the PR-1-close baseline (36/13/8/24/40): Topic-2 drifts **+1** (Drift 25, corrected disposition), Open CFs net 0 (−CF 49 / +CF 54); Catches / Rules / Patterns unchanged.
 
 ### CF closures + openings
 
