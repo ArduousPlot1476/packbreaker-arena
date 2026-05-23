@@ -93,6 +93,35 @@ describe('AbandonRunMenu — ⋯ trigger (universal)', () => {
   });
 });
 
+// ─── Trigger size — viewport-conditional (CF 53) ─────────────────────
+//
+// M1.5c follow-on CF 53: the ⋯ trigger is sized per viewport —
+// 40×40 desktop, 36×36 mobile — replacing the shipped 28×28 uniform,
+// keyed off the same useViewport() signal that drives openFromTrigger
+// and the per-viewport aria-* attrs. Both values pinned so neither the
+// 28 regresses nor the two viewports collapse to a single size.
+// (Tap-target ≥44 deferred to M2 with mobile-vertical; 36 is
+// defensible for the prototype.)
+describe('AbandonRunMenu — ⋯ trigger size (viewport-conditional, CF 53)', () => {
+  it('renders 40×40 on desktop', async () => {
+    mockViewport('desktop');
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.style.width).toBe('40px');
+    expect(trigger.style.height).toBe('40px');
+  });
+
+  it('renders 36×36 on mobile', async () => {
+    mockViewport('mobile');
+    const { getByTestId } = renderMenu();
+    await waitForTrigger(getByTestId);
+    const trigger = getByTestId('abandon-trigger');
+    expect(trigger.style.width).toBe('36px');
+    expect(trigger.style.height).toBe('36px');
+  });
+});
+
 // ─── Phase 2.5 round 2 — ARIA contract per viewport ─────────────────
 //
 // Per decision-log.md 2026-05-21 § 5b.3b Phase 1 halt-gate RATIFIED
