@@ -148,13 +148,87 @@ describe('persistence — saveLocal/loadLocal round-trip', () => {
     expect(loaded?.inProgressRun).toBeNull();
   });
 
-  it('clearLocal removes the saved key — subsequent loadLocal returns null', () => {
+  // Phase 2.5g meta-audit (Codex P1 round 3): clearLocal now
+  // PRESERVES the device-scoped envelope (telemetryAnonId,
+  // trophies, dailyStreak, lastDailyAttempted, tutorialCompleted)
+  // and nulls only inProgressRun. The resurrection guard at
+  // useRun.ts:188 already handles inProgressRun===null, so no
+  // restore code change was needed.
+  it('clearLocal preserves the envelope; nulls only inProgressRun (Phase 2.5g)', () => {
     const adapter = makeAdapter();
     saveLocal(makeSave(), adapter);
     expect(loadLocal(adapter)).not.toBeNull();
     clearLocal(adapter);
-    expect(loadLocal(adapter)).toBeNull();
+    // Key is STILL present (envelope preserved).
+    expect(adapter.store.has(SAVE_STORAGE_KEY)).toBe(true);
+    // loadLocal returns the envelope with inProgressRun nulled;
+    // device fields survive intact.
+    const after = loadLocal(adapter);
+    expect(after).not.toBeNull();
+    expect(after!.inProgressRun).toBeNull();
+  });
+
+  it('clearLocal is a no-op when no save exists (does NOT write a phantom envelope)', () => {
+    const adapter = makeAdapter();
+    // Pre-condition: no save in storage.
     expect(adapter.store.has(SAVE_STORAGE_KEY)).toBe(false);
+    clearLocal(adapter);
+    // Post-condition: still no save. clearLocal must not synthesize
+    // an envelope where there was none.
+    expect(adapter.store.has(SAVE_STORAGE_KEY)).toBe(false);
+    expect(loadLocal(adapter)).toBeNull();
+  });
+
+  it('clearLocal preserves device-scoped fields across the clear (anonId invariant)', () => {
+    const adapter = makeAdapter();
+    // Seed a save with a known telemetryAnonId + non-default device
+    // siblings. Post-clear, every device field must match.
+    saveLocal(
+      makeSave({
+        telemetryAnonId: 'preserved-anon-uuid-12345',
+        trophies: 42,
+        dailyStreak: 7,
+        lastDailyAttempted: '2026-05-22' as IsoDate,
+        tutorialCompleted: true,
+      }),
+      adapter,
+    );
+    clearLocal(adapter);
+    const after = loadLocal(adapter);
+    expect(after).not.toBeNull();
+    expect(after!.telemetryAnonId).toBe('preserved-anon-uuid-12345');
+    expect(after!.trophies).toBe(42);
+    expect(after!.dailyStreak).toBe(7);
+    expect(after!.lastDailyAttempted).toBe('2026-05-22');
+    expect(after!.tutorialCompleted).toBe(true);
+    expect(after!.inProgressRun).toBeNull();
+  });
+
+  it('clearLocal is throw-safe under a throwing storage adapter (no propagation)', () => {
+    // Throwing adapter: seed via direct map write, then poison getItem
+    // + setItem. clearLocal's load+write should both fail silently.
+    const adapter = makeAdapter();
+    saveLocal(makeSave(), adapter);
+    // Wrap getItem + setItem in throwing decorators while preserving
+    // the underlying store. clearLocal's loadLocal call hits the
+    // throwing getItem (loadRaw catches → returns null → clearLocal
+    // bails as a no-op). Alternatively, if loadRaw still resolves
+    // and setItem throws, storageSave swallows. Either way, no
+    // throw escapes.
+    const getOriginal = adapter.getItem.bind(adapter);
+    const setOriginal = adapter.setItem.bind(adapter);
+    adapter.getItem = (_k: string) => {
+      throw new Error('storage unavailable');
+    };
+    adapter.setItem = (_k: string, _v: string) => {
+      throw new Error('storage unavailable');
+    };
+    try {
+      expect(() => clearLocal(adapter)).not.toThrow();
+    } finally {
+      adapter.getItem = getOriginal;
+      adapter.setItem = setOriginal;
+    }
   });
 });
 

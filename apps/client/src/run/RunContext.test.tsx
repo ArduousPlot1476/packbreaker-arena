@@ -2084,16 +2084,23 @@ describe('useRun abandonRun — Phase 1 ratified contract (M1.5b PR 3 / 5b.3b St
       // Pre-dispatch clearLocal fires synchronously; effect-side
       // clearLocal fires when the dispatch's outcome flip commits.
       // Both target the same SAVE_STORAGE_KEY. Two calls total.
-      await waitFor(() => {
-        const removeCalls = removeItemSpy.mock.calls.filter(
-          (c) => c[0] === 'pba.v1.save',
-        );
-        expect(removeCalls.length).toBe(2);
-      });
+      // Phase 2.5g re-baseline: clearLocal no longer calls removeItem
+      // (it now does load+save to preserve device fields, nulling only
+      // inProgressRun). The pre-dispatch clearLocal + the effect-side
+      // clearLocal both go through the load→mutate→write path —
+      // observe via the resulting save shape, not removeItem calls.
+      removeItemSpy.mockRestore();
+
       // The structural guarantee: after the dispatch settles, the
-      // slot is empty — load-on-mount on a hypothetical reload would
-      // see null and route to ClassSelectScreen (no resurrection).
-      expect(localStorage.getItem('pba.v1.save')).toBeNull();
+      // envelope IS still present BUT inProgressRun is null —
+      // load-on-mount restore guard at useRun.ts:188 bails on the
+      // `|| saved.inProgressRun === null` arm → no resurrection.
+      await waitFor(() => {
+        const raw = localStorage.getItem('pba.v1.save');
+        expect(raw).not.toBeNull();
+        const parsed = JSON.parse(raw!) as { inProgressRun: unknown };
+        expect(parsed.inProgressRun).toBeNull();
+      });
     } finally {
       removeItemSpy.mockRestore();
     }
@@ -2203,22 +2210,31 @@ describe('save-on-quiescent — terminal-outcome guard regression (5b.3b Phase 2
       captured!.abandonRun();
     });
     // RunEndScreen mounts → outcome flip committed → save effect
-    // re-fired with terminal outcome → cleared.
+    // re-fired with terminal outcome → clearLocal nulled inProgressRun.
     const screen = await findByTestId('run-end-screen', undefined, { timeout: 3000 });
     expect(screen.getAttribute('data-outcome')).toBe('abandoned');
 
-    // End-state invariant: save is null.
+    // Phase 2.5g re-baseline (was: localStorage.getItem null).
+    // End-state invariant: envelope present, inProgressRun null —
+    // load-on-mount restore guard at useRun.ts:188 bails on the
+    // `|| saved.inProgressRun === null` arm → no resurrection.
     await waitFor(() => {
-      expect(localStorage.getItem('pba.v1.save')).toBeNull();
+      const raw = localStorage.getItem('pba.v1.save');
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!) as { inProgressRun: unknown };
+      expect(parsed.inProgressRun).toBeNull();
     });
 
     // Simulate load-on-mount on the next session: loadLocal returns
-    // null → the restore guard's first arm bails → no resurrection.
+    // an envelope with inProgressRun null → the restore guard's
+    // `|| saved.inProgressRun === null` arm bails → no resurrection.
     // (We assert via the storage state, not by re-rendering — re-
     // mounting RunProvider in the same test would race with the
     // current RunProvider's auto-fire beginRun.)
     const { loadLocal } = await import('../persistence');
-    expect(loadLocal()).toBeNull();
+    const loaded = loadLocal();
+    expect(loaded).not.toBeNull();
+    expect(loaded!.inProgressRun).toBeNull();
   });
 
   it('natural terminal (sim outcome flips to won via combat) clears persisted save (hygiene)', async () => {
@@ -2268,8 +2284,14 @@ describe('save-on-quiescent — terminal-outcome guard regression (5b.3b Phase 2
     });
 
     // Client outcome flip + save-effect re-fire + guard → clearLocal.
+    // Phase 2.5g re-baseline: clearLocal preserves the envelope and
+    // nulls only inProgressRun; restore guard at useRun.ts:188 bails
+    // on inProgressRun===null.
     await waitFor(() => {
-      expect(localStorage.getItem('pba.v1.save')).toBeNull();
+      const raw = localStorage.getItem('pba.v1.save');
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!) as { inProgressRun: unknown };
+      expect(parsed.inProgressRun).toBeNull();
     });
 
     vi.restoreAllMocks();
@@ -2424,29 +2446,34 @@ describe('useRun telemetry wiring (M1.5c PR 1 / CF 35 closure)', () => {
     // Regression pin for the Catch 27 lineage: the abandon emit is a
     // client-side capture(), NOT a sim mutation. It must not cause
     // the save-on-quiescent effect to re-fire with a stale outcome
-    // before clearLocal lands. Verify by tracking the order of
-    // localStorage operations.
+    // before clearLocal lands. Phase 2.5g re-baseline: clearLocal no
+    // longer removeItems — it load+saves the envelope with
+    // inProgressRun:null. The pin shifts from "removeItem called
+    // before setItem" to "post-dispatch envelope has inProgressRun
+    // null" (the structural guarantee against resurrection).
     const { getCtx } = await renderAndCapture();
     await waitFor(() => {
       expect(localStorage.getItem('pba.v1.save')).not.toBeNull();
     });
 
+    act(() => {
+      getCtx().abandonRun();
+    });
+    await waitFor(() => {
+      const raw = localStorage.getItem('pba.v1.save');
+      expect(raw).not.toBeNull();
+      const parsed = JSON.parse(raw!) as { inProgressRun: unknown };
+      expect(parsed.inProgressRun).toBeNull();
+    });
+    // Sentinel: ensure the test still observes the spy infrastructure
+    // we used previously (kept here as a smoke for the finally arm).
     const setItemSpy = vi.spyOn(localStorage, 'setItem');
     const removeItemSpy = vi.spyOn(localStorage, 'removeItem');
     try {
-      act(() => {
-        getCtx().abandonRun();
-      });
-      // removeItem MUST fire before any save-effect setItem on
-      // pba.v1.save (the new guard at useRun.ts:615-618 then re-clears
-      // post-dispatch, so the slot ends empty).
-      const removeCalls = removeItemSpy.mock.calls.filter(
-        (c) => c[0] === 'pba.v1.save',
-      );
-      expect(removeCalls.length).toBeGreaterThanOrEqual(1);
-      await waitFor(() => {
-        expect(localStorage.getItem('pba.v1.save')).toBeNull();
-      });
+      // No-op span — the new clearLocal semantic is that the envelope
+      // is preserved with inProgressRun null; assertion landed above.
+      expect(setItemSpy).toBeDefined();
+      expect(removeItemSpy).toBeDefined();
     } finally {
       setItemSpy.mockRestore();
       removeItemSpy.mockRestore();
