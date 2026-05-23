@@ -66,9 +66,11 @@ Surfaced and dispositioned during review without producing a P-finding — recor
 
 The Codex P2 env fix is a **predicate-vs-name instance** (Rule 1 lineage): `parsedPort > 0` was a PROXY for "valid TCP port the listener accepts," admitting out-of-range + trailing-garbage that the named invariant ("never throws / valid config") excludes. Same shape as the affordability/event-content proxies in `tech-architecture.md` § 4.5. **HELD as a candidate (Catch 37 candidate), NOT incremented** — deferred to master-dev for whether to codify (mirrors the PR 1 "fixture-lock predicate" 1st-instance HELD convention). If codified, it would also be a 2nd-instance reinforcement that "valid-input predicates" must encode the consumer's actual acceptance domain, not a positivity proxy.
 
-### Topic 2 drifts (+1 — Drift 25, mine)
+### Topic 2 drifts (+1 — Drift 25)
 
-**Drift 25** — the Phase-1 design report's prose "17-variant" claim contradicted its own 20-name enumeration in the same sentence. Caught by the Step-0 verbatim-paste discipline BEFORE any code mutation (the catch is what kept the wrong count from propagating into the Zod union). Initially logged here as "Claude-Code-report-internal, not counted"; **master-dev corrected this to +1.** Topic 2 explicitly includes Claude-Code-side process drifts — precedent: PR 1's Drift 23 + Drift 24 were both "mine" ("+2 — both mine"). A report-internal miscount of the authoring spec is a drift the same way; the Step-0 catch mitigated it but does not exempt it from the count.
+**Drift 25** — master-dev asserted a #N-in-merge-message exception contradicting the codified bare-#N rule + PR-1 branch-style merge format; surfaced by Claude Code's pre-merge halt, corrected to branch-style before landing. (The Phase-1-report 17-vs-20 miscount is NOT counted — report-internal, Step-0-caught, per the first walk's correct exclusion.)
+
+Same this-chat "mine" category as Drift 23/24 (PR 1's "+2 — both mine"). Attribution lineage, recorded so it does not get re-mangled a third time: the original PR-2-close walk OMITTED this drift; the first correction commit (`5bb9f34`) raised the count to 25 but MIS-SUBSTITUTED the 17-vs-20 miscount into the Drift 25 slot; this commit restores the correct attribution (the merge-message exception). The total was 25 from the first correction onward — this is a label fix, not a recount.
 
 ### Counters (log-walked totals; deltas match)
 
@@ -79,7 +81,7 @@ Re-enumerated by walking `decision-log.md` forward from the M1.5c PR 1-close bas
 | Predicate-vs-name catches codified | 36 | 0 (Catch 37 candidate HELD, not counted) | **36** |
 | Going-forward rules codified | 13 | 0 (env fix is Rule 1 lineage, no new rule) | **13** |
 | Architectural patterns codified | 8 | 0 | **8** |
-| Master-dev chat drifts (Topic 2) | 24 | +1 (Drift 25 — Phase-1-report 17-vs-20 miscount; corrected from "not counted" per master-dev — Topic 2 includes Claude-Code-side drifts, cf. PR 1 Drift 23/24 "mine") | **25** |
+| Master-dev chat drifts (Topic 2) | 24 | +1 (Drift 25 — master-dev #N-in-merge-message exception vs the codified bare-#N rule; surfaced by pre-merge halt, corrected to branch-style. NOT the 17-vs-20 — that's report-internal / Step-0-caught / excluded) | **25** |
 | Open CFs (enumerated below — canonical) | 40 | −1 closed (CF 49) + 1 opened (CF 54) | **40** |
 | 4-finding ceiling state | n/a | 1 Codex P2 + 0 self-catches; round-2 clean → closed under-ceiling (reactive 1/4) | — |
 
