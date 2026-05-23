@@ -21,18 +21,43 @@
 
 const SESSION_STORAGE_KEY = 'pba.telemetry.sessionId';
 
+// Module-scoped fallback memo (Phase 2.5 round 2 / Codex P1). Stable
+// across repeated getOrCreateSessionId calls within a storage-denied
+// session — without this, every call regenerates a fresh uuid and
+// telemetry events from the same tab visit get attributed to
+// different "sessions." Reset by ESM reload (test isolation via
+// __resetFallbackForTests below).
+let _fallbackSessionId: string | null = null;
+
+/** Reads `globalThis.sessionStorage` under try/catch. Property access
+ *  on the global itself throws SecurityError in Safari private-mode /
+ *  opaque-origin / sandboxed-iframe with blocked-storage contexts —
+ *  `typeof sessionStorage !== 'undefined'` only guards against absent
+ *  globals, NOT against the property-read throw. Mirrors
+ *  storage.ts:51-63 getDefaultStorage (Catch 19 lineage). */
+function getDefaultSessionStorage(): Storage | null {
+  if (typeof globalThis === 'undefined') return null;
+  try {
+    const g = globalThis as { sessionStorage?: Storage };
+    return g.sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Returns the current tab's sessionId. Generates+persists on first
  *  call per tab via sessionStorage. Tests pass a custom Storage to
- *  inspect/seed; production uses the default sessionStorage. */
+ *  inspect/seed; production uses the default sessionStorage.
+ *
+ *  Throw-safety contract (Phase 2.5 round 2 / Catch 21 lineage):
+ *  NEVER throws. Every storage access — the global property read AND
+ *  getItem/setItem — is wrapped. On any throw, returns the module-
+ *  memoized fallback uuid so the caller (useRun mount) cannot crash
+ *  on opaque-origin / blocked-storage contexts. */
 export function getOrCreateSessionId(storage?: Storage): string {
-  const store =
-    storage ??
-    (typeof sessionStorage !== 'undefined' ? sessionStorage : null);
+  const store = storage ?? getDefaultSessionStorage();
   if (store === null) {
-    // SSR / no-storage environment: degraded uuid (won't persist
-    // across calls). Acceptable — sessionStorage is always present in
-    // happy-dom + real browsers.
-    return generateUuid();
+    return getOrInitFallback();
   }
   try {
     const existing = store.getItem(SESSION_STORAGE_KEY);
@@ -41,10 +66,19 @@ export function getOrCreateSessionId(storage?: Storage): string {
     store.setItem(SESSION_STORAGE_KEY, fresh);
     return fresh;
   } catch {
-    // Storage access denied (Safari private mode, quota error, etc.).
-    // Degraded uuid; new uuid per call.
-    return generateUuid();
+    // getItem/setItem failed mid-flow (Safari private mode after the
+    // property read succeeded, quota exceeded, etc.). Degrade to the
+    // memoized fallback so repeated calls in the same session stay
+    // attributed to one sessionId.
+    return getOrInitFallback();
   }
+}
+
+function getOrInitFallback(): string {
+  if (_fallbackSessionId === null) {
+    _fallbackSessionId = generateUuid();
+  }
+  return _fallbackSessionId;
 }
 
 /** Resolves the cross-session anonId. Pure helper: returns the
@@ -72,3 +106,9 @@ function generateUuid(): string {
 
 // Test-only key access for sessionStorage assertions.
 export const __SESSION_STORAGE_KEY_FOR_TESTS = SESSION_STORAGE_KEY;
+
+/** Test-only: reset the module-memoized fallback uuid so each test
+ *  starts with a fresh memo. Never call in production. */
+export function __resetFallbackForTests(): void {
+  _fallbackSessionId = null;
+}
