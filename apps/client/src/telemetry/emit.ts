@@ -48,8 +48,26 @@ const DEFAULT_BATCH_URL = '/v1/telemetry/batch';
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000;
 const CLIENT_VERSION = 'm1.5c-pr1';
 
+/** Half the browser-spec 64 KiB Fetch `keepalive` body cap. The size-
+ *  triggered flush fires when the buffered batch crosses this
+ *  threshold so the next page-dying flush (visibilitychange→hidden /
+ *  pagehide) is guaranteed to carry < 64 KiB even after additional
+ *  captures slip in between the threshold-cross and the actual flush
+ *  microtask. Best-effort: a single in-flight event >32 KiB still
+ *  ships under the cap on its own (graybox events are sub-1 KiB so
+ *  this is theoretical), and bursts that pile multiple events between
+ *  threshold-cross and flush-execution will still bound at the next
+ *  cycle. Phase 2.5 (5c PR 1 / Codex P1). */
+const BYTE_SIZE_FLUSH_THRESHOLD = 32 * 1024;
+
+/** Discriminator for which path triggered a flush. Only 'pagehide'
+ *  flushes carry `keepalive:true`; interval + terminal flushes use a
+ *  normal fetch. The transport observes the reason so it can adapt
+ *  the request init (or — in tests — record it). */
+export type FlushReason = 'interval' | 'terminal' | 'pagehide';
+
 export interface TelemetryTransport {
-  send(batch: TelemetryBatchRequest): Promise<void>;
+  send(batch: TelemetryBatchRequest, reason: FlushReason): Promise<void>;
 }
 
 export interface TelemetryClient {
@@ -82,15 +100,25 @@ export function defaultFetchTransport(
   url: string = DEFAULT_BATCH_URL,
 ): TelemetryTransport {
   return {
-    async send(batch) {
+    async send(batch, reason) {
       try {
-        // keepalive lets the request finish even if the tab is being
-        // closed — pairs with the visibilitychange→hidden flush trigger.
+        // keepalive ONLY on the page-dying path (visibilitychange→
+        // hidden + pagehide both arrive here as reason='pagehide').
+        // Interval + terminal flushes use a normal fetch — they fire
+        // while the page is alive, so the request lifetime is bound
+        // by the live JS context, NOT the post-unload keepalive
+        // window. Avoiding keepalive on the live paths sidesteps the
+        // browser-spec 64 KiB keepalive body cap (Phase 2.5 / Codex
+        // P1: large/bursty batches were hitting the cap on every
+        // path and being silently dropped by the throw-safe swallow
+        // below). The byte-size flush trigger
+        // (BYTE_SIZE_FLUSH_THRESHOLD) caps the page-dying batch
+        // under the 64 KiB limit.
         await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(batch),
-          keepalive: true,
+          keepalive: reason === 'pagehide',
         });
       } catch {
         // Swallow per Catch 21 lineage — telemetry transport failure
@@ -111,8 +139,17 @@ export function createTelemetryClient(
   const { sessionId, anonId } = opts;
 
   const buffer: TelemetryEvent[] = [];
+  // Approximate serialized byte size of the buffer, summed from
+  // JSON.stringify lengths at capture time. Conservative under-
+  // estimate of the wire size (omits batch envelope overhead — anonId,
+  // clientVersion, JSON array framing — which together are <200B for
+  // graybox event counts). The byte-size flush trigger reads this to
+  // decide when to fire a normal-fetch flush so the page-dying batch
+  // stays bounded under the keepalive cap.
+  let bufferBytes = 0;
   let intervalTimer: ReturnType<typeof setInterval> | null = null;
   let visibilityListener: (() => void) | null = null;
+  let pagehideListener: (() => void) | null = null;
 
   function enrich(event: TelemetryEvent): TelemetryEvent {
     // Spread first so the explicit fields below win — sim events
@@ -128,19 +165,39 @@ export function createTelemetryClient(
   }
 
   function capture(event: TelemetryEvent): void {
-    buffer.push(enrich(event));
+    const enriched = enrich(event);
+    buffer.push(enriched);
+    // Track approximate serialized size for the byte-size flush
+    // trigger. Add a small per-event constant (~2 chars for the
+    // array-element comma + spacing) so the running total tracks the
+    // eventual stringified batch within a tight bound.
+    try {
+      bufferBytes += JSON.stringify(enriched).length + 2;
+    } catch {
+      // Defensive: if stringify ever throws (circular ref via custom
+      // payload, etc.), skip size accounting for this event. The
+      // event still buffers; size trigger may under-count by one
+      // event's worth, but interval+terminal flushes still drain.
+    }
+    if (bufferBytes >= BYTE_SIZE_FLUSH_THRESHOLD) {
+      // Live-path proactive flush — normal fetch, NOT keepalive. This
+      // is the size-bound that keeps any subsequent page-dying flush
+      // under the 64 KiB keepalive cap.
+      void flush('interval');
+    }
   }
 
-  async function flush(): Promise<void> {
+  async function flush(reason: FlushReason): Promise<void> {
     if (buffer.length === 0) return;
     const events = buffer.splice(0, buffer.length);
+    bufferBytes = 0;
     const batch: TelemetryBatchRequest = {
       anonId,
       clientVersion,
       events,
     };
     try {
-      await transport.send(batch);
+      await transport.send(batch, reason);
     } catch {
       // Defense-in-depth — defaultFetchTransport already swallows fetch
       // errors internally; this catches anything else (custom transport
@@ -150,23 +207,34 @@ export function createTelemetryClient(
 
   // Flush trigger 1: interval cadence. flushIntervalMs <= 0 disables
   // the timer (tests use 0 to inspect buffer state without timer
-  // interference).
+  // interference). reason='interval' → normal fetch (no keepalive).
   if (typeof setInterval !== 'undefined' && flushInterval > 0) {
     intervalTimer = setInterval(() => {
-      void flush();
+      void flush('interval');
     }, flushInterval);
   }
 
-  // Flush trigger 2: document visibilitychange → hidden. Best-effort
-  // send before tab close. defaultFetchTransport uses keepalive so the
-  // request survives the unload.
+  // Flush trigger 2a: document visibilitychange → hidden.
+  // Flush trigger 2b: window pagehide.
+  // Both map to reason='pagehide' so defaultFetchTransport ships with
+  // keepalive:true (the only path that needs to survive page unload).
+  // Pagehide is a more reliable signal on some browsers/platforms
+  // (Safari tab close, mobile background → hidden); visibilitychange
+  // catches the common desktop tab-switch case. Either listener firing
+  // is OK — the second one will see an empty buffer and no-op.
   if (typeof document !== 'undefined') {
     visibilityListener = () => {
       if (document.visibilityState === 'hidden') {
-        void flush();
+        void flush('pagehide');
       }
     };
     document.addEventListener('visibilitychange', visibilityListener);
+  }
+  if (typeof window !== 'undefined') {
+    pagehideListener = () => {
+      void flush('pagehide');
+    };
+    window.addEventListener('pagehide', pagehideListener);
   }
 
   function shutdown(): void {
@@ -178,13 +246,22 @@ export function createTelemetryClient(
       document.removeEventListener('visibilitychange', visibilityListener);
       visibilityListener = null;
     }
+    if (pagehideListener !== null && typeof window !== 'undefined') {
+      window.removeEventListener('pagehide', pagehideListener);
+      pagehideListener = null;
+    }
     // Flush trigger 3 (implicit via shutdown): drain pending events.
-    void flush();
+    // reason='terminal' → normal fetch (no keepalive). Shutdown runs
+    // while the page is still alive (caller-initiated teardown).
+    void flush('terminal');
   }
 
   return {
     capture,
-    flush,
+    /** External flush — caller-initiated drain. Treated as terminal
+     *  (normal fetch, no keepalive) since the call site is in live JS
+     *  context. */
+    flush: () => flush('terminal'),
     shutdown,
     get bufferSize() {
       return buffer.length;

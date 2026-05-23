@@ -15,7 +15,12 @@ import type {
   TelemetryBatchRequest,
   TelemetryEvent,
 } from '@packbreaker/content';
-import { createTelemetryClient, type TelemetryTransport } from './emit';
+import {
+  createTelemetryClient,
+  defaultFetchTransport,
+  type FlushReason,
+  type TelemetryTransport,
+} from './emit';
 
 const FIXED_NOW_MS = 1_700_000_000_000; // 2023-11-14T22:13:20.000Z
 const FIXED_NOW_ISO = new Date(FIXED_NOW_MS).toISOString();
@@ -34,14 +39,21 @@ function makeRunStart(overrides: Partial<TelemetryEvent> = {}): TelemetryEvent {
   } as TelemetryEvent;
 }
 
+interface CapturedSend {
+  readonly batch: TelemetryBatchRequest;
+  readonly reason: FlushReason;
+}
+
 function captureTransport() {
   const batches: TelemetryBatchRequest[] = [];
+  const sends: CapturedSend[] = [];
   const transport: TelemetryTransport = {
-    async send(batch) {
+    async send(batch, reason) {
       batches.push(batch);
+      sends.push({ batch, reason });
     },
   };
-  return { batches, transport };
+  return { batches, sends, transport };
 }
 
 beforeEach(() => {
@@ -306,6 +318,223 @@ describe('emit.ts — throw-safety on transport rejection', () => {
     });
     client.capture(makeRunStart());
     expect(() => client.shutdown()).not.toThrow();
+    await vi.runOnlyPendingTimersAsync();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// Phase 2.5 (5c PR 1 / Codex P1) — keepalive scoping + byte-size
+// flush trigger. The transport now receives a FlushReason discriminator
+// so it can adapt the request init; defaultFetchTransport sets
+// keepalive ONLY when reason === 'pagehide'. The byte-size trigger
+// fires a normal-fetch flush at 32 KiB so the page-dying batch can
+// never exceed the 64 KiB keepalive cap.
+// ────────────────────────────────────────────────────────────────────
+
+describe('emit.ts — flush-reason discriminator (Phase 2.5 / Codex P1)', () => {
+  it('interval flushes pass reason="interval" to transport.send', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 5_000,
+    });
+    client.capture(makeRunStart());
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(sends).toHaveLength(1);
+    expect(sends[0]!.reason).toBe('interval');
+    client.shutdown();
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+  it('shutdown / external flush pass reason="terminal" to transport.send', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    client.capture(makeRunStart());
+    await client.flush(); // external flush → 'terminal'
+    expect(sends).toHaveLength(1);
+    expect(sends[0]!.reason).toBe('terminal');
+
+    client.capture(makeRunStart());
+    client.shutdown(); // shutdown → 'terminal'
+    await vi.runOnlyPendingTimersAsync();
+    expect(sends).toHaveLength(2);
+    expect(sends[1]!.reason).toBe('terminal');
+  });
+
+  it('visibilitychange→hidden flushes pass reason="pagehide"', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    client.capture(makeRunStart());
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.runOnlyPendingTimersAsync();
+    expect(sends).toHaveLength(1);
+    expect(sends[0]!.reason).toBe('pagehide');
+    client.shutdown();
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+  it('window pagehide event flushes pass reason="pagehide"', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    client.capture(makeRunStart());
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.runOnlyPendingTimersAsync();
+    expect(sends).toHaveLength(1);
+    expect(sends[0]!.reason).toBe('pagehide');
+    client.shutdown();
+    await vi.runOnlyPendingTimersAsync();
+  });
+});
+
+describe('emit.ts — defaultFetchTransport keepalive scoping (Phase 2.5)', () => {
+  it('sets keepalive:true ONLY when reason === "pagehide"; omits on interval + terminal', async () => {
+    // Type the mock with the fetch signature so mock.calls indexes
+    // into a [string|URL, RequestInit?] tuple rather than [].
+    const fetchMock = vi.fn<typeof globalThis.fetch>(
+      async () => new Response(null, { status: 204 }),
+    );
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    try {
+      const transport = defaultFetchTransport('/telemetry');
+      const batch: TelemetryBatchRequest = {
+        anonId: 'anon',
+        clientVersion: 'test',
+        events: [],
+      };
+      await transport.send(batch, 'pagehide');
+      await transport.send(batch, 'interval');
+      await transport.send(batch, 'terminal');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      // Each call's second arg is the init object.
+      const init0 = fetchMock.mock.calls[0]![1]!;
+      const init1 = fetchMock.mock.calls[1]![1]!;
+      const init2 = fetchMock.mock.calls[2]![1]!;
+      expect(init0.keepalive).toBe(true); // pagehide
+      // Interval + terminal: keepalive false (or absent — both
+      // mean "no keepalive"). The implementation sets the field
+      // explicitly so test it explicitly.
+      expect(init1.keepalive).toBe(false);
+      expect(init2.keepalive).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('emit.ts — byte-size flush trigger (Phase 2.5)', () => {
+  // A large event whose enriched form is ~600 bytes. Stack ~60 of
+  // these to cross the 32 KiB threshold within a single test loop
+  // (a bit over headroom to be sure stringify-overhead doesn't
+  // undershoot).
+  function makeBulkEvent(i: number): TelemetryEvent {
+    const padding = 'x'.repeat(500); // ~500-char filler
+    return {
+      tsClient: 'placeholder' as never,
+      sessionId: 'placeholder',
+      name: 'tutorial_step_reached',
+      stepId: `step-${i}-${padding}`,
+    } as TelemetryEvent;
+  }
+
+  it('size-trigger fires a normal-fetch flush ("interval" reason) at threshold', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0, // interval timer off so the only flush is the size-triggered one
+    });
+    // Push events until the 32 KiB threshold trips a synchronous
+    // void-flush. Each event is ~600B enriched; 60+ events cross 32 KiB.
+    for (let i = 0; i < 80; i += 1) {
+      client.capture(makeBulkEvent(i));
+    }
+    // Allow the void-flush microtask + transport promise to settle.
+    await vi.runOnlyPendingTimersAsync();
+    expect(sends.length).toBeGreaterThanOrEqual(1);
+    // Size-triggered flush is a LIVE-path event → 'interval' reason.
+    expect(sends[0]!.reason).toBe('interval');
+    client.shutdown();
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+  it('large-buffer regression: a subsequent pagehide flush carries a bounded batch (size-trigger drained the bulk first)', async () => {
+    const { sends, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    // Push bulk to trip the size trigger; size-flush ships normal-fetch.
+    for (let i = 0; i < 80; i += 1) {
+      client.capture(makeBulkEvent(i));
+    }
+    await vi.runOnlyPendingTimersAsync();
+    const sizeFlushIndex = sends.length - 1;
+    const sizeFlushBytes = JSON.stringify(sends[sizeFlushIndex]!.batch).length;
+    // The pagehide flush after the size trigger should be bounded —
+    // either empty (buffer was fully drained) or contain only what
+    // was captured AFTER the size flush (which is nothing in this
+    // test). Either way, under 64 KiB.
+    window.dispatchEvent(new Event('pagehide'));
+    await vi.runOnlyPendingTimersAsync();
+    if (sends.length > sizeFlushIndex + 1) {
+      const pagehideBatch = sends[sizeFlushIndex + 1]!;
+      expect(pagehideBatch.reason).toBe('pagehide');
+      const pagehideBytes = JSON.stringify(pagehideBatch.batch).length;
+      expect(pagehideBytes).toBeLessThan(64 * 1024);
+    }
+    // The size-flush itself was also under the cap (32 KiB threshold
+    // + at most one over-the-line event worth of bytes).
+    expect(sizeFlushBytes).toBeLessThan(64 * 1024);
+    client.shutdown();
+    await vi.runOnlyPendingTimersAsync();
+  });
+
+  it('throw-safety preserved on size-trigger path: rejecting transport does not propagate', async () => {
+    const transport: TelemetryTransport = {
+      async send() {
+        throw new Error('transport down');
+      },
+    };
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    // Bulk-push to trip the size trigger; rejection must not throw
+    // out of capture().
+    expect(() => {
+      for (let i = 0; i < 80; i += 1) {
+        client.capture(makeBulkEvent(i));
+      }
+    }).not.toThrow();
+    await vi.runOnlyPendingTimersAsync();
+    client.shutdown();
     await vi.runOnlyPendingTimersAsync();
   });
 });
