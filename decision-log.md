@@ -4,6 +4,173 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-23 — M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)
+
+### Framing
+
+PR \#21 (`m1.5c-pr2-telemetry-server`) merged into `main` via `--no-ff` at merge commit `a4561c293fd2c7ae6fd4cd9b1d54d92d45d1a16d` on 2026-05-23. Branches deleted local + remote (`-d` clean — no merge-state drift). 7 atomic branch commits (5 implementation + 1 test + 1 Phase-2.5 fix) off main `c18dd72` (the M1.5c PR 1 CLOSE docs commit; one ahead of the merge `fb42abe` named in PR 1's own pre-flag — `c18dd72` is the correct base because it includes the PR 1 closing-log entry).
+
+M1.5c PR 2 lands the **server half** of the telemetry pipeline per `tech-architecture.md` § 6.3/6.4 (Fastify 4.x, Zod at the server consumer, Pino) + § 12 (server forwards to PostHog). CF 49 CLOSED: bootstraps `apps/server` from an 8-line `export {}` stub into a bootable Fastify app exposing `POST /v1/telemetry/batch` — Zod-validated against the verbatim 20-variant `TelemetryEvent` union, forwarding each event to PostHog (posthog-node), with graceful buffer-drain on shutdown; plus the Vite dev proxy (`/v1` → `:4000`).
+
+**With CF 35 (PR 1, client half) + CF 49 (PR 2, server half), the M1.5c telemetry milestone is CLOSED.**
+
+### Branch + commit topology
+
+Verified via `git log --oneline a4561c2^1..a4561c2^2`. 7 commits:
+
+| SHA | Step | Scope |
+|---|---|---|
+| `24ba645` | Step 1 — deps | chore(server): fastify ^4.28.1 + zod ^4.4.3 + pino ^9 (aligned to fastify 4.29 internal major) + posthog-node ^4.2 + tsx/vitest (dev); `--config.strict-ssl=false` install (5b.3a Phase 2.5j corporate-cert precedent); no turbo.json change (generic tasks pick up new scripts) |
+| `531cf2b` | Step 2 — app factory | feat(server): env.ts (`readEnv` pure reader) + posthog/client.ts (`TelemetrySink` DI seam; real PostHog client satisfies it structurally) + app.ts `createApp({posthog})` (testable seam, bodyLimit 256 KiB, onClose drain) + index.ts thin listen + SIGTERM/SIGINT → app.close() |
+| `49b8d70` | Step 3 — validator | feat(server): validation/telemetryBatch.ts — `z.discriminatedUnion('name', […20 verbatim variants…])`; lenient `z.string().min(1)` on branded IDs/timestamps, strict structure (`.strict()`, `events.min(1)`, `anonId.min(1)`); 4-layer completeness net (see below) |
+| `a0e5971` | Step 4 — route+forward | feat(server): routes/telemetry.ts (204/400/413/500) + posthog/forward.ts (`distinctId←anonId`, `event←name`, `properties←(event−name)+clientVersion+tsServer`, `timestamp←tsClient`); app.ts route wiring |
+| `cd07304` | tests | test(server): 50-test suite (route inject + literal enumeration + env matrix); each completeness layer proven load-bearing (fails on a break, reverts clean). +1 (500 forward-failure) added at pre-push coverage check via stash→reset→amend→cherry-pick (interactive rebase blocked in harness) — tests kept one atomic commit |
+| `079337f` | Step 5 — Vite proxy | feat(client): isolated apps/client commit — `server.proxy { '/v1': 'http://localhost:4000' }` (§ 8.1; never landed pre-server) |
+| `bd398ca` | Phase 2.5 r1 | fix(server): readEnv strict PORT (`/^\d+$/` + 1..65535 range) + LOG_LEVEL pino-set validation (Codex P2); +17 env tests |
+
+(Eighth slot is merge commit `a4561c2`; this docs commit pending.)
+
+### 4-layer validator completeness net (CF 49 core)
+
+Hand-authored 20-variant union under lenient `z.string()` (brand erased to plain string in `z.infer`). No single layer suffices; each was empirically proven to FAIL on a break then reverted clean:
+
+1. **`assertNever(name)` over `TelemetryEventName`** — compile gate on variant-NAME completeness (a 21st canonical variant → `TS2345 not assignable to never`).
+2. **`TelemetryEvent satisfies Inferred` (ONE direction)** — compile gate on extra/renamed properties + extra variant members. Reverse direction intentionally omitted: lenient `z.string()` widens `RunId→string`, so `Inferred satisfies Canonical` false-fails on every brand (no `Equals<>`, per ratification). `events` array `.readonly()` so inferred `readonly E[]` matches canonical `ReadonlyArray` (readonly arrays not assignable to mutable — the satisfies needs the match).
+3. **`.strict()` + per-variant full-payload round-trip tests** — runtime gate on DROPPED properties (a dropped field becomes an unknown key on the full payload → strict rejects → 400 → test fails).
+4. **Literal-enumeration tests** — runtime gate on narrowed literal unions (invisible to layers 1-2 across the brand boundary); every member of RunOutcome/RoundOutcome/CombatOutcome/relic-slot/Rotation accepted + one cross-contaminant non-member rejected.
+
+### Phase trajectory
+
+Phase 1 (read-only design report; 7 open questions ratified with amendments; Rule 6 lifetime-walk drafted) → Step 0 (verbatim verification; surfaced + resolved the Phase-1-report-internal "17-vs-20" variant miscount — verbatim union declared sole authoring spec) → Phase 2 (5-step implementation, CF 49) → pre-push coverage check (+1 forward-failure 500 test) → Phase 2.5 r1 (Codex P2 — env never-throws contract) → Codex round 2 CLEAN. **1 Codex P2 round + 0 self-catches; closed UNDER ceiling (reactive 1/4).** Simplest Codex cycle of M1.5 (cf. PR 1's 3-P1 cycle).
+
+### Phase 2.5 r1 (Codex P2 — env never-throws contract)
+
+Codex P2: `readEnv`'s PORT validation (`Number.isInteger(parseInt(x)) && >0`) crashed `app.listen()` on out-of-range (`70000`) / trailing-garbage (`'70000abc'` → parseInt 70000) inputs, violating env.ts's documented "never throws / falls back to defaults" contract. Step-0 grep swept the FULL env-read surface (the defect class is generic — any unvalidated value reaching a throwing boot consumer):
+
+- **PORT → `app.listen()`** (throws "port should be >= 0 and < 65536"): fixed — strict `/^\d+$/` (via `Number`, not `parseInt`) + `1..65535` range → `DEFAULT_PORT` on any failure.
+- **LOG_LEVEL → pino** (throws "default level:&lt;x&gt; must be included in custom levels" — bootstrap pino AND Fastify's logger): fixed — validate against pino's set `{trace,debug,info,warn,error,fatal,silent}` → `DEFAULT_LOG_LEVEL` on unknown. (Second instance of the same defect class; anticipated.)
+- **POSTHOG_PROJECT_KEY / POSTHOG_HOST → posthog-node**: assessed SAFE — the SDK ctor does not validate at construction and swallows flush failures (no boot throw); empty-string fallback sufficient. Left as-is.
+
++17 env tests (suite 6→23); server suite 50→67. `readEnv` stays pure + non-throwing. Codex round 2 clean.
+
+### Codex dispositions that never fired (carried context, NOT findings)
+
+Surfaced and dispositioned during review without producing a P-finding — recorded so they aren't re-litigated:
+
+- **CORS** — non-issue: same-origin in prod; dev via Vite proxy (`/v1` → `:4000`), so the browser sees same-origin. No CORS headers needed.
+- **Partial-enqueue on mid-batch forward throw** — accepted loss: `forwardBatch` loops `capture()`; a throw mid-loop 500s with some events already enqueued. Acceptable for graybox (client swallows the 500; the 204-acknowledges-enqueue-not-delivery semantics already documented). No transactional batching.
+- **400 body shape** — `{error, issues}` (Zod issues) deemed sufficient; client swallows the body regardless. No schema'd error envelope.
+- **Proxy runtime** — Vite dev proxy is dev-only config; prod is same-origin. No runtime proxy component shipped.
+
+### Candidate catch — HELD (not counted)
+
+The Codex P2 env fix is a **predicate-vs-name instance** (Rule 1 lineage): `parsedPort > 0` was a PROXY for "valid TCP port the listener accepts," admitting out-of-range + trailing-garbage that the named invariant ("never throws / valid config") excludes. Same shape as the affordability/event-content proxies in `tech-architecture.md` § 4.5. **HELD as a candidate (Catch 37 candidate), NOT incremented** — deferred to master-dev for whether to codify (mirrors the PR 1 "fixture-lock predicate" 1st-instance HELD convention). If codified, it would also be a 2nd-instance reinforcement that "valid-input predicates" must encode the consumer's actual acceptance domain, not a positivity proxy.
+
+### Topic 2 drifts (+0)
+
+The Phase-1-report "17-vs-20" variant miscount was **Claude-Code-report-internal** (my own design report's prose contradicted its own enumeration), caught by the Step-0 verbatim-paste discipline working as designed BEFORE any code mutation. It is NOT a master-dev-chat (Topic 2) drift and is **not counted**. No master-dev chat drifts this PR.
+
+### Counters (log-walked totals; deltas match)
+
+Re-enumerated by walking `decision-log.md` forward from the M1.5c PR 1-close baseline through this entry's deltas.
+
+| Counter | M1.5c PR 1-close baseline | M1.5c PR 2 deltas | M1.5c PR 2-close total |
+|---|---:|---:|---:|
+| Predicate-vs-name catches codified | 36 | 0 (Catch 37 candidate HELD, not counted) | **36** |
+| Going-forward rules codified | 13 | 0 (env fix is Rule 1 lineage, no new rule) | **13** |
+| Architectural patterns codified | 8 | 0 | **8** |
+| Master-dev chat drifts (Topic 2) | 24 | 0 (17-vs-20 was Claude-Code-report-internal, Step-0-caught, not counted) | **24** |
+| Open CFs (enumerated below — canonical) | 40 | −1 closed (CF 49) + 1 opened (CF 54) | **40** |
+| 4-finding ceiling state | n/a | 1 Codex P2 + 0 self-catches; round-2 clean → closed under-ceiling (reactive 1/4) | — |
+
+No tally drift vs the working baseline (36/13/8/24/40) — matches the M1.5c PR 1 CLOSED entry's final-counter table exactly.
+
+### CF closures + openings
+
+- **CF 49 CLOSED** — server `/v1/telemetry/batch` endpoint. Fastify app bootstrapped; Zod `TelemetryBatchRequest` validation (20-variant union, 4-layer completeness net); PostHog forward via posthog-node (`distinctId←anonId`, `properties` + `tsServer` ingest stamp per telemetry-plan.md § 8); onClose buffer drain (Rule 6 lifetime walk — 204 acknowledges enqueue not delivery; hard-crash loss accepted for graybox); status map 204/400/413/500; Vite dev proxy. Env hardened to the never-throws contract (Phase 2.5 r1).
+- **CF 54 OPENED (NEW)** — derive `clientVersion` from build/package version. `apps/client/src/telemetry/emit.ts` `CLIENT_VERSION` is the hand-edited literal `'m1.5c-pr1'` (never bumped for PR 2); the server forwards it as a PostHog property, so every post-PR-2 event silently mis-tags its deploy as `'m1.5c-pr1'` in PostHog dashboards. Derive from `package.json` version / build metadata so deploy-slicing is accurate. Low-priority (graybox; single-version analytics tolerable now). → **M2 or follow-up micro-PR.** (Number assigned from the enumeration walk; not asserted.)
+
+### Open CF enumeration (one bullet per CF, no consolidation — canon rule)
+
+Walked from the M1.5c PR 1 CLOSED enumeration (40), applying this PR's −1 closure + 1 opening.
+
+**M1.4-era (21 open, unchanged):**
+
+- CF 2 — Real character art in portraits → M2.
+- CF 3 — Real particle sprite sheets → post-M1.
+- CF 4b — `recipe_combine` event VFX (sim-emission-blocked) → M2 content sweep.
+- CF 5 — Music + SFX integration → post-M2.
+- CF 6 — Custom cubic-bezier easing function → M2 if designer flags.
+- CF 7 — BitmapText / pre-rasterized font atlas → post-M1 if floater spawn rate saturates.
+- CF 8 — `>>` fast-forward indicator visual styling → M2 polish.
+- CF 9 — Telemetry event for "fast-forward triggered" → if `telemetry-plan.md` § 4 surfaces need.
+- CF 10 — Configurable per-user playback speed → M2+.
+- CF 11 — SKIP scene-level direct unit test coverage precedent → revisit if SKIP regresses.
+- CF 12 — Combat chunk Vite build non-determinism (~0.75 kB raw drift) → tracked.
+- CF 13 — Generation-side ghost-loadout filter → M2 ghost storage rework.
+- CF 16 — Server-side ghost record → M2.
+- CF 17 — Auto-rearrange hint affordance → M3.
+- CF 18 — Per-round trophy schedule + contract modifiers + win-streak multipliers → M2.
+- CF 19 — `RarityGem` for shop rarity dot → carries from M1.3.2.
+- CF 20 — `apps/client/src/index.css` `.glow-*` rgba palette derivatives → carries.
+- CF 22 — State-driven bag dimensions through pure helpers → M2.
+- CF 23 — Real-device drag-state screenshot capture → still carried.
+- CF 24 — Player portrait dying-state visual feedback → M2.
+- CF 30 — Particle-count consts promotion (§ 4.5 R2 spirit-extension sweep) → M2 telemetry-driven tuning.
+
+**M1.5a-era (6 open, unchanged):**
+
+- CF 32 — Expand mid/boss relic content to 3+ per class per slot → M1.6+ content fill or M2 polish.
+- CF 33 — Sim `state.ts` combat-coupling refactor for cleaner lazy-boundary → M2 architectural cleanup.
+- CF 34 — Gold/rerollCount/bag/shop authority migration to sim — AMENDED 5b.3b Phase 2.5h. → reconsider at M1.5d.
+- CF 36 — `enterCombatPhase` consolidation surface → opportunistic M1.5d client refactor.
+- CF 37 — `recipesRegistry` sim-default vs client-filter divergence → revisit alongside CF 34.
+- CF 38 — Resolution panel reward display sync (gold + trophy axes) → M2 polish.
+
+**M1.5b PR 1-era (4 open, unchanged):**
+
+- CF 40 — `contractName` + `contractText` hardcoded literals at `createInitialState` → M2 contract system or first non-neutral contract.
+- CF 42 — `buildCombatInput.startingHp: 30` Rule 6 violation → first M1 item with `maxHpBonus` ships.
+- CF 43 — `buildCombatInput.recipeBornPlacementIds` omission (Tinker recipe-bonus no-op) — AMENDED 5b.3b Phase 2.5h. → reconsider at M1.5d.
+- CF 44 — Mid + boss relic named glyphs (6 placeholder diamonds) → M2 visual polish.
+
+**M1.5b PR 3 / 5b.3a-era (3 open, unchanged):**
+
+- CF 45 — Client placement-id minting non-deterministic — AMENDED 5b.3b Phase 2.5h. → M2 `/v1/replay/validate`.
+- CF 46 — Forward-version save clobber on downgrade. → schema-bump territory, M2 likely.
+- CF 47 — Zod main-chunk bundle delta (+19.65 kB gz / +24%). → M2 mobile-perf pass.
+
+**M1.5b PR 3 / 5b.3b-era (1 open, unchanged):**
+
+- CF 48 — `RunEndScreen` + modal-equivalent a11y (no auto-focus on terminal-outcome mount; siblings not `inert` when modal-equivalent open). → M2 polish.
+
+**M1.5c PR 1-era (4 open; CF 49 CLOSED this PR):**
+
+- CF 50 — 4 schema-only telemetry variants (`error_boundary_caught`, `tutorial_step_reached`/`_completed`/`_abandoned`) have no emit site (the server validator ACCEPTS all of them; only emit sites are missing). → **M2** (tutorial M1.5d/M2; error-boundary M2 polish).
+- CF 51 — Tighten `validate.ts` (and the server validator's `anonId`, which uses `z.string().min(1)`) → `.uuid()` after the backfill window. → **M2.**
+- CF 52 — Architectural split: separate device-profile envelope from run-save envelope (two-lifetime → two-storage-keys). → **M2.**
+- CF 53 — Abandon dialog v3 visual polish pass (de-reddened treatment). → **next-seam micro-PR** (see pre-flags).
+
+M1.5c PR 1-era closures this PR: **CF 49** (server endpoint + PostHog forward).
+
+**M1.5c PR 2-era (1 OPENED this PR):**
+
+- **CF 54 NEW** — derive `clientVersion` from build/package version (currently the hand-edited literal `'m1.5c-pr1'`, forwarded as a PostHog property → silently mis-tags deploys). → **M2 or follow-up micro-PR.**
+
+**ENUMERATED TOTAL: 40 open CFs.** Walks: 21 + 6 + 4 + 3 + 1 + 4 + 1 = 40. ✓
+
+### M1.5c MILESTONE CLOSED
+
+CF 35 (PR 1, client emit chokepoint + identifiers + wiring) + CF 49 (PR 2, server endpoint + PostHog forward) together complete the M1 telemetry pipeline per `telemetry-plan.md` + `tech-architecture.md` § 12. Client batches → `POST /v1/telemetry/batch` → Zod-validated → PostHog forward. **M1.5c is CLOSED.**
+
+### Post-M1.5c pre-flags (next seam)
+
+- **CF 53 — abandon-board work (next-seam micro-PR).** Overflow affordance + run-actions container + de-reddened confirm dialog, both viewports. **Restyle-vs-feature scope is PENDING a Step-0 delta-vs-5b.3b-shipped read** — Phase 1 must diff the v3-ratified treatment against what 5b.3b actually shipped before sizing. Branch off the new main tip (`a4561c2`).
+- **M1.5d opens in a fresh chat** with a state-dump-on-resume handoff per the milestone-phase convention. CF 34 / CF 36 / CF 43 flagged for M1.5d reconsideration.
+- **Rule 6 amendment** remains in force: every M1.5d Step 0 walks lifetime classes × runtime operations for any multi-lifetime container touched.
+
+---
+
 ## 2026-05-23 — M1.5c PR 1 CLOSED (telemetry client wiring; CF 35 + CF 41 closures; 3-Codex-P1 cycle closed under-ceiling)
 
 ### Framing
