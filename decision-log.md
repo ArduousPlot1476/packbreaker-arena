@@ -4,7 +4,25 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
-## 2026-05-23 — M1.5c next-target selection (post-CF-53): **M1.5d open** (run-end / restart surfaces)
+## 2026-05-26 — Rule 15 LANDED (ratified the Drift-28 turn, dropped from 528725a via relay gap); Catch 38 (B-class) + env reservation → Catch 39
+
+Lands an **already-ratified rule** that was absent from the artifact — not a new ratification. Rule 15 (drift-vs-clerical boundary) was coined in the Drift-28 ruling turn (the message that selected "keep at 27, label = fix"), which carried the full rule paragraph, the line "Committed counter: 37 / 15 / 8 / 27 / 39 — rules 14 → 15 for Rule 15," and "fold Rule 15 into the same commit." **Relay gap:** the coinage rode in alongside the AskUserQuestion selection and did not propagate to Claude Code as a discrete instruction, so 528725a committed the drift / catch / label items but not the rule. `git show 528725a` + full-file grep confirmed the absence; the close-out rules-count halt (handoff said 14, ratification said 15) is what caught it.
+
+**Rule 15 (drift-vs-clerical boundary).** A grounding-gate-caught miss counts — in the appropriate counted class (Topic-2 drift or catch) — when it is directional/substantive: it would have mis-directed work or dropped ratified content (e.g., a next-target leg contradicting canon → drift; a ratified rule absent from the artifact → catch). A purely clerical slip corrected at the same gate (a propagated label or date — would have mis-labeled, not mis-directed) is ratified as a fix, not counted. The gate firing determines harmlessness, not whether the miss counts; the count turns on whether the miss, had it landed, would have mis-directed work or dropped ratified content vs merely mislabeled it.
+
+**Catch 38 (B-class — ratified-rule-vs-commit).** A ratified rule (Rule 15) was missing from the committed artifact, and verification nearly discarded it as "never ratified" — which would have opened M1.5d on a baseline short one rule with the boundary uncodified. That is a substantive loss of ratified content, not a mislabel → it counts (Rule 15, first application). Caught by the close-out rules-count halt. Number forced by coherence: 37 counted + this = **Catch 38**.
+
+**Env candidate reservation: Catch 38 → Catch 39.** The M1.5c-PR2 env predicate-vs-name candidate, reserved as "Catch 38" at the 528725a bookkeeping entry, moves to **Catch 39** — a counted catch (38) now occupies that slot, and an uncounted reservation takes the next free number. Same coherence applied (inverted) at the CF-53 Catch 37/38 reconciliation: a number can't be held-and-skipped while it stays uncounted. The 528725a reservation line is superseded.
+
+**Rule 15's first application classified both of this turn's items:** the rule-drop as substantive → counted (Catch 38); the 5/23→5/26 header mis-date (below) as clerical → uncounted. It earned its number on first use.
+
+**Date-header fix (clerical, uncounted).** The next-target-selection and Drift-27-bookkeeping entry headers were authored/committed today (2026-05-26, per 528725a commit metadata) but mis-dated 2026-05-23 by matching the adjacent genuinely-5/23 close entries. Corrected to **2026-05-26**. Internal citations to § "M1.5c PR 2 CLOSED" stay 2026-05-23 (that close was real on 5/23); the CF 53 CLOSED + M1.5c PR2 CLOSED entry headers stay 5/23.
+
+**Process note (no second rule this turn).** Rule coinage bundled as a rider on an AskUserQuestion selection is drop-prone — the selection relays, the rider doesn't. Going forward a rule coinage is relayed as its own explicit instruction, not attached to a decision answer; Claude Code flags any instruction that looks like a rider.
+
+**Running counter after this commit: 38 / 15 / 8 / 27 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from the prior running line (37/14/8/27/39): catches **+1** (Catch 38, B-class), rules **+1** (Rule 15 landed); patterns / drifts / open-CFs unchanged. Env candidate reservation now Catch 39 (uncounted).
+
+## 2026-05-26 — M1.5c next-target selection (post-CF-53): **M1.5d open** (run-end / restart surfaces)
 
 Next target: **M1.5d open** — per the M1.5c-close plan (this log, 2026-05-23 § "M1.5c PR 2 CLOSED": "M1.5d opens in a fresh chat… CF 34 / CF 36 / CF 43 flagged for M1.5d reconsideration"; M1.5d scope named as run-end / restart surfaces).
 
@@ -15,7 +33,7 @@ Two corrections to the proposing frame, recorded so the selection traces to cano
 
 Scope status: the **abandon-run flow** is feature-complete post-CF-53 (de-reddening / popover+sheet / desktop two-step + mobile one-step / `abandon_run` action chain / `run_end{outcome:'abandoned'}` telemetry shipped + test-locked at 5b.3b; CF 53 closed its last genuine delta — the viewport-conditional ⋯ trigger size, 40 desktop / 36 mobile). This does NOT make run-lifecycle feature-complete: **CF 48** (RunEndScreen + modal-equivalent a11y) remains open → M2, and M1.5d takes up run-end / restart surfaces. **Label fix ratified — M1.5b → M1.5c:** the proposing frame carried "M1.5b" in from the resume handoff without checking it against canon; the milestone just closed is M1.5c (CF 53 / abandon-run is M1.5c-era, 5b.3b lineage), with M1.5d slated next (M1.5b closed 2026-05-21; M1.5c closed 2026-05-23). This selection/planning entry is itself counter-neutral (no catch / rule / drift / CF delta); the Drift 27 + counter touch it surfaced are recorded separately in the bookkeeping entry below.
 
-## 2026-05-23 — Counter bookkeeping (folded into the M1.5c next-target docs commit): Drift 27 + Catch 37/38 reconciliation
+## 2026-05-26 — Counter bookkeeping (folded into the M1.5c next-target docs commit): Drift 27 + Catch 37/38 reconciliation
 
 Counter-affecting line items from this turn, kept separate from the counter-neutral selection entry above.
 
