@@ -4,6 +4,27 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-23 — M1.5c next-target selection (post-CF-53): **M1.5d open** (run-end / restart surfaces)
+
+Next target: **M1.5d open** — per the M1.5c-close plan (this log, 2026-05-23 § "M1.5c PR 2 CLOSED": "M1.5d opens in a fresh chat… CF 34 / CF 36 / CF 43 flagged for M1.5d reconsideration"; M1.5d scope named as run-end / restart surfaces).
+
+Two corrections to the proposing frame, recorded so the selection traces to canon, not prior prose:
+
+- **CF 14 is LANDED, not a close-out candidate.** Closed 2026-05-17 at M1.5a PR 3 Phase 2c (ruleset-modifier reroll-cost authority regression test in `apps/client/src/shop/ShopController.test.ts`); absent from the 40-CF open enumeration (walk runs CF 13 → 16, skipping closed 14/15). The "[CF 14 close-out]" bracket option was moot.
+- **"M2 open" was not the next target.** The canonical M1.5c-close entry slates M1.5d next; selecting M2 would skip it.
+
+Scope status: the **abandon-run flow** is feature-complete post-CF-53 (de-reddening / popover+sheet / desktop two-step + mobile one-step / `abandon_run` action chain / `run_end{outcome:'abandoned'}` telemetry shipped + test-locked at 5b.3b; CF 53 closed its last genuine delta — the viewport-conditional ⋯ trigger size, 40 desktop / 36 mobile). This does NOT make run-lifecycle feature-complete: **CF 48** (RunEndScreen + modal-equivalent a11y) remains open → M2, and M1.5d takes up run-end / restart surfaces. **Label fix ratified — M1.5b → M1.5c:** the proposing frame carried "M1.5b" in from the resume handoff without checking it against canon; the milestone just closed is M1.5c (CF 53 / abandon-run is M1.5c-era, 5b.3b lineage), with M1.5d slated next (M1.5b closed 2026-05-21; M1.5c closed 2026-05-23). This selection/planning entry is itself counter-neutral (no catch / rule / drift / CF delta); the Drift 27 + counter touch it surfaced are recorded separately in the bookkeeping entry below.
+
+## 2026-05-23 — Counter bookkeeping (folded into the M1.5c next-target docs commit): Drift 27 + Catch 37/38 reconciliation
+
+Counter-affecting line items from this turn, kept separate from the counter-neutral selection entry above.
+
+**Drift 27 (master-dev, grounding-gate-caught).** The next-target proposal offered the leg "M2 open", which contradicted canon's slated M1.5d (this log, § "M1.5c PR 2 CLOSED": "M1.5d opens in a fresh chat…"). Surfaced by Claude Code's log-read grounding pass before it landed. Counted by symmetry with the catch counter — prevention events count: a Codex catch increments though (by definition) it caught the bug pre-ship, and a master-dev drift caught at the grounding gate is the same shape (the gate firing is what kept it harmless, not grounds to null it). Same this-chat "mine" category as the M1.5c drifts. Topic-2 drifts **26 → 27**.
+
+**Catch 37 / 38 reconciliation (counter-neutral; resolves the collision flagged at CF 53-close).** The +1 catch counted at CF 53-close (catches 36 → 37) is the **CF 53 assert-from-prose / Step-0 framing-refutation catch = Catch 37**. The PR-2-close env predicate-vs-name candidate — tentatively labeled "Catch 37 candidate" at § "M1.5c PR 2 CLOSED", HELD/uncounted — is **re-reserved as Catch 38**, pending master-dev codification; its earlier "37" label is superseded. Catch total unchanged at 37.
+
+Running counter after this commit: **37 / 14 / 8 / 27 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from the CF-53-close line (37/14/8/26/39): Topic-2 drifts **+1** (Drift 27); all other fields unchanged.
+
 ## 2026-05-23 — CF 53 CLOSED (abandon-run ⋯ trigger size → viewport-conditional 40×40 desktop / 36×36 mobile; M1.5c follow-on micro-PR)
 
 CF 53 closed (PR #22, branch m1.5c-cf53-trigger-size, +36/−2, turbo 17/17 + CI green, Codex clean/no findings). ⋯ trigger now viewport-conditional 40×40 desktop / 36×36 mobile via existing useViewport() branch in AbandonRunMenu.tsx; new per-viewport size test (suite 34→36); #DC2626 guard intact. No pre-existing size assertion existed — prompt's assumed assertion was unfounded; new test added, DoD met identically. Second assert-from-prose instance this CF → board-ratification shipped-state gate extended: code/test state cited in a scoping prompt must trace to verified code, not prior prose. Branched off current main (a4561c2 + 3 doc-only commits, zero code delta). Episode: a board was ratified and CF carried for 6 abandon-flow surfaces when 5 were already shipped/locked; only the trigger size was genuine.
