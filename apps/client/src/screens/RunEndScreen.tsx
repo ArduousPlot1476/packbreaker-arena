@@ -21,6 +21,11 @@ import { useRunContext } from '../run/RunContext';
 import { useViewport } from '../run/useViewport';
 
 export interface RunEndScreenProps {
+  /** Primary CTA — restart immediately with the same class + starter relic
+   *  (M1.5d PR 1). Bypasses class select via useRun.replaySameClass. */
+  readonly onPlayAgain: () => void;
+  /** Secondary CTA — return to class select for a fresh class/relic pick
+   *  (useRun.resetRun). */
   readonly onRestart: () => void;
 }
 
@@ -159,7 +164,7 @@ function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
   );
 }
 
-export function RunEndScreen({ onRestart }: RunEndScreenProps) {
+export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
   const { state } = useRunContext();
   const viewport = useViewport();
   const isMobile = viewport === 'mobile';
@@ -395,12 +400,24 @@ export function RunEndScreen({ onRestart }: RunEndScreenProps) {
         </div>
       </div>
 
-      {/* CTA */}
-      <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', width: '100%' }}>
+      {/* CTAs — primary "Play Again" (same class, accent) above the muted
+          "Choose new class" secondary (→ class select). Uniform across all
+          terminal outcomes (won/eliminated/abandoned) for M1.5d PR 1;
+          context-aware hierarchy is M2/CF 48. */}
+      <div
+        style={{
+          marginTop: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+          width: '100%',
+        }}
+      >
         <button
-          data-testid="runend-restart-cta"
+          data-testid="runend-playagain-cta"
           type="button"
-          onClick={onRestart}
+          onClick={onPlayAgain}
           style={{
             appearance: 'none',
             border: 'none',
@@ -417,7 +434,27 @@ export function RunEndScreen({ onRestart }: RunEndScreenProps) {
             width: isMobile ? '100%' : undefined,
           }}
         >
-          New Run
+          Play Again
+        </button>
+        <button
+          data-testid="runend-restart-cta"
+          type="button"
+          onClick={onRestart}
+          style={{
+            appearance: 'none',
+            border: 'none',
+            background: 'transparent',
+            color: '#9a9a9a',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+            fontSize: isMobile ? 13 : 14,
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            padding: '8px 16px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          Choose new class
         </button>
       </div>
     </div>

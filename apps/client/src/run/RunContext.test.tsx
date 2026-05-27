@@ -51,6 +51,7 @@ import type { LocalSaveV1 } from '@packbreaker/shared';
 import { RunProvider, useRunContext } from './RunContext';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
 import { SHOP_POOL_ITEMS } from './content';
+import { loadLocal } from '../persistence';
 
 // M1.5b PR 1 Implementation C+B: RunProvider now mounts ClassSelectScreen
 // when pendingRunInput is null. Existing tests in this file expect a
@@ -59,6 +60,12 @@ import { SHOP_POOL_ITEMS } from './content';
 // on its first effect — preserves the old "auto-create-run-on-mount"
 // semantics for everything except the dedicated class-select-flow tests
 // (which live in ClassSelectFlow.test.tsx and don't apply this mock).
+// Hoisted fire-counter: the stub increments it each time it mounts +
+// auto-fires beginRun. The replaySameClass test reads it to prove a
+// replay does NOT re-traverse class select (counter unchanged across the
+// replay cycle), distinguishing it from resetRun (which re-fires the stub).
+const classSelectMock = vi.hoisted(() => ({ fireCount: 0 }));
+
 vi.mock('../screens/ClassSelectScreen', () => ({
   ClassSelectScreen: function StubClassSelectScreen({
     onConfirm,
@@ -66,6 +73,7 @@ vi.mock('../screens/ClassSelectScreen', () => ({
     onConfirm: (input: { classId: ClassId; startingRelicId: RelicId }) => void;
   }) {
     useEffect(() => {
+      classSelectMock.fireCount += 1;
       onConfirm({
         classId: 'tinker' as ClassId,
         startingRelicId: 'apprentices-loop' as RelicId,
@@ -1364,6 +1372,71 @@ describe('RunProvider — resetRun two-axis reset (M1.5b PR 2)', () => {
       expect(queryByTestId('r')).toBeInTheDocument();
     });
     expect(queryByTestId('run-boot-fallback')).toBeNull();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// M1.5d PR 1 — replaySameClass ("Play Again, same class") integration.
+//
+// Mirrors the resetRun two-axis pattern (probe-invocation during an
+// in-progress run; no terminal-forcing, so it sits above the F.1/F.5/F.6
+// it.skip'd harness — terminal-origin integration stays that block's
+// inherited debt). Asserts the fast-path produces a fresh same-class run
+// with simRun rebuilt + state reset, that class select is bypassed
+// (stub fire-count unchanged across the cycle), and that the device-
+// scoped telemetryAnonId survives the replay's clearLocal.
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — replaySameClass fast-path (M1.5d PR 1)', () => {
+  it('replay → fresh same-class run: simRun rebuilt, state reset, class select bypassed, anonId preserved', async () => {
+    localStorage.clear();
+    const fireBaseline = classSelectMock.fireCount;
+
+    // Initial run (stub fires tinker + apprentices-loop once).
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    const simRun0 = ctx0.simRun;
+    const seed0 = ctx0.state.state.seed;
+    expect(ctx0.state.state.classId).toBe('tinker');
+    expect(classSelectMock.fireCount).toBe(fireBaseline + 1);
+
+    // The mount-time quiescent save persisted the resolved anonId.
+    let anon0: string | undefined;
+    await waitFor(() => {
+      anon0 = loadLocal()?.telemetryAnonId;
+      expect(anon0).toBeTruthy();
+    });
+
+    // Lift rerollCount to 1 (Apprentice's Loop gives the first reroll
+    // free; the counter still increments) so the reset is observable.
+    act(() => {
+      getCtx().onReroll();
+    });
+    expect(getCtx().state.state.rerollCount).toBe(1);
+
+    // Play Again — pre-seeds pendingRunInput with the same class, so
+    // RunProvider routes to RunBootFallback → createRun, NOT ClassSelect.
+    act(() => {
+      getCtx().replaySameClass();
+    });
+
+    // Fresh run re-resolves with a NEW simRun instance.
+    await waitFor(() => {
+      expect(getCtx().simRun).not.toBeNull();
+      expect(getCtx().simRun).not.toBe(simRun0);
+    });
+    const ctx1 = getCtx();
+    expect(ctx1.state.state.classId).toBe('tinker'); // same class
+    expect(ctx1.state.state.round).toBe(1); // fresh run
+    expect(ctx1.state.state.rerollCount).toBe(0); // counter reset
+    expect(ctx1.state.bag).toHaveLength(0); // empty bag
+    expect(ctx1.state.state.seed).not.toBe(seed0); // fresh seed
+
+    // Class select was NOT re-traversed — the stub did not re-fire.
+    expect(classSelectMock.fireCount).toBe(fireBaseline + 1);
+
+    // Device-scoped anonId survived the replay's clearLocal.
+    expect(loadLocal()?.telemetryAnonId).toBe(anon0);
   });
 });
 
