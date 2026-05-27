@@ -4,6 +4,34 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-26 — M1.5d Phase-1 canon reconciliation: Catch 39 CONFIRMED; env-reservation + relay conventions broadened; CF 55 opened (entry-mode telemetry); counter 39/15/8/27/40
+
+Docs-only reconciliation of canon to the M1.5d PR 1 ("Play Again, same class") Phase-1 decisions + the Phase-1 closing amendment. No behavior change, no code touched. Lands the catch confirmation, two convention updates, the new CF, and the running-counter update; the three M1.5d scope-trail entries follow below.
+
+**Catch 39 CONFIRMED (C1 — Phase-1 coverage claim without content-side evidence; Rule-5 failure mode applied to test coverage).** The M1.5d Phase-1 investigation asserted the restart round-trip was "not test-locked" — a coverage claim made without first reading the test files. Refuted in the same chat by Claude Code's self-refutation grounding turn: the reset round-trip IS locked (`apps/client/src/run/RunContext.test.tsx:1247-1331`, the `resetRun two-axis reset` block — `rerollCount`→0 after a full reset→re-resolve cycle) and the anonId lifetime invariant IS locked (`apps/client/src/persistence/persistence.test.ts:182-205`, "clearLocal preserves device-scoped fields"). Same assert-from-prose shape as Catch 37 (Rule 5 / Step-0 framing-refutation), here applied to a test-coverage claim rather than shipped-code state. Caught pre-commit by the grounding pass before any design rode on it. Catches 38 → 39.
+
+**Env-reservation convention update (uncounted; supersedes the integer-pinned reservation in this log's 2026-05-26 § "Rule 15 LANDED").** Drop the integer pin from the env predicate-vs-name candidate. The prior wording reserved it as a specific catch number ("Catch 38" at 528725a → "Catch 39" at 4c31e84); with Catch 39 now taken by C1 it would shuffle again to "Catch 40" — three integer shuffles across consecutive counted catches (38 → 39 → 40), a smell. New canonical wording: **"env predicate-vs-name candidate pending codification — receives next available integer at codification time"** (no integer pin). Uncounted convention, not a numbered rule; the 4c31e84 "Catch 39 reserved" wording is superseded by this forward note (historical entry left intact per append-only).
+
+**Relay convention broadened (uncounted; broadens the "Rule-coinage relay" process note in this log's 2026-05-26 § "Rule 15 LANDED").** The prior form covered rule coinage only. Broadened to: *"Any ratified instruction — rule coinage, DoD amendment, scope directive, etc. — is relayed as its own explicit instruction, never as a rider on an AskUserQuestion answer (riders drop)."* Root cause that earned the broadening: the M1.5d Phase-1 amendment instruction ("fold both DoD items into a brief Phase 1 amendment") was bundled as a rider on the CTA-layout AskUserQuestion answer; only the selection label ("Replay primary, New Class secondary") propagated to execution, and the rider dropped — the exact shape the original convention named, now generalized beyond rule coinage.
+
+**CF 55 OPENED (NEW) — entry-mode telemetry.** Entry-mode telemetry: add `entryMode: 'class_select' | 'replay_same_class'` to `run_start`, threaded via `CreateRunInput.entryMode` → sim emit; per CF 41 precedent (M1.5c PR 1 startingRelicId pattern); requires schema add (content-schemas.ts + packages/content/src/schemas.ts mirror), server-validator 20-variant-union update, 6-fixture corpus re-baseline. Spec'd in M1.5d Play-Again Phase 1 amendment; deferred to preserve PR 1 client-only scope. (Number CF 55 — walked from canon; highest prior CF was CF 54 at 2026-05-23 § "M1.5c PR 2 CLOSED".)
+
+**Open-CF reconciliation → 40.** Running open-CF count: 40 (the canonical enumeration at 2026-05-23 § "M1.5c PR 2 CLOSED") − CF 53 (closed 2026-05-23 § "CF 53 CLOSED") + CF 55 (this entry) = **40 open**. CF 55 enumerated above.
+
+**Running counter after this commit: 39 / 15 / 8 / 27 / 40** (catches / rules / patterns / drifts / open-CFs). Delta from the prior running line (38/15/8/27/39): catches **+1** (Catch 39, C1 confirmed), open-CFs **+1** (CF 55 opened); rules / patterns / drifts unchanged. Env predicate-vs-name candidate now integer-unpinned (uncounted, no slot held).
+
+## 2026-05-26 — M1.5d re-pivot to run-end UX (Play Again, same class); CF 34 spun out as M1.5e — authority migration
+
+Gold-first refuted by Step-0 separability check (sellItem bag-coupled); gated-and-fired, uncounted. Rationale: no cheap CF 34 entry; large-coupled migration deserves dedicated milestone; play-again is on-theme bounded opener.
+
+## 2026-05-26 — M1.5d PR 1 re-scope — restart confirmed healthy + ~80% locked (Catch 39); first PR pivots to CF 34 sim-authority migration
+
+Fresh-state assertions fold in as migration characterization net; de-fragilize lands in sim by construction; terminal-path un-skip = separate harness debt. Milestone weight re-centered on CF 34 + run-end deferred debt.
+
+## 2026-05-26 — M1.5d PR 1 scope — restart state-reset contract; CF 34 → PR 2; CF 43/36 off-spine
+
+Rationale: on-spine + Step-0 Rule-6 run-singleton hazard. Reset contract = fresh-state-per-lifetime, authority-agnostic. (Original Phase 1 scope — superseded but part of the trail.)
+
 ## 2026-05-26 — Rule 15 LANDED (ratified the Drift-28 turn, dropped from 528725a via relay gap); Catch 38 (B-class) + env reservation → Catch 39
 
 Lands an **already-ratified rule** that was absent from the artifact — not a new ratification. Rule 15 (drift-vs-clerical boundary) was coined in the Drift-28 ruling turn (the message that selected "keep at 27, label = fix"), which carried the full rule paragraph, the line "Committed counter: 37 / 15 / 8 / 27 / 39 — rules 14 → 15 for Rule 15," and "fold Rule 15 into the same commit." **Relay gap:** the coinage rode in alongside the AskUserQuestion selection and did not propagate to Claude Code as a discrete instruction, so 528725a committed the drift / catch / label items but not the rule. `git show 528725a` + full-file grep confirmed the absence; the close-out rules-count halt (handoff said 14, ratification said 15) is what caught it.

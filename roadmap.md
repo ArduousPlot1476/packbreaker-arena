@@ -32,6 +32,9 @@ Telemetry hooks per telemetry-plan.md
 Placeholder art only
 
 Exit criteria: Trey \+ 3 internal testers each complete 5+ runs without crashes. Item pick-rate spread visible in dashboard. Median run length 12–20 min.  
+M1.5e — Authority Migration (CF 34, +CF 37)  
+Unwind Amendment A's client/sim bifurcation. gold+bag-together (sellItem bag-coupling forces single unit), bounded first PR, slice-sequenced after that. Re-handles ratified amendments B-F3 (restore-bag-init) and E-F9 (placementCounter collision-avoidance) sim-side. Phase 1 must lead with Amendment A rationale (see decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 design halt-gate ratified — Q2 Amendment A) before unwind is locked.  
+
 M2 — Public web demo (10–12 weeks)  
 Goal: Public browser build, portal-ready.  
 In scope:
