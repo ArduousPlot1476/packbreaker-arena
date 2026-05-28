@@ -117,7 +117,7 @@ describe('runEndSubCopy — pure helper', () => {
 describe('RunEndScreen — all 8 ratified fields render (VICTORY baseline)', () => {
   it('renders outcome label + glyph + sub-copy for won', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     expect(getByTestId('runend-label').textContent).toBe('VICTORY');
     expect(getByTestId('runend-glyph').textContent).toBe('★');
     expect(getByTestId('runend-sub').textContent).toBe('Round 11 boss defeated');
@@ -125,19 +125,19 @@ describe('RunEndScreen — all 8 ratified fields render (VICTORY baseline)', () 
 
   it('renders class name from state.className', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     expect(getByTestId('runend-class').textContent).toBe('Marauder');
   });
 
   it('renders round-reached as "N / totalRounds"', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     expect(getByTestId('runend-round').textContent).toBe('11 / 11');
   });
 
   it('renders hearts pip row using HeartGlyph (3 filled of 4 max — Iron Will Marauder mid-loss)', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     const hearts = getByTestId('runend-hearts');
     expect(hearts.getAttribute('data-hearts-filled')).toBe('3');
     expect(hearts.getAttribute('data-hearts-max')).toBe('4');
@@ -147,7 +147,7 @@ describe('RunEndScreen — all 8 ratified fields render (VICTORY baseline)', () 
 
   it('renders all 3 relic slots filled with names from RELICS registry', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     const starter = getByTestId('runend-relic-starter');
     const mid = getByTestId('runend-relic-mid');
     const boss = getByTestId('runend-relic-boss');
@@ -166,7 +166,7 @@ describe('RunEndScreen — all 8 ratified fields render (VICTORY baseline)', () 
 
   it('renders 11 breadcrumb pips with correct W/L outcomes from history', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     // Fixture history: rounds 1, 2, 4-11 = win; round 3 = loss.
     for (let i = 1; i <= 11; i++) {
       const pip = getByTestId(`runend-pip-${i}`);
@@ -177,16 +177,43 @@ describe('RunEndScreen — all 8 ratified fields render (VICTORY baseline)', () 
 
   it('renders gold + trophy with toLocaleString formatting', () => {
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={onRestart} />);
     expect(getByTestId('runend-gold').textContent).toBe('142');
     expect(getByTestId('runend-trophy').textContent).toBe('1,284');
   });
 
-  it('invokes onRestart when the CTA is clicked', () => {
+  it('primary "Play Again" CTA fires onPlayAgain (not onRestart)', () => {
+    const onPlayAgain = vi.fn();
     const onRestart = vi.fn();
-    const { getByTestId } = render(<RunEndScreen onRestart={onRestart} />);
+    const { getByTestId } = render(
+      <RunEndScreen onPlayAgain={onPlayAgain} onRestart={onRestart} />,
+    );
+    fireEvent.click(getByTestId('runend-playagain-cta'));
+    expect(onPlayAgain).toHaveBeenCalledOnce();
+    expect(onRestart).not.toHaveBeenCalled();
+  });
+
+  it('secondary "Choose new class" CTA fires onRestart (not onPlayAgain)', () => {
+    const onPlayAgain = vi.fn();
+    const onRestart = vi.fn();
+    const { getByTestId } = render(
+      <RunEndScreen onPlayAgain={onPlayAgain} onRestart={onRestart} />,
+    );
     fireEvent.click(getByTestId('runend-restart-cta'));
     expect(onRestart).toHaveBeenCalledOnce();
+    expect(onPlayAgain).not.toHaveBeenCalled();
+  });
+
+  it('renders both CTAs (Play Again primary + Choose new class secondary) on every terminal outcome', () => {
+    for (const outcome of ['won', 'eliminated', 'abandoned'] as const) {
+      mocks.ctxValue = makeCtx({ outcome });
+      const { getByTestId, unmount } = render(
+        <RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />,
+      );
+      expect(getByTestId('runend-playagain-cta')).toBeInTheDocument();
+      expect(getByTestId('runend-restart-cta')).toBeInTheDocument();
+      unmount();
+    }
   });
 });
 
@@ -216,7 +243,7 @@ describe('RunEndScreen — outcome variants render correct glyph + label + sub-c
       gold: 38,
       trophy: 612,
     });
-    const { getByTestId } = render(<RunEndScreen onRestart={() => {}} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     expect(getByTestId('runend-label').textContent).toBe('DEFEAT');
     expect(getByTestId('runend-glyph').textContent).toBe('✕');
     expect(getByTestId('runend-sub').textContent).toBe('Eliminated · Round 7');
@@ -244,7 +271,7 @@ describe('RunEndScreen — outcome variants render correct glyph + label + sub-c
       gold: 22,
       trophy: 408,
     });
-    const { getByTestId } = render(<RunEndScreen onRestart={() => {}} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     expect(getByTestId('runend-label').textContent).toBe('RUN ABANDONED');
     expect(getByTestId('runend-glyph').textContent).toBe('⊘');
     expect(getByTestId('runend-sub').textContent).toBe('Quit at Round 4');
@@ -263,7 +290,7 @@ describe('RunEndScreen — outcome variants render correct glyph + label + sub-c
 describe('RunEndScreen — mobile responsive class toggle (Q(d) single-component pattern)', () => {
   it('runend-screen has data-viewport="desktop" when useViewport returns desktop', () => {
     mocks.viewport = 'desktop';
-    const { getByTestId } = render(<RunEndScreen onRestart={() => {}} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     const screen = getByTestId('run-end-screen');
     expect(screen.getAttribute('data-viewport')).toBe('desktop');
     expect(screen.className).toBe('runend');
@@ -271,7 +298,7 @@ describe('RunEndScreen — mobile responsive class toggle (Q(d) single-component
 
   it('runend-screen has data-viewport="mobile" + mobile modifier class when useViewport returns mobile', () => {
     mocks.viewport = 'mobile';
-    const { getByTestId } = render(<RunEndScreen onRestart={() => {}} />);
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     const screen = getByTestId('run-end-screen');
     expect(screen.getAttribute('data-viewport')).toBe('mobile');
     expect(screen.className).toBe('runend mobile');
@@ -281,7 +308,7 @@ describe('RunEndScreen — mobile responsive class toggle (Q(d) single-component
 describe('RunEndScreen — defensive null render when outcome is in_progress', () => {
   it('returns null (renders nothing) when outcome === "in_progress"', () => {
     mocks.ctxValue = makeCtx({ outcome: 'in_progress' });
-    const { container } = render(<RunEndScreen onRestart={() => {}} />);
+    const { container } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     expect(container.firstChild).toBeNull();
   });
 });

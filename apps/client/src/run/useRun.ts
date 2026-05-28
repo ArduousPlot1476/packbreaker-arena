@@ -525,6 +525,36 @@ export function useRun() {
     setPendingRunInput(null);
   }, []);
 
+  // M1.5d PR 1: "Play Again (same class)" run-end fast-path. Identical to
+  // resetRun in every lifetime-bearing step (clearLocal preserves the
+  // device-scoped envelope incl. telemetryAnonId; reducer → fresh
+  // INITIAL_CLIENT_STATE; simRun nulled then rebuilt by the createRun
+  // effect with a fresh makeRunSeed) — see decision-log.md 2026-05-26
+  // § "M1.5d PR 1 scope" Rule-6 walk: every container is mechanism-
+  // equivalent to resetRun. The ONLY divergence is the setPendingRunInput
+  // payload: resetRun nulls it (→ ClassSelectScreen), replay pre-seeds it
+  // with the just-ended run's class + starter relic (→ RunBootFallback →
+  // createRun, bypassing class select). The fresh seed / fresh run is
+  // minted by the same createRun effect either way. Read run-state via
+  // stateRef (latest), mirroring abandonRun's stable-callback pattern.
+  //
+  // Defensive fallback: a terminal run always carries a starter relic
+  // (run_start equips it), but if relics.starter is somehow null we route
+  // through resetRun rather than seed an invalid PendingRunInput
+  // (startingRelicId is non-nullable RelicId).
+  const replaySameClass = useCallback(() => {
+    const runState = stateRef.current.state;
+    const starter = runState.relics.starter;
+    if (starter === null) {
+      resetRun();
+      return;
+    }
+    clearLocal();
+    dispatch({ type: 'reset_run' });
+    setSimRun(null);
+    setPendingRunInput({ classId: runState.classId, startingRelicId: starter });
+  }, [resetRun]);
+
   // M1.5b PR 3 / 5b.3b Step 2: abandon current run.
   // Mirrors resetRun's clearLocal-before-dispatch pattern (prevents
   // reload-resurrection between abandon-confirm and RunEndScreen mount),
@@ -750,6 +780,7 @@ export function useRun() {
     isRunEnded,
     grantSelectedRelic,
     resetRun,
+    replaySameClass,
     abandonRun,
   };
 }

@@ -86,7 +86,7 @@ export function RunProvider({ children }: { children: ReactNode }) {
     return (
       <RunContext.Provider value={value}>
         <Suspense fallback={<RunBootFallback />}>
-          <RunEndScreen onRestart={value.resetRun} />
+          <RunEndScreen onPlayAgain={value.replaySameClass} onRestart={value.resetRun} />
         </Suspense>
       </RunContext.Provider>
     );
