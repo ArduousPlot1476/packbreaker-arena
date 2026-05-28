@@ -4,6 +4,18 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-05-28 — M1.5d PR 1 CLOSED — "Play Again (same class)" run-end fast-path
+
+`replaySameClass` "Play Again (same class)" run-end fast-path landed. Client-only (5 files, all `apps/client/`); no CF delta; Codex clean (no findings); gate 23/23 (full-workspace `turbo lint typecheck test --force`). Merged `--no-ff` as PR #23 at merge commit `70b2ff7`.
+
+RunEndScreen gains a primary **PLAY AGAIN** CTA (restart with the same class + starter relic, bypassing class select via a pre-seeded `pendingRunInput`) + a muted **"Choose new class"** secondary (→ `resetRun`); uniform across won / eliminated / abandoned. The mechanism is `resetRun`-equivalent on every lifetime-bearing container (Rule-6 walk clean — run-singleton, telemetryAnonId, sessionId, simRun, run seed); the sole divergence is the `pendingRunInput` payload (pre-seeded vs nulled), which crosses no lifetime invariant. `run_start` emit untouched (entry-mode telemetry stays **CF 55**); no RunEndScreen a11y change (**CF 48 → M2**); terminal-origin integration (RunEndFlow F.1/F.5/F.6) stays `it.skip`'d (inherited debt, not un-skipped).
+
+**Counter: 39 / 15 / 8 / 27 / 40** (catches / rules / patterns / drifts / open-CFs) — **unchanged**. Feature work: no CF closed/opened, no catch / rule / pattern / drift. The two conventions below are uncounted (rules counter does not move).
+
+**Date convention (uncounted — codified).** Decision-log entries are dated by decision-day (when the decision was made in master-dev review), not commit-day. Commit metadata stamps the landing day separately. When the two diverge, the entry header reflects decision-day; commit metadata reflects landing-day. *First live test:* this CLOSED entry is dated **2026-05-28** — the merge-ratification day read from merge commit `70b2ff7`'s timestamp — not the staged 2026-05-26 carry-forward. (Retroactively, the 2026-05-26 § entries below are consistent: decisions made 2026-05-26, landed by a later commit.)
+
+**Edit convention (uncounted — codified).** Clerical errors in historical entries (typos, wrong dates, raw line-pin → date-citation conversion) are edited in place. Substantive supersessions (decision updates, convention changes, scope shifts) land as new entries with an explicit supersession reference; historical wording is preserved for the audit trail.
+
 ## 2026-05-26 — M1.5d Phase-1 canon reconciliation: Catch 39 CONFIRMED; env-reservation + relay conventions broadened; CF 55 opened (entry-mode telemetry); counter 39/15/8/27/40
 
 Docs-only reconciliation of canon to the M1.5d PR 1 ("Play Again, same class") Phase-1 decisions + the Phase-1 closing amendment. No behavior change, no code touched. Lands the catch confirmation, two convention updates, the new CF, and the running-counter update; the three M1.5d scope-trail entries follow below.
