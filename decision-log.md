@@ -4,6 +4,33 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-03 — M1.5d PR 2 CLOSED + **M1.5d MILESTONE CLOSED** (CF 55 — entry-mode telemetry on run_start)
+
+`entryMode` entry-mode telemetry landed. `run_start` now carries `entryMode: 'class_select' | 'replay_same_class'`, threaded `CreateRunInput.entryMode` → sim emit, so funnel analysis segments fresh class-select runs from Play-Again (same class) restarts. Merged `--no-ff` as PR #24 at merge commit `701d833`; branch `m1.5d-pr2-cf55-entry-mode-telemetry` deleted local + remote. Codex clean (0 findings, reviewed `9bfac9b`); gate 23/23 (full-workspace `turbo lint typecheck test --force`).
+
+**With CF 55 (this PR) closing on top of M1.5d PR 1 (Play Again, `70b2ff7`), the M1.5d run-end / restart UX milestone is CLOSED.** M1.5d had exactly two PRs — PR 1 (Play-Again fast-path) + PR 2 (entry-mode telemetry). CF 48 (RunEndScreen a11y) was never M1.5d scope; it stays → M2.
+
+**Change surfaces (4).** Followed the CF 41 (`startingRelicId`, M1.5c PR 1) precedent PLUS two extensions Phase 1 surfaced and ratification approved:
+
+1. **Schema** — `run_start` gains `entryMode`, byte-identical across `content-schemas.ts` + `packages/content/src/schemas.ts` (`check-schemas-sync` green). Required on the event (always emitted concretely).
+2. **Sim** — `CreateRunInput.entryMode` is **optional** so `restoreRun`'s own `CreateRunInput` literal stays untouched — restore never emits `run_start`. The fresh-run emit threads `input.entryMode ?? DEFAULT_ENTRY_MODE` (`'class_select'`), mirroring how `startedAt`/`sessionId` default.
+3. **Server** — `entryMode: z.enum(['class_select','replay_same_class'])` added to the `.strict()` `runStart` validator member. **This surface did NOT exist at CF 41** (the Zod validator was CF 49 / M1.5c PR 2). Field-add, not variant-add: the `discriminatedUnion` stays at **20 variants**; citation comment `809-948 → 809-949`.
+4. **Client** — **path-dependent stamping** (the substantive divergence from CF 41, whose `startingRelicId` was path-invariant): `PendingRunInput` gains a required `entryMode`; the two entry paths diverge at `setPendingRunInput` (`beginRun` stamps `'class_select'`, `replaySameClass` stamps `'replay_same_class'`) and converge at the single `createRun` call, which threads `pendingRunInput.entryMode`. `beginRun`'s param narrowed to `Omit<PendingRunInput,'entryMode'>` so `ClassSelectScreen.onConfirm` + every existing test stub stay unchanged.
+
+**Step-0 finds (halt-gate clean).** The prompt's "3 hardcoded run_start literals" was accurate for literals needing an `entryMode` add to pass `.strict()` (`helpers.ts:53`, `telemetry.route.test.ts:40`, `emit.test.ts:32`); the Step-0 sweep surfaced a **4th `run_start` assertion site** — `packages/sim/test/run.test.ts` — that did NOT need updating (asserts a single field) and became the home for the new sim tests. `entryMode` added to the deliberately-invalid "missing seed → reject" test (`telemetry.route.test.ts:127`) to isolate its intended rejection cause (the "+1"). 6 `.json` scenario fixtures surgically re-baselined (single `entryMode: "class_select"` line each, the sim default); **224 `.jsonl` determinism corpus untouched** per `runs/README.md` § additive-telemetry-field re-baseline.
+
+**Tests.** +2 sim tests (`run_start` default → `class_select`; explicit → `replay_same_class`) + a new client both-paths telemetry test (`EntryModeTelemetry.test.tsx`) that runs the REAL sim, mocks only the telemetry transport, and asserts each entry path's genuinely-emitted `run_start.entryMode` (fresh mount → `class_select`; `replaySameClass` fired directly post-mount → `replay_same_class`). Suites: sim 505, server 67, client 463.
+
+**Codex cycle.** 1 review round, **0 findings, 0 self-catches — closed UNDER ceiling (reactive 0/4)**; ties M1.5c PR 2 as the simplest cycle of M1.5.
+
+**CF 55 CLOSED** — entry-mode telemetry on `run_start`. No new CF opened.
+
+**Counter: 39 / 15 / 8 / 27 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from the M1.5d PR 1-close line (39/15/8/27/40): open-CFs **−1** (CF 55 CLOSED); no catch / rule / pattern / drift. CF 55 was the sole open-CF delta.
+
+**Merge-message format** mirrors the M1.5d PR 1 precedent (`Merge M1.5d PR N — <title> (#N)`, un-flagged at PR-1 close) rather than the M1.5c-era branch-style — chosen for same-milestone consistency. Flag if branch-style was intended.
+
+**Next: M1.5e** — sim-authority migration (CF 34), the queued dedicated sub-milestone (gold / reroll / bag / shop authority into the sim; `sellItem` bag-coupling). M1 (parent, graybox) stays OPEN — M1.5e plus the M1 exit gates (item pick-rate dashboard, Trey + 3-tester × 5-crash-free-run playtest, 12–20 min median) remain.
+
 ## 2026-05-28 — M1.5d PR 1 CLOSED — "Play Again (same class)" run-end fast-path
 
 `replaySameClass` "Play Again (same class)" run-end fast-path landed. Client-only (5 files, all `apps/client/`); no CF delta; Codex clean (no findings); gate 23/23 (full-workspace `turbo lint typecheck test --force`). Merged `--no-ff` as PR #23 at merge commit `70b2ff7`.
