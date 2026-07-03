@@ -83,6 +83,11 @@ function makeUid(prefix: 'b' | 's'): string {
 export interface PendingRunInput {
   readonly classId: ClassId;
   readonly startingRelicId: RelicId;
+  /** CF 55 (M1.5d PR 2): telemetry entry-mode, stamped by the entry path that
+   *  seeds this input — 'class_select' via beginRun, 'replay_same_class' via
+   *  replaySameClass. Required so the convergent createRun call always threads
+   *  a concrete value (the two paths diverge here but converge at createRun). */
+  readonly entryMode: 'class_select' | 'replay_same_class';
 }
 
 export function useRun() {
@@ -155,8 +160,12 @@ export function useRun() {
   // mirrors the React idiom for "out-of-render mutable handles."
   const restoreEpochRef = useRef(0);
 
-  const beginRun = useCallback((input: PendingRunInput) => {
-    setPendingRunInput(input);
+  // CF 55 (M1.5d PR 2): the fresh class-select path. beginRun accepts the
+  // class-select payload (no entryMode — it is the sole caller, via
+  // ClassSelectScreen.onConfirm) and stamps entryMode:'class_select'. Keeping
+  // entryMode off ClassSelectScreen's prop contract localizes the tag here.
+  const beginRun = useCallback((input: Omit<PendingRunInput, 'entryMode'>) => {
+    setPendingRunInput({ ...input, entryMode: 'class_select' });
   }, []);
 
   // M1.5b PR 3 / 5b.3a Commit 5: load-on-mount. Before the class-select
@@ -247,6 +256,9 @@ export function useRun() {
         classId: pendingRunInput.classId,
         contractId: 'neutral' as ContractId,
         startingRelicId: pendingRunInput.startingRelicId,
+        // CF 55 (M1.5d PR 2): thread the entry-mode stamped at the divergent
+        // set site (beginRun / replaySameClass) into the run_start emit.
+        entryMode: pendingRunInput.entryMode,
         // M1.5b PR 3 / 5b.3a Commit 3: inject real wall-clock timestamp.
         // Sim's CreateRunInput.startedAt defaults to a fixed sentinel
         // ('2025-01-01T00:00:00.000Z') when omitted (state.ts § 200) —
@@ -552,7 +564,12 @@ export function useRun() {
     clearLocal();
     dispatch({ type: 'reset_run' });
     setSimRun(null);
-    setPendingRunInput({ classId: runState.classId, startingRelicId: starter });
+    // CF 55 (M1.5d PR 2): the Play-Again path stamps entryMode:'replay_same_class'.
+    setPendingRunInput({
+      classId: runState.classId,
+      startingRelicId: starter,
+      entryMode: 'replay_same_class',
+    });
   }, [resetRun]);
 
   // M1.5b PR 3 / 5b.3b Step 2: abandon current run.

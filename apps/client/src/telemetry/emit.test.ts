@@ -35,6 +35,7 @@ function makeRunStart(overrides: Partial<TelemetryEvent> = {}): TelemetryEvent {
     contractId: 'neutral' as ContractId,
     seed: 42 as SimSeed,
     startingRelicId: 'apprentices-loop' as RelicId,
+    entryMode: 'class_select',
     ...overrides,
   } as TelemetryEvent;
 }

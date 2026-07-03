@@ -234,7 +234,8 @@
       "classId": "tinker",
       "contractId": "neutral",
       "seed": 7,
-      "startingRelicId": "apprentices-loop"
+      "startingRelicId": "apprentices-loop",
+      "entryMode": "class_select"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

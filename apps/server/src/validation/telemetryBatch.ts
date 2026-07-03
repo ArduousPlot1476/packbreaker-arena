@@ -80,10 +80,10 @@ const baseShape = {
   sessionId: idString,
 }
 
-// ─── 20 variant schemas (authored verbatim from schemas.ts:809-948) ──
+// ─── 20 variant schemas (authored verbatim from schemas.ts:809-949) ──
 
 const runStart = z
-  .object({ ...baseShape, name: z.literal('run_start'), runId: idString, classId: idString, contractId: idString, seed: num, startingRelicId: idString })
+  .object({ ...baseShape, name: z.literal('run_start'), runId: idString, classId: idString, contractId: idString, seed: num, startingRelicId: idString, entryMode: z.enum(['class_select', 'replay_same_class']) })
   .strict()
 const runEnd = z
   .object({ ...baseShape, name: z.literal('run_end'), runId: idString, outcome: RunOutcomeSchema, roundReached: num, heartsRemaining: num })
