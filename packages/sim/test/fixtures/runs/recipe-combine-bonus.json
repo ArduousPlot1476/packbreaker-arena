@@ -198,7 +198,8 @@
       "classId": "tinker",
       "contractId": "neutral",
       "seed": 19,
-      "startingRelicId": "pocket-forge"
+      "startingRelicId": "pocket-forge",
+      "entryMode": "class_select"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

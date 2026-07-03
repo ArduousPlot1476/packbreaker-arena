@@ -815,6 +815,7 @@ export type TelemetryEvent =
       readonly contractId: ContractId
       readonly seed: SimSeed
       readonly startingRelicId: RelicId  // CF 41 closure (M1.5c PR 1)
+      readonly entryMode: 'class_select' | 'replay_same_class'  // CF 55 (M1.5d PR 2)
     })
   | (TelemetryBase & {
       readonly name: 'run_end'

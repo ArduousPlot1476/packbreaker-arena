@@ -492,6 +492,30 @@ describe('telemetry callback', () => {
     }
   });
 
+  // CF 55 (M1.5d PR 2): run_start.entryMode tags the entry path so funnel
+  // analysis can segment fresh class-select runs from Play-Again restarts.
+  // The client stamps it per path; the sim defaults to 'class_select' when
+  // the caller omits it (sim tests / restore never re-emit run_start).
+  it('run_start payload defaults entryMode to class_select when omitted (CF 55)', () => {
+    const events: TelemetryEvent[] = [];
+    createRun(baseInput({ onTelemetryEvent: (e) => events.push(e) }));
+    const runStart = events.find((e) => e.name === 'run_start');
+    expect(runStart).toBeDefined();
+    if (runStart?.name === 'run_start') {
+      expect(runStart.entryMode).toBe('class_select');
+    }
+  });
+
+  it('run_start payload honors an explicit entryMode: replay_same_class (CF 55)', () => {
+    const events: TelemetryEvent[] = [];
+    createRun(baseInput({ entryMode: 'replay_same_class', onTelemetryEvent: (e) => events.push(e) }));
+    const runStart = events.find((e) => e.name === 'run_start');
+    expect(runStart).toBeDefined();
+    if (runStart?.name === 'run_start') {
+      expect(runStart.entryMode).toBe('replay_same_class');
+    }
+  });
+
   it('buyItem records shop_purchase with correct itemId / cost / round', () => {
     const events: TelemetryEvent[] = [];
     const ctrl = createRun(baseInput({ onTelemetryEvent: (e) => events.push(e) }));

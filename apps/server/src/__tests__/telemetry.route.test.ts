@@ -37,7 +37,7 @@ describe('POST /v1/telemetry/batch — happy path', () => {
     app = createApp({ posthog: fake.sink, logLevel: 'silent' })
 
     const events = [
-      { tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', seed: 12345, startingRelicId: 'iron_will' },
+      { tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', seed: 12345, startingRelicId: 'iron_will', entryMode: 'class_select' },
       { tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'run_end', runId: 'run-1', outcome: 'abandoned', roundReached: 5, heartsRemaining: 2 },
       { tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'combat_end', runId: 'run-1', round: 3, outcome: 'player_win', endedAtTick: 120, damageDealt: 40, damageTaken: 12 },
     ]
@@ -124,7 +124,7 @@ describe('POST /v1/telemetry/batch — validation 400s', () => {
 
   it('rejects a variant missing a required property (run_start without seed)', async () => {
     const fake = freshFake()
-    const res = await inject(makeBatch([{ tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', startingRelicId: 'iron_will' }]))
+    const res = await inject(makeBatch([{ tsClient: TS_CLIENT, sessionId: SESSION_ID, name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', startingRelicId: 'iron_will', entryMode: 'class_select' }]))
     expect(res.statusCode).toBe(400)
     expect(fake.captures).toHaveLength(0)
   })

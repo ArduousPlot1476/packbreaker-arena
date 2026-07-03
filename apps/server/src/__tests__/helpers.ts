@@ -50,7 +50,7 @@ function base(): { tsClient: string; sessionId: string } {
 /** One full canonical payload per variant (20 total), as wire JSON. */
 export function allVariantPayloads(): Array<Record<string, unknown>> {
   return [
-    { ...base(), name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', seed: 12345, startingRelicId: 'iron_will' },
+    { ...base(), name: 'run_start', runId: 'run-1', classId: 'tinker', contractId: 'neutral', seed: 12345, startingRelicId: 'iron_will', entryMode: 'class_select' },
     { ...base(), name: 'run_end', runId: 'run-1', outcome: 'abandoned', roundReached: 5, heartsRemaining: 2 },
     { ...base(), name: 'round_start', runId: 'run-1', round: 3, hearts: 3, gold: 10, itemsInBag: 6 },
     { ...base(), name: 'round_end', runId: 'run-1', round: 3, outcome: 'win', damageDealt: 40, damageTaken: 12 },

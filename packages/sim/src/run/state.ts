@@ -129,6 +129,11 @@ export interface CreateRunInput {
   /** Optional callback for telemetry events. Sim never imports telemetry —
    *  the M1.5 client wires PostHog through this. */
   readonly onTelemetryEvent?: (event: TelemetryEvent) => void;
+  /** Optional telemetry entry-mode tag for the run_start payload. The client
+   *  stamps 'class_select' (fresh class-select) or 'replay_same_class' (Play
+   *  Again). Optional here so restoreRun / sim tests can omit it; the fresh-run
+   *  emit defaults to DEFAULT_ENTRY_MODE. CF 55 (M1.5d PR 2). */
+  readonly entryMode?: 'class_select' | 'replay_same_class';
 }
 
 export interface RunController {
@@ -210,6 +215,9 @@ export interface RunController {
 
 const DEFAULT_STARTED_AT = IsoTimestamp('2025-01-01T00:00:00.000Z');
 const DEFAULT_SESSION_ID = '';
+// CF 55 (M1.5d PR 2): run_start.entryMode default when the caller omits it
+// (restoreRun never emits run_start; sim tests default to a fresh entry).
+const DEFAULT_ENTRY_MODE = 'class_select' as const;
 
 interface MutableShopState {
   slots: ItemId[];
@@ -365,6 +373,9 @@ class RunControllerImpl implements RunController {
       // CF 41 closure (M1.5c PR 1): startingRelicId added to the payload.
       // input.startingRelicId is the validated relic at this.relics.starter
       // (state.ts:285); plumbed through from client beginRun → createRun.
+      // CF 55 (M1.5d PR 2): entryMode tags the entry path (class-select vs
+      // Play Again). Optional on input; defaults to DEFAULT_ENTRY_MODE when
+      // the caller omits it (sim tests). Restore never reaches this branch.
       this.emit({
         tsClient: this.startedAt,
         sessionId: this.sessionId,
@@ -374,6 +385,7 @@ class RunControllerImpl implements RunController {
         contractId: input.contractId,
         seed: input.seed,
         startingRelicId: input.startingRelicId,
+        entryMode: input.entryMode ?? DEFAULT_ENTRY_MODE,
       });
       if (contract.isDaily) {
         this.emit({
