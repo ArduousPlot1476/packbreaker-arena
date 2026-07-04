@@ -4,6 +4,51 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-04 — M1.5e Phase 1 RATIFIED (CF 34 sim-authority migration: gold/rerollCount/bag/shop/trophy)
+
+Read-only investigation (8-reader + 6-adversarial-verifier pass, 0 refutations) ratified in full. Dispositions:
+
+**Trophy — IN (5-field CF 34 closure).** Corrects the mislabel at Catch 42. Trophy migrates alongside gold/rerollCount/bag/shop; sim must ADD real trophy-accumulation logic (currently a dead trophiesAtStart: 0 stub, state.ts:438) rather than extend existing tracking.
+
+**CF 36 (enterCombatPhase consolidation) — OUT, separable.** Single call site (useRun.ts:430), zero data-authority coupling to the migration surfaces. Opportunistic client-refactor cleanup only, no critical-path dependency. Corrects Catch 43's "multiple call sites" premise.
+
+**CF 37 (recipesRegistry sim-default vs client-filter) — IN, rides PR 1.** Combine detection moves sim-side with the bag by necessity. Concrete live-bug evidence: sim's unfiltered default registry would newly match r-iron-shield (wooden-shield ×2 → un-iconned iron-shield, recipes.ts:43) once client-side detectRecipes is retired. Fix: thread the client's iconned-filtered recipe list into createRun/restoreRun via the existing recipesRegistry? hatch (state.ts:128), symmetric with the already-threaded itemsRegistry. Retire client detectRecipes/scoutRecipes/placeCombineOutput once threaded.
+
+**CF 43 (bornFromRecipe restore) — IN (restore-persistence half), rides PR 2.** Content-grep confirms 4 live sources exercise recipeBonusPct today (Tinker class passive classes.ts:15, Pocket Forge relics.ts:41, Catalyst relics.ts:62, Worldforge Seed relics.ts:69) — one more than the original CF 43 entry named (omitted Worldforge Seed; corrected in place, clerical, disposition unchanged). Currently a total no-op; CF 34 changes that — once sim's bag restores real placements, a recipe-born item can survive restore while silently losing its bonus. Fix: additive bornFromRecipe: PlacementId[] on SerializedRunState. Full client-combat-threading closure remains an optional follow-on beyond M1.5e.
+
+**sellItem coupling — re-confirmed, unchanged.** Gold+bag remain atomically coupled on both sim (state.ts:508-532) and client (RunController.ts:355-374) sides. Gold-first stays refuted.
+
+**Restore/persistence lifetime walk — 3 gaps, all mid-run-restore-only, all harmless today (client never drives sim mutation methods):** B-F3 (sim restore forces bag placements: [] instead of reading restoreFrom.bag.placements, state.ts:327-330); E-F9 (nextPlacementCounter never serialized/re-derived, uid-collision risk post-restore); CF 43 (above). Save shape itself round-trips gold/rerollCount/bag/shop correctly — all three gaps are restore-logic bugs, not schema gaps.
+
+**PR split, sized from findings:**
+- **PR 1 — live-mutation authority flip (+ trophy, + CF 37).** Route buy/sell/reroll/place/move/rotate/combine through sim actions; extend applySimSnapshot/sync_from_sim to consume sim gold/bag/shop/trophy; add rerollCount + real trophy-accumulation to sim RunState; thread iconned recipesRegistry; delete client parallel reducer arms + α/β dispositions. Bisect seam if Codex flags size: CF 37 as PR 1b.
+- **PR 2 — restore/persistence authority.** B-F3 + E-F9 + CF 43 schema add. Additive schema bump → 6 .json scenario-corpus re-baseline; 224 .jsonl determinism corpus unaffected.
+- **CF 36** rides along only if PR 1 independently touches the useRun sim-dispatch callback family; otherwise deferred indefinitely.
+
+Clerical corrections (in place, no new entries): CF 37's stale path citation (apps/client/src/content.ts:L79-87 → apps/client/src/run/content.ts:79, post-M1.3.4a move); CF 37's state.ts:257 recipesRegistry-default citation; CF 43's content list (add Worldforge Seed relics.ts:69).
+
+Counter: **43 / 16 / 8 / 27 / 39**. Delta from post-Catch-41 baseline (41/15/8/27/39): catches +2, rules +1. Open-CFs unchanged — scope ratified, nothing closed until PR merge.
+
+## 2026-07-04 — Rule 16 LANDED (disposition-text propagation — second instance of the M1.5a disposition-drift watch)
+
+Catch 42's trophy mislabel is the second instance of the mechanism first logged as watched-not-codified at decision-log.md 2026-05-15 § "M1.5a PR 2 closed" § "Disposition-drift watch" ("log + watch; codify as Rule 10 category 6 or new rule on second instance"). Codifying per that standing instruction.
+
+> **Rule 16 — disposition-text propagation.** Any prompt or entry restating an authority/scope disposition from an earlier milestone must cite the most recent Locked Answer or ratification on that surface, not the original pre-correction entry. A CF's carry-forward shorthand (e.g., a field list) must be checked against the CF's original full definition before being repeated — shorthand erosion that silently drops a field is the same failure shape as an outright authority flip.
+
+Rules 15 → 16.
+
+## 2026-07-04 — Catch 43 CONFIRMED (assert-from-prose — CF 36 "multiple call sites" premise false)
+
+The M1.5e Phase 1 prompt repeated CF 36's canonical decision-log description verbatim ("multiple call sites in useRun.ts") without re-deriving it from shipped code per Rule 6. False: simRun.enterCombatPhase() has exactly one client call site (useRun.ts:430, inside the single onContinue handler at :425-432); git log -S 'enterCombatPhase' -- useRun.ts shows one introducing commit (f6ccd5b, M1.5a Phase 2b-2) — 0→1, never multiplied. The original CF 36 entry conflated this single call site with three other sim-dispatch call sites the same commit introduced together. This is the CF 36 entry's own long-standing inaccuracy, carried into the M1.5e prompt unverified. Caught by Claude Code's Step 0 re-derivation — same mechanism as Catch 42, distinct surface.
+
+Catches 42 → 43.
+
+## 2026-07-04 — Catch 42 CONFIRMED (assert-from-prose — trophy authority mislabeled sim-owned in M1.5e Phase 1 prompt)
+
+The M1.5e Phase 1 prompt's Context stated "sim currently owns ... trophy," scoping CF 34 to 4 fields. False on two counts: (1) trophy is client-authoritative — RunController.ts:437-438/:456, schemas.ts:741-742/:763 (SerializedRunState-only field; sim has only a dead trophiesAtStart: 0 stub at state.ts:438 that applySimSnapshot never copies); (2) this exact mislabel already happened once and was corrected — decision-log.md 2026-05-15 § "M1.5a PR 2 closed" Locked Answer 32 settled trophy client-owned, and that entry's "Disposition-drift watch" names the original 2026-05-13 Q2 Amendment A wording as the error's source. CF 34's own opening definition has always scoped trophy in. Master-dev cited the pre-correction wording instead of LA 32 when authoring the M1.5e Context, three milestones later. Caught by Claude Code's Step 0 re-derivation, independently flagged by all 8 mapper agents — 0 refutations.
+
+Catches 41 → 42.
+
 ## 2026-07-04 — Catch 41 CONFIRMED (assert-from-prose — false in-section MITM cross-reference)
 
 The M1.5e housekeeping prompt's Step 3 instructed documenting the schannel TLS revocation-check quirk as "plausibly the same corporate MITM proxy already noted in this section [tech-architecture.md § 8] for npm installs." § 8 contains no such note — the corporate-cert TLS precedent (--config.strict-ssl=false workaround) is documented in decision-log.md's 5b.3a Phase 2.5j entries, not § 8. Same assert-from-prose shape as Catch 37/39/40 — an unverified claim about canonical document content, this time authored by master-dev in a prompt rather than carried from a prior instance. Caught by Claude Code's Step 3 grep before any text was written to a canonical file, validating Rule 8's halt-and-surface authority on a plumbing-only-framed prompt. The underlying MITM-proxy hypothesis is real and retained, correctly cited to decision-log.md rather than invented as an in-section § 8 claim.
@@ -666,7 +711,7 @@ M1.5a-era explicit closures since M1.5a: CF 39 (M1.5b PR 1 Phase 2 D close).
 - CF 40 — `contractName` + `contractText` hardcoded literals at `createInitialState` → M2 contract system or first non-neutral contract.
 - CF 41 — `run_start` telemetry payload `startingRelicId` omission → folds into CF 35 scope at M1.5b telemetry milestone.
 - CF 42 — `buildCombatInput.startingHp: 30` Rule 6 violation (no current `passiveStats.maxHpBonus` items) → first M1 item with `maxHpBonus` ships.
-- CF 43 — `buildCombatInput.recipeBornPlacementIds` omission (Tinker class passive + Pocket Forge + Catalyst silently no-op in client-side combat) — **AMENDED Phase 2.5h:** restore loses sim's `bornFromRecipe` Set mid-round (E-F6); Set isn't JSON-roundtrippable; closure must persist + restore the membership (likely as `bornFromRecipe: PlacementId[]` array in `SerializedRunState`, schema-bump territory). → 5b.3b.
+- CF 43 — `buildCombatInput.recipeBornPlacementIds` omission (Tinker class passive + Pocket Forge + Catalyst + Worldforge Seed silently no-op in client-side combat) — **AMENDED Phase 2.5h:** restore loses sim's `bornFromRecipe` Set mid-round (E-F6); Set isn't JSON-roundtrippable; closure must persist + restore the membership (likely as `bornFromRecipe: PlacementId[]` array in `SerializedRunState`, schema-bump territory). → 5b.3b.
 - CF 44 — Mid + boss relic named glyphs (6 placeholder diamonds: `resonant-anchor`, `catalyst`, `worldforge-seed`, `berserkers-pendant`, `crimson-pact`, `conquerors-crown`) → M2 visual polish.
 
 **M1.5b PR 3 / 5b.3a-era (3 open):**
@@ -2462,7 +2507,7 @@ First instance within M1.5a: `decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 d
 
 **CF 36** — `enterCombatPhase` consolidation surface (multiple call sites in `useRun.ts` post-Phase-2b-2). Scope: opportunistic during M1.5b client refactor. Opened during Phase 2b-2 inspection.
 
-**CF 37** — `recipesRegistry` sim-default vs client-filter divergence. `createRun.recipesRegistry` defaults to canonical RECIPES at sim controller constructor (`packages/sim/src/run/state.ts:257`); client uses its own filtered RECIPES from `apps/client/src/content.ts:L79–87` for combine detection. Latent divergence — not load-bearing currently (client owns combine detection). Revisit at M1.5b alongside CF 34 if combine detection moves sim-side.
+**CF 37** — `recipesRegistry` sim-default vs client-filter divergence. `createRun.recipesRegistry` defaults to canonical RECIPES at sim controller constructor (`packages/sim/src/run/state.ts:277`); client uses its own filtered RECIPES from `apps/client/src/run/content.ts:79` for combine detection. Latent divergence — not load-bearing currently (client owns combine detection). Revisit at M1.5b alongside CF 34 if combine detection moves sim-side.
 
 **CF 38** — Resolution panel reward display sync with post-PR-2 mutation sources (gold + trophy axes). `apps/client/src/combat/CombatOverlay.tsx:255-258` locally computes reward values from M1.3.4a-era pre-PR-2 assumptions. PR 2's β gold-capture-delta migration shifted mutation source to sim's captured `goldDelta` (including winBonus + `derived.bonusGoldOnWin` + `baseIncomeForRound(round+1)`) per `packages/sim/src/run/state.ts:363`. Display emits `isWin ? winBonusGold : 0`; result: TopBar gold jumps by full `goldDelta`, panel announces only winBonus. Trophy display at same site emits `isWin ? 18 : 0` matching Phase 2.5h reducer-side `+18` by coincidence (both M0-placeholder per `decision-log.md 2026-05-02 § M1.3.4a ratification 5`); M2 per-round trophy schedule surfaces same Class D co-drift on trophy axis. Surfaced by Codex Finding 5 on PR #14 commit 8eba201; Phase 2.5i inspection halted on three structural resolution paths each violating a load-bearing invariant (β disposition / NEXT-click commit semantic / resolution UX shape) × three valid UX directions for reward-vs-income semantic (display-authoritative / TopBar-authoritative / split-row panel) entangled with structural call. Disposition target: M1.5b or M2 polish. Graybox-acceptable. Counter 29 → 30 open CFs.
 
