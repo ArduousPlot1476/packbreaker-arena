@@ -300,6 +300,15 @@ Block merge on any failure. The determinism suite is the one nobody is allowed t
 ### 8.3 Versioning
 M1: no public versions, internal builds tagged by commit SHA. M2+: semver on the client app, content packs versioned independently (`content@2025-W42` pattern — picked in M2).
 
+### 8.4 Local environment
+
+Environment facts for the primary Windows dev machine (recorded M1.5e pre-Phase-1 housekeeping, 2026-07-04). Diagnostic record only — none of these change build/CI behavior.
+
+- **Node** — pinned to **20** via a repo-root `.nvmrc`, matching CI's `node-version: 20.x` (§ 8.2 / `.github/workflows/ci.yml`). The local runtime had drifted to v22.12.0; `.nvmrc` corrects the drift. Root `package.json` keeps `engines.node: ">=18.18.0"` unchanged — both 20 and 22 satisfy that floor, so the `.nvmrc` pin narrows local dev to CI's major rather than altering the engines constraint. No workspace-level `engines` fields are added.
+- **`gh` CLI** — not installed. PR / merge operations run through the existing git-credential-token REST path, not `gh` automation.
+- **`pnpm`** — not on `PATH` by default; invoked through the corepack shim (`corepack pnpm …`) for `turbo` and all workspace scripts.
+- **GitHub API reachability** — a raw unauthenticated HTTPS probe to `api.github.com` fails locally with a Windows **schannel TLS revocation-check** error (`curl` exit 35, `CRYPT_E_NO_REVOCATION_CHECK`, `http_code 000`). This is **not** a network block: the identical request with `curl --ssl-no-revoke` returns `200`, so DNS / socket / trust-chain are all fine and the fault is isolated to CRL/OCSP revocation checking. Plausibly the same corporate-cert / TLS-interception root cause already documented for npm installs (the `--config.strict-ssl=false` workaround — decision-log.md § 2026-05-21 "M1.5b PR 3 / 5b.3a Phase 2.5j"). Diagnostic note only; no TLS-bypass flags or config are added here.
+
 ---
 
 ## 9. Deployment

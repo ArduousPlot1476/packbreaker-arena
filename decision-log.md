@@ -4,6 +4,22 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-04 — Catch 41 CONFIRMED (assert-from-prose — false in-section MITM cross-reference)
+
+The M1.5e housekeeping prompt's Step 3 instructed documenting the schannel TLS revocation-check quirk as "plausibly the same corporate MITM proxy already noted in this section [tech-architecture.md § 8] for npm installs." § 8 contains no such note — the corporate-cert TLS precedent (--config.strict-ssl=false workaround) is documented in decision-log.md's 5b.3a Phase 2.5j entries, not § 8. Same assert-from-prose shape as Catch 37/39/40 — an unverified claim about canonical document content, this time authored by master-dev in a prompt rather than carried from a prior instance. Caught by Claude Code's Step 3 grep before any text was written to a canonical file, validating Rule 8's halt-and-surface authority on a plumbing-only-framed prompt. The underlying MITM-proxy hypothesis is real and retained, correctly cited to decision-log.md rather than invented as an in-section § 8 claim.
+
+Lands against the current running counter (post-Catch-40: 40/15/8/27/39): catches 40 → 41.
+
+## 2026-07-04 — Catch 40 CONFIRMED (assert-from-prose — false M1.5e Phase 1/2 ratification claim)
+
+M1.5e opened with prior-instance-carried context asserting a completed CF 34 Phase 1 + Phase 2 ratification that does not exist anywhere in canon. Same shape as Catch 37 (CF 53 trigger-size) and Catch 39 (M1.5d restart coverage claim) — a claim about canonical state made without grounding, caught before it reached a prompt. Confirmed by direct grep + an independent refutation-attempt pass against the full decision-log.md: "M1.5e" occurs exactly twice (2026-07-03 forward-pointer, 2026-05-26 spin-out header), neither a ratification; zero M1.5e PRs exist in the log; no Phase 1 or Phase 2 ratification for CF 34/M1.5e exists anywhere in canon. Refutation attempt failed — absence confirmed.
+
+Lands against the pre-CF-55-close baseline: catches 39 → 40. Independent of CF 55's own close (open-CFs 40 → 39, dc4ade1). Combined running counter: 40 / 15 / 8 / 27 / 39.
+
+## 2026-07-04 — GitHub API reachability note corrected (schannel TLS revocation-check quirk, not a sandbox network block)
+
+The standing note that "the sandbox blocks outbound HTTPS to api.github.com" is corrected. Isolated probe (`curl -sS -o /dev/null -w '%{http_code}' https://api.github.com`) returns curl exit 35 (CURLE_SSL_CONNECT_ERROR) / http_code 000 — traced to Windows schannel failing a CRL/OCSP revocation check during the TLS handshake, not a blocked connection. `curl --ssl-no-revoke` to the same URL returns 200, confirming DNS/socket/trust-chain are fine and isolating the fault to revocation checking specifically — plausibly the same corporate MITM TLS proxy already documented for npm installs. Existing git-based push/PR/Codex-comment operations are unaffected by this (not independently isolated this pass) and continue via the established git-credential-token path. PR workflow (browser-link + manual paste, no `gh` automation) is UNCHANGED — this correction is diagnostic only, not authorization for Claude Code to self-serve merge/CI steps.
+
 ## 2026-07-03 — M1.5d PR 2 CLOSED + **M1.5d MILESTONE CLOSED** (CF 55 — entry-mode telemetry on run_start)
 
 `entryMode` entry-mode telemetry landed. `run_start` now carries `entryMode: 'class_select' | 'replay_same_class'`, threaded `CreateRunInput.entryMode` → sim emit, so funnel analysis segments fresh class-select runs from Play-Again (same class) restarts. Merged `--no-ff` as PR #24 at merge commit `701d833`; branch `m1.5d-pr2-cf55-entry-mode-telemetry` deleted local + remote. Codex clean (0 findings, reviewed `9bfac9b`); gate 23/23 (full-workspace `turbo lint typecheck test --force`).
