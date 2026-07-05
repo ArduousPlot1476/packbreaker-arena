@@ -427,6 +427,37 @@ describe('useRun onReroll — sim-authoritative reroll (CF 34 / M1.5e PR 1)', ()
   });
 });
 
+describe('useRun onCombine — routes the SELECTED match to sim (Codex round 1 Finding 2)', () => {
+  it('calls sim.combineRecipe with the exact placement uids of the selected match (not empty, not another match)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    expect(ctx.simRun).not.toBeNull();
+    // Client-wiring test: mock the sim call boundary so we don't need a real
+    // ambiguous-match game state — we assert what onCombine PASSES to sim. This
+    // closes the bug class Codex found (Finding 2): sim correctness alone
+    // doesn't guarantee the client hands sim the right placement ids.
+    const combineSpy = vi
+      .spyOn(ctx.simRun!, 'combineRecipe')
+      .mockImplementation(() => {});
+    const match = {
+      recipe: { id: 'r-steel-sword', inputs: ['iron-sword', 'iron-dagger'], output: 'steel-sword' },
+      uids: ['p-3', 'p-4'],
+    } as unknown as Parameters<typeof ctx.onCombine>[0];
+
+    act(() => {
+      ctx.onCombine(match);
+    });
+
+    expect(combineSpy).toHaveBeenCalledOnce();
+    const [recipeId, placementIds] = combineSpy.mock.calls[0]!;
+    // The SELECTED match's recipe id + exact placement uids reach sim. Pre-fix
+    // onCombine passed only the recipeId, so sim consumed whichever cluster it
+    // detected first — losing the player's specific selection.
+    expect(recipeId).toBe('r-steel-sword');
+    expect(placementIds).toEqual(['p-3', 'p-4']);
+  });
+});
+
 describe('useRun onContinue — enterCombatPhase routing (M1.5a PR 2 Phase 2b-2)', () => {
   it('calls simRun.enterCombatPhase then dispatches continue_to_combat (combatActive=true)', async () => {
     const { getCtx } = await renderAndCapture();
