@@ -156,6 +156,16 @@ export interface RunController {
   moveItem(placementId: PlacementId, anchor: CellCoord, rotation: Rotation): void;
   rotateItem(placementId: PlacementId, rotation: Rotation): void;
   rerollShop(): void;
+  /** STOPGAP — shop-generation RNG basis (client shopSeedFor vs sim this.rng)
+   *  is an open follow-on CF, opened at this PR's close. This method exists
+   *  only until that resolves.
+   *
+   *  Overwrites the current shop's slots with client-supplied items (the
+   *  shopSeedFor set actually shown to the player) AFTER the authoritative
+   *  rerollShop/advancePhase call has already consumed this.rng. A pure slot
+   *  overwrite: consumes no rng, leaves purchased/rerollsThisRound intact.
+   *  Arranging-phase only. (M1.5e PR 1 / B2 Option 1.) */
+  overrideShopSlots(slots: ReadonlyArray<ItemId>): void;
   detectRecipes(): ReadonlyArray<RecipeMatch>;
   /** Returns the anchor + first-fitting rotation for a recipe match's output,
    *  or null if no rotation fits at the inputs' top-left footprint with input
@@ -654,6 +664,14 @@ class RunControllerImpl implements RunController {
       cost,
       rerollIndex: this.shop.rerollsThisRound - 1,
     });
+  }
+
+  overrideShopSlots(slots: ReadonlyArray<ItemId>): void {
+    // STOPGAP — shop-generation RNG basis (client shopSeedFor vs sim this.rng)
+    // is an open follow-on CF, opened at this PR's close. This method exists
+    // only until that resolves.
+    this.requirePhase('arranging', 'overrideShopSlots');
+    this.shop.slots = [...slots];
   }
 
   detectRecipes(): ReadonlyArray<RecipeMatch> {
