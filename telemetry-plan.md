@@ -135,8 +135,10 @@ KPIs map directly to the four telemetry goals in § 1.
   - Target: ≥ 55% by end of M1 graybox playtests. (`concept-brief.md` § Success metrics for M2.)
 - **Abandon rate by round** = `count(run_end where outcome=abandoned, group by roundReached) / count(round_start at that round)`.
   - Cliffs flag where players quit. Round-1 abandons usually = onboarding. Round-7+ abandons usually = blowout.
+- **Median run length (minutes)** = `median(run_end.tsClient − run_start.tsClient) where outcome != abandoned`.
+  - Target: 12–20 minutes. This is the **M1 exit-gate number** (`roadmap.md` M1 exit criteria; core-loop pillar in `concept-brief.md` § 5 / `gdd.md` § 9). Measures session-length UX, not lethality calibration — distinct from median rounds reached below. No new telemetry: both events already carry `tsClient` per § 8.
 - **Median run length (rounds reached)** = `median(roundReached) where outcome != abandoned`.
-  - Target: 8–11 rounds. Median below 6 = lethality too high. Median pinned at 11 = boss too easy.
+  - Target: 8–11 rounds. Balance/lethality diagnostic only, not a session-length stand-in. Median below 6 = lethality too high. Median pinned at 11 = boss too easy.
 
 ### Goal 2 — Synergy depth
 
@@ -188,7 +190,8 @@ Three dashboards. Built in PostHog. Each maps to a telemetry goal.
 ### D1 — Run Health Overview
 - Run completion rate (line, daily)
 - Abandon rate by round (bar, by round 1–11)
-- Median rounds reached (single value + 7-day sparkline)
+- Median run length in minutes (single value + 7-day sparkline) — **M1 exit-gate metric**, target 12–20 min
+- Median rounds reached (single value + 7-day sparkline) — balance diagnostic, target 8–11 rounds
 - Tick-cap draw rate (line, daily; alert if > 1%)
 - Combat duration histogram (distribution of `endedAtTick`)
 

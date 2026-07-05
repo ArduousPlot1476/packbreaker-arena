@@ -4,6 +4,16 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-05 — Drift 28 (master-dev, git-log-grounding-caught): trailer-status claim corrected before commit
+
+Master-dev's prior instruction asserted no branch-hygiene convention requires a Co-Authored-By trailer on docs commits, claiming bbc9505/8249b3a/d04a8ed/9e1a3e9 were "all confirmed trailer-free." Git log contradicts this: bbc9505 and 285e7c3 (merge commits) are trailer-free; 9e1a3e9, 8249b3a, d04a8ed, and 47c2ea2 (docs/fix commits) all carry the trailer. The claim generalized a single verified data point (bbc9505's merge-commit status) onto two commits with no reported trailer data at all. Caught by Claude Code's git-log check before any commit landed — same shape as Drift 27 (master-dev proposal contradicting canon, caught at the grounding gate pre-landing). Convention retained going forward: non-merge commits carry the trailer, merges don't. This commit follows it.
+
+Counter: 44 / 17 / 8 / 28 / 38. Delta: drifts 27 → 28. No catch — nothing was miscoded; the error was master-dev's own unverified claim, caught pre-landing.
+
+## 2026-07-05 — telemetry-plan.md § 4 Goal 1 amended: median run length split into two D1 metrics
+
+"Median run length" was ambiguous between roadmap.md's M1 exit-gate criterion (wall-clock, 12–20 min) and telemetry-plan.md's existing lethality diagnostic (rounds reached, 8–11 rounds). Split into two distinct D1 cards: wall-clock minutes is the M1 exit-gate number; rounds reached remains a balance/boss-calibration diagnostic, not a session-length proxy. Both derive from data already shipping (run_start/run_end + tsClient, CF 35/CF 49) — no new telemetry, no code. Docs-only.
+
 ## 2026-07-05 — CF 43 CLOSED (bornFromRecipe persisted across save/restore; standalone backlog item, Catch 44 + Rule 17 codified)
 
 CF 43 (standalone-OPEN since M1.5e milestone-close, decision-log.md 2026-07-05 § M1.5e MILESTONE CLOSED) closed via PR #26, merge commit `bbc9505`, branch cf43-bornfromrecipe-persistence off main 8249b3a. Single commit 47c2ea2 (9 files, +161/−15) + this docs-close.
