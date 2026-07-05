@@ -271,6 +271,15 @@ const SerializedRunStateSchema = z
     rngState: z.number(),
     rerollCount: z.number(),
     trophy: z.number(),
+    // CF 43: recipe-born placement ids. OPTIONAL (permissive) — a pre-fix save
+    // lacking this field still validates rather than being hard-rejected as the
+    // required rngState/trophy fields would be. This boundary VALIDATES but does
+    // not transform (validateLocalSaveV1 returns .success and loadLocal returns
+    // the raw object), so a default here would be discarded; the empty-array
+    // default materializes at the consumption point instead — restoreRun does
+    // `restoreFrom.bornFromRecipe ?? []`. Optional (not required) keeps the type
+    // guard honest: the field can genuinely be absent on a legacy load.
+    bornFromRecipe: z.array(PlacementIdSchema).readonly().optional(),
   })
   .readonly();
 

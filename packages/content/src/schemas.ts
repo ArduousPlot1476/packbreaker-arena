@@ -758,14 +758,21 @@ export interface GhostBuild {
  *    - nextPlacementCounter: re-derived to 0 on restoreRun() — sim's bag is
  *      empty in M1.5a (client owns bag per Q2 Amendment A); sim's placeItem
  *      is never called by client code.
- *    - bornFromRecipe (Set<PlacementId>): CF 43 decoupled per Phase 1 — Sets
- *      are not JSON-roundtrippable, and CF 43's eventual client mirror is a
- *      separate PR. Recipe-bonus tracking lives sim-internal; restore yields
- *      an empty Set, which matches the freshly-constructed controller shape. */
+ *    - bornFromRecipe: NO LONGER decoupled — CF 43 closed. Now extended below
+ *      as a PlacementId[] (serialized from the sim's internal Set via
+ *      RunController.getRecipeBornPlacementIds, rehydrated on restoreRun);
+ *      pre-fix saves lacking the field default it to [] at the load boundary.
+ *      See the interface field. */
 export interface SerializedRunState extends RunState {
   readonly rngState: number
   readonly rerollCount: number
   readonly trophy: number
+  // CF 43 (closed): recipe-born placement ids, serialized from the sim's
+  // internal bornFromRecipe Set (RunController.getRecipeBornPlacementIds) so
+  // recipeBonusPct survives save→restore. OPTIONAL — pre-fix saves omit it and
+  // the load boundary validates (does NOT transform), so it is simply absent
+  // on legacy loads; restoreRun treats a missing value as an empty set (?? []).
+  readonly bornFromRecipe?: readonly PlacementId[]
 }
 
 /** Versioned. Migrations live in apps/client/src/persistence/migrations/. */

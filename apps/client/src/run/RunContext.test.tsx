@@ -1632,6 +1632,7 @@ describe('RunProvider — load-on-mount restore race guard (M1.5b PR 3 / 5b.3a P
         rngState: 0x12345678,
         rerollCount: 0,
         trophy: 0,
+        bornFromRecipe: [],
       },
     };
     localStorage.setItem('pba.v1.save', JSON.stringify(maraudersSave));
@@ -1796,6 +1797,7 @@ describe('RunProvider — corrupt-payload mount fallback (M1.5b PR 3 / 5b.3a Pha
         rngState: 0x42424242,
         rerollCount: 0,
         trophy: 36,
+        bornFromRecipe: [],
       },
     };
     localStorage.setItem('pba.v1.save', JSON.stringify(partialPurchase));

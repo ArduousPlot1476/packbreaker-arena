@@ -149,6 +149,11 @@ export interface RunController {
    *  load-bearing (tests/replay fixtures). Forward-compat insurance per
    *  Phase 1 ratification A4-minimal. */
   getRngState(): number;
+  /** Returns the placement ids currently flagged recipe-born (the sim's
+   *  internal bornFromRecipe Set as an array). Used by the save path to
+   *  persist bornFromRecipe onto SerializedRunState so recipeBonusPct
+   *  survives save→restore (CF 43). Mirrors getRngState()'s save-surface. */
+  getRecipeBornPlacementIds(): ReadonlyArray<PlacementId>;
   advancePhase(): void;
   buyItem(slotIndex: number): void;
   sellItem(placementId: PlacementId): void;
@@ -277,13 +282,11 @@ class RunControllerImpl implements RunController {
 
   // Internal-only run state (NOT serialized in RunState).
   private readonly pendingItems: ItemId[] = [];
-  // KNOWN GAP (CF43, deferred to PR2) — a recipe-born placement surviving
-  // restore loses its bonus; bag contents themselves are correct as of this fix
-  // (B-F3/E-F9). bornFromRecipe is NOT serialized (a Set isn't JSON-round-
-  // trippable and SerializedRunState is frozen for PR 1), so it deserializes
-  // empty on restore. PR 2 adds bornFromRecipe: PlacementId[] to
-  // SerializedRunState to close this (Tinker passive / Pocket Forge / Catalyst /
-  // Worldforge Seed recipe-bonus items are the affected content).
+  // Recipe-born placement ids (added on combineRecipe output; pruned on sell /
+  // combine-input consumption). Serialized onto SerializedRunState via
+  // getRecipeBornPlacementIds and rehydrated in the restore branch so
+  // recipeBonusPct survives save→restore (CF 43 closed). Affected content:
+  // Tinker passive / Pocket Forge / Catalyst / Worldforge Seed.
   private readonly bornFromRecipe: Set<PlacementId> = new Set();
   private nextPlacementCounter = 0;
   private lastCombatResult: CombatResult | null = null;
@@ -349,6 +352,13 @@ class RunControllerImpl implements RunController {
       // Trophy restore-mirror (parallel to gold above): sim owns trophy
       // (CF 34 / M1.5e PR 1), seeded from the client-authored snapshot.
       this.trophy = restoreFrom.trophy;
+      // CF 43: rehydrate recipe-born membership so recipeBonusPct applies to
+      // these placements after restore. Populate the (empty) Set in place —
+      // the field is readonly. `?? []` is the effective empty-array default for
+      // pre-fix saves: the field is optional and the client load boundary
+      // validates without transforming, so a legacy snapshot arrives here with
+      // bornFromRecipe absent (undefined) — treat that as empty (prior behavior).
+      for (const id of restoreFrom.bornFromRecipe ?? []) this.bornFromRecipe.add(id);
       // B-F3 (M1.5e PR 1 Codex round 1): sim is now the bag authority, so
       // hydrate the saved placements instead of forcing empty. The data is
       // already serialized (schemas.ts § 13). Pre-flip this was empty because
@@ -490,6 +500,10 @@ class RunControllerImpl implements RunController {
 
   getRngState(): number {
     return this.rng.state;
+  }
+
+  getRecipeBornPlacementIds(): ReadonlyArray<PlacementId> {
+    return [...this.bornFromRecipe];
   }
 
   advancePhase(): void {
