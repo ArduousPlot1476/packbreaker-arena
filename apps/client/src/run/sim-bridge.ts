@@ -25,12 +25,13 @@ import type {
   ClassId,
   PlacementId,
   RelicSlots,
+  RunState,
   Ruleset,
   ShopState,
   SimSeed,
 } from '@packbreaker/content';
 import type { Rng } from '@packbreaker/sim';
-import { createRng, generateShop as simGenerateShop } from '@packbreaker/sim';
+import { createRng, effectiveItemCost, generateShop as simGenerateShop } from '@packbreaker/sim';
 import { SHOP_POOL_ITEMS } from './content';
 import type { BagItem, ItemId, ShopSlot } from './types';
 
@@ -97,6 +98,11 @@ export function generateShop(
   return shopState.slots.map((itemId, i) => ({
     uid: `${uidPrefix}${i}`,
     itemId: itemId as ItemId,
+    // Placeholder-quality effective cost (default itemCostDelta): this path's
+    // output feeds overrideShopSlots (itemIds only). The DISPLAYED shop cost
+    // comes from simShopToClientShop post-sync with the run's real
+    // derived.itemCostDelta (CF 34 / M1.5e PR 1 B1).
+    cost: effectiveItemCost(SHOP_POOL_ITEMS[itemId]!, 0, ruleset.itemCostMultiplierBp),
   }));
 }
 
@@ -161,15 +167,32 @@ export function simBagToClientBag(bag: BagState): BagItem[] {
   }));
 }
 
-/** Adapter: canonical ShopState → client ShopSlot[] (inverse of
- *  clientShopToSimShop). Purchased slot indices materialize as itemId:null
- *  (the client's "sold" state). uid is stable per (round, rerollsThisRound,
- *  slotIndex) so React keys + drag survive a re-sync within the same shop. */
-export function simShopToClientShop(shop: ShopState, round: number): ShopSlot[] {
-  return shop.slots.map((itemId, i) => ({
-    uid: `s${round}-${shop.rerollsThisRound}-${i}`,
-    itemId: shop.purchased.includes(i) ? null : (itemId as ItemId),
-  }));
+/** Adapter: sim RunState → client ShopSlot[] (inverse of clientShopToSimShop).
+ *  Purchased slot indices materialize as itemId:null (the client's "sold"
+ *  state). uid is stable per (round, rerollsThisRound, slotIndex) so React keys
+ *  + drag survive a re-sync within the same shop. `cost` is the effective price
+ *  via sim's effectiveItemCost — the SAME value sim.buyItem charges, so
+ *  displayed price == charged price (B1, CF 34 / M1.5e PR 1). Takes the whole
+ *  RunState because it needs derived.itemCostDelta + ruleset.itemCostMultiplierBp
+ *  alongside the shop + currentRound. */
+export function simShopToClientShop(snapshot: RunState): ShopSlot[] {
+  const { shop, currentRound, derived, ruleset } = snapshot;
+  return shop.slots.map((itemId, i) => {
+    const sold = shop.purchased.includes(i);
+    const item = SHOP_POOL_ITEMS[itemId];
+    return {
+      uid: `s${currentRound}-${shop.rerollsThisRound}-${i}`,
+      itemId: sold ? null : (itemId as ItemId),
+      // Defensive fallback 0 if the item isn't in the current shop pool — in
+      // production every shop item comes from SHOP_POOL_ITEMS, so this only
+      // fires on a cross-version restore with a dropped item (PR 2 concern):
+      // degrade gracefully rather than crash on the undefined cost lookup.
+      cost:
+        sold || !item
+          ? 0
+          : effectiveItemCost(item, derived.itemCostDelta, ruleset.itemCostMultiplierBp),
+    };
+  });
 }
 
 /** Empty relic slots for M1.3.4a — the client renders a static

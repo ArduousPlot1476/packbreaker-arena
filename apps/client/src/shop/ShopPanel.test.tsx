@@ -41,11 +41,11 @@ const TEST_RUN_STATE: RunState = {
 };
 
 const TEST_SHOP: ShopSlot[] = [
-  { uid: 's1', itemId: 'iron-sword' as ItemId },
-  { uid: 's2', itemId: 'healing-herb' as ItemId },
-  { uid: 's3', itemId: 'whetstone' as ItemId },
-  { uid: 's4', itemId: 'apple' as ItemId },
-  { uid: 's5', itemId: 'iron-dagger' as ItemId },
+  { uid: 's1', itemId: 'iron-sword' as ItemId, cost: 3 },
+  { uid: 's2', itemId: 'healing-herb' as ItemId, cost: 2 },
+  { uid: 's3', itemId: 'whetstone' as ItemId, cost: 2 },
+  { uid: 's4', itemId: 'apple' as ItemId, cost: 1 },
+  { uid: 's5', itemId: 'iron-dagger' as ItemId, cost: 3 },
 ];
 
 describe('ShopPanel', () => {

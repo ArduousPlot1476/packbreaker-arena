@@ -44,10 +44,17 @@ export interface BagItem {
 
 /** Single shop slot. `itemId: null` is the "sold" state — sim's ShopState
  *  tracks `purchased: number[]` (slot indices); the client materializes
- *  bought slots as `itemId: null` for ergonomic React rendering. */
+ *  bought slots as `itemId: null` for ergonomic React rendering.
+ *
+ *  `cost` is the effective (ruleset-aware) price — the SAME value sim.buyItem
+ *  charges (effectiveItemCost: item.cost + itemCostDelta, × itemCostMultiplierBp).
+ *  Computed once in simShopToClientShop at sync time so the displayed price
+ *  and the charged price are one read (CF 34 / M1.5e PR 1 B1). Sold slots
+ *  carry 0 (not rendered). */
 export interface ShopSlot {
   uid: string;
   itemId: ItemId | null;
+  cost: number;
 }
 
 /** Client-narrowed item record. Adapted from canonical Item which carries
