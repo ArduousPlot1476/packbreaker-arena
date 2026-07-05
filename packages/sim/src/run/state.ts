@@ -253,6 +253,7 @@ class RunControllerImpl implements RunController {
   // Mutable state
   private hearts: number;
   private gold: number;
+  private trophy = 0;
   private currentRound: RoundNumber = 1;
   private bag: MutableBagState;
   private shop: MutableShopState;
@@ -324,6 +325,11 @@ class RunControllerImpl implements RunController {
       // code in M1.5a/b. CF 34 closure would re-evaluate (and amend B-F3 /
       // E-F9 per Phase 2.5h meta-audit carry-forwards).
       this.gold = restoreFrom.gold;
+      // Trophy restore-mirror (parallel to gold above): sim now owns trophy
+      // (CF 34 / M1.5e PR 1), so seed it from the client-authored snapshot to
+      // avoid a trophy-loss-on-restore regression. A value mirror like
+      // gold/shop — NOT the structural B-F3/E-F9 bag-restore work (still PR 2).
+      this.trophy = restoreFrom.trophy;
       this.bag = {
         dimensions: this.effectiveRuleset.bagDimensions,
         placements: [],
@@ -435,6 +441,8 @@ class RunControllerImpl implements RunController {
         purchased: this.shop.purchased.slice(),
         rerollsThisRound: this.shop.rerollsThisRound,
       },
+      rerollCount: this.shop.rerollsThisRound,
+      trophy: this.trophy,
       trophiesAtStart: 0, // M2 concern.
       history: this.history.slice(),
       outcome: this.outcome,
@@ -847,6 +855,11 @@ class RunControllerImpl implements RunController {
       goldEarnedThisRound =
         this.effectiveRuleset.winBonusGold + this.derived.bonusGoldOnWin;
       this.gold += goldEarnedThisRound;
+      // Trophy accumulation (CF 34 / M1.5e PR 1): sim is now the authoritative
+      // writer of run-cumulative trophy. +18/win is the M0 placeholder
+      // (decision-log 2026-05-02 § M1.3.4a ratification 5); the M2 trophy-curve
+      // owns the real schedule. Replaces the client accumulator this PR retires.
+      this.trophy += 18;
     } else {
       this.hearts = Math.max(0, this.hearts - 1);
     }

@@ -121,6 +121,8 @@ function makeSimSnapshot(overrides: Partial<SimRunState> = {}): SimRunState {
     bag: { dimensions: { width: 6, height: 4 }, placements: [] },
     relics: { starter: null, mid: null, boss: null },
     shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+    rerollCount: 0,
+    trophy: 0,
     trophiesAtStart: 0,
     history: [],
     outcome: 'in_progress',

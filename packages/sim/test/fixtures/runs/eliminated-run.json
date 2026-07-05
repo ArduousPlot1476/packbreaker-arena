@@ -133,6 +133,8 @@
       "purchased": [],
       "rerollsThisRound": 0
     },
+    "rerollCount": 0,
+    "trophy": 0,
     "trophiesAtStart": 0,
     "history": [
       {

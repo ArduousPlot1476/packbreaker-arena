@@ -560,7 +560,12 @@ export interface RunState {
   readonly bag: BagState
   readonly relics: RelicSlots
   readonly shop: ShopState
-  readonly trophiesAtStart: number
+  // rerollCount + trophy: sim-authoritative per CF 34 / M1.5e PR 1 (were
+  // client-owned under Q2 Amendment A). rerollCount projects
+  // shop.rerollsThisRound; trophy accumulates +18/win in applyCombatOutcome.
+  readonly rerollCount: number
+  readonly trophy: number
+  readonly trophiesAtStart: number // dead stub; removal deferred to M1.5e PR 2
   readonly history: ReadonlyArray<RunHistoryEntry>
   readonly outcome: RunOutcome
 }
