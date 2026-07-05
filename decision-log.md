@@ -4,6 +4,26 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-05 — CF 43 CLOSED (bornFromRecipe persisted across save/restore; standalone backlog item, Catch 44 + Rule 17 codified)
+
+CF 43 (standalone-OPEN since M1.5e milestone-close, decision-log.md 2026-07-05 § M1.5e MILESTONE CLOSED) closed via PR #26, merge commit `bbc9505`, branch cf43-bornfromrecipe-persistence off main 8249b3a. Single commit 47c2ea2 (9 files, +161/−15) + this docs-close.
+
+**What shipped.** New getRecipeBornPlacementIds(): ReadonlyArray<PlacementId> on RunController (mirrors getRngState()). Optional bornFromRecipe?: readonly PlacementId[] added to SerializedRunState + Zod schema (content-schemas.ts + byte-synced packages/content/src/schemas.ts). restoreRun materializes restoreFrom.bornFromRecipe ?? [] at the consumption site. Save-site wiring at useRun.ts. Both stale "PR 2 deferred" gap comments refreshed (state.ts:280-286, content-schemas.ts + mirror). 4 new tests (2 sim: restoreRun.test.ts membership round-trip + backward-compat tolerance; 2 client: persistence.test.ts positive round-trip + backward-compat non-discard).
+
+**Step 0 deviations from initial plan (both ratified pre-implementation):**
+- **Getter required.** Original plan assumed direct [...this.bornFromRecipe] at the save site; bornFromRecipe is sim-private and the save site is client-side (useRun.ts). Resolved with the getter above.
+- **Permissive over required.** rngState/rerollCount/trophy precedent uses required Zod fields (missing → hard-reject, in-progress run discarded). Mirroring that for bornFromRecipe would newly discard every pre-fix save, which today loads fine and only loses the recipe bonus — strictly more destructive, violates additive-only. Resolved: optional field, default materialized at consumption, not at the schema boundary.
+
+**Catch 44 (NEW, Class C2 — framework-internal architecture gap).** Implementation surfaced a second deviation beyond Step 0's two: the load boundary (validateLocalSaveV1/loadLocal) validates via safeParse(x).success as a boolean type-guard and returns the original raw object, not Zod's transformed .data. Any field's .default()/.transform() is computed and discarded at this boundary — schema-level defaults are inert here. Caught by the sim round-trip test throwing on for...of undefined when the originally-planned .default([]) shipped without a consumption-site fallback. Shipped fix: .optional() at the schema (not .default([])), ?? [] materialized in restoreRun at the point of use. Catches 43 → 44.
+
+**Rule 17 (NEW) — Zod-boundary transform materialization.** Any schema field consumed through a validate-as-typeguard boundary (a safeParse(x).success check whose caller reuses the original raw object, not .data) must have its default/transform explicitly materialized at the point of consumption, not relied upon at the schema level. Applies to CF 45 (slot-uid preservation) and CF 46 (forward-version save handling) — both cross this same boundary. Rules 16 → 17.
+
+**CF disposition.** CF 43 CLOSED. No client-combat threading (CombatOverlay.tsx:118-119 recipe-bonus omission remains a separate, still-open, lower-priority follow-on — not reopened, not renumbered, tracked informally, no CF assigned pending future prioritization). No CF 36/37/56 work touched.
+
+**Verification.** pnpm turbo lint test build --force: 19/19 tasks, schema-sync gate green. Test counts: content 30, ui-kit 27, server 67, sim 509+1 skipped, client 461+15 skipped (+4 vs pre-CF43: 2 sim, 2 client). Fixture corpora (6 .json scenario, 224 .jsonl determinism) untouched — field lands on SerializedRunState only, not RunState/getState(). Codex round 1: clean, no findings.
+
+**Counter: 44 / 17 / 8 / 27 / 38** (catches / rules / patterns / drifts / open-CFs). Delta from pre-close (43/16/8/27/39): +1 catch (Catch 44, C2), +1 rule (Rule 17), open-CFs −1 (CF 43 closed). Patterns / drifts unchanged.
+
 ## 2026-07-05 — M1.5e MILESTONE CLOSED
 
 CF 34 (gold/rerollCount/bag/shop/trophy sim-authority migration) was M1.5e's sole mandate, closed at merge commit 285e7c3 (§ "M1.5e PR 1 CLOSED" above). No PR 2 opened under M1.5e — CF 36 (separable, deferred), CF 37 (amended, remainder parked), CF 43 (standalone follow-up), and CF 56 (new, own future Phase 1) all resolved to independent backlog status rather than M1.5e scope. M1.5e is CLOSED.
