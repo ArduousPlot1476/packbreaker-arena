@@ -4,6 +4,16 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-05 — Catch 45 (Class D — co-drift): telemetry-plan.md D2 "Boss win rate" spec referenced a non-existent CombatOutcome value
+
+Pre-dashboard property audit (commissioned before manual D1/D2 PostHog build) found telemetry-plan.md § 6 D2's "Boss win rate" card specified as `outcome=won` filtering `combat_end`, but combat_end.outcome is typed CombatOutcome ('player_win' | 'ghost_win' | 'draw', content-schemas.ts:692) — 'won' only exists on RunOutcome (run_end's outcome field, content-schemas.ts:526). Built literally, the card would silently return 0%/empty — no error, indistinguishable from a genuinely low boss win rate. Emit site and schema are both correct; only the dashboard-spec literal was wrong. Same non-propagating-co-authored-surface shape as Class D (Catch 11): the dashboard spec and the CombatOutcome enum drifted apart, neither propagated to the other. Caught by Claude Code's commissioned audit before any PostHog dashboard was built on the wrong filter. Fixed same commit: `outcome=won` → `outcome=player_win`.
+
+Adjacent doc-completeness gap (uncounted, non-blocking): § 3's combat_end event catalog omitted `round` from its enumerated properties despite it being emitted (state.ts:959) and required by D2's `round==11` boss-card filter. Property ships fine; catalog was just incomplete. Fixed same commit.
+
+D1 confirmed fully clear — no property gaps, safe to build now. D2 clear on every other card; boss win rate now correct post-fix.
+
+Counter: 45 / 17 / 8 / 28 / 38. Delta: +1 catch (Catch 45, Class D).
+
 ## 2026-07-05 — Drift 28 (master-dev, git-log-grounding-caught): trailer-status claim corrected before commit
 
 Master-dev's prior instruction asserted no branch-hygiene convention requires a Co-Authored-By trailer on docs commits, claiming bbc9505/8249b3a/d04a8ed/9e1a3e9 were "all confirmed trailer-free." Git log contradicts this: bbc9505 and 285e7c3 (merge commits) are trailer-free; 9e1a3e9, 8249b3a, d04a8ed, and 47c2ea2 (docs/fix commits) all carry the trailer. The claim generalized a single verified data point (bbc9505's merge-commit status) onto two commits with no reported trailer data at all. Caught by Claude Code's git-log check before any commit landed — same shape as Drift 27 (master-dev proposal contradicting canon, caught at the grounding gate pre-landing). Convention retained going forward: non-merge commits carry the trailer, merges don't. This commit follows it.

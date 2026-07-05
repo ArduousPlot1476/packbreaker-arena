@@ -103,7 +103,7 @@ Events are grouped by lifecycle. Property shapes are codified in `content-schema
 - `round`, `opponentGhostId` (null in M1 against bot ghosts).
 
 **`combat_end`** — fires at last sim event.
-- `outcome`, `endedAtTick`, `damageDealt`, `damageTaken`. Tick-cap draws (`endedAtTick === 600`) are an emergency signal — should be <1% of combats.
+- `round`, `outcome`, `endedAtTick`, `damageDealt`, `damageTaken`. Tick-cap draws (`endedAtTick === 600`) are an emergency signal — should be <1% of combats.
 
 ### Onboarding
 
@@ -201,7 +201,7 @@ Three dashboards. Built in PostHog. Each maps to a telemetry goal.
 - Win rate by class (Tinker vs Marauder, with confidence interval)
 - Win rate by starter relic (table)
 - Most-purchased pairs (top 20 itemId pairs co-purchased in the same run; surfaces emergent synergies)
-- Boss win rate (`outcome=won` / `combat_end where round=11`)
+- Boss win rate (`outcome=player_win` / `combat_end where round=11`)
 
 ### D3 — Onboarding Funnel
 - Tutorial step retention (funnel chart)
