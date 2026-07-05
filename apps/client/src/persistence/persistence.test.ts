@@ -23,6 +23,7 @@ import type {
   ContractId,
   IsoDate,
   IsoTimestamp,
+  PlacementId,
   RelicId,
   RoundNumber,
   RunId,
@@ -79,6 +80,7 @@ function makeSerializedRunState(
     rngState: 0x42424242,
     rerollCount: 0,
     trophy: 36,
+    bornFromRecipe: [],
     ...overrides,
   };
 }
@@ -132,6 +134,39 @@ describe('persistence — saveLocal/loadLocal round-trip', () => {
     expect(loaded?.inProgressRun?.rerollCount).toBe(3);
     expect(loaded?.inProgressRun?.trophy).toBe(90);
     expect(loaded?.inProgressRun?.relics.mid).toBe('berserkers-pendant');
+  });
+
+  it('CF 43: preserves bornFromRecipe membership through save→load', () => {
+    const adapter = makeAdapter();
+    const original = makeSave({
+      inProgressRun: makeSerializedRunState({
+        bornFromRecipe: ['p-0' as PlacementId, 'p-3' as PlacementId],
+      }),
+    });
+    saveLocal(original, adapter);
+    const loaded = loadLocal(adapter);
+    expect(loaded?.inProgressRun?.bornFromRecipe).toEqual(['p-0', 'p-3']);
+  });
+
+  it('CF 43 backward-compat: a pre-fix save missing bornFromRecipe still loads (not discarded)', () => {
+    // Pre-fix saves carry no bornFromRecipe field. JSON.stringify drops the
+    // undefined key, simulating a legacy payload. bornFromRecipe is OPTIONAL at
+    // the load boundary, so the save is NOT hard-rejected the way an absent
+    // required field (rngState/trophy) would discard the whole run.
+    const partial = makeSave();
+    const legacy = {
+      ...partial,
+      inProgressRun: { ...partial.inProgressRun, bornFromRecipe: undefined as unknown },
+    };
+    const adapter = makeAdapter({ [SAVE_STORAGE_KEY]: JSON.stringify(legacy) });
+    const loaded = loadLocal(adapter);
+    // Non-destructive: the in-progress run survives the load.
+    expect(loaded).not.toBeNull();
+    expect(loaded?.inProgressRun).not.toBeNull();
+    // This boundary validates but does NOT transform, so the field is simply
+    // absent on the raw loaded object; restoreRun materializes the [] default
+    // (see restoreRun.test.ts: "tolerates a pre-fix snapshot").
+    expect(loaded?.inProgressRun?.bornFromRecipe).toBeUndefined();
   });
 
   it('writes to the canonical pba.v1.save key', () => {

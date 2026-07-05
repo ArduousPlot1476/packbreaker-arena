@@ -306,6 +306,7 @@ function makeSerializedSnapshot(
     rngState: 0xdeadbeef,
     rerollCount: 2,
     trophy: 72,
+    bornFromRecipe: [],
     ...overrides,
   };
 }

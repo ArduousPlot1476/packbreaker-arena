@@ -20,6 +20,7 @@ import {
   ClassId,
   ContractId,
   GhostId,
+  PlacementId,
   RelicId,
   SimSeed,
   type RoundNumber,
@@ -47,6 +48,7 @@ function captureSerialized(
     rngState: controller.getRngState(),
     rerollCount,
     trophy,
+    bornFromRecipe: controller.getRecipeBornPlacementIds(),
   };
 }
 
@@ -98,6 +100,7 @@ describe('restoreRun — fidelity round-trip', () => {
       rngState: base.getRngState(),
       rerollCount: 0,
       trophy: 0,
+      bornFromRecipe: [],
     };
 
     const restored = restoreRun(snapshot);
@@ -149,6 +152,7 @@ describe('restoreRun — fidelity round-trip', () => {
       rngState: original.getRngState(),
       rerollCount: 0,
       trophy: 0,
+      bornFromRecipe: [],
     };
     const restored = restoreRun(snapshot);
     expect(restored.getState().relics.starter).toBe(IRON_WILL);
@@ -183,6 +187,7 @@ describe('restoreRun — fidelity round-trip', () => {
       rngState: original.getRngState(),
       rerollCount: 0,
       trophy: 0,
+      bornFromRecipe: [],
     };
     const restored = restoreRun(terminalSnap);
     expect(restored.getPhase()).toBe('ended');
@@ -202,8 +207,71 @@ describe('restoreRun — fidelity round-trip', () => {
       rngState: seed.getRngState(),
       rerollCount: 0,
       trophy: 0,
+      bornFromRecipe: [],
     };
     expect(() => restoreRun(corruptSnap)).toThrow(/relics\.starter is null/);
+  });
+
+  it('CF 43: bornFromRecipe membership survives save→restore (recipe-born placement keeps recipeBonusPct)', () => {
+    const original = createRun({
+      seed: 12345 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const baseSnap = original.getState();
+    // Stand in for a combineRecipe output (state.ts combineRecipe .add site):
+    // a placement flagged recipe-born, plus its bag placement. Pre-CF-43 this
+    // Set deserialized empty, silently dropping the recipe bonus after reload.
+    const recipeBorn = PlacementId('p-0');
+    const snapshot: SerializedRunState = {
+      ...baseSnap,
+      bag: {
+        dimensions: baseSnap.bag.dimensions,
+        placements: [
+          {
+            placementId: recipeBorn,
+            itemId: baseSnap.shop.slots[0]!,
+            anchor: { col: 0, row: 0 },
+            rotation: 0,
+          },
+        ] as unknown as SerializedRunState['bag']['placements'],
+      },
+      bornFromRecipe: [recipeBorn],
+      rngState: original.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+    };
+
+    const restored = restoreRun(snapshot);
+    expect(restored.getRecipeBornPlacementIds()).toContain(recipeBorn);
+
+    // Full persistence boundary: membership also survives a JSON round-trip.
+    const viaJson = restoreRun(
+      JSON.parse(JSON.stringify(snapshot)) as SerializedRunState,
+    );
+    expect(viaJson.getRecipeBornPlacementIds()).toContain(recipeBorn);
+  });
+
+  it('CF 43 backward-compat: restoreRun tolerates a pre-fix snapshot with no bornFromRecipe (empty membership, no throw)', () => {
+    const original = createRun({
+      seed: 12345 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    // Legacy save: SerializedRunState with bornFromRecipe absent (the field is
+    // optional). The client load boundary validates without transforming, so a
+    // real legacy snapshot reaches restoreRun with the field undefined.
+    const legacy: SerializedRunState = {
+      ...original.getState(),
+      rngState: original.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+    };
+    expect(legacy.bornFromRecipe).toBeUndefined();
+    const restored = restoreRun(legacy);
+    expect(restored.getRecipeBornPlacementIds()).toEqual([]);
   });
 });
 

@@ -774,6 +774,9 @@ export function useRun() {
       rngState: simRun.getRngState(),
       rerollCount: state.state.rerollCount,
       trophy: state.state.trophy,
+      // CF 43: persist recipe-born membership from the sim (sole owner of the
+      // internal Set) so recipeBonusPct survives save→restore.
+      bornFromRecipe: simRun.getRecipeBornPlacementIds(),
     };
     const payload: LocalSaveV1 = {
       schemaVersion: 1,
