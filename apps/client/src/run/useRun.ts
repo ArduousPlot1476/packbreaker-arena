@@ -492,11 +492,16 @@ export function useRun() {
     (match: RecipeMatch) => {
       if (simRun === null) return;
       if (state.state.outcome !== 'in_progress') return;
-      // Combine EXECUTION is sim-authoritative (CF 34 / CF 37): sim.combineRecipe
-      // re-detects the match over its own bag + threaded iconned registry and
-      // mutates the bag. The client detects only to drive the CTA.
+      // Combine EXECUTION is sim-authoritative (CF 34 / CF 37). Pass the SELECTED
+      // match's exact input placements (match.uids === placementIds post-flip) so
+      // sim consumes the cluster the player clicked, not whichever it detects
+      // first when a recipe has multiple ready matches (Codex P2, Finding 2).
+      // The client detector only drives the CTA.
       try {
-        simRun.combineRecipe(match.recipe.id as RecipeId);
+        simRun.combineRecipe(
+          match.recipe.id as RecipeId,
+          match.uids.map((u) => u as PlacementId),
+        );
         dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
       } catch (err) {
         if (import.meta.env.DEV) {

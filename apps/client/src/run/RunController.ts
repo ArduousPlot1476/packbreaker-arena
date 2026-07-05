@@ -320,20 +320,17 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       // init_from_sim's shop arm). At save time the quiescent invariant
       // (arranging-entry only) guarantees purchased=[] and
       // rerollsThisRound=0, so no purchased-null masking is needed.
-      const s = action.snapshot;
+      // B-F3/E-F9 landed (M1.5e PR 1 Codex round 1): restoreRun now hydrates
+      // sim's bag from the saved placements, so the controller snapshot `c`
+      // carries the restored bag/shop/gold/rerollCount/trophy — applySimSnapshot
+      // derives the full client state from it (ruleset/derived are `c`'s
+      // recomposed, cross-version-safe values per Catch 26). The former
+      // `bag: simBagToClientBag(action.snapshot.bag)` override is now REDUNDANT
+      // (c.bag === action.snapshot.bag after restore) and removed. This closes
+      // the Codex P1: pre-B-F3 the empty sim bag wiped the restored bag on the
+      // first sync_from_sim after restore.
       const c = action.controllerSnapshot;
-      const base = applySimSnapshot(state, c);
-      // CF 34 / M1.5e PR 1: sim's restored bag is still force-emptied pre-PR-2
-      // (B-F3 unresolved), so the authoritative bag comes from the persisted
-      // snapshot `s`, mapped via the sim-sole-uid scheme. shop / gold /
-      // rerollCount / trophy are already correct from the controller snapshot
-      // `c` (restored verbatim + recomposed by applySimSnapshot above) — only
-      // bag needs the override. Restore-side sim bag authority is PR 2 (B-F3 /
-      // E-F9); the s-sourced bag/rerollCount/trophy above predate that.
-      return {
-        ...base,
-        bag: simBagToClientBag(s.bag),
-      };
+      return applySimSnapshot(state, c);
     }
 
     default: {

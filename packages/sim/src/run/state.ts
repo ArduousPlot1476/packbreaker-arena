@@ -174,7 +174,11 @@ export interface RunController {
    *  callers (test harnesses, future UI gating) should call it to predict
    *  combine viability without attempting + catching. */
   findCombineRotation(match: RecipeMatch): { rotation: Rotation; anchor: CellCoord } | null;
-  combineRecipe(recipeId: RecipeId): void;
+  /** Combine a ready recipe. When `inputPlacementIds` names the exact input
+   *  placements the caller selected (the client passes the specific match the
+   *  player clicked), sim consumes THOSE items; omitted → the recipeId-only
+   *  "first fitting candidate" behavior (M1.5e PR 1 Codex round 1, Finding 2). */
+  combineRecipe(recipeId: RecipeId, inputPlacementIds?: ReadonlyArray<PlacementId>): void;
   /** Grants a mid- or boss-tier relic to the run's RelicSlots and recomposes
    *  the effective ruleset. Phase gating per gdd.md § 9:
    *    - 'mid' is legal only in arranging phase of round 6+.
@@ -273,6 +277,13 @@ class RunControllerImpl implements RunController {
 
   // Internal-only run state (NOT serialized in RunState).
   private readonly pendingItems: ItemId[] = [];
+  // KNOWN GAP (CF43, deferred to PR2) — a recipe-born placement surviving
+  // restore loses its bonus; bag contents themselves are correct as of this fix
+  // (B-F3/E-F9). bornFromRecipe is NOT serialized (a Set isn't JSON-round-
+  // trippable and SerializedRunState is frozen for PR 1), so it deserializes
+  // empty on restore. PR 2 adds bornFromRecipe: PlacementId[] to
+  // SerializedRunState to close this (Tinker passive / Pocket Forge / Catalyst /
+  // Worldforge Seed recipe-bonus items are the affected content).
   private readonly bornFromRecipe: Set<PlacementId> = new Set();
   private nextPlacementCounter = 0;
   private lastCombatResult: CombatResult | null = null;
@@ -335,15 +346,29 @@ class RunControllerImpl implements RunController {
       // code in M1.5a/b. CF 34 closure would re-evaluate (and amend B-F3 /
       // E-F9 per Phase 2.5h meta-audit carry-forwards).
       this.gold = restoreFrom.gold;
-      // Trophy restore-mirror (parallel to gold above): sim now owns trophy
-      // (CF 34 / M1.5e PR 1), so seed it from the client-authored snapshot to
-      // avoid a trophy-loss-on-restore regression. A value mirror like
-      // gold/shop — NOT the structural B-F3/E-F9 bag-restore work (still PR 2).
+      // Trophy restore-mirror (parallel to gold above): sim owns trophy
+      // (CF 34 / M1.5e PR 1), seeded from the client-authored snapshot.
       this.trophy = restoreFrom.trophy;
+      // B-F3 (M1.5e PR 1 Codex round 1): sim is now the bag authority, so
+      // hydrate the saved placements instead of forcing empty. The data is
+      // already serialized (schemas.ts § 13). Pre-flip this was empty because
+      // the client owned the bag (Amendment A); post-flip an empty sim bag here
+      // is projected onto the client by the first sync_from_sim after restore,
+      // wiping every item (Codex P1 on the RunController restore path).
       this.bag = {
         dimensions: this.effectiveRuleset.bagDimensions,
-        placements: [],
+        placements: restoreFrom.bag.placements.map((p) => ({ ...p })),
       };
+      // E-F9: initialize the placement-id counter past the highest restored id
+      // so newly-minted ids (buyItem→placeItem, combine output) can't collide
+      // with restored placements. Ids are `p-${n}` (nextPlacementId); parse the
+      // numeric suffix, take max+1. Non-`p-` ids (older saves) parse to NaN and
+      // are skipped — they can't collide with the fresh `p-${n}` sequence.
+      this.nextPlacementCounter = restoreFrom.bag.placements.reduce((mx, p) => {
+        const s = String(p.placementId);
+        const n = Number(s.slice(2));
+        return s.startsWith('p-') && Number.isFinite(n) && n + 1 > mx ? n + 1 : mx;
+      }, 0);
 
       // Restore shop VERBATIM from the serialized snapshot. Phase 2.5h
       // (Catch 23 / Class B) fix: prior path regenerated shop via
@@ -721,12 +746,31 @@ class RunControllerImpl implements RunController {
     return null;
   }
 
-  combineRecipe(recipeId: RecipeId): void {
+  combineRecipe(recipeId: RecipeId, inputPlacementIds?: ReadonlyArray<PlacementId>): void {
     // Locked answer 13: combines arranging-only.
     this.requirePhase('arranging', 'combineRecipe');
-    const candidates = this.detectRecipes().filter((m) => m.recipeId === recipeId);
+    let candidates = this.detectRecipes().filter((m) => m.recipeId === recipeId);
     if (candidates.length === 0) {
       throw new Error(`combineRecipe: no match for recipeId ${String(recipeId)}`);
+    }
+    // Finding 2 (M1.5e PR 1 Codex round 1): when the caller names the exact
+    // input placements the player selected, restrict to the matching candidate
+    // so sim consumes THOSE items — not whichever cluster it detects first
+    // (multiple ready matches for one recipe would otherwise disambiguate
+    // arbitrarily). Omitted → unchanged "first fitting candidate" behavior
+    // (backward-compatible for sim tests / determinism harness callers).
+    if (inputPlacementIds !== undefined) {
+      const want = new Set(inputPlacementIds.map((id) => String(id)));
+      candidates = candidates.filter(
+        (m) =>
+          m.inputPlacementIds.length === want.size &&
+          m.inputPlacementIds.every((id) => want.has(String(id))),
+      );
+      if (candidates.length === 0) {
+        throw new Error(
+          `combineRecipe: no ${String(recipeId)} match over the requested placements [${[...want].join(', ')}]`,
+        );
+      }
     }
 
     const recipe = this.recipes.find((r) => r.id === recipeId)!;

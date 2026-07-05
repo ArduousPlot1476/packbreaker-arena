@@ -469,29 +469,32 @@ describe('clientRunReducer — cross-version restore hydration (Phase 2.5j-fix /
     expect(next.state.derived.bonusGoldOnWin).toBe(4);
   });
 
-  it('bag comes from snapshot (sim bag empty pre-PR-2 B-F3); shop/rerollCount/trophy come from controllerSnapshot', () => {
-    // CF 34 / M1.5e PR 1 changed the restore partition: sim's restoreRun still
-    // force-empties its bag (B-F3 unresolved pre-PR-2), so the client bag is
-    // sourced from the persisted snapshot; shop / rerollCount / trophy are now
-    // sim-authoritative and sourced from the (post-restore) controller snapshot.
+  it('all restored fields incl. bag come from the controller snapshot (B-F3/E-F9 landed — restoreRun hydrates sim bag)', () => {
+    // Codex round 1: restoreRun now populates sim's bag from the save, so the
+    // controller snapshot carries the restored bag/shop/rerollCount/trophy and
+    // restore_from_save derives the whole client state from it (the old s.bag
+    // override is gone). Diverge the raw persisted snapshot `s` from `c` to
+    // prove the reducer reads `c`, not `s`.
     const snapshot = makeSerializedSnapshot();
-    const divergedController: SimRunState = {
-      ...controllerSnapshotFrom(snapshot),
-      // Only the bag is emptied (mimics sim's restore B-F3). shop/rerollCount/
-      // trophy stay as the controller's restored-verbatim values.
-      bag: { dimensions: { width: 6, height: 4 }, placements: [] },
+    const controller = controllerSnapshotFrom(snapshot); // c.bag = 2 restored placements
+    const divergedSnapshot: SerializedRunState = {
+      ...snapshot,
+      bag: { dimensions: snapshot.bag.dimensions, placements: [] },
+      rerollCount: 99,
+      trophy: 999,
     };
 
     const next = clientRunReducer(freshInitial(), {
       type: 'restore_from_save',
-      snapshot,
-      controllerSnapshot: divergedController,
+      snapshot: divergedSnapshot,
+      controllerSnapshot: controller,
     });
 
-    // Bag: from snapshot.bag.placements (controller's empty array ignored).
+    // Bag / shop / rerollCount / trophy all from `c`; the diverged raw-snapshot
+    // values (empty bag, 99, 999) are ignored.
     expect(next.bag).toHaveLength(2);
     expect(next.bag[0]!.itemId).toBe('iron-sword');
-    // Shop / rerollCount / trophy: sim-authoritative — from controllerSnapshot.
+    expect(next.bag[0]!.uid).toBe('p-0');
     expect(next.shop).toHaveLength(3);
     expect(next.shop[0]!.itemId).toBe('copper-coin');
     expect(next.state.rerollCount).toBe(2);

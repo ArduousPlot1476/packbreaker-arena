@@ -75,6 +75,43 @@ describe('restoreRun — fidelity round-trip', () => {
     expect(restoredState.history).toEqual(snapshot.history);
   });
 
+  it('B-F3/E-F9 (M1.5e PR 1 Codex round 1): restoreRun hydrates the saved bag; a fresh mint after restore does not collide with restored ids', () => {
+    const base = createRun({
+      seed: 12345 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const gs = base.getState();
+    const item0 = gs.shop.slots[0]!;
+    // Save with two placements (ids p-0, p-3, as if bought/placed). Restore does
+    // not re-validate placement, so item shapes/cells are irrelevant here.
+    const snapshot: SerializedRunState = {
+      ...gs,
+      bag: {
+        dimensions: gs.bag.dimensions,
+        placements: [
+          { placementId: 'p-0', itemId: item0, anchor: { col: 4, row: 0 }, rotation: 0 },
+          { placementId: 'p-3', itemId: item0, anchor: { col: 5, row: 0 }, rotation: 0 },
+        ] as unknown as SerializedRunState['bag']['placements'],
+      },
+      rngState: base.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+    };
+
+    const restored = restoreRun(snapshot);
+    // B-F3: bag hydrated from the save (pre-fix restoreRun forced placements: []).
+    expect(restored.getState().bag.placements.map((p) => p.placementId)).toEqual(['p-0', 'p-3']);
+
+    // E-F9: the next minted id is past the highest restored id (p-3 → p-4), so a
+    // buy→place after restore can't collide with a restored placement.
+    restored.buyItem(0);
+    const newPid = restored.placeItem(restored.getState().shop.slots[0]!, { col: 0, row: 0 }, 0);
+    expect(newPid).toBe('p-4');
+    expect(['p-0', 'p-3']).not.toContain(String(newPid));
+  });
+
   it('round-trips Marauder + iron-will: ruleset recomposes with bonusHearts (hearts=4 not 3)', () => {
     const original = createRun({
       seed: 54321 as SimSeed,

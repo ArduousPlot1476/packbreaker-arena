@@ -334,6 +334,31 @@ describe('recipe combine', () => {
     expect(bag.placements[0]!.anchor).toEqual({ col: 0, row: 0 });
   });
 
+  it('combineRecipe honors explicit inputPlacementIds and rejects ids that do not form the match (Codex round 1 Finding 2)', () => {
+    const items = {
+      [ItemId('iron-sword')]: cheapItem('iron-sword'),
+      [ItemId('iron-dagger')]: cheapItem('iron-dagger'),
+      [ItemId('steel-sword')]: ITEMS[ItemId('steel-sword')]!,
+    };
+    const ctrl = createRun(baseInput({ itemsRegistry: items, seed: SimSeed(7) }));
+    const slots = ctrl.getState().shop.slots;
+    ctrl.buyItem(slots.findIndex((s) => s === 'iron-sword'));
+    ctrl.buyItem(slots.findIndex((s) => s === 'iron-dagger'));
+    const swordPid = ctrl.placeItem(ItemId('iron-sword'), { col: 0, row: 0 }, 0);
+    const daggerPid = ctrl.placeItem(ItemId('iron-dagger'), { col: 1, row: 0 }, 0);
+
+    // Wrong ids → throws (the selected placements don't form a match).
+    expect(() =>
+      ctrl.combineRecipe(RecipeId('r-steel-sword'), [PlacementId('p-99')]),
+    ).toThrow(/requested placements/);
+
+    // Correct ids → combines exactly those two into the output.
+    ctrl.combineRecipe(RecipeId('r-steel-sword'), [swordPid, daggerPid]);
+    const bag = ctrl.getState().bag;
+    expect(bag.placements).toHaveLength(1);
+    expect(bag.placements[0]!.itemId).toBe('steel-sword');
+  });
+
   it('combineRecipe applies +25% recipeBonusPct (Tinker 10 + Pocket Forge 15) to recipe-output damage', () => {
     const items = {
       [ItemId('iron-sword')]: cheapItem('iron-sword'),
