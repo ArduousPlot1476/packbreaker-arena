@@ -21,24 +21,20 @@ import {
   CLASSES,
   DEFAULT_RULESET,
   type ClassId,
-  type CombatResult,
   type ContractId,
-  type GhostId,
   type RunId,
   type RunOutcome,
   type RunState as SimRunState,
   type SerializedRunState,
 } from '@packbreaker/content';
 
-import { generateInitialShop, generateShop } from '../shop/ShopController';
-import { BAG_COLS, BAG_ROWS, cellsOf, placementValid } from '../bag/layout';
-import { ITEMS } from './content';
 import {
-  computeRerollCost,
   emptyRelicSlots,
   makeRunSeed,
+  simBagToClientBag,
+  simShopToClientShop,
 } from './sim-bridge';
-import type { BagItem, Cell, ItemId, RecipeMatch, RunState, ShopSlot } from './types';
+import type { BagItem, ItemId, RunState, ShopSlot } from './types';
 import type { DragState } from '../bag/types';
 
 export interface ClientRunState {
@@ -64,10 +60,13 @@ export interface ClientRunState {
 export function createInitialState(classId: ClassId): ClientRunState {
   const seed = makeRunSeed();
   const ruleset = DEFAULT_RULESET;
-  const shop = generateInitialShop(seed, classId, ruleset);
   return {
     bag: [],
-    shop,
+    // Placeholder — overwritten by init_from_sim before first render
+    // (RunProvider shows RunBootFallback until simRun resolves). The
+    // authoritative shop is sim-generated + client-overridden (B2) then
+    // projected via simShopToClientShop. Post CF 34 / M1.5e PR 1.
+    shop: [],
     state: {
       round: 1,
       totalRounds: ruleset.maxRounds,
@@ -123,20 +122,11 @@ export type RunAction =
   | { type: 'drag_rotate' }
   | { type: 'drag_cancel' }
   | { type: 'set_hover'; hover: { col: number; row: number } | null }
-  | { type: 'drop_bag'; col: number; row: number; newUid: string }
-  | { type: 'sell_drop' }
-  | { type: 'reroll' }
-  | { type: 'combine'; match: RecipeMatch; newUid: string }
   | { type: 'continue_to_combat' }
-  | {
-      type: 'combat_done';
-      result: CombatResult;
-      opponentGhostId: GhostId | null;
-      opponentClassId: ClassId | null;
-      damageDealt: number;
-      damageTaken: number;
-      goldDelta: number;
-    }
+  // combat_done carries no payload post CF 34 / M1.5e PR 1: sim owns all
+  // post-combat state; onCombatDone syncs from sim, then this only lowers
+  // the overlay. (buy/sell/reroll/combine actions retired — routed to sim.)
+  | { type: 'combat_done' }
   | { type: 'init_from_sim'; snapshot: SimRunState }
   | { type: 'sync_from_sim'; snapshot: SimRunState }
   | { type: 'reset_run' }
@@ -159,44 +149,22 @@ export type RunAction =
       controllerSnapshot: SimRunState;
     };
 
-/** Applies a sim RunState snapshot to ClientRunState. Q2 Amendment A
- *  bifurcated authority (M1.5a PR 2 Phase 1 ratification): sim is
- *  authoritative for hearts/history/derived/relics/outcome/ruleset/round/
- *  runId/classId/contractId/seed; client is authoritative for
- *  gold/rerollCount/bag/shop/trophy in M1.5a (sim only sees reroll +
- *  apply_combat_outcome routing in PR 2, so its gold tracking diverges
- *  from client's mid-round by sum(buy_costs) − sum(sell_proceeds);
- *  overwriting gold on sync would lose in-round shop transactions).
- *
- *  `includeGold` distinguishes init from sync:
- *    - init_from_sim (run-start): includeGold=true. Client and sim
- *      gold haven't diverged yet — sim's gold IS the source of truth.
- *    - sync_from_sim (mid-run): includeGold=false. Sim's gold is stale;
- *      client's gold is the live value. CF 34 migrates this to full
- *      sim-authoritative gold at M1.5b/LocalSaveV1.
- *
- *  bag is NOT touched by either init or sync — remains client-
- *  authoritative for M1.5a. shop is bootstrapped from sim's snapshot
- *  at the init_from_sim reducer arm post-applySimSnapshot (Phase 2.5b
- *  Codex response); sync continues to leave shop client-authoritative.
- *  contractName/contractText/totalRounds also untouched — they're
- *  derived placeholders the client owns. (className and maxHearts now
- *  derive from sim-authoritative classId and ruleset.startingHearts
- *  respectively, updated per sync — M1.5b PR 1 CF 39 fix + Finding A.)
- *
- *  trophy is locked client-authoritative for M1.5a per decision-log.md
- *  2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13; sim's
- *  snapshot.trophiesAtStart is between-runs cumulative state for M2
- *  (// M2 concern. at sim's getState L336) and is ignored by both init
- *  and sync. The +18-per-win accumulator lives in the combat_done
- *  reducer arm (Phase 2.5h Codex Finding 4 restore). */
-function applySimSnapshot(
-  state: ClientRunState,
-  snapshot: SimRunState,
-  includeGold: boolean,
-): ClientRunState {
+/** Projects a sim RunState snapshot onto ClientRunState. Post CF 34 / M1.5e
+ *  PR 1 the sim is the SOLE authority for gold / rerollCount / bag / shop /
+ *  trophy (Q2 Amendment A unwound), so every one is derived from the snapshot
+ *  and the client keeps no parallel copy. Top-level bag/shop are the
+ *  client-shape projections the UI renders (via the sim-bridge reverse adapters
+ *  simBagToClientBag / simShopToClientShop); state.state.bag/shop mirror the
+ *  canonical sim shapes. className + maxHearts derive from sim-authoritative
+ *  classId + ruleset.startingHearts. One path for init_from_sim AND
+ *  sync_from_sim — the old includeGold init/sync split is gone (sim's gold is
+ *  always authoritative now). trophiesAtStart stays a dead sim stub (M2;
+ *  removal deferred to PR 2). */
+function applySimSnapshot(state: ClientRunState, snapshot: SimRunState): ClientRunState {
   return {
     ...state,
+    bag: simBagToClientBag(snapshot.bag),
+    shop: simShopToClientShop(snapshot),
     state: {
       ...state.state,
       runId: snapshot.runId,
@@ -212,52 +180,11 @@ function applySimSnapshot(
       relics: snapshot.relics,
       outcome: snapshot.outcome,
       history: snapshot.history.slice(),
-      ...(includeGold ? { gold: snapshot.gold } : {}),
+      gold: snapshot.gold,
+      rerollCount: snapshot.rerollCount,
+      trophy: snapshot.trophy,
     },
   };
-}
-
-// Pure helper: computes placement of the combine output. Returns the new
-// bag with the output placed, or null if no placement fits.
-function placeCombineOutput(
-  bag: BagItem[],
-  match: RecipeMatch,
-  newUid: string,
-): BagItem[] | null {
-  const inputs = match.uids
-    .map((uid) => bag.find((b) => b.uid === uid))
-    .filter((x): x is BagItem => Boolean(x));
-  const cells = inputs.flatMap((b) => cellsOf(b));
-  const minX = Math.min(...cells.map((c) => c[0]));
-  const minY = Math.min(...cells.map((c) => c[1]));
-  const outDef = ITEMS[match.recipe.output];
-  if (!outDef) return null;
-  const newBagBase = bag.filter((b) => !match.uids.includes(b.uid));
-  let placed: { col: number; row: number; rot: number } | null = null;
-  const tryCells: Cell[] = [[minX, minY], ...cells];
-  for (const [tx, ty] of tryCells) {
-    for (const rot of [0, 90, 180, 270]) {
-      if (placementValid(newBagBase, outDef.id, tx, ty, rot, null)) {
-        placed = { col: tx, row: ty, rot };
-        break;
-      }
-    }
-    if (placed) break;
-  }
-  if (!placed) {
-    outer: for (let y = 0; y < BAG_ROWS; y++) {
-      for (let x = 0; x < BAG_COLS; x++) {
-        for (const rot of [0, 90, 180, 270]) {
-          if (placementValid(newBagBase, outDef.id, x, y, rot, null)) {
-            placed = { col: x, row: y, rot };
-            break outer;
-          }
-        }
-      }
-    }
-  }
-  if (!placed) return null;
-  return [...newBagBase, { uid: newUid, itemId: outDef.id, ...placed }];
 }
 
 export function clientRunReducer(state: ClientRunState, action: RunAction): ClientRunState {
@@ -277,15 +204,18 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       if (state.combatActive) return state;
       const slot = state.shop.find((s) => s.uid === action.uid);
       if (!slot || !slot.itemId) return state;
-      const def = ITEMS[slot.itemId];
-      if (!def || state.state.gold < def.cost) return state;
+      // Affordability + drag cost read the effective price synced from sim
+      // (slot.cost = effectiveItemCost — the value sim.buyItem actually
+      // charges), so the gate matches the deduction (B1). No client cost math;
+      // sim re-validates authoritatively on buyItem.
+      if (state.state.gold < slot.cost) return state;
       return {
         ...state,
         drag: {
           itemId: slot.itemId,
           rot: 0,
           fromShopUid: action.uid,
-          cost: def.cost,
+          cost: slot.cost,
         },
       };
     }
@@ -301,175 +231,25 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
     case 'set_hover':
       return { ...state, hover: action.hover };
 
-    case 'drop_bag': {
-      if (!state.drag) return state;
-      const drag = state.drag;
-      const ok = placementValid(
-        state.bag,
-        drag.itemId,
-        action.col,
-        action.row,
-        drag.rot,
-        drag.fromBagUid ?? null,
-      );
-      if (!ok) {
-        return { ...state, drag: null, hover: null };
-      }
-      if (drag.fromBagUid) {
-        const fromUid = drag.fromBagUid;
-        return {
-          ...state,
-          bag: state.bag.map((x) =>
-            x.uid === fromUid ? { ...x, col: action.col, row: action.row, rot: drag.rot } : x,
-          ),
-          drag: null,
-          hover: null,
-        };
-      }
-      if (drag.fromShopUid) {
-        const fromShop = drag.fromShopUid;
-        const cost = drag.cost ?? 0;
-        return {
-          ...state,
-          bag: [
-            ...state.bag,
-            {
-              uid: action.newUid,
-              itemId: drag.itemId,
-              col: action.col,
-              row: action.row,
-              rot: drag.rot,
-            },
-          ],
-          shop: state.shop.map((slot) =>
-            slot.uid === fromShop ? { ...slot, itemId: null } : slot,
-          ),
-          state: { ...state.state, gold: state.state.gold - cost },
-          drag: null,
-          hover: null,
-        };
-      }
-      return { ...state, drag: null, hover: null };
-    }
-
-    case 'sell_drop': {
-      if (!state.drag || !state.drag.fromBagUid) {
-        return { ...state, drag: null, hover: null };
-      }
-      const fromUid = state.drag.fromBagUid;
-      const item = state.bag.find((b) => b.uid === fromUid);
-      if (!item) {
-        return { ...state, drag: null, hover: null };
-      }
-      const def = ITEMS[item.itemId];
-      if (!def) return { ...state, drag: null, hover: null };
-      const refund = Math.floor(def.cost * 0.5);
-      return {
-        ...state,
-        bag: state.bag.filter((x) => x.uid !== fromUid),
-        state: { ...state.state, gold: state.state.gold + refund },
-        drag: null,
-        hover: null,
-      };
-    }
-
-    case 'reroll': {
-      const ruleset = state.state.ruleset;
-      const cost = computeRerollCost(
-        state.state.rerollCount,
-        ruleset.rerollCostStart,
-        ruleset.rerollCostIncrement,
-        state.state.derived.extraRerollsPerRound,
-      );
-      if (state.state.gold < cost) return state;
-      const newSlots = generateShop(
-        state.state.seed,
-        state.state.round,
-        state.state.classId,
-        ruleset,
-        state.state.rerollCount + 1,
-      );
-      return {
-        ...state,
-        shop: newSlots,
-        state: {
-          ...state.state,
-          gold: state.state.gold - cost,
-          rerollCount: state.state.rerollCount + 1,
-        },
-      };
-    }
-
-    case 'combine': {
-      const newBag = placeCombineOutput(state.bag, action.match, action.newUid);
-      if (!newBag) return state;
-      return { ...state, bag: newBag };
-    }
-
     case 'continue_to_combat':
       if (state.combatActive) return state;
       return { ...state, combatActive: true };
 
-    case 'combat_done': {
-      // M1.5a PR 2 Phase 2b-2 active routing cutover: all sim-authoritative
-      // fields (hearts/history/round/derived/relics/outcome/trophy) were
-      // mirrored by the prior sync_from_sim dispatch in onCombatDone.
-      // state.state.round here is ALREADY the new (post-advancePhase) round
-      // from that sync. Gold-delta is precomputed by the handler via
-      // before/after sim.gold observation (β disposition — sim is single
-      // source of truth for gold-mutation math; see useRun.ts onCombatDone).
-      //
-      // Bag + shop stay client-authoritative for M1.5a per Q2 Amendment A.
-      // If sim's advancePhase didn't end the run, regenerate next round's
-      // shop deterministically from the run seed at the new round. If the
-      // run ended (sim's shouldEndRun fired → outcome != 'in_progress'),
-      // shop is left as-is (run-end UX is M1.5+; CF 34/M1.5b reworks).
-      const runEnded = state.state.outcome !== 'in_progress';
-      const nextShop = runEnded
-        ? state.shop
-        : generateShop(
-            state.state.seed,
-            state.state.round,
-            state.state.classId,
-            state.state.ruleset,
-            0,
-          );
-      // Trophy is client-authoritative for M1.5a per decision-log.md
-      // 2026-05-11 § M1.5a Phase 1 design take-2 ratification §6e Q13.
-      // Read the just-pushed history entry (sync_from_sim populated
-      // history before combat_done dispatched) to derive win/loss; +18
-      // per win is the M0-placeholder per decision-log.md 2026-05-02
-      // § M1.3.4a ratification 5 (M2 trophy-curve work owns the real
-      // schedule). Optional-chain defends against future refactors
-      // where history could be empty at dispatch time.
-      const lastHistoryEntry = state.state.history[state.state.history.length - 1];
-      const trophyEarned = lastHistoryEntry?.outcome === 'win' ? 18 : 0;
-      return {
-        ...state,
-        combatActive: false,
-        shop: nextShop,
-        drag: null,
-        hover: null,
-        state: {
-          ...state.state,
-          gold: state.state.gold + action.goldDelta,
-          trophy: state.state.trophy + trophyEarned,
-          rerollCount: 0,
-        },
-      };
-    }
+    case 'combat_done':
+      // Post-combat: sim is the authority for gold/trophy/rerollCount/shop, and
+      // onCombatDone dispatches sync_from_sim (which derives all of them from
+      // the sim snapshot) BEFORE this arm — so combat_done only lowers the
+      // combat overlay + clears any stray drag. Next-round shop regen is
+      // sim-side (advancePhase → makeShop, then the client's overrideShopSlots
+      // + sync). The β gold-capture-delta workaround and the client trophy
+      // accumulator are both retired here (CF 34 / M1.5e PR 1).
+      return { ...state, combatActive: false, drag: null, hover: null };
 
     case 'init_from_sim':
-      return {
-        ...applySimSnapshot(state, action.snapshot, /* includeGold */ true),
-        shop: action.snapshot.shop.slots.map((itemId, i) => ({
-          uid: `s${action.snapshot.currentRound}-${action.snapshot.shop.rerollsThisRound}-${i}`,
-          itemId: itemId as ItemId,
-        })),
-      };
+      return applySimSnapshot(state, action.snapshot);
 
     case 'sync_from_sim':
-      return applySimSnapshot(state, action.snapshot, /* includeGold */ false);
+      return applySimSnapshot(state, action.snapshot);
 
     case 'reset_run':
       return INITIAL_CLIENT_STATE;
@@ -540,28 +320,17 @@ export function clientRunReducer(state: ClientRunState, action: RunAction): Clie
       // init_from_sim's shop arm). At save time the quiescent invariant
       // (arranging-entry only) guarantees purchased=[] and
       // rerollsThisRound=0, so no purchased-null masking is needed.
-      const s = action.snapshot;
+      // B-F3/E-F9 landed (M1.5e PR 1 Codex round 1): restoreRun now hydrates
+      // sim's bag from the saved placements, so the controller snapshot `c`
+      // carries the restored bag/shop/gold/rerollCount/trophy — applySimSnapshot
+      // derives the full client state from it (ruleset/derived are `c`'s
+      // recomposed, cross-version-safe values per Catch 26). The former
+      // `bag: simBagToClientBag(action.snapshot.bag)` override is now REDUNDANT
+      // (c.bag === action.snapshot.bag after restore) and removed. This closes
+      // the Codex P1: pre-B-F3 the empty sim bag wiped the restored bag on the
+      // first sync_from_sim after restore.
       const c = action.controllerSnapshot;
-      const base = applySimSnapshot(state, c, /* includeGold */ true);
-      return {
-        ...base,
-        bag: s.bag.placements.map((p) => ({
-          uid: String(p.placementId),
-          itemId: p.itemId as ItemId,
-          col: p.anchor.col,
-          row: p.anchor.row,
-          rot: p.rotation,
-        })),
-        shop: s.shop.slots.map((itemId, i) => ({
-          uid: `s${s.currentRound}-${s.shop.rerollsThisRound}-${i}`,
-          itemId: itemId as ItemId,
-        })),
-        state: {
-          ...base.state,
-          rerollCount: s.rerollCount,
-          trophy: s.trophy,
-        },
-      };
+      return applySimSnapshot(state, c);
     }
 
     default: {

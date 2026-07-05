@@ -14,6 +14,7 @@ import {
   ITEMS as CONTENT_ITEMS,
   RECIPES as CONTENT_RECIPES,
   type Item as ContentItem,
+  type Recipe as ContentRecipe,
 } from '@packbreaker/content';
 import type { ItemDef, ItemId, Recipe } from './types';
 
@@ -76,11 +77,19 @@ export const ITEMS: Readonly<Record<string, ItemDef>> = (() => {
  *  iconned subset. Same filter logic as the M1.1 data.local.ts adapter —
  *  4 recipes survive in the M1 prototype set (steel-sword, healing-salve,
  *  fire-oil, ember-brand). */
-export const RECIPES: ReadonlyArray<Recipe> = CONTENT_RECIPES.filter(
+/** Iconned subset of the CANONICAL content recipes (content Recipe[]) — thread
+ *  into sim's recipesRegistry (CF 37 / M1.5e PR 1) so sim's combine detection
+ *  matches the client's iconned set, resolving the sim-default-vs-client-filter
+ *  divergence (sim's unfiltered default would otherwise match non-iconned
+ *  recipes like r-iron-shield). RECIPES below is the client-narrowed view of
+ *  this same subset, for the UI's detectRecipes / scoutRecipes. */
+export const ICONNED_RECIPES: ReadonlyArray<ContentRecipe> = CONTENT_RECIPES.filter(
   (r) =>
     ICONNED_SET.has(String(r.output)) &&
     r.inputs.every((i) => ICONNED_SET.has(String(i.itemId))),
-).map((r) => ({
+);
+
+export const RECIPES: ReadonlyArray<Recipe> = ICONNED_RECIPES.map((r) => ({
   id: String(r.id),
   inputs: r.inputs.map((i) => i.itemId as unknown as ItemId),
   output: r.output as unknown as ItemId,

@@ -6,7 +6,6 @@
 import { describe, expect, it } from 'vitest';
 import type {
   ClassId,
-  CombatResult,
   ContractId,
   IsoTimestamp,
   RelicId,
@@ -27,17 +26,6 @@ import {
 import type { BagItem, ItemId } from './types';
 
 const TINKER = 'tinker' as ClassId;
-
-// Stub CombatResult — the reducer's combat_done handler doesn't read
-// outcome / damage in M1.3.4a commit 2 (commit 3 wires the consumption).
-// The minimal shape satisfies the action type so the reducer test can
-// drive the round-advance branch.
-const STUB_COMBAT_RESULT: CombatResult = {
-  events: [],
-  outcome: 'player_win',
-  finalHp: { player: 30, ghost: 0 },
-  endedAtTick: 0,
-};
 
 const SWORD = 'iron-sword' as ItemId;
 
@@ -112,47 +100,12 @@ describe('clientRunReducer', () => {
     expect(next.hover).toBeNull();
   });
 
-  it('drop_bag on a valid empty cell moves a bag item', () => {
-    const initial = freshInitial();
-    const dragging: ClientRunState = {
-      ...initial,
-      bag: [{ ...sampleBagItem }],
-      drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
-    };
-    const next = clientRunReducer(dragging, {
-      type: 'drop_bag',
-      col: 2,
-      row: 2,
-      newUid: 'new',
-    });
-    const moved = next.bag.find((b) => b.uid === 'b1');
-    expect(moved?.col).toBe(2);
-    expect(moved?.row).toBe(2);
-    expect(next.drag).toBeNull();
-  });
-
-  it('sell_drop refunds 50% of cost (rounded down) and removes the item', () => {
-    const initial = freshInitial();
-    const dragging: ClientRunState = {
-      ...initial,
-      bag: [{ ...sampleBagItem }],
-      drag: { itemId: SWORD, rot: 0, fromBagUid: 'b1' },
-    };
-    const goldBefore = dragging.state.gold;
-    const next = clientRunReducer(dragging, { type: 'sell_drop' });
-    expect(next.bag.find((b) => b.uid === 'b1')).toBeUndefined();
-    expect(next.state.gold).toBe(goldBefore + Math.floor(3 * 0.5)); // iron-sword cost = 3
-  });
-
-  it('reroll deducts cost and increments rerollCount', () => {
-    // Round-1 initial: rerollCount = 0, gold = baseGoldPerRound = 4. First
-    // reroll costs rerollCostStart + 0*increment = 1.
-    const initial = freshInitial();
-    const next = clientRunReducer(initial, { type: 'reroll' });
-    expect(next.state.rerollCount).toBe(1);
-    expect(next.state.gold).toBe(initial.state.gold - 1);
-    expect(next.shop).toHaveLength(initial.shop.length);
-  });
+  // drop_bag / sell_drop / reroll / combine reducer arms deleted (CF 34 /
+  // M1.5e PR 1): those mutations now route through sim actions in useRun
+  // (buyItem+placeItem / sellItem / rerollShop+overrideShopSlots /
+  // combineRecipe), and the client re-derives bag/shop/gold via sync_from_sim.
+  // Their behaviour is covered sim-side (packages/sim run tests) + at the
+  // integration layer (RunContext.test.tsx).
 
   it('continue_to_combat sets combatActive only when not already in combat', () => {
     const initial = freshInitial();
@@ -162,74 +115,26 @@ describe('clientRunReducer', () => {
     expect(noOp).toBe(next); // identity-equal: no state change
   });
 
-  // M1.5a PR 2 Phase 2b-2 active routing cutover: combat_done's reducer
-  // contract collapsed. sim-authoritative fields (hearts/history/round/
-  // derived/relics/outcome/trophy) flow exclusively via sync_from_sim
-  // (dispatched by onCombatDone BEFORE combat_done). The reducer's
-  // combat_done now only applies the precomputed goldDelta (β —
-  // sim-computed via before/after observation in onCombatDone),
-  // resets combatActive + rerollCount, and regenerates next round's
-  // shop locally (client-authoritative bag/shop per Q2 Amendment A).
-  it('combat_done applies action.goldDelta + resets combatActive (β capture-delta)', () => {
+  // CF 34 / M1.5e PR 1: combat_done's reducer contract collapsed to a UI
+  // concern. Sim owns gold/trophy/rerollCount/shop, and onCombatDone syncs
+  // them from sim BEFORE dispatching combat_done — which now only lowers the
+  // combat overlay + clears any stray drag (β gold-capture-delta and the
+  // client trophy accumulator both retired; combat_done carries no payload).
+  it('combat_done clears combatActive + drag and touches no sim-owned state', () => {
     const initial = freshInitial();
-    const inCombat: ClientRunState = { ...initial, combatActive: true };
-    const next = clientRunReducer(inCombat, {
-      type: 'combat_done',
-      result: STUB_COMBAT_RESULT,
-      opponentGhostId: null,
-      opponentClassId: null,
-      damageDealt: 30,
-      damageTaken: 6,
-      goldDelta: 5, // sim's winBonus + roundIncome captured by handler
-    });
+    const inCombat: ClientRunState = {
+      ...initial,
+      combatActive: true,
+      drag: { itemId: SWORD, rot: 0, fromBagUid: 'p-0' },
+    };
+    const goldBefore = inCombat.state.gold;
+    const next = clientRunReducer(inCombat, { type: 'combat_done' });
     expect(next.combatActive).toBe(false);
-    expect(next.state.gold).toBe(initial.state.gold + 5);
-    expect(next.state.rerollCount).toBe(0);
-    // Hearts/history/round NOT mutated by combat_done (sync_from_sim
-    // populates those upstream). Asserting absence proves the reducer's
-    // pre-2b-2 arithmetic block is gone.
-    expect(next.state.hearts).toBe(initial.state.hearts);
-    expect(next.state.history).toHaveLength(0);
-    expect(next.state.round).toBe(initial.state.round);
-  });
-
-  it('combat_done with goldDelta=0 leaves gold unchanged (loss-no-advance path)', () => {
-    const initial = freshInitial();
-    const inCombat: ClientRunState = { ...initial, combatActive: true };
-    const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
-    const next = clientRunReducer(inCombat, {
-      type: 'combat_done',
-      result: lossResult,
-      opponentGhostId: null,
-      opponentClassId: null,
-      damageDealt: 12,
-      damageTaken: 30,
-      goldDelta: 0, // sim's shouldEndRun fired → no advancePhase credit
-    });
-    expect(next.combatActive).toBe(false);
-    expect(next.state.gold).toBe(initial.state.gold);
-    expect(next.state.rerollCount).toBe(0);
-    // Hearts/history/round still NOT mutated by combat_done — that's
-    // sync_from_sim's job in the real handler flow.
-    expect(next.state.hearts).toBe(initial.state.hearts);
-    expect(next.state.history).toHaveLength(0);
-  });
-
-  it('combat_done with goldDelta=3 (loss + advance, base income only) increments gold by exactly 3', () => {
-    const initial = freshInitial();
-    const inCombat: ClientRunState = { ...initial, combatActive: true };
-    const lossResult = { ...STUB_COMBAT_RESULT, outcome: 'ghost_win' as const };
-    const next = clientRunReducer(inCombat, {
-      type: 'combat_done',
-      result: lossResult,
-      opponentGhostId: null,
-      opponentClassId: null,
-      damageDealt: 0,
-      damageTaken: 30,
-      goldDelta: 3, // sim's advancePhase round income (no win bonus on loss)
-    });
-    expect(next.state.gold).toBe(initial.state.gold + 3);
-    expect(next.combatActive).toBe(false);
+    expect(next.drag).toBeNull();
+    // Sim-owned fields are NOT mutated by combat_done — sync_from_sim owns them.
+    expect(next.state.gold).toBe(goldBefore);
+    expect(next.state.rerollCount).toBe(initial.state.rerollCount);
+    expect(next.state.trophy).toBe(initial.state.trophy);
   });
 });
 
@@ -269,6 +174,8 @@ describe('clientRunReducer — applySimSnapshot CF 39 + Finding A regressions', 
       bag: { dimensions: { width: 6, height: 4 }, placements: [] },
       relics: { starter: 'iron-will' as RelicId, mid: null, boss: null },
       shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      rerollCount: 0,
+      trophy: 0,
       trophiesAtStart: 0,
       history: [],
       outcome: 'in_progress',
@@ -332,6 +239,8 @@ describe('clientRunReducer — applySimSnapshot CF 39 + Finding A regressions', 
       bag: { dimensions: { width: 6, height: 4 }, placements: [] },
       relics: { starter: 'razors-edge' as RelicId, mid: null, boss: null },
       shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+      rerollCount: 0,
+      trophy: 0,
       trophiesAtStart: 0,
       history: [],
       outcome: 'in_progress',
@@ -424,6 +333,8 @@ function controllerSnapshotFrom(s: SerializedRunState): SimRunState {
     bag: s.bag,
     relics: s.relics,
     shop: s.shop,
+    rerollCount: s.rerollCount,
+    trophy: s.trophy,
     trophiesAtStart: s.trophiesAtStart,
     history: s.history,
     outcome: s.outcome,
@@ -558,32 +469,36 @@ describe('clientRunReducer — cross-version restore hydration (Phase 2.5j-fix /
     expect(next.state.derived.bonusGoldOnWin).toBe(4);
   });
 
-  it('client-authoritative fields (bag, shop, rerollCount, trophy) still come from snapshot', () => {
+  it('all restored fields incl. bag come from the controller snapshot (B-F3/E-F9 landed — restoreRun hydrates sim bag)', () => {
+    // Codex round 1: restoreRun now populates sim's bag from the save, so the
+    // controller snapshot carries the restored bag/shop/rerollCount/trophy and
+    // restore_from_save derives the whole client state from it (the old s.bag
+    // override is gone). Diverge the raw persisted snapshot `s` from `c` to
+    // prove the reducer reads `c`, not `s`.
     const snapshot = makeSerializedSnapshot();
-    // Diverge controllerSnapshot's bag/shop/etc. — reducer must IGNORE
-    // these and pull from snapshot for client-owned fields.
-    const divergedController: SimRunState = {
-      ...controllerSnapshotFrom(snapshot),
-      bag: { dimensions: { width: 6, height: 4 }, placements: [] }, // sim restoreRun forces empty
-      shop: { slots: [], purchased: [], rerollsThisRound: 0 }, // mismatches snapshot
+    const controller = controllerSnapshotFrom(snapshot); // c.bag = 2 restored placements
+    const divergedSnapshot: SerializedRunState = {
+      ...snapshot,
+      bag: { dimensions: snapshot.bag.dimensions, placements: [] },
+      rerollCount: 99,
+      trophy: 999,
     };
 
     const next = clientRunReducer(freshInitial(), {
       type: 'restore_from_save',
-      snapshot,
-      controllerSnapshot: divergedController,
+      snapshot: divergedSnapshot,
+      controllerSnapshot: controller,
     });
 
-    // Bag: from snapshot.bag.placements (controller's empty array
-    // would render 0 items; snapshot has 2).
+    // Bag / shop / rerollCount / trophy all from `c`; the diverged raw-snapshot
+    // values (empty bag, 99, 999) are ignored.
     expect(next.bag).toHaveLength(2);
     expect(next.bag[0]!.itemId).toBe('iron-sword');
-    // Shop: from snapshot.shop.slots (controller's empty would be 0).
+    expect(next.bag[0]!.uid).toBe('p-0');
     expect(next.shop).toHaveLength(3);
     expect(next.shop[0]!.itemId).toBe('copper-coin');
-    // SerializedRunState-only fields:
-    expect(next.state.rerollCount).toBe(2); // snapshot.rerollCount
-    expect(next.state.trophy).toBe(72); // snapshot.trophy
+    expect(next.state.rerollCount).toBe(2);
+    expect(next.state.trophy).toBe(72);
   });
 });
 

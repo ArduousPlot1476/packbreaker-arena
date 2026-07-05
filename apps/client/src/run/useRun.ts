@@ -12,7 +12,17 @@ import type {
   DragOverEvent,
   DragStartEvent,
 } from '@dnd-kit/core';
-import type { ClassId, CombatResult, ContractId, GhostId, IsoTimestamp, RelicId } from '@packbreaker/content';
+import type {
+  ClassId,
+  CombatResult,
+  ContractId,
+  GhostId,
+  IsoTimestamp,
+  PlacementId,
+  RecipeId,
+  RelicId,
+  Rotation,
+} from '@packbreaker/content';
 // Type-only import — does NOT pull sim/state.ts → combat.ts into the
 // main bundle (TS elides type-only imports at compile time; Vite
 // chunk-splits only on runtime imports). The runtime createRun call
@@ -42,7 +52,9 @@ export interface CombatDonePayload {
   damageDealt: number;
   damageTaken: number;
 }
-import { ITEMS, SHOP_POOL_ITEMS } from './content';
+import { ICONNED_RECIPES, ITEMS, SHOP_POOL_ITEMS } from './content';
+import { generateShop } from '../shop/ShopController';
+import { placementValid } from '../bag/layout';
 import type { DraggableData, DroppableData } from '../bag/types';
 import {
   clientRunReducer,
@@ -53,7 +65,6 @@ import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
 import {
   clientBagToSimBag,
   clientShopToSimShop,
-  computeRerollCost,
   makeRunSeed,
 } from './sim-bridge';
 import type { Recipe } from './types';
@@ -66,10 +77,6 @@ import {
   initTelemetry,
 } from '../telemetry/emit';
 import { getOrCreateSessionId, resolveAnonId } from '../telemetry/identifiers';
-
-function makeUid(prefix: 'b' | 's'): string {
-  return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-}
 
 /** Input the player commits at class-select. useRun gates createRun on
  *  this being non-null — until ClassSelectScreen calls beginRun, sim is
@@ -208,6 +215,8 @@ export function useRun() {
       try {
         controller = restoreRun(snapshot, {
           itemsRegistry: SHOP_POOL_ITEMS,
+          // CF 37: same iconned recipe registry as createRun.
+          recipesRegistry: ICONNED_RECIPES,
           sessionId,
           onTelemetryEvent: telemetryCapture,
         });
@@ -268,6 +277,11 @@ export function useRun() {
         // environment-free).
         startedAt: new Date().toISOString() as IsoTimestamp,
         itemsRegistry: SHOP_POOL_ITEMS,
+        // CF 37: thread the client's iconned-filtered recipe list so sim's
+        // combine detection uses the SAME set the client renders (resolves the
+        // recipesRegistry sim-default vs client-filter divergence — sim's
+        // unfiltered default would otherwise match non-iconned recipes).
+        recipesRegistry: ICONNED_RECIPES,
         sessionId,
         // M1.5c PR 1: sim's onTelemetryEvent wires through the
         // emit.ts chokepoint. Sim emits with this.sessionId (which
@@ -277,6 +291,21 @@ export function useRun() {
         // no data flows back into sim.
         onTelemetryEvent: telemetryCapture,
       });
+      // B2 Option 1: sim's makeShop(1) generated the round-1 shop from this.rng
+      // (kept for 224-fixture stability); overwrite with the client's
+      // shopSeedFor items so the player sees the deterministic shop.
+      {
+        const snap = controller.getState();
+        controller.overrideShopSlots(
+          generateShop(
+            snap.seed,
+            snap.currentRound,
+            snap.classId,
+            snap.ruleset,
+            snap.shop.rerollsThisRound,
+          ).map((s) => s.itemId!),
+        );
+      }
       setSimRun(controller);
       dispatch({ type: 'init_from_sim', snapshot: controller.getState() });
     });
@@ -363,16 +392,73 @@ export function useRun() {
     }
   }, []);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const overData = event.over?.data.current as DroppableData | undefined;
-    if (overData?.kind === 'cell') {
-      dispatch({ type: 'drop_bag', col: overData.col, row: overData.row, newUid: makeUid('b') });
-    } else if (overData?.kind === 'sell') {
-      dispatch({ type: 'sell_drop' });
-    } else {
-      dispatch({ type: 'drag_cancel' });
-    }
-  }, []);
+  // Drop-commit routing (CF 34 / M1.5e PR 1): the drag STATE stays client-side
+  // (pickup / rotate / hover), but the COMMIT dispatches sim actions and syncs
+  // the result — sim is the sole writer of bag/shop/gold. Placement validity is
+  // gated with the same placementValid the bag hover uses (a UI concern), so an
+  // invalid drop cancels without a buy; sim re-validates authoritatively.
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const overData = event.over?.data.current as DroppableData | undefined;
+      const drag = dragRef.current;
+      const sim = simRun;
+      if (drag === null || sim === null) {
+        dispatch({ type: 'drag_cancel' });
+        return;
+      }
+      if (overData?.kind === 'cell') {
+        const anchor = { col: overData.col, row: overData.row };
+        const rotation = drag.rot as Rotation;
+        const ok = placementValid(
+          stateRef.current.bag,
+          drag.itemId,
+          anchor.col,
+          anchor.row,
+          drag.rot,
+          drag.fromBagUid ?? null,
+        );
+        if (ok) {
+          try {
+            if (drag.fromBagUid) {
+              sim.moveItem(drag.fromBagUid as PlacementId, anchor, rotation);
+            } else if (drag.fromShopUid) {
+              const slotIndex = stateRef.current.shop.findIndex(
+                (s) => s.uid === drag.fromShopUid,
+              );
+              if (slotIndex >= 0) {
+                sim.buyItem(slotIndex);
+                sim.placeItem(drag.itemId, anchor, rotation);
+              }
+            }
+            dispatch({ type: 'sync_from_sim', snapshot: sim.getState() });
+          } catch (err) {
+            // Sim rejected (placement/affordability). The client gates above
+            // should preclude this; on a genuine invariant break, cancel the
+            // drag without mutation rather than crash the run.
+            if (import.meta.env.DEV) {
+              console.warn('[useRun] sim rejected drop; cancelling drag:', err);
+            }
+          }
+        }
+        dispatch({ type: 'drag_cancel' });
+      } else if (overData?.kind === 'sell') {
+        if (drag.fromBagUid) {
+          try {
+            sim.sellItem(drag.fromBagUid as PlacementId);
+            dispatch({ type: 'sync_from_sim', snapshot: sim.getState() });
+          } catch (err) {
+            if (import.meta.env.DEV) {
+              console.warn('[useRun] sim rejected sell; cancelling drag:', err);
+            }
+          }
+        }
+        dispatch({ type: 'drag_cancel' });
+      } else {
+        dispatch({ type: 'drag_cancel' });
+      }
+    },
+    [simRun],
+  );
 
   const handleDragCancel = useCallback((_event: DragCancelEvent) => {
     dispatch({ type: 'drag_cancel' });
@@ -381,46 +467,50 @@ export function useRun() {
   const onReroll = useCallback(() => {
     if (simRun === null) return;
     if (state.state.outcome !== 'in_progress') return;
-    // Client-side gold gate (Amendment A: client owns gold).
-    const ruleset = state.state.ruleset;
-    const cost = computeRerollCost(
-      state.state.rerollCount,
-      ruleset.rerollCostStart,
-      ruleset.rerollCostIncrement,
-      state.state.derived.extraRerollsPerRound,
+    // Sim is authoritative — no client gold gate, no α try/catch. rerollShop
+    // throws on insufficient gold, but the reroll CTA is disabled when
+    // unaffordable (ShopPanel/ShopTab gate computeRerollCost vs synced gold),
+    // so a throw here would be a genuine invariant break — let it propagate (Q5).
+    simRun.rerollShop();
+    // B2 Option 1: rerollShop consumed this.rng (kept for 224-fixture
+    // stability); overwrite the stored slots with the client's shopSeedFor
+    // items (what the player sees). See sim.overrideShopSlots STOPGAP.
+    const snap = simRun.getState();
+    simRun.overrideShopSlots(
+      generateShop(
+        snap.seed,
+        snap.currentRound,
+        snap.classId,
+        snap.ruleset,
+        snap.shop.rerollsThisRound,
+      ).map((s) => s.itemId!),
     );
-    if (state.state.gold < cost) return;
+    dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+  }, [simRun, state.state.outcome]);
 
-    // Sim-side mirror — α disposition. Sim's rerollShop throws on its
-    // own gold check (state.ts:518-522). Under Amendment A's bifurcation,
-    // sim.gold goes stale after client buys/sells; catch the specific
-    // insufficient-gold throw and degrade to client-only mutation (no
-    // sync_from_sim — sim is provably stale on gold). Other throws
-    // re-propagate per Q5 (trust invariants).
-    let simMirrored = false;
-    try {
-      simRun.rerollShop();
-      simMirrored = true;
-    } catch (err) {
-      if (err instanceof Error && err.message.startsWith('rerollShop: insufficient gold')) {
-        console.warn(
-          '[useRun] sim/client gold divergence on reroll; client proceeds without sim mirror:',
-          err.message,
+  const onCombine = useCallback(
+    (match: RecipeMatch) => {
+      if (simRun === null) return;
+      if (state.state.outcome !== 'in_progress') return;
+      // Combine EXECUTION is sim-authoritative (CF 34 / CF 37). Pass the SELECTED
+      // match's exact input placements (match.uids === placementIds post-flip) so
+      // sim consumes the cluster the player clicked, not whichever it detects
+      // first when a recipe has multiple ready matches (Codex P2, Finding 2).
+      // The client detector only drives the CTA.
+      try {
+        simRun.combineRecipe(
+          match.recipe.id as RecipeId,
+          match.uids.map((u) => u as PlacementId),
         );
-      } else {
-        throw err;
+        dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('[useRun] sim rejected combine; ignoring:', err);
+        }
       }
-    }
-
-    if (simMirrored) {
-      dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
-    }
-    dispatch({ type: 'reroll' });
-  }, [simRun, state.state.derived.extraRerollsPerRound, state.state.gold, state.state.rerollCount, state.state.ruleset, state.state.outcome]);
-
-  const onCombine = useCallback((match: RecipeMatch) => {
-    dispatch({ type: 'combine', match, newUid: makeUid('b') });
-  }, []);
+    },
+    [simRun, state.state.outcome],
+  );
 
   const onContinue = useCallback(() => {
     if (simRun === null) return;
@@ -754,7 +844,9 @@ export function useRun() {
     // guarded at sim state.ts:357-360). § 4.5 R2 strict enactment —
     // client recomputes nothing; sim is single source of truth for the
     // gold-delta math.
-    const goldBefore = simRun.getState().gold;
+    // β disposition retired (CF 34 / M1.5e PR 1): sim is the sole gold writer,
+    // so there is no before/after gold-capture — the sync below carries sim's
+    // authoritative gold/trophy directly.
     simRun.applyCombatOutcome({
       outcome: payload.result.outcome,
       damageDealt: payload.damageDealt,
@@ -771,11 +863,26 @@ export function useRun() {
       postApply.relics.boss === null;
     if (!shouldDeferAdvance) {
       simRun.advancePhase();
+      // B2 Option 1: advancePhase → makeShop consumed this.rng (kept for
+      // 224-fixture stability); overwrite the new round's stored slots with the
+      // client's shopSeedFor items. Guard on 'arranging' — a round-end
+      // advancePhase leaves phase 'ended' (no shop), and overrideShopSlots is
+      // arranging-only.
+      if (simRun.getPhase() === 'arranging') {
+        const snap = simRun.getState();
+        simRun.overrideShopSlots(
+          generateShop(
+            snap.seed,
+            snap.currentRound,
+            snap.classId,
+            snap.ruleset,
+            snap.shop.rerollsThisRound,
+          ).map((s) => s.itemId!),
+        );
+      }
     }
-    const snapshot = simRun.getState();
-    const goldDelta = snapshot.gold - goldBefore;
-    dispatch({ type: 'sync_from_sim', snapshot });
-    dispatch({ type: 'combat_done', goldDelta, ...payload });
+    dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+    dispatch({ type: 'combat_done' });
   }, [simRun, state.state.outcome]);
 
   return {

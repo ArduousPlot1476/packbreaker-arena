@@ -47,7 +47,10 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
   }
   const def = ITEMS[slot.itemId];
   const r = RARITY[def.rarity];
-  const affordable = gold >= def.cost && !busy;
+  // slot.cost is sim's effective (ruleset-aware) price — the value sim.buyItem
+  // actually charges — so the displayed price and affordability gate match what
+  // gets deducted (B1, CF 34 / M1.5e PR 1). Was def.cost (raw item cost).
+  const affordable = gold >= slot.cost && !busy;
   const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
   const data: DraggableData = { kind: 'shop', uid: slot.uid };
@@ -98,7 +101,7 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
           <div style={{ width: 12, height: 12 }}>
             <CoinGlyph />
           </div>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--coin-fill)' }}>{def.cost}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--coin-fill)' }}>{slot.cost}</span>
         </div>
       </div>
     </div>

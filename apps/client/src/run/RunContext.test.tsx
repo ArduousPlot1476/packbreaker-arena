@@ -121,6 +121,8 @@ function makeSimSnapshot(overrides: Partial<SimRunState> = {}): SimRunState {
     bag: { dimensions: { width: 6, height: 4 }, placements: [] },
     relics: { starter: null, mid: null, boss: null },
     shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+    rerollCount: 0,
+    trophy: 0,
     trophiesAtStart: 0,
     history: [],
     outcome: 'in_progress',
@@ -299,60 +301,58 @@ describe('clientRunReducer — init_from_sim + sync_from_sim (Q2 Amendment A)', 
     expect(next.state.gold).toBe(42);
   });
 
-  it('sync_from_sim IGNORES gold (Q2 Amendment A — client-authoritative gold for M1.5a)', () => {
+  it('sync_from_sim applies gold from sim (sim-authoritative — CF 34 / M1.5e PR 1)', () => {
     const snapshot = makeSimSnapshot({ gold: 42 });
     const fixture = {
       ...INITIAL_CLIENT_STATE,
       state: { ...INITIAL_CLIENT_STATE.state, gold: 99 },
     };
     const next = clientRunReducer(fixture, { type: 'sync_from_sim', snapshot });
-    // Client's pre-sync gold preserved; sim's gold value discarded.
-    expect(next.state.gold).toBe(99);
-    // Other sim-authoritative fields still applied.
+    // Amendment A unwound: sim's gold overwrites the client's stale value.
+    expect(next.state.gold).toBe(42);
     expect(next.state.runId).toBe(snapshot.runId);
     expect(next.state.hearts).toBe(snapshot.hearts);
   });
 
-  it('sync_from_sim still applies all non-gold sim-authoritative fields', () => {
+  it('sync_from_sim applies all sim-authoritative fields incl. gold + trophy', () => {
     const snapshot = makeSimSnapshot({
       hearts: 1,
+      gold: 55,
+      trophy: 88,
       currentRound: 7 as RoundNumber,
-      trophiesAtStart: 50,
       outcome: 'eliminated' as RunOutcome,
     });
-    const trophyBefore = INITIAL_CLIENT_STATE.state.trophy;
     const next = clientRunReducer(INITIAL_CLIENT_STATE, {
       type: 'sync_from_sim',
       snapshot,
     });
     expect(next.state.hearts).toBe(1);
     expect(next.state.round).toBe(7);
-    // Phase 2.5h: trophy is locked client-authoritative for M1.5a per
-    // decision-log.md 2026-05-11 § M1.5a Phase 1 design take-2
-    // ratification §6e Q13. sync_from_sim no longer writes trophy from
-    // snapshot.trophiesAtStart — client trophy preserved across sync.
-    expect(next.state.trophy).toBe(trophyBefore);
+    expect(next.state.gold).toBe(55);
+    // trophy is now sim-authoritative (CF 34 / M1.5e PR 1) — sourced from
+    // snapshot.trophy; the client no longer preserves its own copy across sync.
+    expect(next.state.trophy).toBe(88);
     expect(next.state.outcome).toBe('eliminated');
   });
 
-  it('init_from_sim + sync_from_sim leave bag client-authoritative; sync_from_sim leaves shop client-authoritative (top-level fields, not nested in state.state)', () => {
-    const snapshot = makeSimSnapshot();
+  it('init_from_sim / sync_from_sim derive bag + shop from the sim snapshot (sim-authoritative — CF 34 / M1.5e PR 1)', () => {
+    const snapshot = makeSimSnapshot(); // empty bag + empty shop
     const fixture = {
       ...INITIAL_CLIENT_STATE,
       bag: [
-        { uid: 'b1', itemId: 'iron-sword' as never, col: 0, row: 0, rot: 0 },
+        { uid: 'stale-b1', itemId: 'iron-sword' as never, col: 0, row: 0, rot: 0 },
       ],
-      shop: [{ uid: 's1', itemId: 'apple' as never }],
+      shop: [{ uid: 'stale-s1', itemId: 'apple' as never, cost: 99 }],
     };
+    // Amendment A unwound: both init and sync now OVERWRITE the client's stale
+    // bag/shop with the sim projection. makeSimSnapshot has an empty bag/shop,
+    // so the client's stale entries are dropped rather than preserved.
     const afterInit = clientRunReducer(fixture, { type: 'init_from_sim', snapshot });
-    expect(afterInit.bag).toEqual(fixture.bag);
-    // Post-Phase-2.5b: init_from_sim bootstraps shop from sim's snapshot
-    // (shape-adapted ItemId[] → ShopSlot[]). Coverage of that bootstrap
-    // lives in the dedicated "init_from_sim populates top-level shop
-    // from sim snapshot" test in the dynamic-import describe block.
+    expect(afterInit.bag).toEqual([]);
+    expect(afterInit.shop).toEqual([]);
     const afterSync = clientRunReducer(fixture, { type: 'sync_from_sim', snapshot });
-    expect(afterSync.bag).toEqual(fixture.bag);
-    expect(afterSync.shop).toEqual(fixture.shop);
+    expect(afterSync.bag).toEqual([]);
+    expect(afterSync.shop).toEqual([]);
   });
 });
 
@@ -397,8 +397,8 @@ async function renderAndCapture(): Promise<{
   return { getCtx: () => latest! };
 }
 
-describe('useRun onReroll — sim mirror + α catch (M1.5a PR 2 Phase 2b-2)', () => {
-  it('routes through simRun.rerollShop on success; dispatches sync_from_sim then reroll', async () => {
+describe('useRun onReroll — sim-authoritative reroll (CF 34 / M1.5e PR 1)', () => {
+  it('routes reroll through simRun.rerollShop; rerollCount increments via sync', async () => {
     const { getCtx } = await renderAndCapture();
     const ctx = getCtx();
     expect(ctx.simRun).not.toBeNull();
@@ -414,40 +414,47 @@ describe('useRun onReroll — sim mirror + α catch (M1.5a PR 2 Phase 2b-2)', ()
     });
   });
 
-  it('α catch — insufficient-gold throw is swallowed; reroll still dispatches', async () => {
-    const { getCtx } = await renderAndCapture();
-    const ctx = getCtx();
-    const rerollCountBefore = ctx.state.state.rerollCount;
-    const goldBefore = ctx.state.state.gold;
-    // Inject the specific α throw on rerollShop.
-    vi.spyOn(ctx.simRun!, 'rerollShop').mockImplementation(() => {
-      throw new Error('rerollShop: insufficient gold (have 0, need 1)');
-    });
-    // Suppress the warn that the catch logs.
-    const originalWarn = console.warn;
-    console.warn = vi.fn();
-    try {
-      // Must not throw — α catch swallows.
-      expect(() => act(() => ctx.onReroll())).not.toThrow();
-    } finally {
-      console.warn = originalWarn;
-    }
-    // Client-side reducer still ran (rerollCount + gold mutated locally).
-    await waitFor(() => {
-      expect(getCtx().state.state.rerollCount).toBe(rerollCountBefore + 1);
-    });
-    // Gold decremented by the client-side reducer per its own cost calc
-    // (free first reroll because derived.extraRerollsPerRound=1; goldBefore preserved).
-    expect(getCtx().state.state.gold).toBe(goldBefore);
-  });
-
-  it('non-α errors from rerollShop re-propagate per Q5 (trust invariants)', async () => {
+  // α disposition deleted (CF 34 / M1.5e PR 1): sim is the sole gold writer, so
+  // there is no client gold gate and no insufficient-gold try/catch. rerollShop
+  // throws propagate (the reroll CTA is disabled when unaffordable).
+  it('rerollShop throws propagate per Q5 (no client gold gate to swallow them)', async () => {
     const { getCtx } = await renderAndCapture();
     const ctx = getCtx();
     vi.spyOn(ctx.simRun!, 'rerollShop').mockImplementation(() => {
       throw new Error('rerollShop: requires phase \'arranging\' (current: \'combat\')');
     });
     expect(() => act(() => ctx.onReroll())).toThrow(/requires phase 'arranging'/);
+  });
+});
+
+describe('useRun onCombine — routes the SELECTED match to sim (Codex round 1 Finding 2)', () => {
+  it('calls sim.combineRecipe with the exact placement uids of the selected match (not empty, not another match)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+    expect(ctx.simRun).not.toBeNull();
+    // Client-wiring test: mock the sim call boundary so we don't need a real
+    // ambiguous-match game state — we assert what onCombine PASSES to sim. This
+    // closes the bug class Codex found (Finding 2): sim correctness alone
+    // doesn't guarantee the client hands sim the right placement ids.
+    const combineSpy = vi
+      .spyOn(ctx.simRun!, 'combineRecipe')
+      .mockImplementation(() => {});
+    const match = {
+      recipe: { id: 'r-steel-sword', inputs: ['iron-sword', 'iron-dagger'], output: 'steel-sword' },
+      uids: ['p-3', 'p-4'],
+    } as unknown as Parameters<typeof ctx.onCombine>[0];
+
+    act(() => {
+      ctx.onCombine(match);
+    });
+
+    expect(combineSpy).toHaveBeenCalledOnce();
+    const [recipeId, placementIds] = combineSpy.mock.calls[0]!;
+    // The SELECTED match's recipe id + exact placement uids reach sim. Pre-fix
+    // onCombine passed only the recipeId, so sim consumed whichever cluster it
+    // detected first — losing the player's specific selection.
+    expect(recipeId).toBe('r-steel-sword');
+    expect(placementIds).toEqual(['p-3', 'p-4']);
   });
 });
 

@@ -73,6 +73,8 @@
       "purchased": [],
       "rerollsThisRound": 2
     },
+    "rerollCount": 2,
+    "trophy": 0,
     "trophiesAtStart": 0,
     "history": [],
     "outcome": "in_progress"

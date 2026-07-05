@@ -106,6 +106,8 @@ function makeTerminalSnapshot(overrides: Partial<SimRunState>): SimRunState {
       boss: 'conquerors-crown' as RelicId,
     } as RelicSlots,
     shop: { slots: [], purchased: [], rerollsThisRound: 0 },
+    rerollCount: 0,
+    trophy: 0,
     trophiesAtStart: 0,
     history: Array.from({ length: 11 }, (_, i): RunHistoryEntry => ({
       round: (i + 1) as RoundNumber,
