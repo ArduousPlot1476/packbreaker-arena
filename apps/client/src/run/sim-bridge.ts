@@ -147,6 +147,31 @@ export function clientShopToSimShop(
   };
 }
 
+/** Adapter: canonical BagState → client BagItem[] (inverse of
+ *  clientBagToSimBag). uid = String(placementId): post CF 34 / M1.5e PR 1 the
+ *  sim is the sole minter of placement identity, so the client renders sim's
+ *  ids directly — no client-minted uids, no uid↔placementId mapping layer. */
+export function simBagToClientBag(bag: BagState): BagItem[] {
+  return bag.placements.map((p) => ({
+    uid: String(p.placementId),
+    itemId: p.itemId as ItemId,
+    col: p.anchor.col,
+    row: p.anchor.row,
+    rot: p.rotation,
+  }));
+}
+
+/** Adapter: canonical ShopState → client ShopSlot[] (inverse of
+ *  clientShopToSimShop). Purchased slot indices materialize as itemId:null
+ *  (the client's "sold" state). uid is stable per (round, rerollsThisRound,
+ *  slotIndex) so React keys + drag survive a re-sync within the same shop. */
+export function simShopToClientShop(shop: ShopState, round: number): ShopSlot[] {
+  return shop.slots.map((itemId, i) => ({
+    uid: `s${round}-${shop.rerollsThisRound}-${i}`,
+    itemId: shop.purchased.includes(i) ? null : (itemId as ItemId),
+  }));
+}
+
 /** Empty relic slots for M1.3.4a — the client renders a static
  *  Apprentice's Loop in the Relics rail/tab but doesn't yet model relic
  *  state (M1.5). Sim accepts empty RelicSlots; modifiers default to no-op. */
