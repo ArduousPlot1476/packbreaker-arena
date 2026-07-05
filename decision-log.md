@@ -4,6 +4,10 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-05 — M1.5e MILESTONE CLOSED
+
+CF 34 (gold/rerollCount/bag/shop/trophy sim-authority migration) was M1.5e's sole mandate, closed at merge commit 285e7c3 (§ "M1.5e PR 1 CLOSED" above). No PR 2 opened under M1.5e — CF 36 (separable, deferred), CF 37 (amended, remainder parked), CF 43 (standalone follow-up), and CF 56 (new, own future Phase 1) all resolved to independent backlog status rather than M1.5e scope. M1.5e is CLOSED.
+
 ## 2026-07-05 — M1.5e PR 1 CLOSED — CF 34 sim-authority migration (gold/rerollCount/bag/shop/trophy)
 
 Sim is now sole writer for gold, rerollCount, bag, shop-state, and trophy, across both live mutation and restore. Merged --no-ff at merge commit `285e7c3`; branch m1.5e-pr1-authority-flip deleted local + remote. Codex: 2 rounds, round 1 found 2 findings (both P1/P2, both fixed), round 2 clean (0 findings) — well under the 4-finding ceiling, ordinary reactive cycle.
