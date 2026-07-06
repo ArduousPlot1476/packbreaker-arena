@@ -1,11 +1,11 @@
 // CF 57 — describeItem unit + coverage tests.
 //
 // Covers every one of the 6 Trigger variants and 6 Effect variants at least
-// once (real shipped items where they exist; synthetic fixtures for the two
-// sim-inert effects and the positive-sign cooldown edge). The coverage test
-// asserts all 45 shipped items produce non-empty output — Rune Pedestal via
-// the structural tag fallback (its only effect is the omitted trigger_chance
-// buff), which is pinned explicitly.
+// once (real shipped items where they exist; synthetic fixtures / describeEffect
+// for the sim-inert effects and the positive-sign cooldown edge). The coverage
+// test asserts all 45 shipped items produce non-empty output — Rune Pedestal and
+// Lucky Penny (each with only an omitted effect) fall back to a structural tag
+// summary, pinned explicitly.
 
 import { describe, expect, it } from 'vitest';
 import { ITEMS, getItem } from '@packbreaker/content';
@@ -97,10 +97,12 @@ describe('describeItem — effect variants', () => {
     ).toBe('burn 1 to enemy for 3s');
   });
 
-  it('add_gold → "+N gold", no target (lucky-penny)', () => {
-    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual([
-      'Round start — +2 gold',
-    ]);
+  it('add_gold is omitted (unimplemented no-op); lucky-penny → tag fallback', () => {
+    // Sim skips add_gold and no run-controller credit path exists, so it grants
+    // nothing — omit it (Codex Phase 2.5). Lucky Penny's only effect is add_gold,
+    // so it falls back to its structural tag summary.
+    expect(describeEffect({ type: 'add_gold', amount: 2 })).toBeNull();
+    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Gold']);
   });
 
   it('buff_adjacent damage → "nearby [tags ]items +N dmg" (resonance-crystal, two effects)', () => {

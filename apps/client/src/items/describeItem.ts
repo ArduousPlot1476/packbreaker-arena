@@ -8,11 +8,14 @@
 // Register: TERSE / arcade (CF 57 Q2). One line per describable trigger, then
 // one line per present passiveStats field.
 //
-// Two effects the shipped sim does NOT execute are OMITTED (CF 57 Q1 — "show
+// Three effects the shipped game does NOT execute are OMITTED (CF 57 Q1 — "show
 // only what the sim actually does"):
 //   • buff_adjacent { stat: 'trigger_chance_pct' } — hard no-op (combat.ts:699,
 //     deferred to M1.2.5).
 //   • summon_temp_item — no-op (combat.ts:735) and used by zero shipped items.
+//   • add_gold — the sim skips it (combat.ts:682, deferred to the M1.2.4 run
+//     controller) and no run-controller credit path exists, so it grants no
+//     gold today (Codex Phase 2.5).
 // Their switch cases remain (returning null) so a future Trigger/Effect schema
 // member still fails to compile here rather than silently rendering nothing.
 //
@@ -122,7 +125,10 @@ export function describeEffect(effect: Effect): string | null {
         : base;
     }
     case 'add_gold':
-      return `+${effect.amount} gold`;
+      // Unimplemented today: the sim skips it (combat.ts:682, deferred to the
+      // M1.2.4 run controller) and no run-controller credit path exists, so no
+      // gold is actually granted. Omit per CF 57 Q1 (Codex Phase 2.5).
+      return null;
     case 'buff_adjacent':
       return describeBuffAdjacent(effect);
     case 'summon_temp_item':
