@@ -166,13 +166,11 @@ describe('describeItem — inert trigger_chance_pct omission (CF 57 Q1)', () => 
 });
 
 describe('describePassiveStats', () => {
-  it('emits present fields in stable order (HP, base dmg, gold)', () => {
+  it('emits only maxHpBonus; omits unimplemented goldPerRound + bonusBaseDamage', () => {
+    // maxHpBonus is the sole passive the run controller applies; the other two
+    // have no consumer, so they are omitted (Codex Phase 2.5) not advertised.
     const stats: PassiveStats = { maxHpBonus: 18, bonusBaseDamage: 2, goldPerRound: 3 };
-    expect(describePassiveStats(stats)).toEqual([
-      '+18 max HP',
-      '+2 base dmg',
-      '+3 gold/round',
-    ]);
+    expect(describePassiveStats(stats)).toEqual(['+18 max HP']);
   });
 
   it('passive + trigger compose (tower-shield: heal line then +18 max HP)', () => {
@@ -182,9 +180,10 @@ describe('describePassiveStats', () => {
     ]);
   });
 
-  it('pure-passive item (buckler → +5 max HP; copper-coin → +1 gold/round)', () => {
+  it('pure-passive: buckler → +5 max HP (real); copper-coin → Gold fallback (goldPerRound omitted)', () => {
     expect(describeItem(getItem('buckler' as ItemId))).toEqual(['+5 max HP']);
-    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['+1 gold/round']);
+    // Its only content is the unimplemented goldPerRound → structural tag fallback.
+    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['Gold']);
   });
 });
 

@@ -19,6 +19,11 @@
 // Their switch cases remain (returning null) so a future Trigger/Effect schema
 // member still fails to compile here rather than silently rendering nothing.
 //
+// PassiveStats: only `maxHpBonus` is actually applied (state.ts sums it into
+// Combatant.startingHp). `goldPerRound` (no run-controller credit path) and
+// `bonusBaseDamage` (reserved for M2, used by no shipped item) are likewise
+// omitted — see describePassiveStats.
+//
 // Sign hazard: buff_adjacent `cooldown_pct` is applied un-negated as
 // floor(base*(100+pct)/100) (math.ts:18) — a POSITIVE amount lengthens the
 // cooldown (slower/worse); NEGATIVE shortens it (faster/better). All shipped
@@ -177,12 +182,15 @@ export function describeTrigger(trigger: Trigger): string | null {
   )}`;
 }
 
-/** Passive (non-sim) modifiers → one line each, in a stable order. */
+/** Passive modifiers → one line each. Only `maxHpBonus` is rendered: it is the
+ *  sole passive the run controller applies (state.ts sums it into
+ *  Combatant.startingHp). `goldPerRound` has no credit path and
+ *  `bonusBaseDamage` is reserved for M2 (used by no shipped item), so both are
+ *  omitted rather than advertising income/damage the game never grants
+ *  (CF 57 Q1 / Codex Phase 2.5). */
 export function describePassiveStats(stats: PassiveStats): string[] {
   const lines: string[] = [];
   if (stats.maxHpBonus != null) lines.push(`+${stats.maxHpBonus} max HP`);
-  if (stats.bonusBaseDamage != null) lines.push(`+${stats.bonusBaseDamage} base dmg`);
-  if (stats.goldPerRound != null) lines.push(`+${stats.goldPerRound} gold/round`);
   return lines;
 }
 
