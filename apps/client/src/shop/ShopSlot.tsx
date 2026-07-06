@@ -1,13 +1,23 @@
 // Single shop slot. Renders a SOLD placeholder when the slot has no item;
-// otherwise renders the buyable item card. As of commit 6 the card is a
-// useDraggable — pickup happens by drag-and-drop into the bag, replacing
-// the prototype's click-to-grab pattern. Drag is disabled when the
-// player can't afford or combat is in progress.
+// otherwise the buyable card. Pickup is drag-and-drop into the bag.
+//
+// CF 57 structural split: the outer <div> is the pure dnd-kit drag node
+// (pointer/touch listeners + card styling; drag disabled when unaffordable or
+// busy). When the info popover is enabled, an inner <button> is the single
+// interactive element owning the inspect popover. dnd-kit's `attributes` are
+// intentionally NOT spread (no KeyboardSensor in this app; spreading role=button
+// would nest around the inner button). Because drag-availability (affordability)
+// and inspect-availability (combat) now live on two different elements, the
+// unaffordable-but-inspectable case no longer needs an aria-disabled override —
+// the drag node's state can't mislabel the inspect button.
 
+import { useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { RARITY } from '@packbreaker/ui-kit';
 import { ITEMS } from '../run/content';
+import { ItemInfoPopover } from '../items/ItemInfoPopover';
+import { INSPECT_TRIGGER_STYLE, useItemInfoTrigger } from '../items/useItemInfoTrigger';
 import type { ShopSlot as ShopSlotData } from '../run/types';
 import type { DraggableData } from '../bag/types';
 import { CoinGlyph, ICONS } from '../icons/icons';
@@ -22,9 +32,36 @@ interface ShopSlotProps {
    * mobile grid column.
    */
   cardWidth?: number | string;
+  /**
+   * Opt in to the tap/click item-info popover (CF 57). Defaults to `false`
+   * (fail-closed). The popover is intentionally allowed even when the slot is
+   * unaffordable (inspect-before-buy); the SOLD placeholder never gets one.
+   */
+  enableInfoPopover?: boolean;
 }
 
-export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
+export function ShopSlot({
+  slot,
+  gold,
+  busy,
+  cardWidth = 110,
+  enableInfoPopover = false,
+}: ShopSlotProps) {
+  // All hooks are called unconditionally, before the SOLD early return.
+  // Inspect is gated off during combat (busy), NOT by affordability — an
+  // unaffordable-but-not-busy slot stays inspectable (inspect-before-buy).
+  const infoEnabled = enableInfoPopover && slot.itemId != null && !busy;
+  const info = useItemInfoTrigger(infoEnabled);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  // slot.cost is sim's effective (ruleset-aware) price (CF 34 / M1.5e PR 1 B1).
+  const affordable = slot.itemId != null && gold >= slot.cost && !busy;
+  const data: DraggableData = { kind: 'shop', uid: slot.uid };
+  const { listeners, setNodeRef, isDragging } = useDraggable({
+    id: `shop:${slot.uid}`,
+    data,
+    disabled: !affordable,
+  });
+
   if (!slot.itemId) {
     return (
       <div
@@ -47,39 +84,10 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
   }
   const def = ITEMS[slot.itemId];
   const r = RARITY[def.rarity];
-  // slot.cost is sim's effective (ruleset-aware) price — the value sim.buyItem
-  // actually charges — so the displayed price and affordability gate match what
-  // gets deducted (B1, CF 34 / M1.5e PR 1). Was def.cost (raw item cost).
-  const affordable = gold >= slot.cost && !busy;
   const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
-  const data: DraggableData = { kind: 'shop', uid: slot.uid };
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `shop:${slot.uid}`,
-    data,
-    disabled: !affordable,
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className="ease-snap text-left relative"
-      style={{
-        width: cardWidth,
-        padding: 8,
-        borderRadius: 6,
-        background: 'var(--surface)',
-        border: '1px solid var(--border-default)',
-        opacity: isDragging ? 0.45 : affordable ? 1 : 0.55,
-        cursor: affordable ? (isDragging ? 'grabbing' : 'grab') : 'not-allowed',
-        // 120ms snappy ease per visual-direction.md § 7. Was 140ms in M1.3.1.
-        transition: 'transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms, opacity 120ms',
-        touchAction: 'none',
-        userSelect: 'none',
-      }}
-    >
+  const cardInner = (
+    <>
       <div className="flex items-center justify-center mb-2">
         <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={42}>
           <ItemIcon>
@@ -104,6 +112,58 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--coin-fill)' }}>{slot.cost}</span>
         </div>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      <div
+        ref={setNodeRef}
+        {...listeners}
+        className="ease-snap text-left relative"
+        style={{
+          width: cardWidth,
+          padding: 8,
+          borderRadius: 6,
+          background: 'var(--surface)',
+          border: '1px solid var(--border-default)',
+          opacity: isDragging ? 0.45 : affordable ? 1 : 0.55,
+          cursor: affordable ? (isDragging ? 'grabbing' : 'grab') : 'not-allowed',
+          // 120ms snappy ease per visual-direction.md § 7. Was 140ms in M1.3.1.
+          transition: 'transform 120ms cubic-bezier(0.16, 1, 0.3, 1), background 120ms, opacity 120ms',
+          touchAction: 'none',
+          userSelect: 'none',
+        }}
+      >
+        {enableInfoPopover ? (
+          <button
+            ref={triggerRef}
+            type="button"
+            {...info.handlers}
+            // Cost is decision-relevant in a purchase context and is otherwise
+            // only shown visually (coin glyph + number), so fold it into the
+            // accessible name. Bag stays name-only. Codex Phase 2.5 shop a11y.
+            aria-label={`${def.name} — ${slot.cost} gold`}
+            // Out of the tab order (still programmatically focusable for
+            // focus-return) while the popover is disabled during combat.
+            tabIndex={infoEnabled ? undefined : -1}
+            className="focus-ring"
+            style={INSPECT_TRIGGER_STYLE}
+          >
+            {cardInner}
+          </button>
+        ) : (
+          cardInner
+        )}
+      </div>
+      {enableInfoPopover && (
+        <ItemInfoPopover
+          itemId={slot.itemId}
+          open={info.open}
+          onClose={info.close}
+          anchorRef={triggerRef}
+        />
+      )}
+    </>
   );
 }

@@ -91,7 +91,7 @@ export function ShopTab({ state, shop, onReroll, busy }: ShopTabProps) {
         style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}
       >
         {shop.map((s) => (
-          <ShopSlot key={s.uid} slot={s} gold={state.gold} busy={busy} cardWidth="100%" />
+          <ShopSlot key={s.uid} slot={s} gold={state.gold} busy={busy} cardWidth="100%" enableInfoPopover />
         ))}
       </div>
 
