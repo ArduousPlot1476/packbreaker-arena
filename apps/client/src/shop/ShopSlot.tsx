@@ -42,7 +42,11 @@ export function ShopSlot({
   enableInfoPopover = false,
 }: ShopSlotProps) {
   // All hooks are called unconditionally, before the SOLD early return.
-  const infoEnabled = enableInfoPopover && slot.itemId != null;
+  // Gate the popover off during combat (busy), mirroring the bag's `!disabled`
+  // gate — otherwise a shop popover could open + focus-trap behind CombatOverlay
+  // (Codex Phase 2.5 F3). Affordability is a SEPARATE gate (below): an
+  // unaffordable-but-not-busy slot stays inspectable.
+  const infoEnabled = enableInfoPopover && slot.itemId != null && !busy;
   const info = useItemInfoTrigger(infoEnabled);
   const nodeRef = useRef<HTMLDivElement | null>(null);
   // slot.cost is sim's effective (ruleset-aware) price — the value sim.buyItem

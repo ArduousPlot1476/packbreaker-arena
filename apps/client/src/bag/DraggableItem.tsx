@@ -70,6 +70,9 @@ export function DraggableItem({
         {...attributes}
         {...listeners}
         {...info.handlers}
+        // Bag items are icon-only, so give the popover trigger an accessible
+        // name (shop slots already render the name as text). Codex Phase 2.5 F2.
+        aria-label={enableInfoPopover ? def.name : undefined}
         className={infoEnabled ? 'absolute ease-snap focus-ring' : 'absolute ease-snap'}
         style={{
           left: item.col * cellSize + 2,

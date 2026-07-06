@@ -39,4 +39,10 @@ describe('DraggableItem — info popover focus across combat disable (Rule 12)',
     expect(screen.queryByTestId('item-info-popover')).toBeNull();
     expect(document.activeElement).toBe(trigger);
   });
+
+  it('gives the icon-only bag trigger an accessible name (Codex F2)', () => {
+    render(tree(false));
+    const trigger = document.querySelector('[aria-haspopup="dialog"]') as HTMLElement;
+    expect(trigger.getAttribute('aria-label')).toBe('Iron Sword');
+  });
 });
