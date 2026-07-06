@@ -52,7 +52,7 @@ export function ShopPanel({ state, shop, onReroll, onContinue, busy }: ShopPanel
         </div>
         <div className="grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
           {shop.map((s) => (
-            <ShopSlot key={s.uid} slot={s} gold={state.gold} busy={busy} />
+            <ShopSlot key={s.uid} slot={s} gold={state.gold} busy={busy} enableInfoPopover />
           ))}
         </div>
         <button

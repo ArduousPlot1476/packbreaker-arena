@@ -156,7 +156,7 @@ export function BagBoard({
         )}
 
         {bag.map((b) => (
-          <DraggableItem key={b.uid} item={b} disabled={dimmed} />
+          <DraggableItem key={b.uid} item={b} disabled={dimmed} enableInfoPopover />
         ))}
       </div>
       {!compact && (

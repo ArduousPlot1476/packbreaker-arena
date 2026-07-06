@@ -4,10 +4,13 @@
 // the prototype's click-to-grab pattern. Drag is disabled when the
 // player can't afford or combat is in progress.
 
+import { useCallback, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { RARITY } from '@packbreaker/ui-kit';
 import { ITEMS } from '../run/content';
+import { ItemInfoPopover } from '../items/ItemInfoPopover';
+import { useItemInfoTrigger } from '../items/useItemInfoTrigger';
 import type { ShopSlot as ShopSlotData } from '../run/types';
 import type { DraggableData } from '../bag/types';
 import { CoinGlyph, ICONS } from '../icons/icons';
@@ -22,9 +25,44 @@ interface ShopSlotProps {
    * mobile grid column.
    */
   cardWidth?: number | string;
+  /**
+   * Opt in to the tap/click item-info popover (CF 57). Defaults to `false`
+   * (fail-closed): a component reused without opting in gets no popover. The
+   * popover is intentionally allowed even when the slot is unaffordable
+   * (inspect-before-buy); the SOLD placeholder never gets one.
+   */
+  enableInfoPopover?: boolean;
 }
 
-export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
+export function ShopSlot({
+  slot,
+  gold,
+  busy,
+  cardWidth = 110,
+  enableInfoPopover = false,
+}: ShopSlotProps) {
+  // All hooks are called unconditionally, before the SOLD early return.
+  const infoEnabled = enableInfoPopover && slot.itemId != null;
+  const info = useItemInfoTrigger(infoEnabled);
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  // slot.cost is sim's effective (ruleset-aware) price — the value sim.buyItem
+  // actually charges — so the displayed price and affordability gate match what
+  // gets deducted (B1, CF 34 / M1.5e PR 1). Was def.cost (raw item cost).
+  const affordable = slot.itemId != null && gold >= slot.cost && !busy;
+  const data: DraggableData = { kind: 'shop', uid: slot.uid };
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `shop:${slot.uid}`,
+    data,
+    disabled: !affordable,
+  });
+  const setRefs = useCallback(
+    (node: HTMLDivElement | null) => {
+      setNodeRef(node);
+      nodeRef.current = node;
+    },
+    [setNodeRef],
+  );
+
   if (!slot.itemId) {
     return (
       <div
@@ -47,26 +85,19 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
   }
   const def = ITEMS[slot.itemId];
   const r = RARITY[def.rarity];
-  // slot.cost is sim's effective (ruleset-aware) price — the value sim.buyItem
-  // actually charges — so the displayed price and affordability gate match what
-  // gets deducted (B1, CF 34 / M1.5e PR 1). Was def.cost (raw item cost).
-  const affordable = gold >= slot.cost && !busy;
   const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
 
-  const data: DraggableData = { kind: 'shop', uid: slot.uid };
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `shop:${slot.uid}`,
-    data,
-    disabled: !affordable,
-  });
-
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className="ease-snap text-left relative"
-      style={{
+    <>
+      <div
+        ref={setRefs}
+        {...attributes}
+        {...listeners}
+        {...info.handlers}
+        className={
+          infoEnabled ? 'ease-snap text-left relative focus-ring' : 'ease-snap text-left relative'
+        }
+        style={{
         width: cardWidth,
         padding: 8,
         borderRadius: 6,
@@ -104,6 +135,15 @@ export function ShopSlot({ slot, gold, busy, cardWidth = 110 }: ShopSlotProps) {
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--coin-fill)' }}>{slot.cost}</span>
         </div>
       </div>
-    </div>
+      </div>
+      {enableInfoPopover && (
+        <ItemInfoPopover
+          itemId={slot.itemId}
+          open={info.open}
+          onClose={info.close}
+          anchorRef={nodeRef}
+        />
+      )}
+    </>
   );
 }
