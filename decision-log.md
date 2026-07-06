@@ -4,6 +4,32 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-06 — CF 57 CLOSED — Item-info popover, merge 2c720cf (PR 27, main a7d1ce5 → 2c720cf)
+
+Description text derived structurally from each Item's triggers/effects/passiveStats at render time (Option B) — zero schema changes, zero hand-authored copy, git diff on content-schemas.ts/packages/content/** confirmed empty at merge.
+
+Five mechanics correctly omitted as sim no-ops rather than described as designed: trigger_chance_pct, summon_temp_item, add_gold, goldPerRound, bonusBaseDamage. Two of these (add_gold, goldPerRound) were caught only via external Codex review after Step-0 incorrectly trusted a schema/code comment over a verified runtime consumer — same gap, twice, on one PR (Rule 5 territory: content-side evidence over inference, reinforced not re-codified).
+
+9 Codex review rounds surfaced a converging root cause: the item-trigger element carried three orthogonal roles (dnd drag node, popover trigger, affordability-state carrier), producing a combinatorial parade of findings at each pairwise intersection rather than a fixed bug count. Resolved via structural decomposition (separate drag-only outer element + labeled inner popover-trigger button) rather than continued reactive patching — 4 of the round's findings became structurally impossible by construction, not merely re-tested-and-passing.
+
+Rule 18 codified this session: any claim that a pass/audit is "comprehensive," "locked," or "final" must enumerate the specific axes it checked; unlisted axes are unchecked, not assumed clean. Triggered by three instances on this one PR (master-dev's file-list enumeration vs. actual git status; the add_gold/goldPerRound comment-trusted-over-verified-consumer repeat; the 2.5g meta-audit's "locked, no further findings possible" claim that covered only effect-consumers and missed a11y-naming + busy-gating entirely).
+
+Candidate Pattern, not yet ratified (holding for a second instance per standing convention): an interactive element accumulating 3+ orthogonal responsibilities predicts combinatorial review findings, not a fixed bug count.
+
+Opens: CF 58, CF 59, CF 60, CF 61 (below). Closes: CF 57.
+
+**Counter: 47 / 18 / 8 / 29 / 42** (catches / rules / patterns / drifts / open-CFs). Delta from the live tip 45 / 17 / 8 / 28 / 38 (2026-07-05 § Catch 45): +2 catches (Catch 46 — describeItem shipped Lucky Penny's add_gold as an ungranted "+2 gold"; Catch 47 — same for goldPerRound on Copper Coin / Coin Pouch / Treasure Sack; both miscoded, shipped, caught by Codex review), +1 rule (Rule 18), +1 drift (Drift 29 — master-dev's CF 57 input file-list omitted the three call-site opt-ins; caught pre-staging, nothing miscoded → drift-not-catch per the Drift 28 precedent). Two corrections applied to the drafted delta: (1) open-CFs is **+4 → 42**, NOT the drafted −1+4 → 41 — CF 57 was never in the live open count (grep-confirmed absent from decision-log.md; the 38 predates its assignment), so its close is counter-neutral; (2) the file-list gap is Drift 29, not the drafted third catch. Patterns unchanged — the 3-orthogonal-responsibilities shape is logged as a candidate, held for a second instance.
+
+The four CFs opened by this close:
+
+**CF 58 (OPENED)** — trigger_chance_pct's chance-roll mechanism deferred at M1.2.3a to M1.2.5; M1.2.5 closed without implementing it. Rune Pedestal / Master Alchemist's Kit's proc-buff remains a hard sim no-op.
+
+**CF 59 (OPENED)** — M1.2.4's item-driven gold-credit system never wired to any consumer. Affects add_gold (Lucky Penny) and goldPerRound (Copper Coin, Coin Pouch, Treasure Sack) — one root cause, two mechanisms, 4 of 45 items functionally inert in shipped combat. Real M1 playtest implication: expect and accept low D2 pick-rate on these four until this ships — that's correct signal, not noise.
+
+**CF 60 (OPENED)** — No visual signal exists for generic adjacency-trigger participation (on_adjacent_trigger). Confirmed universal and structural via combat.ts:542-543 — every top-level trigger fires adjacent reactions regardless of whether its own effects are real or omitted. Only formal named recipes get a visible cue (the glow); this class of item interaction is invisible board-wide.
+
+**CF 61 (OPENED)** — No keyboard-operable drag-and-drop exists anywhere in the bag system — PointerSensor/TouchSensor configured, no KeyboardSensor. Pre-existing, app-wide, predates CF 57; surfaced when CF 57's structural split correctly removed ARIA (aria-roledescription/aria-describedby) that had been falsely describing a keyboard-drag capability that never worked. Real WCAG 2.1.1 gap, correctly out of M1 scope, flagged for M2's accessibility pass.
+
 ## 2026-07-05 — Catch 45 (Class D — co-drift): telemetry-plan.md D2 "Boss win rate" spec referenced a non-existent CombatOutcome value
 
 Pre-dashboard property audit (commissioned before manual D1/D2 PostHog build) found telemetry-plan.md § 6 D2's "Boss win rate" card specified as `outcome=won` filtering `combat_end`, but combat_end.outcome is typed CombatOutcome ('player_win' | 'ghost_win' | 'draw', content-schemas.ts:692) — 'won' only exists on RunOutcome (run_end's outcome field, content-schemas.ts:526). Built literally, the card would silently return 0%/empty — no error, indistinguishable from a genuinely low boss win rate. Emit site and schema are both correct; only the dashboard-spec literal was wrong. Same non-propagating-co-authored-surface shape as Class D (Catch 11): the dashboard spec and the CombatOutcome enum drifted apart, neither propagated to the other. Caught by Claude Code's commissioned audit before any PostHog dashboard was built on the wrong filter. Fixed same commit: `outcome=won` → `outcome=player_win`.
