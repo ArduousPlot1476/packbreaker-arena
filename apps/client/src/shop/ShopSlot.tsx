@@ -98,6 +98,13 @@ export function ShopSlot({
         {...attributes}
         {...listeners}
         {...info.handlers}
+        // When the info popover is operable the control is NOT disabled, even if
+        // it's un-draggable because unaffordable — otherwise dnd-kit's
+        // aria-disabled="true" (from disabled:!affordable) would announce this
+        // still-operable inspect trigger as disabled and hide the
+        // inspect-before-buy path from AT users (Codex Phase 2.5 F4). During
+        // combat infoEnabled is false, so dnd's aria-disabled passes through.
+        aria-disabled={infoEnabled ? undefined : attributes['aria-disabled']}
         className={
           infoEnabled ? 'ease-snap text-left relative focus-ring' : 'ease-snap text-left relative'
         }

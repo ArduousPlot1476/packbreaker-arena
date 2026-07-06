@@ -34,12 +34,23 @@ describe('ShopSlot — info popover combat gating (Codex F3)', () => {
     expect(screen.queryByTestId('item-info-popover')).toBeNull();
   });
 
-  it('unaffordable but NOT busy: still inspectable (affordability is not the popover gate)', () => {
+  it('unaffordable but NOT busy: inspectable AND not announced disabled (F4)', () => {
     render(tree(0, false));
     const trigger = document.querySelector('[aria-haspopup="dialog"]') as HTMLElement;
     expect(trigger).not.toBeNull();
+    // Un-draggable (can't afford) but the info trigger is operable, so it must
+    // not carry aria-disabled="true" — otherwise AT hides the inspect path.
+    expect(trigger.getAttribute('aria-disabled')).not.toBe('true');
     fireEvent.click(trigger);
     expect(screen.getByTestId('item-info-popover')).toBeInTheDocument();
+  });
+
+  it('busy: dnd aria-disabled passes through (control is genuinely disabled)', () => {
+    const { container } = render(tree(10, true));
+    // No popover trigger during combat; the card is the disabled draggable.
+    expect(container.querySelector('[aria-haspopup="dialog"]')).toBeNull();
+    const card = screen.getByText('Iron Sword').closest('[aria-disabled]');
+    expect(card?.getAttribute('aria-disabled')).toBe('true');
   });
 
   it('busy flips true while open: popover closes and focus returns to the slot', () => {
