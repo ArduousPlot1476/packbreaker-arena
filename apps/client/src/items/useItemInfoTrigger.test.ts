@@ -1,9 +1,10 @@
-// CF 57 Phase 2.5 — useItemInfoTrigger tests. Locks the post-Codex behavior:
-// tap/keyboard only (no hover handlers, per P1) and no auto-reopen after the
-// trigger is disabled then re-enabled (P2 regression — e.g. combat start/end).
+// CF 57 — useItemInfoTrigger tests. The inspect trigger is a native <button>, so
+// the hook provides only click + ARIA (Enter/Space come from the button itself);
+// it must NOT also emit an onKeyDown (that would double-toggle). Also locks the
+// no-auto-reopen-after-disable behavior (P2).
 
-import type { KeyboardEvent, MouseEvent } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import type { MouseEvent } from 'react';
+import { describe, expect, it } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useItemInfoTrigger } from './useItemInfoTrigger';
 
@@ -16,13 +17,13 @@ describe('useItemInfoTrigger', () => {
     expect(result.current.handlers).toEqual({});
   });
 
-  it('enabled → tap + keyboard handlers and ARIA, and NO hover handlers', () => {
+  it('enabled → click + ARIA only (no onKeyDown, no hover); keyboard is native to the button', () => {
     const { result } = renderHook(() => useItemInfoTrigger(true));
     const h = result.current.handlers;
     expect(typeof h.onClick).toBe('function');
-    expect(typeof h.onKeyDown).toBe('function');
     expect(h['aria-haspopup']).toBe('dialog');
     expect(h['aria-expanded']).toBe(false);
+    expect('onKeyDown' in h).toBe(false);
     expect('onMouseEnter' in h).toBe(false);
     expect('onMouseLeave' in h).toBe(false);
   });
@@ -34,15 +35,6 @@ describe('useItemInfoTrigger', () => {
     expect(result.current.handlers['aria-expanded']).toBe(true);
     act(() => result.current.handlers.onClick?.(clickEvent()));
     expect(result.current.open).toBe(false);
-  });
-
-  it('Enter/Space toggle via keyboard and preventDefault', () => {
-    const { result } = renderHook(() => useItemInfoTrigger(true));
-    const pd = vi.fn();
-    const e = { key: 'Enter', preventDefault: pd } as unknown as KeyboardEvent<HTMLElement>;
-    act(() => result.current.handlers.onKeyDown?.(e));
-    expect(pd).toHaveBeenCalledTimes(1);
-    expect(result.current.open).toBe(true);
   });
 
   it('close() closes', () => {
@@ -60,10 +52,8 @@ describe('useItemInfoTrigger', () => {
     );
     act(() => result.current.handlers.onClick?.(clickEvent()));
     expect(result.current.open).toBe(true);
-    // combat starts → disabled
     rerender({ enabled: false });
     expect(result.current.open).toBe(false);
-    // combat ends → re-enabled: must stay closed until a fresh tap
     rerender({ enabled: true });
     expect(result.current.open).toBe(false);
   });
