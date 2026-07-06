@@ -140,7 +140,10 @@ export function ShopSlot({
             ref={triggerRef}
             type="button"
             {...info.handlers}
-            aria-label={def.name}
+            // Cost is decision-relevant in a purchase context and is otherwise
+            // only shown visually (coin glyph + number), so fold it into the
+            // accessible name. Bag stays name-only. Codex Phase 2.5 shop a11y.
+            aria-label={`${def.name} — ${slot.cost} gold`}
             // Out of the tab order (still programmatically focusable for
             // focus-return) while the popover is disabled during combat.
             tabIndex={infoEnabled ? undefined : -1}

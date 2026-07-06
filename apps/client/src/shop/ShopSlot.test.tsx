@@ -29,6 +29,13 @@ describe('ShopSlot — inspect button (CF 57 structural split)', () => {
     expect(screen.getByTestId('item-info-popover')).toBeInTheDocument();
   });
 
+  it('accessible name includes item name AND cost (purchase-decision context)', () => {
+    render(tree(10, false));
+    const button = document.querySelector('[aria-haspopup="dialog"]') as HTMLElement;
+    // SLOT.cost === 3; "gold" mirrors the coin-glyph cost display.
+    expect(button.getAttribute('aria-label')).toBe('Iron Sword — 3 gold');
+  });
+
   it('busy (combat): no popover affordance, and interaction opens nothing (F3)', () => {
     const { container } = render(tree(10, true));
     expect(container.querySelector('[aria-haspopup="dialog"]')).toBeNull();
