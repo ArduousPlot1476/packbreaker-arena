@@ -3,23 +3,24 @@
 // place.
 //
 // Rules:
-//   • TAP / CLICK is the primary path and works on both viewports (a <4px tap
-//     does not start a @dnd-kit drag, so the click lands as a toggle).
+//   • TAP / CLICK is the path in, and works on both viewports (a <4px tap does
+//     not start a @dnd-kit drag, so the click lands as a toggle).
 //   • Enter/Space toggle from the keyboard (the trigger is already role=button,
 //     tabindex=0 via @dnd-kit attributes).
-//   • HOVER is a desktop-only progressive enhancement — attached ONLY on
-//     hover-capable pointers, and it never becomes the sole path in (tap always
-//     works). A hover-open closes on mouse-leave; a tap-open stays pinned until
-//     dismissed (Esc / tap-away).
 //   • Fail-closed: when `enabled` is false the hook returns NO handlers and NO
 //     ARIA, so a component reused without opting in silently has no popover.
+//
+// Hover-open was removed in CF 57 Phase 2.5 (Codex P1): the modal Popover mounts
+// a full-screen scrim that consumes the next pointerdown, so a desktop
+// hover-open would swallow the press that starts a @dnd-kit drag. Tap/click is
+// the primary path on both viewports and is unaffected.
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { HTMLAttributes } from 'react';
 
 type TriggerHandlers = Pick<
   HTMLAttributes<HTMLElement>,
-  'onClick' | 'onKeyDown' | 'onMouseEnter' | 'onMouseLeave' | 'aria-haspopup' | 'aria-expanded'
+  'onClick' | 'onKeyDown' | 'aria-haspopup' | 'aria-expanded'
 >;
 
 export interface ItemInfoTrigger {
@@ -29,42 +30,35 @@ export interface ItemInfoTrigger {
 }
 
 export function useItemInfoTrigger(enabled: boolean): ItemInfoTrigger {
-  const [reason, setReason] = useState<'tap' | 'hover' | null>(null);
-  const canHover = useMemo(
-    () =>
-      typeof window !== 'undefined' &&
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(hover: hover)').matches,
-    [],
-  );
+  const [isOpen, setIsOpen] = useState(false);
 
-  const open = enabled && reason !== null;
-  const close = useCallback(() => setReason(null), []);
-  const toggleTap = useCallback(
-    () => setReason((prev) => (prev === 'tap' ? null : 'tap')),
-    [],
-  );
+  // Clear the open state whenever the trigger is disabled (CF 57 Phase 2.5 /
+  // Codex P2). Without this, `open` would merely be masked by `enabled` while
+  // disabled and then silently spring back when re-enabled — e.g. an open bag
+  // popover would reappear on its own when combat ends. Reopening requires a
+  // fresh tap.
+  useEffect(() => {
+    if (!enabled) setIsOpen(false);
+  }, [enabled]);
+
+  const open = enabled && isOpen;
+  const close = useCallback(() => setIsOpen(false), []);
+  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
 
   const handlers = useMemo<TriggerHandlers>(() => {
     if (!enabled) return {};
     return {
       'aria-haspopup': 'dialog',
       'aria-expanded': open,
-      onClick: () => toggleTap(),
+      onClick: () => toggle(),
       onKeyDown: (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          toggleTap();
+          toggle();
         }
       },
-      onMouseEnter: canHover
-        ? () => setReason((prev) => (prev === null ? 'hover' : prev))
-        : undefined,
-      onMouseLeave: canHover
-        ? () => setReason((prev) => (prev === 'hover' ? null : prev))
-        : undefined,
     };
-  }, [enabled, open, canHover, toggleTap]);
+  }, [enabled, open, toggle]);
 
   return { open, close, handlers };
 }
