@@ -213,4 +213,16 @@ describe('describeItem — coverage: all 45 shipped items produce non-empty outp
       }
     }
   });
+
+  // Phase 2.5g: the 5 items whose entire content is sim-inert (omitted effects,
+  // no real passive) fall back to a structural tag summary. Pinned by name so a
+  // future content/tag change that alters a fallback is caught. NOTE the 4 gold
+  // items collide on the identical string "Gold" (all carry only the 'gold' tag).
+  it('pins all 5 tag-fallback items by name (4 gold items collide on "Gold")', () => {
+    expect(describeItem(getItem('rune-pedestal' as ItemId))).toEqual(['Tool · Gem']);
+    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Gold']);
+    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['Gold']);
+    expect(describeItem(getItem('coin-pouch' as ItemId))).toEqual(['Gold']);
+    expect(describeItem(getItem('treasure-sack' as ItemId))).toEqual(['Gold']);
+  });
 });
