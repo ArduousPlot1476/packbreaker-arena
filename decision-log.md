@@ -4,6 +4,92 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-06 — Catch 48 + Catch 49 + Catch 50 + Catch 51 + telemetry env-wiring trio committed (PostHog env-loading; PR \#28, branch telemetry-env-wiring off main, branch commit 2851ad9, merge badab8a)
+
+apps/server had no env-loading layer — POSTHOG_PROJECT_KEY had nowhere to be
+read from at boot. Wired via Node's --env-file-if-exists passthrough
+(^20.19.0 || >=22.9.0 — see Catch 49 + Catch 50 for how this range was
+reached), forwarded by tsx, zero new dependency. Trio: apps/server/package.json
+(dev script loads .env + engines.node range), apps/server/.env.example
+(committed template), .gitignore (.env stays untracked — the real key lives
+only in the local untracked .env; hunk also covers .claude/settings.local.json,
+an unrelated pre-existing local-tooling ignore accepted as a trivial ride-along,
+not split out). Decoupled from CF 57 (already merged/closed 2c720cf): own
+branch, single amended commit 2851ad9.
+
+**Catch 48 (tooling/CLI-arg-order defect; caught at Rule 8 Step 1 inspection;
+descriptive label only, not a formalized taxonomy class — none of A/B/C1/C2/D
+fit, held for second instance).** Draft dev script read tsx's env flag before
+the `watch` subcommand, which tsx requires as its first positional token;
+crashed at boot with `ERR_MODULE_NOT_FOUND: ...\apps\server\watch`. Corrected
+to `tsx watch --env-file-if-exists=.env src/index.ts` before ever shipping.
+
+**Catch 49 (C2, framework-internal architecture gap; Codex external-review
+catch per Rule 4).** Commit message + first log draft asserted "Node 20.6+"
+for --env-file-if-exists — wrong; v20.6.0 added only throw-on-missing
+--env-file, the if-exists variant landed in v22.9.0 and was backported to
+v20.19.0 (nodejs/node PR 53060). Root package.json declares >=18.18.0,
+.nvmrc pins major 20 only — neither enforced the real floor. CI unaffected
+(no CI step invokes the dev script carrying the flag). Fixed: engines.node
+pinned on apps/server/package.json only (root untouched, intentionally broad).
+First instance of "asserted a tool's version-compatibility claim without
+checking the authoritative changelog" — held for second instance.
+
+**Catch 50 (NEW — C2, Codex external-review catch per Rule 4; related to but
+distinct from Catch 49, not its second instance).** Catch 49's fix
+(>=20.19.0) corrected the floor fact but not the range: Node 21.x
+(odd-numbered, never LTS, EOL'd mid-2024 — before the backport existed) and
+22.0.0-22.8.x (predate the flag's introduction on the 22.x line) both satisfy
+>=20.19.0 while lacking the flag entirely. Corrected to the disjunctive
+^20.19.0 || >=22.9.0 ([20.19.0, 21.0.0) ∪ [22.9.0, ∞) — excludes the
+flagless gap exactly). Distinct failure shape from Catch 49: 49 was a wrong
+fact from not checking the changelog; this is a correctly-sourced fact encoded
+into an incomplete range. Held for its own second instance before codifying a
+range-completeness rule — not conflated with Catch 49's verify-before-asserting
+antidote, which addresses a different mechanism. 2nd Codex finding this PR,
+well under the 4-finding ceiling.
+
+**Catch 51 (NEW — master-dev pre-merge/pre-append review catch; Rule 10
+Category 4 application, broadened scope).** Proposed --no-ff merge commit
+(title + body) used a bare `(#28)` and a bare `Closes #28` — identical
+failure shape already caught once as Drift 25 (2026-05-23 § M1.5c PR 2
+CLOSED: master-dev's #N-in-merge-message exception, corrected to branch-style
+then). Caught at master-dev pre-merge ratification before the hard-to-reverse
+merge landed. Corrected to branch-style: title references the branch
+(telemetry-env-wiring), not `(#28)`; `Closes #28` dropped entirely —
+unnecessary as well as rule-violating, since GitHub auto-detects the merge
+from pushed commit history and closes the PR without the keyword, as already
+observed on every prior PR in this project (PR \#21, \#22, \#23, \#27). The
+same pre-append review sweep caught the identical defect leaking into this
+decision-log draft itself, in three more places: the entry title's bare
+`PR #28`, Catch 49's cross-repo reference (ambiguous within this repo's
+autolink scope — rephrased from `Node PR #53060` to `nodejs/node PR 53060`),
+and this paragraph's own first-draft quoting of the offending merge-message
+text (now code-spanned rather than left as live bare references). Ten bare-#N
+instances total found and corrected across the merge message and this entry
+before either landed.
+
+**Rule 10 Category 4 broadened again (uncounted — fold-in, not a new rule).**
+Previously scoped to "PR bodies," then to "PR bodies and merge commit
+messages" mid-sweep. The same review pass found the identical defect in
+decision-log.md prose too — broadened one more step: Category 4 now reads
+"bare-#N auto-link scan in PR bodies, merge commit messages, and
+decision-log.md entries — check before every append, not just before every
+PR/merge."
+
+**Scope.** Server-side env-loading + flag-order + runtime-floor range only.
+Client-emission leg (browser instrumentation, buffer/flush timing) unconfirmed
+— next exit-gate step, not this commit. No CF closed or opened — env-loading
+was untracked infra discovered during the M1 exit-gate PostHog build.
+
+**Counter: 51 / 18 / 8 / 29 / 42** (catches / rules / patterns / drifts /
+open-CFs). Delta from the live tip 47/18/8/29/42 (2026-07-06 § CF 57 CLOSED):
++4 catches (48, 49, 50, 51 — the bare-#N cleanup folds into 51, not a fifth
+catch, since it's the same review pass catching the same defect class in more
+places, not a new discovery). Rules unchanged — Rule 4 + Rule 8 applied,
+Rule 10 Category 4 broadened twice this entry (amended, not newly coined).
+Patterns / drifts / open-CFs unchanged.
+
 ## 2026-07-06 — CF 57 CLOSED — Item-info popover, merge 2c720cf (PR 27, main a7d1ce5 → 2c720cf)
 
 Description text derived structurally from each Item's triggers/effects/passiveStats at render time (Option B) — zero schema changes, zero hand-authored copy, git diff on content-schemas.ts/packages/content/** confirmed empty at merge.
