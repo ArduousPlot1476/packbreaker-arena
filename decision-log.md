@@ -4,6 +4,43 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-06 — CF 62 (OPENED) + Catch 53 — combat_start telemetry dead-emit-path (M2 deferral; surfaced by real-gameplay verification)
+
+**CF 62 (NEW) — combat_start telemetry event never emitted in real client
+gameplay.** Client drives combat via applyCombatOutcome (useRun.ts:853), which
+emits combat_end + round_end but never combat_start. The event is only emitted
+from the sim's startCombat() (state.ts:1032), a path the production client
+never calls — confirmed via a full grep of client run code (zero production
+hits for startCombat/combat_start). Its one unique field, opponentGhostId, is
+null even in the sim-internal path — carries no information until M2 ghost
+battles ship, the actual consumer this field exists for. → M2, alongside
+ghost-battle wiring. Not an M1 blocker: D1/D2 dashboards only read combat_end,
+confirmed clean for their scope (2026-07-05 property audit).
+
+**Catch 53 (NEW — telemetry dead-emit-path defect; caught via real-gameplay
+verification, not Codex, not the D1/D2 property audit; descriptive label
+only, held for second instance).** combat_start is schema'd, sim-implemented,
+and telemetry-plan.md documents it as real — but it silently never fires in
+production. Surfaced by the 13x combat_end / 0x combat_start asymmetry during
+this session's real-gameplay PostHog Activity check (the same check that
+caught Catch 52's dev-proxy bug). The D1/D2 property audit was correctly
+"clean" for its scope — it validates schema-to-emit mapping in the abstract,
+not production call-path reachability. Distinct catching mechanism worth
+naming: emit-site presence in the codebase is not evidence of production
+reachability. No new taxonomy class minted — doesn't cleanly fit
+A/B/C1/C2/D — held for second instance.
+
+**Counter: 53 / 18 / 8 / 29 / 43** (catches / rules / patterns / drifts /
+open-CFs). Delta from the live tip 51/18/8/29/42 (2026-07-06 § telemetry
+env-wiring trio CLOSED): +2 catches (Catch 52 — the Vite dev-proxy IPv4 fix,
+formalized concurrently via a branch->PR->Codex->merge cycle, its own
+closing-log entry to follow; Catch 53 — this entry), +1 open-CF (CF 62).
+Rules / patterns / drifts unchanged. Both catches were surfaced by the same
+real-gameplay client-emission verification this session; the doc-only Catch 53
+lands first, so its running total necessarily accounts for the concurrently-
+assigned Catch 52 (a total introducing Catch 53 cannot read 52). Catch 52's
+closing entry, when it lands post-merge, leaves the counter unchanged.
+
 ## 2026-07-06 — Catch 48 + Catch 49 + Catch 50 + Catch 51 + telemetry env-wiring trio committed (PostHog env-loading; PR \#28, branch telemetry-env-wiring off main, branch commit 2851ad9, merge badab8a)
 
 apps/server had no env-loading layer — POSTHOG_PROJECT_KEY had nowhere to be
