@@ -10,8 +10,12 @@ export default defineConfig({
     // § 8.1). The client's telemetry transport POSTs to the relative
     // path /v1/telemetry/batch (emit.ts); in dev this proxy routes it to
     // the server (M1.5c PR 2 / CF 49). Same-origin in prod needs no proxy.
+    // 127.0.0.1 (not localhost): the server binds IPv4 0.0.0.0, but on
+    // Windows/Node 'localhost' resolves to IPv6 ::1 first, so a 'localhost'
+    // target yields ECONNREFUSED ::1:4000 and every telemetry batch is
+    // silently dropped at the proxy (client swallows the fetch error).
     proxy: {
-      '/v1': 'http://localhost:4000',
+      '/v1': 'http://127.0.0.1:4000',
     },
     // Watch source changes inside @packbreaker/* workspace packages so edits in
     // packages/content (etc.) HMR through to the client without manual rebuilds.
