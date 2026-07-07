@@ -4,6 +4,44 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-07 — Catch 52 CLOSED — Vite dev-proxy IPv4 fix (dev telemetry no longer silently dropped at ::1; PR \#29, branch client-dev-proxy-ipv4 off main, branch commit a797655, merge c3ba521)
+
+**Catch 52 (C2, framework-internal / dev-harness defect; caught via
+real-gameplay verification, not Codex, not CI).** The client telemetry transport
+POSTs the relative path /v1/telemetry/batch; Vite's dev server proxies /v1 to
+the Fastify server. The proxy target was `http://localhost:4000`, which on
+Node 17+ (default verbatim DNS resolution order) resolves to IPv6 `::1` first —
+but the server binds IPv4 `0.0.0.0` only. Every batch hit
+`ECONNREFUSED ::1:4000` at the proxy; the client's throw-safe transport
+(Catch 21 lineage) swallowed the error, so telemetry was silently dropped in
+dev on Windows — zero events reached the server across a full play session (the
+same session whose one landed run surfaced Catch 53). Fixed: proxy target →
+`http://127.0.0.1:4000` (forces IPv4 to match the server bind) plus an
+explanatory comment. Dev-only — production is same-origin with no proxy, so
+the real telemetry code is untouched. Rejected alternative: making the server
+dual-stack on `::` — the narrower dev-only proxy fix is correct; no reason to
+change the server's listen host for a dev-harness quirk.
+
+**Why it matters + how it was caught.** A dev-harness bug that unit tests and
+same-origin prod both miss: any tester running `pnpm dev` on Windows would have
+silently produced zero telemetry, zeroing the playtest data. Surfaced during
+the M1 exit-gate real-gameplay client-emission check — before the fix the Vite
+log showed `ECONNREFUSED ::1:4000` every ~30s (one per client flush, buffer
+non-empty). After the fix, real-gameplay batches return 204 and land in PostHog
+Activity under a real device anonId (8/8 batches, 78 events across
+run/round/combat/shop/item/recipe/relic — the same data whose 13x combat_end /
+0x combat_start asymmetry surfaced Catch 53). Same catching mechanism as
+Catch 53: production reachability is only proven by driving the real path, not
+by unit tests or schema/emit-site presence.
+
+**Counter: 53 / 18 / 8 / 29 / 43** (catches / rules / patterns / drifts /
+open-CFs) — unchanged from the 2026-07-06 § CF 62 + Catch 53 entry, which
+pre-counted Catch 52. Both catches were surfaced by the same real-gameplay
+verification this session; the doc-only Catch 53 landed first and its running
+total already included this one, so this closing entry carries no delta — it
+documents Catch 52's disposition (branch commit a797655, merge c3ba521; Codex
+clean on a797655, CI install/lint/typecheck/test/build green).
+
 ## 2026-07-06 — CF 62 (OPENED) + Catch 53 — combat_start telemetry dead-emit-path (M2 deferral; surfaced by real-gameplay verification)
 
 **CF 62 (NEW) — combat_start telemetry event never emitted in real client
