@@ -4,6 +4,97 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-08 — Combat-parity Phase 1 ratified: CF 42 confirmed open, recipe-threading remainder renumbered CF 63, auto-close-trigger rule HELD, two design calls locked; Drift 30
+
+Phase 1 ratification for the combat-parity plan (client combat-input parity),
+the first item in the playtest-readiness sequence, ahead of a separate Phase 2
+hand-off. No code this entry; no CF closed. Investigation confirmed the client's
+production combat (`CombatOverlay.buildCombatInput`) hardcodes `startingHp: 30`
+and omits `recipeBornPlacementIds`, so shipped `maxHpBonus` items and the Tinker
+`recipeBonusPct` line no-op in the combat the player actually watches.
+
+**CF 42 — confirmed still open (not a fresh find).** Opened M1.5b PR 1
+Phase 2.5, commit 17bd494; verbatim disposition recorded at decision-log.md
+2026-05-19 § "M1.5b PR 1 Phase 2.5b interlude": "CF 42 (open, M1.5b PR 1
+Phase 2.5): `buildCombatInput.startingHp: 30` hardcode. No M1 item ships
+`passiveStats.maxHpBonus` so the value is correct for every M1 build;
+auto-closes when the first `maxHpBonus` item ships." Six `maxHpBonus` items have
+since shipped (`packages/content/src/items.ts`); the auto-close trigger fired
+with no re-check. Grep of the log confirms no "CF 42 CLOSED" entry — open at
+tip. CF 42 stays open here; it closes on the combat-parity code merge, not this
+ratification.
+
+**CF 43 — the number is CLOSED; recipe-threading remainder renumbered CF 63.**
+Per decision-log.md 2026-07-05 § "CF 43 CLOSED (bornFromRecipe persisted across
+save/restore; standalone backlog item, Catch 44 + Rule 17 codified)" (merge
+bbc9505), CF 43 was re-scoped to persistence and closed, open-CFs −1. That same
+entry de-numbered the combat-threading remainder verbatim: "No client-combat
+threading (CombatOverlay.tsx:118-119 recipe-bonus omission remains a separate,
+still-open, lower-priority follow-on — not reopened, not renumbered, tracked
+informally, no CF assigned pending future prioritization)." Prioritization has
+now arrived, so the remainder is assigned a fresh number rather than re-closing
+the already-closed CF 43:
+
+**CF 63 (OPENED)** — client-combat recipe-bonus threading.
+`CombatOverlay.buildCombatInput` omits `recipeBornPlacementIds`, so Tinker's
+class passive `recipeBonusPct` + Pocket Forge + Catalyst + Worldforge Seed
+no-op in client-side combat. Spun off (de-numbered) at the 2026-07-05 CF 43
+close; renumbered here. Closes on the combat-parity code merge. Number walked
+from canon: highest existing CF was 62 (decision-log.md 2026-07-06 § "CF 62
+(OPENED) + Catch 53"); grep confirms no CF 63+ present at tip.
+
+**Auto-close-trigger rule — HELD, not codified.** The proposal to codify now
+(bending the second-instance convention) does not survive log re-derivation:
+only CF 42 exhibits the "latent bug reactivated silently by an unrelated content
+drop, with no checker" shape. CF 43's trigger was milestone-reconsider and
+functioned as designed (reconsidered at M1.5e, persistence half closed). CF 44's
+auto-close trigger (decision-log.md 2026-05-19 § "M1.5b PR 1 closed" CF
+dispositions: "named glyphs land for all mid + boss relics across both classes")
+is gated on deliberate glyph-art work for six already-shipped relics — no
+silent-reactivation mode, and it has not failed. One confirmed instance → HELD
+candidate, no rule ordinal assigned. The low-burden antidote (grep
+decision-log.md for auto-close-trigger CFs against `packages/content/` on every
+content drop) is adopted as informal practice immediately, independent of rule
+codification; codify on a genuine second instance (M2's content surface makes
+one likely).
+
+**Drift 30 (Topic 2, master-dev; caught pre-landing).** Master-dev asserted
+CF 43 as closeable "by number" and CF 43/44 as parallel already-failed instances
+of CF 42's auto-close pattern, carrying their original/assumed dispositions
+rather than re-deriving from the log. Both facets share one root: CF 43 was
+closed and de-numbered 2026-07-05 (so it cannot be re-closed by number, and its
+tracking functioned rather than failing silently), and CF 44 is glyph-art-gated
+with no silent-reactivation failure. Corrected before this entry landed. Same
+shape as Drift 28 / Drift 29 (master-dev claim contradicting canon, caught at
+the grounding gate pre-landing). Counted as one drift — single root
+(disposition not re-derived from the log), two surfaced facets.
+
+**Design calls ratified (counter-neutral — design decisions, not
+catch/rule/pattern).**
+1. Sim-exported starting-HP getter. Add `RunController.getPlayerStartingHp()`
+   delegating to the existing `computePlayerStartingHp()` (`BASE_COMBATANT_HP` +
+   Σ `passiveStats.maxHpBonus` over bag placements); the client reads it and
+   never recomputes passiveStats, per tech-architecture.md § 4.5 Rule 2.
+   `recipeBornPlacementIds` needs no new getter — `getRecipeBornPlacementIds()`
+   already exists (shipped at the CF 43 persistence close). Rejected: exporting
+   `computeStartingHpFromBag` for client-side recomputation (Rule 2 violation;
+   duplicates the passiveStats read outside the `packages/sim/src/run/**`
+   ESLint fence).
+2. Ghost HP keeps its own derivation. `makeGhostForRound` retains its
+   round-scaling formula (`BASE_COMBATANT_HP + max(0, floor((round-1)/2))*2`);
+   no `maxHpBonus` summing. It is deliberate M2-placeholder scaffolding ("must
+   remain easy to delete"), not a player-HP mirror. Player and ghost use
+   different HP derivations by design — recorded so the asymmetry is not later
+   mis-caught as an inconsistency.
+
+**Counter: 53 / 19 / 8 / 30 / 44** (catches / rules / patterns / drifts /
+open-CFs). Delta from the tip 53/19/8/29/43 (decision-log.md 2026-07-08 §
+"Three process skills adopted under .claude/skills/"): drifts +1 (Drift 30),
+open-CFs +1 (CF 63 opened). Catches / rules / patterns unchanged — the two
+design ratifications are counter-neutral, the auto-close-trigger rule is HELD
+not codified, and no CF is closed (CF 42 + CF 63 both close on the combat-parity
+code merge).
+
 ## 2026-07-08 — Three process skills adopted under .claude/skills/ (decision-log-close, handoff-verify, codex-cycle); process tooling, no counter movement
 
 Three project-scoped, model-invoked skills committed directly to main and
