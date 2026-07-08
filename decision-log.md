@@ -4,6 +4,47 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-08 — CF 58 / CF 59 Phase-1 evidence-gathering CLOSED; CF 58 flagged for its own dedicated Phase 1 (RNG/determinism-corpus collision)
+
+**Evidence base for both CFs is now ratifiable** (verbatim opening text +
+content-side citations verified against the live repo, not the earlier
+adversarial-pass preview):
+
+- CF 58 (trigger_chance_pct) — verbatim per decision-log.md 2026-07-06 §
+  CF 57 CLOSED, L254: chance-roll mechanism deferred at M1.2.3a to M1.2.5,
+  closed without implementation. Hard sim no-op at combat.ts:699
+  (`if (effect.stat === 'trigger_chance_pct') continue;`). Two items
+  reference it: Rune Pedestal (rune-pedestal, rare, items.ts:544/554) and
+  Master Alchemist's Kit (master-alchemists-kit, epic, items.ts:618/632).
+- CF 59 (gold economy) — verbatim per decision-log.md 2026-07-06 § CF 57
+  CLOSED, L256: item-driven gold-credit system never wired to a consumer
+  since M1.2.4. One root cause (add_gold no-op at combat.ts:682-684,
+  deferred to a run controller with zero add_gold handling; goldPerRound
+  has no consumer — run controller only sums maxHpBonus), two mechanisms,
+  4 of 45 items affected: Lucky Penny (add_gold, items.ts:252/259), Copper
+  Coin, Coin Pouch, Treasure Sack (goldPerRound, items.ts:232/239,
+  242/249, 456/463).
+- Display-leak symptom on these same items (describeItem advertising
+  ungranted rewards) was already fixed under Catch 46/47 (CF 57). CF 58/59
+  track the underlying mechanism gap, not the display bug.
+
+**Design-cost split, ratified:** CF 58's fix requires injecting a new RNG
+draw into live combat resolution — collides with the 224-fixture
+determinism corpus (trajectory-immutable, DO-NOT-REGENERATE per
+`[[project_sim_determinism]]`). Any Phase 1 for CF 58 must resolve
+RNG-stream ordering before implementation is safe. CF 59 is
+run-controller/out-of-combat only, touching solely the re-baselineable
+`.json` scenario corpus — materially lower risk.
+
+**Scoping decision:** split the track. CF 59 proceeds to its own Phase 1
+design pass (gold-crediting consumer point, round-start timing vs. the
+flat baseIncomeForRound formula). CF 58 is held for a dedicated Phase 1
+addressing RNG-ordering specifically — same treatment as CF 56; two
+backlog items now carry the "own Phase 1" flag, not one.
+
+**Not yet done:** actual design contracts for either CF. This entry closes
+evidence-gathering only.
+
 ## 2026-07-07 — M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog; 4 defects caught by rendered-tile screenshots after config review false-passed 12/12; Rule 19 minted; counter 53/19/8/29/43
 
 **Config review is not render verification (Rule 19 origin).** The D1/D2 build
