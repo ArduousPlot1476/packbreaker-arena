@@ -4,6 +4,74 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-07 — M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog; 4 defects caught by rendered-tile screenshots after config review false-passed 12/12; Rule 19 minted; counter 53/19/8/29/43
+
+**Config review is not render verification (Rule 19 origin).** The D1/D2 build
+was audited across seven passes. The three initial passes were config-review
+only and reported a false 12/12 PASS. Direct dashboard screenshots then caught
+defects config inspection could not see — query-config correctness and render
+correctness are separate axes.
+
+**Defects (all caught via rendered-tile screenshot, none by config review;
+three of four were also dropped at least once from a text-only status update
+before capture):**
+- **Card #10 (Win Rate by Starter Relic)** — missing from D2 outright on first
+  audit. A since-superseded chat message describing the fix was briefly treated
+  as verification without a live check; corrected before logging (no fix logged
+  as shipped off a chat description alone) and re-confirmed via direct screenshot.
+- **Cards #1 / #5 / #12 (Run Completion Rate, Tick-Cap Draw Rate, Boss Win
+  Rate)** — query config correct, but display format set to `percentage_scaled`
+  on top of an already-scaled `A/B*100` formula, double-converting (rendered
+  7,500%–10,000% instead of 0–100%). Fixed by switching `aggregationAxisFormat`
+  off `percentage_scaled` on all three; formulas unchanged. Confirmed via post-fix
+  rendered axis ranges (0–80, 0–30, 100 respectively).
+- **Card #8 (Recipe Completion Rate)** — Trends formula with a breakdown shared
+  across asymmetric-property series (`recipe_completed` carries `recipeId`;
+  `run_end` does not), corrupting the per-recipe denominator and silently
+  rendering 0% on every row incl. None. Rebuilt as SQL insight `jACFyB57` with a
+  fixed total-`run_end` denominator; old insight `8HvNaoKJ` removed from D2. State
+  omitted from two intermediate status reports before screenshot confirmation.
+
+**Rule 19 (NEW) — verify rendered/executed output directly.** Config inspection
+or a written status report alone is insufficient to call any artifact verified;
+a live capture of the rendered/executed output is required. Artifact-general, not
+PostHog-scoped. Lineage: the "recap audit screenshot/source confusion" drift
+(2026-05-19 § M1.5b PR 1 closed) and the Catch 52/53 mechanism — presence in the
+config/codebase is not evidence of correct rendered/production output.
+
+**Not counted.** These four defects stay outside the catch taxonomy on an
+independently-verifiable boundary: catches 48–53 are all defects in
+Claude-Code-authored, git-tracked code/infra, whose remedies are code changes
+carried through the PR / Codex / git pipeline (the env-wiring trio and the
+dev-proxy fix via branch→PR→Codex→merge cycles; Catch 53's `combat_start`
+dead-emit-path deferred to M2 as a client-code fix). The four dashboard defects
+touched none of that path — found and fixed via direct PostHog UI edits,
+verified by chat-mediated screenshot review, with no Claude Code, PR, Codex, or
+git artifact anywhere in their discovery, fix, or verification. They are
+dashboard-configuration defects, not code defects; no catch increment.
+(Supporting canonical anchor: telemetry-plan.md § 6 — "Three dashboards. Built
+in PostHog." The "PostHog UI, not code" shorthand for this boundary traces to
+this session's own task-scoping prompt, NOT a canonical decision-log or
+telemetry-plan line — noted so a future reader can't mistake it for ratified
+doctrine.) Two process slips (the fix briefly treated as verified off a chat
+description; the two status reports dropping Card #8's state) did not originate
+from master-dev-chat's own assertions — both were master-dev-chat catching
+another actor's mid-session framing, same-turn, before either reached the log;
+no Topic-2 drift increment per the pre-propagation self-catch exclusion.
+
+**Watch-items (not defects, not actionable now).** Tick-Cap Draw Rate ~28% vs
+<1% target; sample size across both dashboards is smoke-test scale (2–3 runs),
+not playtest scale. Both re-evaluate at the Trey+3-tester × 5-run playtest.
+
+**Counter: 53 / 19 / 8 / 29 / 43** (catches / rules / patterns / drifts /
+open-CFs). Delta from the live tip 53/18/8/29/43 (2026-07-07 § "Catch 52
+CLOSED" — header quoted verbatim; the "CLOSED" is non-taxonomic and flagged in
+place, not propagated as doctrine nor silently scrubbed: catches log once with
+an incremental number and carry no open/close lifecycle — only CFs open and
+close): +1 rule (Rule 19); catches / patterns / drifts / open-CFs unchanged. M1
+dashboard exit-gate item CLOSED on corrected state; remaining M1 gate is the
+Trey+3-tester × 5-run PostHog playtest.
+
 ## 2026-07-07 — Catch 52 CLOSED — Vite dev-proxy IPv4 fix (dev telemetry no longer silently dropped at ::1; PR \#29, branch client-dev-proxy-ipv4 off main, branch commit a797655, merge c3ba521)
 
 **Catch 52 (C2, framework-internal / dev-harness defect; caught via
