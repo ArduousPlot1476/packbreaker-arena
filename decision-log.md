@@ -4,6 +4,48 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-08 — Three process skills adopted under .claude/skills/ (decision-log-close, handoff-verify, codex-cycle); process tooling, no counter movement
+
+Three project-scoped, model-invoked skills committed directly to main and
+pushed to origin, encoding disciplines that had recurred as process failures
+this project — decision-log counter drift, unverified claims relayed across the
+master-dev-chat / Cursor boundary, and Codex endpoint / thread-reply mistakes:
+
+- **decision-log-close** (commit ebfade1; sole write grant — Read, Edit, Grep,
+  git diff) — the append procedure for this log: tip-read counter walk-forward,
+  newest-at-top insertion-only, decision-day dating, `\#N` escaping, CF-closure
+  and codification gates, insertion-only diff proof. This entry is its first
+  live exercise.
+- **handoff-verify** (commit 7234dfb; read-only) — pre-paste / pre-act
+  checkpoint for artifacts crossing the master-dev-chat / Cursor boundary; runs
+  the five claim-check categories against the live repo and halts on mismatch.
+  Explicitly NOT for appends to this log — that is decision-log-close's job.
+- **codex-cycle** (commit 3ac8dab; read-only) — Codex trigger / poll / ceiling
+  loop after a remediation push: top-level `@codex review` comment only, poll
+  the pulls-reviews endpoint (not issues-comments), gate the 4-finding ceiling,
+  hand the tally back to decision-log-close.
+
+All three are model-invoked only — no hook / CI / webhook wiring yet
+(deliberate: prove out before automating). Committed directly to main as
+tooling, consistent with the same session's other docs/tooling commits; zero
+runtime or game code touched.
+
+**Push confirmed against the live repo:** origin/main advanced 21e150b..3ac8dab
+(fast-forward, 5 commits — a52c2c9 and 4f21b99, both already logged, plus the
+three skills ebfade1 / 7234dfb / 3ac8dab; `a52c2c9^` resolves to 21e150b
+"Catch 52 closing-log" and `git rev-list --count 21e150b..3ac8dab` = 5).
+`git rev-parse origin/main` = 3ac8dabcbbe3df84108f6eaf6ba0434218beabae, equal to
+local HEAD; `git rev-list --left-right --count origin/main...main` = 0 ahead /
+0 behind (fully synced).
+
+**Counter: 53 / 19 / 8 / 29 / 43** (catches / rules / patterns / drifts /
+open-CFs). Delta from the tip 53/19/8/29/43 (decision-log.md 2026-07-07 § "M1
+dashboard exit-gate CLOSED"): none across all five — process tooling only, zero
+catch / rule / pattern / drift / CF impact. This entry documents skill adoption
+only; the same-day dashboard and CF 58/59 closures (decision-log.md 2026-07-08
+§ "CF 58 / CF 59 Phase-1 evidence-gathering CLOSED") are already logged and not
+restated here.
+
 ## 2026-07-08 — CF 58 / CF 59 Phase-1 evidence-gathering CLOSED; CF 58 flagged for its own dedicated Phase 1 (RNG/determinism-corpus collision)
 
 **Evidence base for both CFs is now ratifiable** (verbatim opening text +
