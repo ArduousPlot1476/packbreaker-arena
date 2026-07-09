@@ -4,6 +4,69 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-08 — Supersession: CF 42 reclassified LATENT (maxHpBonus items shipped 2026-04-26 + unreachable in client content); corrects the 55f4dcb combat-parity ratification framing; Drift 31
+
+Corrects two factual errors in decision-log.md 2026-07-08 § "Combat-parity Phase 1
+ratified: CF 42 confirmed open … Drift 30" (commit `55f4dcb`), surfaced by the
+git-blame + client-reachability check run ahead of Phase 2 (the check that
+entry's own hand-off mandated). The technical fix and the CF-numbering (CF 42 +
+CF 63) are unchanged; only CF 42's severity framing and the ship-date claim are
+corrected.
+
+**Error 1 — ship date.** `55f4dcb` states the six `maxHpBonus` items "have since
+shipped … the auto-close trigger fired with no re-check," implying they landed
+after CF 42 opened (2026-05-19). Git contradicts this:
+`git log -S 'maxHpBonus' -- packages/content/src/items.ts` returns a single
+commit, `583bd7a` (**2026-04-26**, the initial M1.1 content drop — the same
+commit that introduced `buckler`). The items predate CF 42's opening by three
+weeks; CF 42's disposition premise ("No M1 item ships `passiveStats.maxHpBonus`")
+was **false when written**, not a trigger that fired later.
+
+**Error 2 — live vs latent.** `55f4dcb` frames CF 42's `startingHp: 30` hardcode
+as a live no-op in watched combat. It is not reachable: `apps/client/src/run/content.ts`
+builds `SHOP_POOL_ITEMS` (the client shop + ghost pool) from the 12
+`ICONNED_ITEM_IDS` only — none carry `maxHpBonus` — and `ICONNED_RECIPES`
+excludes `r-iron-shield`/`r-tower-shield` (the recipes whose outputs carry it);
+the starting bag is empty. So no `maxHpBonus` item can enter a player (or ghost)
+bag in real client gameplay, and the hardcode is correct for every reachable
+build.
+
+**CF 42 reclassified: LATENT, not live. Stays OPEN.** Its reactivation condition
+is properly read as "a `maxHpBonus` item becomes *reachable* (iconned)" — not
+"exists in the content registry" — and that has never fired (the `content.ts`
+header notes the iconned `SHOP_POOL_ITEMS` filter drops only when the full
+45-item icon set lands, post-M1.3.4b). CF 42 is not closed here; it closes on the
+combat-parity code merge as a latent-hardening fix.
+
+**CF 63 unaffected — confirmed live.** The reachable iconned recipes
+(`r-steel-sword`, `r-fire-oil`, `r-ember-brand`, `r-healing-salve`) mint
+recipe-born outputs whose Tinker `recipeBonusPct` (+10% class passive, plus Pocket
+Forge / Catalyst if held) is dropped by the omitted `recipeBornPlacementIds`.
+This is the batch's genuine live bug; the combat-parity fix still closes it.
+
+**Bearing on the auto-close-trigger HELD call (`55f4dcb`):** unchanged, if
+anything reinforced — CF 42 remains the single clean instance of the "latent bug
+reactivated by content, no checker" shape; this correction only refines that its
+trigger is *reachability*, not registry-presence, and that it has not yet fired.
+Still HELD, no rule ordinal.
+
+**Drift 31 (Topic 2, master-dev; caught POST-landing).** The "shipped since /
+trigger fired" claim originated as an unverified master-dev assertion (prior chat
+turns) and was propagated by Claude Code into the committed + pushed entry
+`55f4dcb` without a git-blame. Same grounding-caught-master-dev-claim mechanism as
+Drift 28 (decision-log.md 2026-07-05 § "Drift 28 … trailer-status claim corrected
+before commit") and Drift 30 (decision-log.md 2026-07-08 § "Combat-parity Phase 1
+ratified") — but distinct from both in that it **landed in a committed, pushed log
+entry before being caught**, whereas 28 and 30 were each caught pre-landing at the
+grounding gate. Caught here by the git-blame + reachability check the same
+combat-parity hand-off mandated, ahead of Phase 2 rather than at the code close.
+
+**Counter: 53 / 19 / 8 / 31 / 44** (catches / rules / patterns / drifts /
+open-CFs). Delta from the tip 53/19/8/30/44 (decision-log.md 2026-07-08 §
+"Combat-parity Phase 1 ratified"): drifts +1 (Drift 31). No catch / rule /
+pattern; no CF opened or closed — CF 42 is reclassified (latent) but stays open,
+CF 63 stays open; both close on the combat-parity code merge.
+
 ## 2026-07-08 — Combat-parity Phase 1 ratified: CF 42 confirmed open, recipe-threading remainder renumbered CF 63, auto-close-trigger rule HELD, two design calls locked; Drift 30
 
 Phase 1 ratification for the combat-parity plan (client combat-input parity),
