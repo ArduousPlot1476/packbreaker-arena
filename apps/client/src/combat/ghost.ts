@@ -100,6 +100,14 @@ export function makeGhostForRound(
   // HP scales gently with round (every other round +2 HP). Keeps early
   // rounds winnable and late rounds challenging without making the math
   // unreadable in the replay log.
+  //
+  // INTENTIONAL non-goal (combat-parity PR, CF 42 / CF 63): this is a
+  // deliberate round-scaling difficulty knob, NOT a mirror of the player's
+  // sim-side computeStartingHpFromBag derivation. makeGhostForRound is
+  // placeholder scaffolding pending M2 ghost storage ("must remain easy to
+  // delete" — see file header), so it deliberately does NOT sum the ghost
+  // bag's passiveStats.maxHpBonus. Player and ghost use different HP
+  // derivations by design; do not "fix" this asymmetry for symmetry's sake.
   const startingHp = BASE_COMBATANT_HP + Math.max(0, Math.floor((round - 1) / 2)) * 2;
 
   const id = `ghost-r${round}-${(ghostSeed >>> 0).toString(16)}` as GhostId;
