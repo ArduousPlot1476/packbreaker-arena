@@ -21,17 +21,16 @@ the browser:
 
 ```
 curl --ssl-no-revoke -sS -X POST \
-  -H "Authorization: Bearer $GH_TOKEN" \
+  -H "Authorization: Bearer $PACKBREAKER_GH_PAT" \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \
   https://api.github.com/repos/{owner}/{repo}/pulls \
   -d '{"title":"…","head":"<branch>","base":"main","body":"…"}'
 ```
 
-`$GH_TOKEN` = the env var holding the repo-scoped fine-grained PAT
-(Pull requests R/W, Issues R/W, Metadata R/O — substitute your configured
-name). Smoke-test read access first (`GET /repos/{owner}/{repo}` → 200)
-before any write.
+`$PACKBREAKER_GH_PAT` = the env var holding the repo-scoped fine-grained PAT
+(Pull requests R/W, Issues R/W, Metadata R/O). Smoke-test read access first
+(`GET /repos/{owner}/{repo}` → 200) before any write.
 
 **Hard precondition — this POST does not fire until BOTH hold:**
 1. The PR body has cleared `handoff-verify` (every applicable category PASS).
@@ -63,7 +62,7 @@ right after wastes a round and confuses the count.
 **Trigger mechanics — both are hard rules, not preferences:**
 1. Post a **new top-level** PR comment (`POST
    /repos/{owner}/{repo}/issues/{pr}/comments`) via the API with the same
-   repo-scoped token (`-H "Authorization: Bearer $GH_TOKEN"`), **not** by
+   repo-scoped token (`-H "Authorization: Bearer $PACKBREAKER_GH_PAT"`), **not** by
    hand in the browser. Body is **exactly** `@codex review` — nothing
    appended, nothing prepended.
 2. **Never** reply inside an existing Codex review thread to
