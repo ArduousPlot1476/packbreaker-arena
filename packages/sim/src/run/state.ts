@@ -154,6 +154,12 @@ export interface RunController {
    *  persist bornFromRecipe onto SerializedRunState so recipeBonusPct
    *  survives save→restore (CF 43). Mirrors getRngState()'s save-surface. */
   getRecipeBornPlacementIds(): ReadonlyArray<PlacementId>;
+  /** Sim-authoritative player combat starting HP: BASE_COMBATANT_HP plus the
+   *  sum of passiveStats.maxHpBonus over current bag placements — the same
+   *  derivation runCombatInternal uses. Exposed so the client combat-input
+   *  builder reads this value rather than recomputing or hardcoding it
+   *  (tech-architecture.md § 4.5 Rule 2). */
+  getPlayerStartingHp(): number;
   advancePhase(): void;
   buyItem(slotIndex: number): void;
   sellItem(placementId: PlacementId): void;
@@ -504,6 +510,10 @@ class RunControllerImpl implements RunController {
 
   getRecipeBornPlacementIds(): ReadonlyArray<PlacementId> {
     return [...this.bornFromRecipe];
+  }
+
+  getPlayerStartingHp(): number {
+    return this.computePlayerStartingHp();
   }
 
   advancePhase(): void {

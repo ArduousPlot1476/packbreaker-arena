@@ -30,6 +30,7 @@ import {
   type CombatInput,
   type CombatResult,
   type GhostId,
+  type PlacementId,
 } from '@packbreaker/content';
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
@@ -92,6 +93,7 @@ interface CombatOverlayProps {
 export function buildCombatInput(
   bag: ReturnType<typeof useRunContext>['state']['bag'],
   state: ReturnType<typeof useRunContext>['state']['state'],
+  player: { startingHp: number; recipeBornPlacementIds: ReadonlyArray<PlacementId> },
 ): { input: CombatInput; ghostClass: string; ghostId: GhostId; ghostClassId: ClassId } {
   const playerBag = clientBagToSimBag(bag, state.ruleset.bagDimensions);
   const ghost = makeGhostForRound(state.seed, state.round, state.ruleset.bagDimensions);
@@ -108,22 +110,18 @@ export function buildCombatInput(
       // no-opped.
       relics: state.relics,
       classId: state.classId,
-      // CF 42 (open): startingHp hardcode. BASE_COMBATANT_HP is 30
-      // and no M1 item ships passiveStats.maxHpBonus, so this matches
-      // the derivation rule on schemas.ts § Combatant comment for
-      // every M1 build. Auto-close trigger: first item with
-      // maxHpBonus ships; replace with a client-side analog of sim's
-      // computeStartingHpFromBag.
-      //
-      // CF 43 (open): recipeBornPlacementIds is intentionally omitted
-      // (sim's internal `bornFromRecipe` set is unreachable from the
-      // client tier; client's clientRunReducer combine arm does not
-      // track which placement-ids were minted by combineRecipe).
-      // Consequence: Tinker's class.passive.recipeBonusPct and the
-      // recipeBonusPct relics (Pocket Forge, Catalyst) silently
-      // no-op in client-side combat. Deferred to M1.5b PR 2 /
-      // LocalSaveV1; requires new client-side state.
-      startingHp: 30,
+      // Sim-authoritative (tech-architecture.md § 4.5 Rule 2): startingHp
+      // from RunController.getPlayerStartingHp() (BASE_COMBATANT_HP + bag
+      // maxHpBonus sum) and recipeBornPlacementIds from
+      // getRecipeBornPlacementIds() (the sim's bornFromRecipe set —
+      // populated by combineRecipe, pruned on sell/consume, rehydrated on
+      // restore). Threaded in from the memo call site. Closes CF 63
+      // (recipe-bonus threading — live: reachable iconned recipes drop
+      // Tinker's recipeBonusPct today) + CF 42 (startingHp hardcode —
+      // latent hardening: no maxHpBonus item is reachable in the iconned
+      // content set today, so this is correct now and future-proofed).
+      startingHp: player.startingHp,
+      recipeBornPlacementIds: player.recipeBornPlacementIds,
     },
     ghost: ghost.combatant,
   };
@@ -145,7 +143,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   // handshake measures against the same state the sim consumed.
   const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, ghostClassId, bagSnapshot, bagDimensions } =
     useMemo(() => {
-      if (!active) {
+      if (!active || ctx.simRun === null) {
         return {
           result: null as CombatResult | null,
           initialPlayerHp: 0,
@@ -157,7 +155,14 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           bagDimensions: ctx.state.state.ruleset.bagDimensions,
         };
       }
-      const { input, ghostClass, ghostId: gid, ghostClassId: gcid } = buildCombatInput(ctx.state.bag, ctx.state.state);
+      const { input, ghostClass, ghostId: gid, ghostClassId: gcid } = buildCombatInput(
+        ctx.state.bag,
+        ctx.state.state,
+        {
+          startingHp: ctx.simRun.getPlayerStartingHp(),
+          recipeBornPlacementIds: ctx.simRun.getRecipeBornPlacementIds(),
+        },
+      );
       const r = runCombat(input);
       return {
         result: r,
@@ -169,7 +174,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         bagSnapshot: ctx.state.bag,
         bagDimensions: ctx.state.state.ruleset.bagDimensions,
       };
-    }, [active, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
+    }, [active, ctx.simRun, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
 
   // Damage attributable to player / ghost. result.finalHp is HP at the
   // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
