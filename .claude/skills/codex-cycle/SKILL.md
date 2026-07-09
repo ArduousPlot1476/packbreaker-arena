@@ -40,22 +40,26 @@ right after wastes a round and confuses the count.
    thread reply, **HALT** and use the top-level comment endpoint
    instead.
 
-## Step 2 — Poll the right endpoint
+## Step 2 — Poll both surfaces
 
-Codex's response is a **PR review**, not an issue comment.
-1. Poll `GET /repos/{owner}/{repo}/pulls/{pr}/reviews`, filter for
-   `user.login == "chatgpt-codex-connector[bot]"` with
-   `submitted_at` after the Step 1 trigger timestamp.
-2. Do **not** poll `/issues/{pr}/comments` expecting Codex's reply —
-   that endpoint only ever shows the human-posted `@codex review`
-   trigger, never Codex's response. (This exact mistake cost a false
-   15-minute timeout report earlier in this project — Codex had
-   already responded in ~10 minutes on the reviews endpoint.)
-3. Once found, fetch line-level findings via `GET
+Codex's response shape depends on outcome. A review WITH findings lands as a **PR review**
+(`/pulls/{pr}/reviews`) with line-level comments. A **clean pass (zero findings) may instead land
+as a plain top-level issue comment** from the same bot account — confirmed empirically on PR #30,
+where a clean "Codex Review: ... Swish!" verdict landed via `/issues/{pr}/comments` while the
+reviews endpoint stayed empty.
+
+1. Poll `GET /repos/{owner}/{repo}/pulls/{pr}/reviews`, filter for `user.login ==
+   "chatgpt-codex-connector[bot]"` with `submitted_at` after the Step 1 trigger timestamp. Primary
+   channel for finding-bearing reviews.
+2. ALSO poll `GET /repos/{owner}/{repo}/issues/{pr}/comments`, filter for the same bot login, with
+   `created_at` after the trigger timestamp. Do not assume this endpoint only ever carries the human
+   trigger — it can also carry Codex's own clean-pass response. Check both endpoints every round.
+3. If a hit on either surface references a commit SHA, confirm it matches the current branch tip
+   before treating it as current — a match on a stale SHA is not a current response.
+4. Once a review with findings is found, fetch line-level findings via `GET
    /repos/{owner}/{repo}/pulls/{pr}/reviews/{review_id}/comments`.
-4. Typical response window: 5–10 minutes. If nothing appears by 15,
-   re-check you're polling the reviews endpoint before assuming Codex
-   is slow or silent.
+5. Typical response window: 5–10 minutes. If nothing appears by 15 on EITHER endpoint, re-check
+   both before assuming Codex is slow or silent.
 
 ## Step 3 — Classify each finding
 
