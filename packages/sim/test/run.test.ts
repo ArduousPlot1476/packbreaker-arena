@@ -20,12 +20,14 @@ import {
   type Item,
   type Recipe,
   type RelicSlots,
+  type SerializedRunState,
   type TelemetryEvent,
   type Trigger,
 } from '@packbreaker/content';
 import {
   applyAction,
   createRun,
+  restoreRun,
   type ApplyCombatOutcomeInput,
   type CreateRunInput,
 } from '../src/run';
@@ -434,6 +436,104 @@ describe('round economics', () => {
     const goldBefore = ctrl.getState().gold;
     ctrl.startCombat(emptyGhost(1));
     expect(ctrl.getState().gold).toBe(goldBefore + 3); // +3g win bonus
+  });
+});
+
+// ─── Item-driven gold income (CF 59) ──────────────────────────────
+
+describe('item-driven gold income (CF 59)', () => {
+  // Determinism-safe bag construction: restoreRun hydrates arbitrary bag
+  // placements with no shape/cell validation (the restoreRun.test.ts pattern),
+  // so we seat the real gold items directly instead of hunting shop seeds. The
+  // combat each helper runs is a guaranteed LOSS (gold items deal no damage vs
+  // a tanky ghost), so no win-bonus gold contaminates the advancePhase delta.
+  function restoreWith(
+    placements: ReadonlyArray<{ itemId: string; placementId: string }>,
+    shopSlots?: ReadonlyArray<string>,
+  ): SerializedRunState {
+    const base = createRun(baseInput());
+    const gs = base.getState();
+    return {
+      ...gs,
+      bag: {
+        dimensions: gs.bag.dimensions,
+        placements: placements.map((p, i) => ({
+          placementId: PlacementId(p.placementId),
+          itemId: ItemId(p.itemId),
+          anchor: { col: i, row: 0 },
+          rotation: 0,
+        })),
+      },
+      shop: shopSlots
+        ? { slots: shopSlots.map((s) => ItemId(s)), purchased: [], rerollsThisRound: 0 }
+        : {
+            slots: gs.shop.slots.slice(),
+            purchased: gs.shop.purchased.slice(),
+            rerollsThisRound: gs.shop.rerollsThisRound,
+          },
+      rngState: base.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+      bornFromRecipe: [],
+    };
+  }
+
+  /** Restore with the given bag, run one losing combat, advancePhase into the
+   *  next round, and report the gold advancePhase credited plus the round_start
+   *  telemetry gold it emitted. */
+  function advanceIncome(
+    placements: ReadonlyArray<{ itemId: string; placementId: string }>,
+    shopSlots?: ReadonlyArray<string>,
+  ): { delta: number; finalGold: number; roundStartGold: number } {
+    const events: TelemetryEvent[] = [];
+    const ctrl = restoreRun(restoreWith(placements, shopSlots), {
+      onTelemetryEvent: (e) => events.push(e),
+    });
+    ctrl.startCombat(emptyGhost(200)); // no player damage → loss → no win bonus
+    const before = ctrl.getState().gold;
+    ctrl.advancePhase();
+    const finalGold = ctrl.getState().gold;
+    const round = ctrl.getState().currentRound;
+    const roundStart = events.find(
+      (e): e is Extract<TelemetryEvent, { name: 'round_start' }> =>
+        e.name === 'round_start' && e.round === round,
+    );
+    if (!roundStart) throw new Error('advanceIncome: no round_start captured');
+    return { delta: finalGold - before, finalGold, roundStartGold: roundStart.gold };
+  }
+
+  it('Copper Coin (goldPerRound 1) credits +1 over base income', () => {
+    const base = advanceIncome([]).delta;
+    expect(advanceIncome([{ itemId: 'copper-coin', placementId: 'p-0' }]).delta).toBe(base + 1);
+  });
+
+  it('Lucky Penny (on_round_start add_gold 2) credits +2 — proves the trigger-scan arm', () => {
+    const base = advanceIncome([]).delta;
+    expect(advanceIncome([{ itemId: 'lucky-penny', placementId: 'p-0' }]).delta).toBe(base + 2);
+  });
+
+  it('Coin Pouch (2) + Treasure Sack (4) stack to +6 — proves summing across placements', () => {
+    const base = advanceIncome([]).delta;
+    expect(
+      advanceIncome([
+        { itemId: 'coin-pouch', placementId: 'p-0' },
+        { itemId: 'treasure-sack', placementId: 'p-1' },
+      ]).delta,
+    ).toBe(base + 6);
+  });
+
+  it('gold item in SHOP slots but never placed credits +0 — proves placements-only', () => {
+    const base = advanceIncome([]).delta;
+    const shopFull = ['copper-coin', 'copper-coin', 'copper-coin', 'copper-coin', 'copper-coin'];
+    expect(advanceIncome([], shopFull).delta).toBe(base);
+  });
+
+  it('round_start telemetry gold includes the item credit', () => {
+    const withCoin = advanceIncome([{ itemId: 'copper-coin', placementId: 'p-0' }]);
+    // Credit lands before emitRoundStart(), so the emitted gold equals the
+    // post-advancePhase controller gold and exceeds the no-item baseline by +1.
+    expect(withCoin.roundStartGold).toBe(withCoin.finalGold);
+    expect(withCoin.roundStartGold).toBe(advanceIncome([]).roundStartGold + 1);
   });
 });
 

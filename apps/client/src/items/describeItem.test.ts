@@ -3,9 +3,10 @@
 // Covers every one of the 6 Trigger variants and 6 Effect variants at least
 // once (real shipped items where they exist; synthetic fixtures / describeEffect
 // for the sim-inert effects and the positive-sign cooldown edge). The coverage
-// test asserts all 45 shipped items produce non-empty output — Rune Pedestal and
-// Lucky Penny (each with only an omitted effect) fall back to a structural tag
-// summary, pinned explicitly.
+// test asserts all 45 shipped items produce non-empty output — Rune Pedestal
+// (its only effect is the omitted trigger_chance_pct buff, no passives) is now
+// the sole tag-fallback item, pinned explicitly. As of CF 59 the four gold
+// items render real income copy instead of falling back.
 
 import { describe, expect, it } from 'vitest';
 import { ITEMS, getItem } from '@packbreaker/content';
@@ -97,12 +98,12 @@ describe('describeItem — effect variants', () => {
     ).toBe('burn 1 to enemy for 3s');
   });
 
-  it('add_gold is omitted (unimplemented no-op); lucky-penny → tag fallback', () => {
-    // Sim skips add_gold and no run-controller credit path exists, so it grants
-    // nothing — omit it (Codex Phase 2.5). Lucky Penny's only effect is add_gold,
-    // so it falls back to its structural tag summary.
-    expect(describeEffect({ type: 'add_gold', amount: 2 })).toBeNull();
-    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Gold']);
+  it('add_gold renders "+N gold" (CF 59); lucky-penny → "Round start — +2 gold"', () => {
+    // CF 59 made add_gold real: the run controller credits it out-of-combat at
+    // round-end (computeItemGoldIncome). describeTrigger adds the "Round start —"
+    // prefix. Lucky Penny no longer falls back to its structural tag summary.
+    expect(describeEffect({ type: 'add_gold', amount: 2 })).toBe('+2 gold');
+    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Round start — +2 gold']);
   });
 
   it('buff_adjacent damage → "nearby [tags ]items +N dmg" (resonance-crystal, two effects)', () => {
@@ -166,11 +167,11 @@ describe('describeItem — inert trigger_chance_pct omission (CF 57 Q1)', () => 
 });
 
 describe('describePassiveStats', () => {
-  it('emits only maxHpBonus; omits unimplemented goldPerRound + bonusBaseDamage', () => {
-    // maxHpBonus is the sole passive the run controller applies; the other two
-    // have no consumer, so they are omitted (Codex Phase 2.5) not advertised.
+  it('emits maxHpBonus + goldPerRound (CF 59); omits unimplemented bonusBaseDamage', () => {
+    // maxHpBonus and goldPerRound both have run-controller consumers; only
+    // bonusBaseDamage remains without one (reserved for M2), so it is omitted.
     const stats: PassiveStats = { maxHpBonus: 18, bonusBaseDamage: 2, goldPerRound: 3 };
-    expect(describePassiveStats(stats)).toEqual(['+18 max HP']);
+    expect(describePassiveStats(stats)).toEqual(['+18 max HP', '+3 gold per round']);
   });
 
   it('passive + trigger compose (tower-shield: heal line then +18 max HP)', () => {
@@ -180,10 +181,10 @@ describe('describePassiveStats', () => {
     ]);
   });
 
-  it('pure-passive: buckler → +5 max HP (real); copper-coin → Gold fallback (goldPerRound omitted)', () => {
+  it('pure-passive: buckler → +5 max HP; copper-coin → +1 gold per round (CF 59)', () => {
     expect(describeItem(getItem('buckler' as ItemId))).toEqual(['+5 max HP']);
-    // Its only content is the unimplemented goldPerRound → structural tag fallback.
-    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['Gold']);
+    // CF 59: goldPerRound now renders, so copper-coin describes its real income.
+    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['+1 gold per round']);
   });
 });
 
@@ -214,15 +215,16 @@ describe('describeItem — coverage: all 45 shipped items produce non-empty outp
     }
   });
 
-  // Phase 2.5g: the 5 items whose entire content is sim-inert (omitted effects,
-  // no real passive) fall back to a structural tag summary. Pinned by name so a
-  // future content/tag change that alters a fallback is caught. NOTE the 4 gold
-  // items collide on the identical string "Gold" (all carry only the 'gold' tag).
-  it('pins all 5 tag-fallback items by name (4 gold items collide on "Gold")', () => {
+  // As of CF 59, Rune Pedestal is the SOLE tag-fallback item — its only effect
+  // is the omitted trigger_chance_pct buff and it has no passive. The four gold
+  // items no longer collide on "Gold"; they render their now-real income copy
+  // (goldPerRound passives + Lucky Penny's on_round_start add_gold). Pinned by
+  // name so a future content/tag change that alters any of these is caught.
+  it('pins Rune Pedestal as the sole tag-fallback; the 4 gold items render real income copy (CF 59)', () => {
     expect(describeItem(getItem('rune-pedestal' as ItemId))).toEqual(['Tool · Gem']);
-    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Gold']);
-    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['Gold']);
-    expect(describeItem(getItem('coin-pouch' as ItemId))).toEqual(['Gold']);
-    expect(describeItem(getItem('treasure-sack' as ItemId))).toEqual(['Gold']);
+    expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Round start — +2 gold']);
+    expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['+1 gold per round']);
+    expect(describeItem(getItem('coin-pouch' as ItemId))).toEqual(['+2 gold per round']);
+    expect(describeItem(getItem('treasure-sack' as ItemId))).toEqual(['+4 gold per round']);
   });
 });

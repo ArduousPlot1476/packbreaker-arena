@@ -70,6 +70,26 @@ describe('items', () => {
       expect(v === null || v === 'tinker' || v === 'marauder').toBe(true);
     }
   });
+
+  it('every add_gold effect sits under an on_round_start trigger (CF 59 income invariant)', () => {
+    // computeItemGoldIncome (packages/sim/src/run/state.ts) credits add_gold as a
+    // flat out-of-combat sum, and only from on_round_start triggers (which fire
+    // once per combat). add_gold on any other trigger would be combat-conditional
+    // and MUST NOT be silently treated as flat income — this gate fails if future
+    // content attaches it elsewhere, forcing a deliberate decision.
+    for (const item of Object.values(ITEMS)) {
+      for (const trigger of item.triggers as ReadonlyArray<Trigger>) {
+        for (const effect of trigger.effects as ReadonlyArray<Effect>) {
+          if (effect.type === 'add_gold') {
+            expect(
+              trigger.type,
+              `${item.id}: add_gold under '${trigger.type}'; only on_round_start is credited by computeItemGoldIncome`,
+            ).toBe('on_round_start');
+          }
+        }
+      }
+    }
+  });
 });
 
 describe('recipes', () => {
