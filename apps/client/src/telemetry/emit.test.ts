@@ -133,6 +133,26 @@ describe('emit.ts — batch assembly', () => {
     client.shutdown();
   });
 
+  it('stamps the build-time clientVersion when no override is passed (CF 54)', async () => {
+    const { batches, transport } = captureTransport();
+    const client = createTelemetryClient({
+      transport,
+      sessionId: 'sess',
+      anonId: 'anon',
+      flushIntervalMs: 0,
+    });
+    client.capture(makeRunStart());
+    await client.flush();
+    // Default path: no clientVersion override, so the module constant wins.
+    // Must be a real build stamp (<version>+<sha|local>), NOT the fallback
+    // sentinel — this fails if vite.config.ts's `define` ever stops
+    // substituting __CLIENT_VERSION__ under Vitest.
+    const version = batches[0]!.clientVersion;
+    expect(version).not.toBe('0.0.0+unstamped');
+    expect(version).toMatch(/^\d+\.\d+\.\d+\+([0-9a-f]{7,40}|local)$/);
+    client.shutdown();
+  });
+
   it('drains the buffer on flush (empty buffer post-flush)', async () => {
     const { transport } = captureTransport();
     const client = createTelemetryClient({
