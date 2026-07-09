@@ -4,6 +4,71 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-09 — CF 54 CLOSED (telemetry clientVersion derived from build metadata); PR 31 merged 86357f3
+
+`apps/client` telemetry `clientVersion` was a hand-edited literal `'m1.5c-pr1'`
+(stale several merges), so every emitted event mis-tagged its deploy in the D1/D2
+PostHog dashboards. Now derived at build time as `<pkg.version>+<short git SHA>`
+(tech-architecture.md § 8.3 M1 scheme), e.g. `0.0.1+faa4ae1`, with a
+`0.0.0+unstamped` fallback under non-Vite runners. Merge commit `86357f3`
+(--no-ff, GitHub "Merge pull request" from `cf54-client-version`, parents
+`a91fa3c` + `6fc7410`), code commits `faa4ae1` (derivation) + `6fc7410`
+(turbo-cache fix). PR 31 merged + closed.
+
+**CF 54 CLOSED — core deliverable.** Opened 2026-05-23 § "M1.5c PR 2 CLOSED …" →
+"CF 54 OPENED (NEW) — derive clientVersion from build/package version". The Vite
+`define` injects `__CLIENT_VERSION__` (computed in `vite.config.ts` from
+`package.json` version + `git rev-parse --short HEAD`, git-absent → `local`);
+`emit.ts` reads it through a `typeof` guard so the module stays loadable under any
+non-Vite runner. Production `useRun` never overrides, so the constant always
+reaches the wire. Value-only change: no schema edit, schema-sync trivially green;
+determinism corpora byte-stable (`git diff` on `packages/sim/test/fixtures/`
+empty — client-only). New default-path emit test asserts a real stamp and, by
+mutation (define removed → fallback), provably fails on the `0.0.0+unstamped`
+sentinel (`AssertionError: expected '0.0.0+unstamped' not to be '0.0.0+unstamped'`).
+
+**Two review-caught findings folded in — no new Catch numbers.** Both were caught
+before merge (one pre-ratification, one during normal PR review); per the
+established session ruling, pre-merge review catches take no Catch ordinal.
+- **Phase-1 (pre-ratification): `@types/node` false-green.** `vite.config.ts`'s new
+  `node:` imports are typechecked (via `tsconfig.node.json`), but `apps/client`
+  didn't declare `@types/node` — it compiled locally only via an ambient home-dir
+  `@types/node` leak and would have failed `tsc -b` on a clean CI checkout. Fix =
+  add `@types/node ^20.17.0` to `apps/client` + `"types": []` on
+  `tsconfig.app.json` (scopes Node ambient globals out of the `src`/DOM app
+  compilation so they can't shadow `URL`/`fetch`/`setTimeout`). Expanded scope from
+  the plan's 4 files to 7 (incl. `pnpm-lock.yaml`).
+- **Codex round-1 (normal PR review): turbo build-cache stale-SHA (P2).** The
+  `build` task cached `apps/client dist/**` under a hash excluding the git SHA, so a
+  commit advancing HEAD without touching client inputs could cache-hit and ship an
+  older stamp — defeating the deploy-slice goal for warm-cache local builds. Fixed
+  `6fc7410`: `"@packbreaker/client#build": { "cache": false }`. Behaviorally
+  verified — baseline `turbo run build --filter=@packbreaker/client` twice → run 2
+  `>>> FULL TURBO` (stale-SHA cache-hit); after the change run 2 re-executes
+  (`0 cached, 1 total`, fresh build time) and `--dry-run` reports the task cache
+  local:false / remote:false. CI already builds fresh, so no CI behavior change.
+
+**PostHog filter-continuity changeover (expected, not a data gap).** Dashboard
+filters on `clientVersion = 'm1.5c-pr1'` stop matching events emitted after this
+ships — deploy-slicing becoming real is the point, not a telemetry regression.
+Noted so the changeover isn't misread.
+
+**Codex-cycle tally.** Round 1 (commit `faa4ae1`): 1× P2 (turbo-cache, above),
+fixed. Round 2 (commit `6fc7410`): CLEAN — "Codex Review: Didn't find any major
+issues. Swish!", reviewed commit `6fc74107d5` (matches branch tip). Ceiling never
+tripped (1/4); no meta-audit. CI green per-step — Install / Lint / Typecheck /
+Test / Build all `success` on both `faa4ae1` (Actions run 29038989824) and
+`6fc7410` (run 29042197965); the clean-checkout Typecheck step is the authoritative
+gate the ambient `@types/node` leak could not stand in for locally. (PR-thread
+hygiene: 👍 + "addressed in 6fc7410" reply landed; the review thread's collapse is a
+manual browser action — the fine-grained PAT cannot run `resolveReviewThread`.)
+
+**Counter: 54 / 19 / 8 / 31 / 41** (catches / rules / patterns / drifts /
+open-CFs). Delta from the tip 54/19/8/31/42 (decision-log.md 2026-07-08 § "CF 63
+CLOSED … CF 42 CLOSED …"): open-CFs −1 (CF 54 closed). Catches / rules / patterns /
+drifts unchanged — the two folded-in findings were pre-merge review catches and
+take no Catch number per the session ruling.
+
 ## 2026-07-08 — CF 63 CLOSED (live recipe-bonus threading) + CF 42 CLOSED (latent startingHp hardening); Catch 54 (codex-cycle clean-pass polling gap); combat-parity merge 3594eb1
 
 Client combat-input parity merged: `CombatOverlay.buildCombatInput` now reads the
