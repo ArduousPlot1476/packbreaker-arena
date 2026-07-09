@@ -4,6 +4,90 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-08 — CF 63 CLOSED (live recipe-bonus threading) + CF 42 CLOSED (latent startingHp hardening); Catch 54 (codex-cycle clean-pass polling gap); combat-parity merge 3594eb1
+
+Client combat-input parity merged: `CombatOverlay.buildCombatInput` now reads the
+sim-authoritative player `startingHp` and `recipeBornPlacementIds` from
+`RunController.getPlayerStartingHp()` + the existing `getRecipeBornPlacementIds()`
+at combat-entry, replacing the hardcoded `startingHp: 30` and the omitted field.
+Merge commit `3594eb1` (--no-ff, trailer-free), branch `client-combat-input-parity`
+off main `36dd14c`, code commit `dced52e`. PR 30 merged + closed.
+
+**CF 63 CLOSED — live bug fixed.** Opened 2026-07-08 § "Combat-parity Phase 1
+ratified …" (the recipe-threading remainder de-numbered at the 2026-07-05 CF 43
+close, renumbered CF 63 there). Genuinely live: the reachable iconned recipes
+(`r-steel-sword`, `r-fire-oil`, `r-ember-brand`, `r-healing-salve`) mint
+recipe-born outputs whose Tinker `recipeBonusPct` (+10% class passive, plus Pocket
+Forge / Catalyst if held) was silently dropped in the combat the player watches.
+Now threaded.
+
+**CF 42 CLOSED — latent hardening (NOT a live no-op).** Opened 2026-05-19 §
+"M1.5b PR 1 Phase 2.5b interlude" (commit 17bd494); reclassified LATENT at
+2026-07-08 § "Supersession: CF 42 reclassified LATENT …" (commit `36dd14c`). The
+`startingHp: 30` hardcode was correct for every *reachable* client build (two-part
+reachability below); this fix future-proofs it so it cannot silently become wrong
+when reachability opens. Framed as latent hardening — deliberately not a joint
+"items were dead" narrative with CF 63.
+
+**Two-part reachability (refinement of CF 42's disposition; no new CF).** A
+`maxHpBonus` item is reachable in client combat only if BOTH conditions hold, and
+both fail today:
+1. **Iconned into the client shop/ghost pool.** `SHOP_POOL_ITEMS` is built from
+   the 12 `ICONNED_ITEM_IDS` (`apps/client/src/run/content.ts`); none of the six
+   `maxHpBonus` items (`buckler`, `iron-shield`, `chainmail`, `tower-shield`,
+   `bloodmoon-plate`, `world-forged-heart`) are iconned, and `ICONNED_RECIPES`
+   excludes `r-iron-shield` / `r-tower-shield`.
+2. **Present in the registry the client combat path resolves against.** `runCombat`
+   hardcodes `simulateCombat(input, { items: SHOP_POOL_ITEMS })`
+   (`apps/client/src/combat/sim-bridge.combat.ts`) — the client resolver throws
+   `canonicalCells: unknown itemId` on any non-iconned item, so a `maxHpBonus` item
+   could not be simulated even if it reached the bag.
+They open independently: condition 1 when icon-art expansion lands the full
+45-item set (post-M1.3.4b); condition 2 if the client combat registry ever widens
+beyond `SHOP_POOL_ITEMS`. Surfaced during Phase 2 — the e2e test hit condition 2
+directly (iron-shield could not traverse `runCombat`), which is why CF 42's e2e
+case asserts at the `CombatInput` boundary rather than through real combat.
+
+**Design + verification.** `getPlayerStartingHp()` delegates to the existing
+private `computePlayerStartingHp()` — behavior-neutral; Rule 7 barrel sweep a
+verified no-op (`RunController` already exported from both barrels). Ghost HP keeps
+its own round-scaling formula (intentional asymmetry, comment added; ghost is
+M2-placeholder scaffolding, not a player-HP mirror). New `combatParity.e2e.test.ts`
+(2 cases): CF 63 driven through the real `buildCombatInput → runCombat →
+simulateCombat` with an iconned recipe-born `steel-sword`; CF 42 asserted at the
+`CombatInput` boundary with `iron-shield` (per condition 2). Gate:
+`turbo lint typecheck test build --force` 25/25 green (sim 509 pass / 1 skip;
+client 507 pass / 15 skip, +2; content 30; ui-kit 34; server 67); determinism
+corpus byte-stable (`git diff` on `packages/sim/test/fixtures/` empty — the getter
+only delegates to an existing private read, no RNG / mutation, not invoked during
+replay); CI green on `dced52e`. Change surface 4 files (the Phase-1 plan's 5-file
+prediction over-counted `CombatOverlay.test.tsx`, which has no direct
+`buildCombatInput` call site and needed no edit).
+
+**Codex-cycle: round 1 CLEAN.** 0 findings, ceiling never tripped, no meta-audit.
+Codex's clean verdict — "Codex Review: Didn't find any major issues. Swish!",
+reviewed commit `dced52e` (matches branch tip) — landed as a top-level ISSUE
+comment while the reviews endpoint stayed empty.
+
+**Catch 54 (NEW — process-tooling defect in a project skill; caught by real Codex
+behavior contradicting the skill's own assertion).** `codex-cycle` Step 2 asserted
+Codex's response is always a PR review and instructed the poller NOT to check
+`/issues/{pr}/comments` ("that endpoint only ever shows the human-posted
+trigger"). PR 30's clean pass falsified that: the zero-finding verdict landed as an
+issue comment, reviews endpoint empty — a poller following the old Step 2 would
+have reported a false timeout and missed the pass. Corrected in
+`.claude/skills/codex-cycle/SKILL.md` Step 2 (commit `5cb5bff`): poll BOTH surfaces
+every round (reviews for finding-bearing reviews, issue comments for the same bot's
+clean-pass verdict) + a stale-SHA guard. Per master-dev ratification, logged as a
+Catch only — **no new Rule**: the correction lives in the skill file itself, so a
+Rule ordinal would merely restate it.
+
+**Counter: 54 / 19 / 8 / 31 / 42** (catches / rules / patterns / drifts /
+open-CFs). Delta from the tip 53/19/8/31/44 (decision-log.md 2026-07-08 §
+"Supersession: CF 42 reclassified LATENT …"): catches +1 (Catch 54), open-CFs −2
+(CF 63 + CF 42 closed on the combat-parity merge). Rules / patterns / drifts
+unchanged.
+
 ## 2026-07-08 — Supersession: CF 42 reclassified LATENT (maxHpBonus items shipped 2026-04-26 + unreachable in client content); corrects the 55f4dcb combat-parity ratification framing; Drift 31
 
 Corrects two factual errors in decision-log.md 2026-07-08 § "Combat-parity Phase 1
