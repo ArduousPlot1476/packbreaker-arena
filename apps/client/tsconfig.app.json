@@ -3,7 +3,8 @@
   "extends": "@packbreaker/tsconfig/react.json",
   "compilerOptions": {
     "composite": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": []
   },
   "include": ["src"]
 }

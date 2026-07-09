@@ -5,6 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**", "!dist/**/*.map"]
     },
+    "@packbreaker/client#build": { "cache": false },
     "lint": {
       "dependsOn": ["//#check-schemas-sync"]
     },

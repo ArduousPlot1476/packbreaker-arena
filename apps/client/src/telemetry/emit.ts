@@ -46,7 +46,11 @@ import type {
 
 const DEFAULT_BATCH_URL = '/v1/telemetry/batch';
 const DEFAULT_FLUSH_INTERVAL_MS = 30_000;
-const CLIENT_VERSION = 'm1.5c-pr1';
+// CF 54: build-stamped by the vite.config.ts `define` ("<version>+<sha>").
+// typeof-guarded so the module stays loadable under any runner that doesn't
+// substitute the define (the guard compiles to a constant under Vite).
+const CLIENT_VERSION =
+  typeof __CLIENT_VERSION__ !== 'undefined' ? __CLIENT_VERSION__ : '0.0.0+unstamped';
 
 /** Half the browser-spec 64 KiB Fetch `keepalive` body cap. The size-
  *  triggered flush fires when the buffered batch crosses this
@@ -92,7 +96,8 @@ export interface CreateTelemetryOptions {
    *  interval flushing (tests). */
   readonly flushIntervalMs?: number;
   /** Client version string for TelemetryBatchRequest.clientVersion.
-   *  Default: 'm1.5c-pr1'. */
+   *  Default: the build-stamped `<pkg.version>+<git sha>` constant
+   *  (see vite.config.ts CF 54). */
   readonly clientVersion?: string;
 }
 
