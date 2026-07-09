@@ -32,6 +32,11 @@ curl --ssl-no-revoke -sS -X POST \
 (Pull requests R/W, Issues R/W, Metadata R/O). Smoke-test read access first
 (`GET /repos/{owner}/{repo}` → 200) before any write.
 
+Token capability note: reactions (👍) and replies post fine via the token, but a
+fine-grained PAT **cannot** run `resolveReviewThread`/`unresolveReviewThread`
+(GraphQL returns `FORBIDDEN` even with Pull requests: write) — do NOT retry
+thread-collapse via API; leave resolving to Trey's manual browser action.
+
 **Hard precondition — this POST does not fire until BOTH hold:**
 1. The PR body has cleared `handoff-verify` (every applicable category PASS).
 2. Master-dev has signed off on the verbatim title + body text.
