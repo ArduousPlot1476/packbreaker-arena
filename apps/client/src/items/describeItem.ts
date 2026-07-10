@@ -8,21 +8,20 @@
 // Register: TERSE / arcade (CF 57 Q2). One line per describable trigger, then
 // one line per present passiveStats field.
 //
-// Three effects the shipped game does NOT execute are OMITTED (CF 57 Q1 — "show
+// Two effects the shipped game does NOT execute are OMITTED (CF 57 Q1 — "show
 // only what the sim actually does"):
 //   • buff_adjacent { stat: 'trigger_chance_pct' } — hard no-op (combat.ts:699,
 //     deferred to M1.2.5).
 //   • summon_temp_item — no-op (combat.ts:735) and used by zero shipped items.
-//   • add_gold — the sim skips it (combat.ts:682, deferred to the M1.2.4 run
-//     controller) and no run-controller credit path exists, so it grants no
-//     gold today (Codex Phase 2.5).
 // Their switch cases remain (returning null) so a future Trigger/Effect schema
 // member still fails to compile here rather than silently rendering nothing.
+// `add_gold` is now REAL: the run controller credits it out-of-combat at
+// round-end (CF 59, computeItemGoldIncome in state.ts), so it renders.
 //
-// PassiveStats: only `maxHpBonus` is actually applied (state.ts sums it into
-// Combatant.startingHp). `goldPerRound` (no run-controller credit path) and
-// `bonusBaseDamage` (reserved for M2, used by no shipped item) are likewise
-// omitted — see describePassiveStats.
+// PassiveStats: `maxHpBonus` (state.ts sums it into Combatant.startingHp) and
+// `goldPerRound` (CF 59 — credited per round-end by the run controller) are
+// rendered. `bonusBaseDamage` (reserved for M2, used by no shipped item) is
+// still omitted — see describePassiveStats.
 //
 // Sign hazard: buff_adjacent `cooldown_pct` is applied un-negated as
 // floor(base*(100+pct)/100) (math.ts:18) — a POSITIVE amount lengthens the
@@ -130,10 +129,11 @@ export function describeEffect(effect: Effect): string | null {
         : base;
     }
     case 'add_gold':
-      // Unimplemented today: the sim skips it (combat.ts:682, deferred to the
-      // M1.2.4 run controller) and no run-controller credit path exists, so no
-      // gold is actually granted. Omit per CF 57 Q1 (Codex Phase 2.5).
-      return null;
+      // Real as of CF 59: the sim skips it in combat (combat.ts:682, by
+      // design — out-of-combat only), but the run controller credits it at
+      // round-end (computeItemGoldIncome, state.ts). describeTrigger prefixes
+      // the trigger condition (e.g. "Round start — ").
+      return `+${effect.amount} gold`;
     case 'buff_adjacent':
       return describeBuffAdjacent(effect);
     case 'summon_temp_item':
@@ -182,15 +182,15 @@ export function describeTrigger(trigger: Trigger): string | null {
   )}`;
 }
 
-/** Passive modifiers → one line each. Only `maxHpBonus` is rendered: it is the
- *  sole passive the run controller applies (state.ts sums it into
- *  Combatant.startingHp). `goldPerRound` has no credit path and
- *  `bonusBaseDamage` is reserved for M2 (used by no shipped item), so both are
- *  omitted rather than advertising income/damage the game never grants
- *  (CF 57 Q1 / Codex Phase 2.5). */
+/** Passive modifiers → one line each. `maxHpBonus` (state.ts sums it into
+ *  Combatant.startingHp) and `goldPerRound` (CF 59 — the run controller credits
+ *  it per round-end via computeItemGoldIncome) are both rendered.
+ *  `bonusBaseDamage` is reserved for M2 (used by no shipped item), so it is
+ *  omitted rather than advertising damage the game never grants (CF 57 Q1). */
 export function describePassiveStats(stats: PassiveStats): string[] {
   const lines: string[] = [];
   if (stats.maxHpBonus != null) lines.push(`+${stats.maxHpBonus} max HP`);
+  if (stats.goldPerRound != null) lines.push(`+${stats.goldPerRound} gold per round`);
   return lines;
 }
 

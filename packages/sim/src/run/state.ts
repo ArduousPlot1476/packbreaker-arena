@@ -534,6 +534,10 @@ class RunControllerImpl implements RunController {
 
     this.currentRound = (this.currentRound + 1) as RoundNumber;
     this.gold += baseIncomeForRound(this.currentRound, this.effectiveRuleset);
+    // CF 59: item-driven gold income (goldPerRound passives + on_round_start
+    // add_gold effects), credited after combat resolves and before the next
+    // shop generates — included in the emitRoundStart() gold below.
+    this.gold += computeItemGoldIncome(this.bag, this.items);
     this.shop = this.makeShop(this.currentRound);
     this.phase = 'arranging';
     this.lastCombatResult = null;
@@ -1222,6 +1226,40 @@ function computeStartingHpFromBag(
     if (bonus) hp += bonus;
   }
   return hp;
+}
+
+/** Item-driven gold income for one completed round (CF 59). Two mechanisms,
+ *  one credit site (advancePhase):
+ *    - passiveStats.goldPerRound, summed over bag placements
+ *      (balance-bible.md § 17: "summed per round-end and credited to the
+ *      player's gold pool");
+ *    - add_gold effects on on_round_start triggers (gdd.md § effects:
+ *      add_gold is out-of-combat only; the combat resolver no-op at
+ *      combat.ts case 'add_gold' is intentional and permanent). on_round_start
+ *      fires once per combat, so its out-of-combat credit is a flat sum.
+ *  add_gold attached to any OTHER trigger type is NOT credited here — it
+ *  would be probabilistic/combat-dependent, which this out-of-combat credit
+ *  cannot represent. A content-side invariant test (packages/content/test/
+ *  items.test.ts) enforces that no such item exists. Sibling to
+ *  computeStartingHpFromBag — the run controller is content-schemas.ts § 0's
+ *  legitimate passiveStats consumer (lint relaxed for packages/sim/src/run/**). */
+function computeItemGoldIncome(
+  bag: BagState,
+  items: Readonly<Record<ItemId, Item>>,
+): number {
+  let gold = 0;
+  for (const p of bag.placements) {
+    const item = items[p.itemId]!;
+    const perRound = item.passiveStats?.goldPerRound;
+    if (perRound) gold += perRound;
+    for (const t of item.triggers) {
+      if (t.type !== 'on_round_start') continue;
+      for (const e of t.effects) {
+        if (e.type === 'add_gold') gold += e.amount;
+      }
+    }
+  }
+  return gold;
 }
 
 /** Computes per-side damage totals from a CombatResult.events stream. Used
