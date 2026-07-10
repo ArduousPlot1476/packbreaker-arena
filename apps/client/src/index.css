@@ -85,6 +85,15 @@ body {
   animation: recipe-march 1.5s linear infinite, recipe-pulse 1.5s ease-in-out infinite;
 }
 
+/* CF 60: adjacency-synergy outline — static (no marching/pulse), thinner than
+   the recipe glow, so it reads as a quiet secondary cue. Stroke colour is set
+   inline (teal-300 placeholder) in AdjacencyGlow.tsx. */
+.adjacency-glow rect {
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  fill: none;
+}
+
 .drop-ok {
   box-shadow: inset 0 0 0 2px var(--r-uncommon);
 }

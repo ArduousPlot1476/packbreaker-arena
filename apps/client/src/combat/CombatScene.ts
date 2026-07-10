@@ -514,7 +514,16 @@ export class CombatScene extends Phaser.Scene {
       // (Q2 ratification). CF 4a closure.
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.source) {
-        this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 2);
+        // CF 60: an on_adjacent_trigger reaction fires a denser TEAL burst so
+        // "the neighbor answered" reads distinctly from a generic activation.
+        // `ev.trigger` is the existing discriminator on item_trigger events —
+        // no scene→bag lookup (edge case 7). Teal 0x5eead4 is the graybox
+        // placeholder (CF 20 palette consolidation).
+        if (ev.trigger === 'on_adjacent_trigger') {
+          this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 4, 0x5eead4);
+        } else {
+          this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 2);
+        }
       }
     } else if (ev.type === 'buff_apply') {
       // M1.4b2.3: item-anchored "+stat" beat. ANCHOR_RULE.buff_apply='target'
@@ -685,13 +694,20 @@ export class CombatScene extends Phaser.Scene {
     this.spawnFloaterAt(refs.centerX, refs.centerY, text, colorHex, small);
   }
 
-  private spawnParticleBurstAt(centerX: number, centerY: number, textureKey: string, count: number): void {
+  private spawnParticleBurstAt(
+    centerX: number,
+    centerY: number,
+    textureKey: string,
+    count: number,
+    tint?: number,
+  ): void {
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
       const dist = 40 + Math.random() * 20;
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
       const p = this.add.image(centerX, centerY, textureKey);
+      if (tint !== undefined) p.setTint(tint);
       p.setAlpha(0.95);
       this.tweens.add({
         targets: p,
