@@ -4,6 +4,110 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-09 — CF 59 CLOSED (item-driven gold economy wired: add_gold + goldPerRound; PR 32, merge pending Trey's --no-ff)
+
+**CF 59 CLOSED** — M1.2.4's item-driven gold-credit system, dead since it shipped, now has exactly
+one consumer. Two mechanisms, one site: a run-controller helper `computeItemGoldIncome(bag, items)`
+(sibling to `computeStartingHpFromBag` in `packages/sim/src/run/state.ts`) sums
+`passiveStats.goldPerRound` plus `on_round_start` `add_gold` effects across the current bag
+placements; `advancePhase` credits it in one line — after base income, before `makeShop`, before
+`emitRoundStart` (so `round_start.gold` telemetry includes it). Activates the 4 previously-inert
+gold items: Lucky Penny (add_gold 2), Copper Coin (1), Coin Pouch (2), Treasure Sack (4).
+
+**Design contract (Phase-1-ratified, verified verbatim against source this session):**
+- `gdd.md` line 118 — `add_gold(n)` is out-of-combat only; the `combat.ts` combat-resolver no-op is
+  CORRECT and permanent (not a bug to fix). Confirmed unchanged.
+- `balance-bible.md` § 17 — "the run controller reads `passiveStats`… `goldPerRound` is summed per
+  round-end and credited to the player's gold pool… the sim never sees `passiveStats`. Determinism
+  contract preserved."
+- `content-schemas.ts` line 204 — goldPerRound "credited to player gold AFTER round combat resolves,
+  BEFORE next shop generates."
+
+**Zero fixture churn — confirmed by an actual gate run, not predicted.** 0 diffs across the 230-file
+determinism corpus (224 `.jsonl` determinism fixtures + 6 `.json` run-scenario fixtures); the full
+243-file `packages/sim/test/fixtures/` directory (the 230 plus 12 combat `.json` + 1
+rng-sequences.json) is likewise byte-unchanged (`git diff --name-only main..HEAD -- …/fixtures` = 0).
+This corrected the plan's original Phase-1 premise: 65 of the 224 `.jsonl` fixtures DO `place_item` a
+gold item into the player bag (110 placements), so `computeItemGoldIncome` returns non-zero in dozens
+of replayed rounds — that is correct, not a bug. Stability holds because (a) the `.jsonl` replay
+terminal snapshot is `{outcome, roundsReached, finalHearts, perRoundCombatEvents}` — gold is never
+compared; (b) higher gold can never invalidate a recorded action (gold only floor-gates purchases
+downward); (c) the credit line consumes no RNG, so `makeShop` sees an identical RNG state. The 6
+`.json` scenarios carry gold items only in `shop.slots` (never placed).
+
+**Test deltas:** sim +5 income tests in `run.test.ts` (+1 copper, +2 lucky-penny [trigger-scan arm],
++6 pouch+sack stack, +0 shop-only [placements-only], round_start telemetry carries the credit —
+determinism-safe bags via `restoreRun`, guaranteed-loss combat so no win-bonus contaminates the
+delta); content +1 invariant in `items.test.ts` (every `add_gold` sits under `on_round_start`
+registry-wide); client `describeItem.test.ts` flipped (4 gold items now render real copy; Rune
+Pedestal is now the sole tag-fallback). Suite totals: sim 514/1-skip, content 31, client 508/15-skip.
+No fixture re-baseline; no schema change; `combat.ts` / `ruleset.ts` / `useRun.ts` untouched.
+
+**Rule 18 — verified axes (enumerated; unlisted = unchecked):**
+1. Helper arithmetic — goldPerRound + on_round_start add_gold summed over `placements` (not cells);
+   integer-only; `?.goldPerRound`/`e.amount` guarded (no NaN/undefined path).
+2. Credit-site placement — after baseIncome, before makeShop, before emitRoundStart (telemetry
+   captures it); one line, `advancePhase` only.
+3. Boss round (11) — `shouldEndRun → endRun → return` short-circuits BEFORE the credit line; no
+   post-run payout, no next-shop to precede.
+4. Constructor / round-1 — no item credit (empty bag precedes first shop); restore re-enters via
+   `advancePhase` only → no double-credit.
+5. Double-count — repo-wide `goldPerRound` grep found zero existing gold-crediting reader; this is
+   the first and only credit path.
+6. add_gold trigger-scope — credited only from `on_round_start`; content invariant test enforces it
+   registry-wide so future content can't silently attach it elsewhere.
+7. Determinism / fixtures — zero churn (230 corpus + 243 directory), empirically; terminal snapshot
+   gold-free; credit RNG-free.
+8. ESLint fence — the `passiveStats` read in the new helper did NOT trip the sim-wide lint
+   restriction (relaxed for `packages/sim/src/run/**`); lint green.
+9. Client copy — add_gold + goldPerRound rendered; bonusBaseDamage still omitted (no consumer);
+   header/doc comments updated; describeItem tests flipped.
+10. Scope — exactly 5 files changed vs main (git-confirmed); combat.ts / schemas / fixtures /
+    ruleset.ts / useRun.ts untouched.
+11. Gate — lint / typecheck / test / build green across sim, content, client; schema-sync
+    byte-identical.
+12. Adversarial review — 4-lens (correctness / determinism / test-adequacy / plan-conformance)
+    returned zero findings.
+
+**Codex round(s):** round 1 CLEAN — "Codex Review: Didn't find any major issues." Zero P1/P2
+findings. Clean pass landed as a top-level issue comment (reviews endpoint empty), per Catch 54;
+reviewed commit `1311b152e5` = current tip. 4-finding ceiling never tripped (0/4); no meta-audit
+run. Trigger note: this repo's token-created PRs do NOT auto-review on open — round 1 fired only
+after an explicit top-level `@codex review` comment (PR 31 precedent), not on PR creation, logged as
+Catch 55; codex-cycle's trigger step corrected accordingly.
+
+**Playtest note (per CF 59's opening text):** the low-D2-pick-rate expectation on these four gold
+items is now lifted — after this ships, pick-rate on gold items becomes real signal, not an artifact
+of them being inert.
+
+**Counter: 55 / 19 / 8 / 31 / 40** (catches / rules / patterns / drifts / open-CFs). Delta from the
+tip 55/19/8/31/41 (decision-log.md 2026-07-09 § "Catch 55 …"): open-CFs −1 (CF 59 closed). Catches /
+rules / patterns / drifts unchanged.
+
+## 2026-07-09 — Catch 55 (codex-cycle auto-review assumption: PAT-created PRs need an explicit @codex review trigger)
+
+**Catch 55 (NEW — process-tooling defect in a project skill; caught by real Codex behavior
+contradicting the skill's own assertion).** `codex-cycle` asserted that creating a PR auto-fires
+Codex's first review ("Creating the PR is what fires Codex's automatic first review"; frontmatter:
+the initial review "fire[s] without a manual trigger"). CF 59's PR 32 — created via the fine-grained
+PAT — falsified it: the PR sat 17 min silent on open, both surfaces empty (0 reviews, 0 issue
+comments), no auto-review queued. Round 1 fired only after an explicit top-level `@codex review`
+comment, landing ~4.5 min later as the usual clean-pass issue comment. PR 31 showed the same shape
+(its Codex review came ~6 min after a manual `@codex review`, never on open). Codex's own response
+lists "Open a pull request for review" as a trigger, but that does not fire for the API/PAT-created
+path this skill uses. Corrected in `.claude/skills/codex-cycle/SKILL.md` (commit `637eeed`): opening
+paragraph, "Opening the PR" entry, Step 1, and the frontmatter description now state review is never
+automatic on the PAT path — post an explicit `@codex review` immediately after every PR open
+(round 1) and after every later push; Step 2 polling / stale-SHA guard (Catch 54) left untouched.
+Codified at first instance per master-dev's bend-now ratification (shape generic, discipline
+low-burden, predictable surface across the rest of the playtest-readiness batch). Logged as a Catch
+only — **no new Rule**: the correction lives in the skill file itself, so a Rule ordinal would merely
+restate it (same disposition as Catch 54).
+
+**Counter: 55 / 19 / 8 / 31 / 41** (catches / rules / patterns / drifts / open-CFs). Delta from the
+tip 54/19/8/31/41 (decision-log.md 2026-07-09 § "CF 54 CLOSED …"): catches +1 (Catch 55). Rules /
+patterns / drifts / open-CFs unchanged.
+
 ## 2026-07-09 — CF 54 CLOSED (telemetry clientVersion derived from build metadata); PR 31 merged 86357f3
 
 `apps/client` telemetry `clientVersion` was a hand-edited literal `'m1.5c-pr1'`
