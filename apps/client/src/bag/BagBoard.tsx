@@ -11,8 +11,11 @@
 // — total bag area must fit 240px at 52px cells × 4 rows + 32px
 // padding, no room for the desktop header/footer).
 
+import { useMemo } from 'react';
 import type { RefObject } from 'react';
 import type { BagItem, Cell, RecipeMatch } from '../run/types';
+import { detectAdjacencySynergies } from '../run/adjacency';
+import { AdjacencyGlow } from './AdjacencyGlow';
 import { BagCell } from './BagCell';
 import { useCellSize } from './CellSize';
 import { DraggableItem } from './DraggableItem';
@@ -55,6 +58,11 @@ export function BagBoard({
   const cellSize = useCellSize();
   const W = BAG_COLS * cellSize;
   const H = BAG_ROWS * cellSize;
+  // CF 60: live adjacency-synergy pairs for the teal glow overlay. Local memo
+  // on `bag` (glow-only — NOT lifted to the parent screens; recipeMatches is a
+  // prop only because the parents also consume it, whereas synergies are used
+  // solely here). One mount in BagBoard covers Desktop + Mobile run screens.
+  const synergies = useMemo(() => detectAdjacencySynergies(bag), [bag]);
 
   let preview: { valid: boolean; cells: Cell[] } | null = null;
   if (drag && hover) {
@@ -131,6 +139,8 @@ export function BagBoard({
             <BagCell key={`${col},${row}`} col={col} row={row} />
           )),
         )}
+
+        <AdjacencyGlow bag={bag} synergies={synergies} />
 
         <RecipeGlow bag={bag} matches={recipeMatches} onCombine={onCombine} />
 
