@@ -67,4 +67,19 @@ describe('detectAdjacencySynergies (CF 60)', () => {
     ]
     expect(detectAdjacencySynergies(bag)).toEqual([{ reactorUid: 'res', provokerUid: 'sword' }])
   })
+
+  it('reaction-only provoker: Vampire Fang (on_hit only) beside Resonance Crystal (match-all) → 0', () => {
+    // on_hit fires ONLY as a reaction (isTopLevel=false, combat.ts:454), so it
+    // never provokes an adjacent reaction. Match-all reactor removes the tag
+    // variable, isolating canProvoke: the sim would fire nothing here.
+    const bag = [item('fang', 'vampire-fang', 0, 0), item('res', 'resonance-crystal', 1, 0)]
+    expect(detectAdjacencySynergies(bag)).toEqual([])
+  })
+
+  it('reaction-only provoker: Wooden Shield (on_taken_damage only) beside Resonance Crystal → 0', () => {
+    // on_taken_damage also fires only as a reaction (combat.ts:454) — not a
+    // provoker, so no synergy despite the match-all reactor being adjacent.
+    const bag = [item('shield', 'wooden-shield', 0, 0), item('res', 'resonance-crystal', 1, 0)]
+    expect(detectAdjacencySynergies(bag)).toEqual([])
+  })
 })

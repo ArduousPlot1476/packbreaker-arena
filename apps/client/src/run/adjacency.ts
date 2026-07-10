@@ -6,9 +6,12 @@
 //   - the reactor R has an `on_adjacent_trigger` whose `matchTags` is
 //     empty/absent (match-all, combat.ts:576-581) or intersects the provoker
 //     P's tags;
-//   - the provoker P has at least one TOP-LEVEL (non-on_adjacent_trigger)
-//     trigger, since only top-level fires provoke reactions — no cascade
-//     (combat.ts:540-543).
+//   - the provoker P has at least one TOP-LEVEL trigger — on_round_start,
+//     on_low_health, or on_cooldown (the only fireTrigger(..., true) phases:
+//     runTriggerPhase combat.ts:308 + runCooldownPhase combat.ts:352). on_hit /
+//     on_taken_damage fire ONLY as reactions (fireDamageReactions,
+//     isTopLevel=false, combat.ts:454) and on_adjacent_trigger never provokes
+//     (no-cascade, combat.ts:540-543), so none of those can provoke a reaction.
 //
 // Item triggers/tags come from the CANONICAL registry via `getItem`: the client
 // ItemDef (run/content.ts `adaptItem`) STRIPS triggers, so it cannot drive this
@@ -46,12 +49,20 @@ function reactorAcceptsProvoker(reactor: BagItem, provoker: BagItem): boolean {
   return false
 }
 
-/** Can this item fire a top-level trigger (and thus provoke reactions)? True
- *  iff it has at least one non-on_adjacent_trigger trigger (no-cascade,
- *  combat.ts:540-543 — an item whose only trigger is on_adjacent_trigger can
- *  never provoke). */
+/** Can this item fire a TOP-LEVEL trigger (and thus provoke adjacent reactions)?
+ *  The sim fires adjacent reactions only from top-level fires (combat.ts:542-543,
+ *  isTopLevel). The top-level set is EXACTLY {on_round_start, on_low_health,
+ *  on_cooldown} — the fireTrigger(..., true) phases (runTriggerPhase
+ *  combat.ts:308 + runCooldownPhase combat.ts:352). on_hit / on_taken_damage fire
+ *  only as reactions (fireDamageReactions, isTopLevel=false, combat.ts:454) and
+ *  on_adjacent_trigger is itself a reaction (:586), so an item with none of the
+ *  three top-level triggers can never provoke — even if it has on_hit /
+ *  on_taken_damage. (Positive membership, not "anything but on_adjacent_trigger":
+ *  the latter would wrongly count on_hit / on_taken_damage as provokers.) */
 function canProvoke(item: BagItem): boolean {
-  return getItem(item.itemId).triggers.some((t) => t.type !== 'on_adjacent_trigger')
+  return getItem(item.itemId).triggers.some(
+    (t) => t.type === 'on_round_start' || t.type === 'on_cooldown' || t.type === 'on_low_health',
+  )
 }
 
 /** Bag → every live adjacency-synergy pair. Both directions can appear when
