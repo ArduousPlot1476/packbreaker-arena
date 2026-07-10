@@ -4,6 +4,88 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-10 — CF 60 CLOSED (adjacency-trigger visual signal: arranging teal glow + combat burst; PR 33, merge dee67ee)
+
+**CF 60 CLOSED** — the on_adjacent_trigger mechanic, invisible board-wide (7 of 45
+items build on it), now has two additive client-only visual signals. (1) Arranging: a
+new pure detector (run/adjacency.ts detectAdjacencySynergies) surfaces every live
+(reactor, provoker) pair, drawn by an AdjacencyGlow SVG overlay — a quiet teal dashed
+outline on both items, sibling to RecipeGlow at zIndex 4 (one below RecipeGlow's 5 so
+the gold recipe cue stays dominant), static (motion reserved for the recipe glow).
+(2) Combat: on_adjacent_trigger item_trigger events render a denser teal burst,
+distinct from the generic red activation burst. Client-only; zero sim/schema/fixture
+change.
+
+**Design contract:** the detector mirrors the sim ground truth exactly
+(packages/sim/src/combat.ts) — 4-dir edge adjacency (:157-159); fireAdjacentReactions
+(:558-589) tests the PROVOKER's tags against the REACTOR's on_adjacent_trigger
+matchTags, empty/absent = match-all (:576-581); only TOP-LEVEL fires provoke (no
+cascade, :540-543). CF 60 opened 2026-07-06 § "CF 57 CLOSED…".
+
+**Two pre-merge findings folded in — no new Catch** (pre-merge review catches take no
+ordinal, same treatment as CF 54's @types/node false-green + turbo-cache P2):
+1. Plan Step-1 data-source correction — the detector reads canonical getItem from
+   @packbreaker/content, not the client-narrowed run/content ITEMS (ItemDef strips
+   `triggers`, so it cannot drive the detector). Phase-1-missed.
+2. Adversarial-review-caught detector bug — canProvoke tested "any
+   non-on_adjacent_trigger trigger" as a provoker, but the sim fires adjacent reactions
+   only from top-level fires (isTopLevel=true), whose set is exactly {on_round_start,
+   on_low_health, on_cooldown}; on_hit / on_taken_damage fire only as reactions
+   (fireDamageReactions isTopLevel=false, :454) and never provoke. Would have falsely
+   glowed e.g. Vampire Fang (on_hit-only) or Wooden Shield (on_taken_damage-only)
+   beside a match-all reactor. Fixed to positive membership; +2 regression tests.
+   Latent for today's iconned shop pool but wrong for the canonical registry the
+   detector mirrors.
+
+**Ratified deviation from plan Step 5:** the plan added an optional tint param to
+spawnParticleBurstAt to colour the burst teal. Phaser's tint multiplies, and tinting
+the saturated-red TEX.lineHit (0xef4444) rendered muddy brown (confirmed in playtest),
+not teal. Superseded by a dedicated pre-coloured teal texture (TEX.lineHitTeal +
+PALETTE.adjacencyTeal 0x5eead4), rendered untinted — matches the codebase's per-colour
+texture pattern; tint param dropped as unneeded (trivial re-add).
+
+**Test deltas:** client +9 detector unit tests (run/adjacency.test.ts: happy pair,
+tag-mismatch, no-trigger neighbour, diagonal, reactor-only pair, rotation, match-all,
++2 reaction-only-provoker regressions) + 3 component tests (AdjacencyGlow.test.tsx).
+Suite totals: client 520/15-skip, sim 514/1-skip, content 31. RecipeGlow + its tests
+unmodified. No fixture re-baseline; no schema/sim/content change.
+
+**Rule 18 — verified axes (enumerated; unlisted = unchecked):**
+1. Detector semantics vs combat.ts — 4-dir edge adjacency (cells not anchors, via
+   bag/layout cellsOf); matchTags direction + empty=match-all; top-level provoker set
+   (post-fix); no-cascade. Adversarially reviewed.
+2. Trigger data source — canonical getItem (has triggers); client ItemDef strips them
+   (would silently yield 0 synergies).
+3. Determinism / fixtures — 0 diffs across packages/sim/test/fixtures; client-render-
+   only, reads the EXISTING item_trigger `trigger` field — no CombatEvent schema change
+   (a provokedBy field would have byte-shifted the corpus; explicitly not added).
+4. Recipe-glow dominance — AdjacencyGlow zIndex 4 < RecipeGlow 5; static vs animated;
+   RecipeGlow + tests unmodified (asserted).
+5. Both viewports — one AdjacencyGlow mount in BagBoard (shared by Desktop + Mobile);
+   synergies memoized locally on bag, not lifted to parents.
+6. Combat differentiation — branch on the existing ev.trigger discriminator; no scene→
+   bag lookup; dedicated teal texture (post-fix) reads clean.
+7. Scope — exactly 7 client files changed vs main (git-confirmed); no sim/content/
+   schema/fixture file touched.
+8. Gate — client typecheck/lint/test/build green; sim + content regression-clean.
+9. Rule 19 rendered output — states 1–3 screenshot-confirmed; state 4 live-observation-
+   confirmed (burst too small/brief for a reliable full-page capture; documented as
+   direct visual confirmation). First pass rendered muddy (pre-texture-fix); post-fix
+   reads clean teal.
+
+**Codex round(s):** round 1 CLEAN — "Codex Review: Didn't find any major issues.
+Bravo." Zero P1/P2 findings. Clean pass landed as a top-level issue comment (id
+4937319845), reviewed commit a580b92 = current tip, not stale. Ceiling never tripped
+(0/4); no meta-audit run.
+
+**Playtest/palette note:** the teal (teal-300, 0x5eead4 / rgba(94,234,212,0.55)) is a
+graybox placeholder; palette consolidation rides CF 20.
+
+**Counter: 55 / 19 / 8 / 31 / 39** (catches / rules / patterns / drifts / open-CFs).
+Delta from the tip 55/19/8/31/40 (decision-log.md 2026-07-09 § "CF 59 CLOSED …"):
+open-CFs −1 (CF 60 closed). Catches / rules / patterns / drifts unchanged — the two
+folded findings were pre-merge review catches and take no Catch number.
+
 ## 2026-07-09 — CF 59 merge SHA recorded: 9445a9b (supersedes placeholder in CF 59 CLOSED entry below)
 
 Merge commit `9445a9b659…fed1b` (`--no-ff`, parents `95894f0` + `1311b15`), merged via GitHub PR \#32. Confirmed independently via local git and GitHub API (`merged: true`, `state: closed`, `merged_at: 2026-07-10T00:39:37Z`). Supersedes the `<SHA-on-merge>` placeholder left in the CF 59 CLOSED entry appended earlier this session (`95894f0`). No counter change — informational append only.
