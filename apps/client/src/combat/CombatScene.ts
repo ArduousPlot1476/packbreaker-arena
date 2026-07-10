@@ -49,6 +49,7 @@ const PALETTE = {
   rarityLegendary: 0xf59e0b, // burn / status_tick floater color
   lifeRed: 0xef4444, // damage floater + HP bar fill
   lifeStroke: 0xf87171,
+  adjacencyTeal: 0x5eead4, // CF 60 adjacency-reaction burst (teal-300 graybox; CF 20 palette consolidation)
 } as const;
 
 const PALETTE_HEX = {
@@ -126,6 +127,7 @@ const TEX = {
   squareStatus: 'cs-square-status',
   plusHeal: 'cs-plus-heal',
   lineHit: 'cs-line-hit',
+  lineHitTeal: 'cs-line-hit-teal', // CF 60: adjacency-reaction burst (drawn teal, not a tint of the red lineHit)
 } as const;
 
 export interface CombatSceneInitData {
@@ -263,6 +265,7 @@ export class CombatScene extends Phaser.Scene {
     this.makeSquareTexture(TEX.squareStatus, PALETTE.rarityLegendary);
     this.makePlusTexture(TEX.plusHeal, PALETTE.rarityUncommon);
     this.makeLineTexture(TEX.lineHit, PALETTE.lifeRed);
+    this.makeLineTexture(TEX.lineHitTeal, PALETTE.adjacencyTeal);
   }
 
   create(): void {
@@ -517,10 +520,11 @@ export class CombatScene extends Phaser.Scene {
         // CF 60: an on_adjacent_trigger reaction fires a denser TEAL burst so
         // "the neighbor answered" reads distinctly from a generic activation.
         // `ev.trigger` is the existing discriminator on item_trigger events —
-        // no scene→bag lookup (edge case 7). Teal 0x5eead4 is the graybox
-        // placeholder (CF 20 palette consolidation).
+        // no scene→bag lookup (edge case 7). Uses a DEDICATED teal texture, not
+        // a tint of the red lineHit: tinting a red texture multiplies to a muddy
+        // brown (confirmed in playtest); a teal-drawn texture reads clean.
         if (ev.trigger === 'on_adjacent_trigger') {
-          this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 4, 0x5eead4);
+          this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHitTeal, 4);
         } else {
           this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 2);
         }
@@ -694,20 +698,13 @@ export class CombatScene extends Phaser.Scene {
     this.spawnFloaterAt(refs.centerX, refs.centerY, text, colorHex, small);
   }
 
-  private spawnParticleBurstAt(
-    centerX: number,
-    centerY: number,
-    textureKey: string,
-    count: number,
-    tint?: number,
-  ): void {
+  private spawnParticleBurstAt(centerX: number, centerY: number, textureKey: string, count: number): void {
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.4;
       const dist = 40 + Math.random() * 20;
       const dx = Math.cos(angle) * dist;
       const dy = Math.sin(angle) * dist;
       const p = this.add.image(centerX, centerY, textureKey);
-      if (tint !== undefined) p.setTint(tint);
       p.setAlpha(0.95);
       this.tweens.add({
         targets: p,
