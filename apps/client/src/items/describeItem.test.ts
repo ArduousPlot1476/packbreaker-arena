@@ -3,10 +3,11 @@
 // Covers every one of the 6 Trigger variants and 6 Effect variants at least
 // once (real shipped items where they exist; synthetic fixtures / describeEffect
 // for the sim-inert effects and the positive-sign cooldown edge). The coverage
-// test asserts all 45 shipped items produce non-empty output — Rune Pedestal
-// (its only effect is the omitted trigger_chance_pct buff, no passives) is now
-// the sole tag-fallback item, pinned explicitly. As of CF 59 the four gold
-// items render real income copy instead of falling back.
+// test asserts all 45 shipped items produce non-empty output. As of CF 58 no
+// shipped item falls back to a structural tag summary — Rune Pedestal now
+// renders its trigger_chance_pct echo buff line; the four gold items render real
+// income copy (CF 59). The tag-fallback path is retained only as a defensive
+// guard, pinned explicitly.
 
 import { describe, expect, it } from 'vitest';
 import { ITEMS, getItem } from '@packbreaker/content';
