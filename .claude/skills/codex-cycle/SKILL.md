@@ -1,21 +1,27 @@
 ---
 name: codex-cycle
-description: Use after pushing a remediation commit to a PR under Codex review — deciding whether to re-request review, polling for Codex's response, classifying findings, and tracking the 4-finding ceiling. Triggers include "push landed, re-request codex," "did codex respond yet," "check codex findings," "should this trip the ceiling," "is this the 4th finding," or any point where the next move might be either "just fix it" or "this needs a meta-audit." Does not apply to the initial auto-review on PR open or the draft-to-ready-for-review toggle — those fire without a manual trigger.
+description: Use after pushing a remediation commit to a PR under Codex review — deciding whether to re-request review, polling for Codex's response, classifying findings, and tracking the 4-finding ceiling. Triggers include "push landed, re-request codex," "did codex respond yet," "check codex findings," "should this trip the ceiling," "is this the 4th finding," or any point where the next move might be either "just fix it" or "this needs a meta-audit." Also covers the initial trigger: on the PAT path Codex review is never automatic, so an explicit `@codex review` comment fires round 1 immediately after PR open.
 allowed-tools: Bash(curl:*), Bash(git rev-parse:*), Bash(git log:*), Read, Grep
 ---
 
 # codex-cycle
 
-Codex (`chatgpt-codex-connector[bot]`) auto-reviews on PR open and on the
-draft→ready-for-review toggle. It does **not** auto-re-review on
-subsequent pushes — every push after that requires an explicit
-re-request, or the PR sits unreviewed while you assume it's covered.
+Codex (`chatgpt-codex-connector[bot]`) documents three triggers — PR opened
+for review, draft marked ready, and a top-level `@codex review` comment — but
+the first two do **not** fire for PRs created through the API / PAT path this
+skill uses. Treat the review as **never automatic**: post an explicit
+`@codex review` comment immediately after every PR open to fire round 1, and
+again after every later push, or the PR sits unreviewed while you assume it's
+covered. (Empirically a PAT-created PR sat 17 min silent on open and reviewed
+only after the explicit comment — CF 59 / PR 32, Catch 55; PR 31 showed the
+same.)
 
 ## Opening the PR — first-time entry (gated on review sign-off)
 
 Applies only when the PR does not exist yet (for a re-request on an
-already-open PR, skip to Step 0). Creating the PR is what fires Codex's
-automatic first review, so it is the entry point to this cycle. Open it via
+already-open PR, skip to Step 0). Creating the PR does **not** fire a review on
+the PAT path — it is the entry point, but round 1 only starts once you post the
+explicit `@codex review` comment immediately after (Step 1). Open it via
 the API with the repo-scoped fine-grained PAT (env var), **not** by hand in
 the browser:
 
@@ -57,12 +63,15 @@ Before triggering or reporting anything:
 3. If the log's round-state and any chat-carried claim disagree,
    **HALT** — surface both, do not average.
 
-## Step 1 — Re-request review (only when actually needed)
+## Step 1 — Trigger the review (immediately after PR open, and after every later push)
 
-Re-request only if commits landed since the last Codex review on this
-PR. Do not re-trigger immediately after PR open or a draft→ready
-toggle — those already queued an automatic review; a manual trigger
-right after wastes a round and confuses the count.
+Codex does not review on its own on the PAT path, so an explicit trigger is
+required — not optional. Post the `@codex review` comment **immediately after
+opening the PR** to fire round 1, and again after every push that lands new
+commits. The only time to skip is when a comment for the current tip SHA is
+already outstanding and unanswered — a second identical comment then just
+wastes a round. (This corrects the prior assumption that PR open / draft→ready
+auto-queues a review; it does not for API-created PRs — CF 59 / Catch 55.)
 
 **Trigger mechanics — both are hard rules, not preferences:**
 1. Post a **new top-level** PR comment (`POST
