@@ -4,6 +4,10 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-09 — CF 59 merge SHA recorded: 9445a9b (supersedes placeholder in CF 59 CLOSED entry below)
+
+Merge commit `9445a9b659…fed1b` (`--no-ff`, parents `95894f0` + `1311b15`), merged via GitHub PR \#32. Confirmed independently via local git and GitHub API (`merged: true`, `state: closed`, `merged_at: 2026-07-10T00:39:37Z`). Supersedes the `<SHA-on-merge>` placeholder left in the CF 59 CLOSED entry appended earlier this session (`95894f0`). No counter change — informational append only.
+
 ## 2026-07-09 — CF 59 CLOSED (item-driven gold economy wired: add_gold + goldPerRound; PR 32, merge pending Trey's --no-ff)
 
 **CF 59 CLOSED** — M1.2.4's item-driven gold-credit system, dead since it shipped, now has exactly
