@@ -8,13 +8,13 @@
 // Register: TERSE / arcade (CF 57 Q2). One line per describable trigger, then
 // one line per present passiveStats field.
 //
-// Two effects the shipped game does NOT execute are OMITTED (CF 57 Q1 — "show
+// One effect the shipped game does NOT execute is OMITTED (CF 57 Q1 — "show
 // only what the sim actually does"):
-//   • buff_adjacent { stat: 'trigger_chance_pct' } — hard no-op (combat.ts:699,
-//     deferred to M1.2.5).
 //   • summon_temp_item — no-op (combat.ts:735) and used by zero shipped items.
-// Their switch cases remain (returning null) so a future Trigger/Effect schema
+// Its switch case remains (returning null) so a future Trigger/Effect schema
 // member still fails to compile here rather than silently rendering nothing.
+// buff_adjacent { stat: 'trigger_chance_pct' } is now REAL (CF 58 echo proc,
+// combat.ts) — it renders like the other buff_adjacent stats.
 // `add_gold` is now REAL: the run controller credits it out-of-combat at
 // round-end (CF 59, computeItemGoldIncome in state.ts), so it renders.
 //
@@ -98,8 +98,9 @@ function describeBuffAdjacent(
       break;
     }
     case 'trigger_chance_pct':
-      // Sim no-op (combat.ts:699, deferred to M1.2.5) — omit (CF 57 Q1).
-      line = null;
+      // CF 58: real echo buff — a % chance the adjacent item's trigger effects
+      // resolve a second time. Composed like the other buff_adjacent cases.
+      line = `nearby ${tagPart}items +${effect.amount}% trigger chance`;
       break;
     default:
       return assertNever(stat);
@@ -196,8 +197,9 @@ export function describePassiveStats(stats: PassiveStats): string[] {
 
 /** Full derived description for an item: trigger lines then passive lines.
  *  Never empty — falls back to a structural tag summary for an item whose only
- *  content is sim-inert and which has no passives (Rune Pedestal is the sole
- *  such shipped item; CF 57 Q1 = omit, so it must not re-describe the buff). */
+ *  content renders to nothing and which has no passives. As of CF 58 every
+ *  shipped item describes at least one line (Rune Pedestal now renders its
+ *  trigger_chance_pct buff), so the fallback is a defensive guard only. */
 export function describeItem(item: Item): string[] {
   const lines: string[] = [];
   for (const trigger of item.triggers) {

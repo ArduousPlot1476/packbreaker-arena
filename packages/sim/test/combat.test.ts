@@ -571,16 +571,16 @@ describe('on_adjacent_trigger filtering', () => {
   });
 });
 
-// ─── trigger_chance_pct buff no-op ─────────────────────────────────
+// ─── trigger_chance_pct echo (CF 58) ───────────────────────────────
 
-describe('trigger_chance_pct buff no-op', () => {
-  it('Rune Pedestal next to a gem item produces no buff_apply or buff state', () => {
+describe('trigger_chance_pct echo (CF 58)', () => {
+  it('Rune Pedestal next to a gem now emits its trigger_chance_pct buff_apply', () => {
     // Rune Pedestal: on_adjacent_trigger matchTags=[gem,consumable] →
-    // buff_adjacent stat=trigger_chance_pct +20. M1.2.3b: trigger_chance_pct
-    // is a no-op (deferred). No buff_apply event should emit.
+    // buff_adjacent stat=trigger_chance_pct +20. As of CF 58 the buff flows
+    // through the normal push/dedupe/emit path (inverts the old M1.2.3b no-op).
     //
-    // Frost Shard (gem, ice) has on_cooldown(60) apply_status(stun) — fires
-    // reactively triggering Rune Pedestal.
+    // Frost Shard (gem, ice) has on_cooldown(60) — fires reactively triggering
+    // Rune Pedestal, whose buff then targets the adjacent Frost Shard.
     const player = combatant(
       bag(
         placement('rune-pedestal', 'rp', 0, 0),
@@ -591,14 +591,155 @@ describe('trigger_chance_pct buff no-op', () => {
     const ghost = combatant(bag(), 30);
     const res = simulateCombat(input(player, ghost));
 
-    // Rune Pedestal's on_adjacent_trigger DOES fire (item_trigger emits).
+    // Rune Pedestal's on_adjacent_trigger fires (item_trigger emits).
     const rpFires = res.events.filter(
       (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('rp'),
     );
     expect(rpFires.length).toBeGreaterThan(0);
 
-    // But its buff_adjacent effect is no-op'd — zero buff_apply events for
-    // trigger_chance_pct.
+    // Its buff_adjacent effect now emits exactly one buff_apply (de-duped across
+    // repeated reactions): (rp → fs, trigger_chance_pct, +20).
+    const buffApplies = res.events.filter(
+      (e) => e.type === 'buff_apply' && e.stat === 'trigger_chance_pct',
+    );
+    expect(buffApplies).toHaveLength(1);
+    const ba = buffApplies[0];
+    if (ba?.type === 'buff_apply') {
+      expect(ba.amount).toBe(20);
+      expect(ba.target.placementId).toBe(PlacementId('fs'));
+    }
+  });
+
+  it('a live 100% chance buff makes the trigger echo deterministically (double events)', () => {
+    // X fires on_round_start (damage 5). Adjacent pedestal applies a 100%
+    // trigger_chance_pct buff to X BEFORE X's own echo check (adjacent reactions
+    // run first) — so on the very first fire the echo is guaranteed: two
+    // item_trigger events for X and two damage events.
+    const firer = defineTestItem('test-echo-firer', [
+      { type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] },
+    ], ['weapon']);
+    const pedestal100 = defineTestItem('test-pedestal-100', [
+      {
+        type: 'on_adjacent_trigger',
+        matchTags: ['weapon'],
+        effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 100, matchTags: ['weapon'] }],
+      },
+    ], ['tool']);
+    const customItems = { ...ITEMS, [firer.id]: firer, [pedestal100.id]: pedestal100 };
+    const player = combatant(
+      bag(
+        placement('test-echo-firer', 'x', 0, 0),
+        placement('test-pedestal-100', 'p', 1, 0),
+      ),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    const xFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('x'),
+    );
+    expect(xFires).toHaveLength(2); // original fire + echo
+    const xDamage = res.events.filter((e) => e.type === 'damage' && e.amount === 5);
+    expect(xDamage).toHaveLength(2); // effects resolved twice
+  });
+
+  it('stacked buffs cap at 100 — 80 + 80 yields a single echo, not two (no crash)', () => {
+    // Two distinct pedestals each apply +80 to X (different sources stack →
+    // sum 160). The echo is a single roll gated at min(160,100)=100, so X echoes
+    // exactly once, never twice.
+    const firer = defineTestItem('test-cap-firer', [
+      { type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] },
+    ], ['weapon']);
+    const ped80 = (slug: string) => defineTestItem(slug, [
+      {
+        type: 'on_adjacent_trigger',
+        matchTags: ['weapon'],
+        effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 80, matchTags: ['weapon'] }],
+      },
+    ], ['tool']);
+    const p1 = ped80('test-ped80-a');
+    const p2 = ped80('test-ped80-b');
+    const customItems = { ...ITEMS, [firer.id]: firer, [p1.id]: p1, [p2.id]: p2 };
+    const player = combatant(
+      bag(
+        placement('test-cap-firer', 'x', 0, 0),
+        placement('test-ped80-a', 'p1', 1, 0),
+        placement('test-ped80-b', 'p2', 0, 1),
+      ),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    // Both sources stack → two buff_apply for X.
+    const buffApplies = res.events.filter(
+      (e) => e.type === 'buff_apply' && e.stat === 'trigger_chance_pct',
+    );
+    expect(buffApplies).toHaveLength(2);
+    // 160 capped to 100 → exactly one echo (2 item_trigger), not two.
+    const xFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('x'),
+    );
+    expect(xFires).toHaveLength(2);
+  });
+
+  it('same (source,target,stat) re-application de-dupes — one buff_apply across repeated fires', () => {
+    // X fires on_cooldown repeatedly; its adjacent pedestal reacts every fire and
+    // re-applies the same (pedestal → X, trigger_chance_pct) tuple. Locked answer
+    // 8: same-tuple re-application is a no-op → exactly one buff_apply total.
+    const firer = defineTestItem('test-dedupe-firer', [
+      { type: 'on_cooldown', cooldownTicks: 40, effects: [{ type: 'damage', amount: 1, target: 'opponent' }] },
+    ], ['weapon']);
+    const pedestal = defineTestItem('test-dedupe-ped', [
+      {
+        type: 'on_adjacent_trigger',
+        matchTags: ['weapon'],
+        effects: [{ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 50, matchTags: ['weapon'] }],
+      },
+    ], ['tool']);
+    const customItems = { ...ITEMS, [firer.id]: firer, [pedestal.id]: pedestal };
+    const player = combatant(
+      bag(
+        placement('test-dedupe-firer', 'x', 0, 0),
+        placement('test-dedupe-ped', 'p', 1, 0),
+      ),
+      30,
+    );
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    // X must fire at least twice for the de-dupe path to be exercised.
+    const xFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('x'),
+    );
+    expect(xFires.length).toBeGreaterThanOrEqual(2);
+    // Despite many reactions, the buff is applied exactly once.
+    const buffApplies = res.events.filter(
+      (e) => e.type === 'buff_apply' && e.stat === 'trigger_chance_pct',
+    );
+    expect(buffApplies).toHaveLength(1);
+  });
+
+  it('mechanism is inert without an active chance buff — no echo, no buff_apply', () => {
+    // A plain damage item with no adjacent pedestal: no chance buff active →
+    // chanceRng is never consulted, so the trigger fires exactly once (no echo)
+    // and no trigger_chance_pct buff_apply emits. Cross-build main-stream
+    // isolation (chanceRng never advances the main cursor) is enforced by the
+    // determinism harness + combats/*.json + scenario fixtures, verified
+    // byte-identical in this PR's regeneration gate.
+    const firer = defineTestItem('test-inert-firer', [
+      { type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] },
+    ], ['weapon']);
+    const customItems = { ...ITEMS, [firer.id]: firer };
+    const player = combatant(bag(placement('test-inert-firer', 'x', 0, 0)), 30);
+    const ghost = combatant(bag(), 30);
+    const res = simulateCombat(input(player, ghost), { items: customItems });
+
+    const xFires = res.events.filter(
+      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('x'),
+    );
+    expect(xFires).toHaveLength(1); // exactly one fire, no echo
     const buffApplies = res.events.filter(
       (e) => e.type === 'buff_apply' && e.stat === 'trigger_chance_pct',
     );
