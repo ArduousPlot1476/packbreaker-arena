@@ -195,11 +195,194 @@ const FireOil = () => (
   </Strokey>
 );
 
+// ---------- Common batch 1 (2026-07-11) — 12 net-new placeholders ----------
+// Same Gridline bar as the anchors (1.5px stroke, filled body + line accents,
+// one-stop gradient depth). mana-potion body = #06B6D4 (arcane-cyan): signal-
+// blue would collide with rarity-rare per visual-direction.md § 5; cyan is
+// mana's identity color, ratified decision-log.md 2026-07-11 § "Mana Potion
+// body color ratified" (Option A tag/identity exemption).
+
+const WoodenClub = () => (
+  <Strokey>
+    <path d="M30 60 L30 40 C22 38 20 26 24 16 C27 9 37 9 40 16 C44 26 42 38 34 40 L34 60 Z" fill="#7C2D12" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M26 18 C28 12 36 12 38 18" stroke="#92400E" strokeWidth="2" fill="none" opacity="0.6" />
+    <circle cx="29" cy="24" r="2" fill="#451A03" />
+    <circle cx="35" cy="30" r="2" fill="#451A03" />
+    <circle cx="28" cy="32" r="1.6" fill="#451A03" />
+  </Strokey>
+);
+
+const HandAxe = () => (
+  <Strokey>
+    <defs>
+      <linearGradient id="axeGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#CBD5E1" />
+        <stop offset="1" stopColor="#64748B" />
+      </linearGradient>
+    </defs>
+    <path d="M22 58 L41 16" stroke="#7C2D12" strokeWidth="5" strokeLinecap="round" />
+    <path d="M34 9 C50 8 59 20 53 33 C44 33 36 28 32 19 Z" fill="url(#axeGrad)" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M38 13 C47 13 53 20 51 29" stroke="#94A3B8" strokeWidth="1.2" fill="none" opacity="0.7" />
+    <circle cx="22" cy="58" r="2.6" fill="#475569" stroke="#1C2333" strokeWidth="1.2" />
+  </Strokey>
+);
+
+const IronMace = () => (
+  <Strokey>
+    <defs>
+      <linearGradient id="maceGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#CBD5E1" />
+        <stop offset="1" stopColor="#475569" />
+      </linearGradient>
+    </defs>
+    <rect x="5" y="30" width="34" height="4.5" rx="2.2" fill="#475569" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="6" cy="32.2" r="3" fill="#94A3B8" stroke="#1C2333" strokeWidth="1.5" />
+    <g fill="#94A3B8" stroke="#1C2333" strokeWidth="1">
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(0 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(45 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(90 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(135 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(180 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(225 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(270 44 32)" />
+      <path d="M41 22 L44 10 L47 22 Z" transform="rotate(315 44 32)" />
+    </g>
+    <circle cx="44" cy="32" r="12" fill="url(#maceGrad)" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="39.5" cy="27.5" r="3" fill="#CBD5E1" opacity="0.6" />
+  </Strokey>
+);
+
+const ThrowingKnife = () => (
+  <Strokey>
+    <defs>
+      <linearGradient id="tkGrad" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0" stopColor="#64748B" />
+        <stop offset="1" stopColor="#E2E8F0" />
+      </linearGradient>
+    </defs>
+    <circle cx="15" cy="49" r="5" fill="none" stroke="#475569" strokeWidth="3" />
+    <path d="M19 45 L27 37" stroke="#475569" strokeWidth="5" strokeLinecap="round" />
+    <path d="M25.5 35.5 L30.5 40.5 L53 13 Z" fill="url(#tkGrad)" stroke="#1C2333" strokeWidth="1.5" />
+    <line x1="28" y1="38" x2="49" y2="17" stroke="#CBD5E1" strokeWidth="1" opacity="0.6" />
+  </Strokey>
+);
+
+const Buckler = () => (
+  <Strokey>
+    <defs>
+      <linearGradient id="buckGrad" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#94A3B8" />
+        <stop offset="1" stopColor="#475569" />
+      </linearGradient>
+    </defs>
+    <circle cx="32" cy="32" r="20" fill="url(#buckGrad)" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="32" cy="32" r="14" fill="none" stroke="#334155" strokeWidth="1.2" opacity="0.8" />
+    <g fill="#CBD5E1" stroke="#1C2333" strokeWidth="1">
+      <circle cx="32" cy="13" r="2.2" transform="rotate(0 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(45 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(90 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(135 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(180 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(225 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(270 32 32)" />
+      <circle cx="32" cy="13" r="2.2" transform="rotate(315 32 32)" />
+    </g>
+    <circle cx="32" cy="32" r="6" fill="#CBD5E1" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="30" cy="30" r="2" fill="#F0F4FA" opacity="0.5" />
+  </Strokey>
+);
+
+const LeatherVest = () => (
+  <Strokey>
+    <path d="M18 14 L28 16 L32 24 L36 16 L46 14 L50 22 L46 26 L46 52 L44 54 L20 54 L18 52 L18 26 L14 22 Z" fill="#92400E" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M20 28 L20 50 L44 50 L44 28 L36 20 L32 26 L28 20 Z" fill="#7C2D12" opacity="0.5" />
+    <line x1="32" y1="26" x2="32" y2="50" stroke="#451A03" strokeWidth="1.5" />
+    <path d="M28 31 L36 35 M36 31 L28 35 M28 40 L36 44 M36 40 L28 44" stroke="#451A03" strokeWidth="1.2" />
+  </Strokey>
+);
+
+const IronCap = () => (
+  <Strokey>
+    <defs>
+      <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#CBD5E1" />
+        <stop offset="1" stopColor="#64748B" />
+      </linearGradient>
+    </defs>
+    <path d="M14 41 C14 23 22 14 32 14 C42 14 50 23 50 41 Z" fill="url(#capGrad)" stroke="#1C2333" strokeWidth="1.5" />
+    <rect x="9" y="41" width="46" height="6" rx="2.5" fill="#475569" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="32" cy="13" r="3" fill="#CBD5E1" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M22 38 C22 26 26 19 32 18" stroke="#F0F4FA" strokeWidth="2" fill="none" opacity="0.5" />
+  </Strokey>
+);
+
+const Bread = () => (
+  <Strokey>
+    <path d="M12 42 C12 27 21 22 32 22 C43 22 52 27 52 42 C52 45 50 47 46 47 L18 47 C14 47 12 45 12 42 Z" fill="#92400E" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M15 39 C18 32 24 29 32 29 C40 29 46 32 49 39" fill="none" stroke="#FCD34D" strokeWidth="2.5" opacity="0.55" strokeLinecap="round" />
+    <path d="M23 27 L27 34 M31 25 L35 32 M39 27 L43 34" stroke="#7C2D12" strokeWidth="1.8" strokeLinecap="round" />
+  </Strokey>
+);
+
+const ManaPotion = () => (
+  <Strokey>
+    <path d="M27 26 L27 33 C19 37 15 47 21 54 C27 60 37 60 43 54 C49 47 45 37 37 33 L37 26 Z" fill="#334155" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M24 40 C19 45 20 52 25 55 C30 59 38 58 41 53 C44 49 43 43 39 40 Z" fill="#06B6D4" stroke="#1E293B" strokeWidth="1" />
+    <rect x="26" y="19" width="12" height="8" rx="1" fill="#334155" stroke="#1C2333" strokeWidth="1.5" />
+    <rect x="27" y="12" width="10" height="8" rx="1.5" fill="#7C2D12" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M24 43 C22.5 46 22.5 50 24 53" stroke="#CBD5E1" strokeWidth="1.5" fill="none" opacity="0.6" />
+    <circle cx="31" cy="49" r="1.6" fill="#CBD5E1" opacity="0.6" />
+    <circle cx="35" cy="52" r="1.2" fill="#CBD5E1" opacity="0.5" />
+  </Strokey>
+);
+
+const CoinPouch = () => (
+  <Strokey>
+    <path d="M16 40 C16 29 22 25 32 25 C42 25 48 29 48 40 C50 51 43 58 32 58 C21 58 14 51 16 40 Z" fill="#92400E" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M23 27 C23 22 27 19 32 19 C37 19 41 22 41 27 Z" fill="#7C2D12" stroke="#1C2333" strokeWidth="1.5" />
+    <path d="M24 25 C27 21 37 21 40 25" stroke="#451A03" strokeWidth="2" fill="none" />
+    <circle cx="24" cy="25" r="1.8" fill="#451A03" />
+    <circle cx="40" cy="25" r="1.8" fill="#451A03" />
+    <circle cx="27" cy="16" r="4.5" fill="#F59E0B" stroke="#7C2D12" strokeWidth="1.2" />
+    <circle cx="37" cy="15" r="4.5" fill="#FCD34D" stroke="#7C2D12" strokeWidth="1.2" />
+    <circle cx="32" cy="12" r="4" fill="#F59E0B" stroke="#7C2D12" strokeWidth="1.2" />
+    <path d="M22 44 C26 48 38 48 42 44" stroke="#451A03" strokeWidth="1.2" fill="none" opacity="0.6" />
+  </Strokey>
+);
+
+const LuckyPenny = () => (
+  <Strokey>
+    <circle cx="28" cy="36" r="17" fill="#F59E0B" stroke="#1C2333" strokeWidth="1.5" />
+    <circle cx="28" cy="36" r="12.5" fill="#FCD34D" stroke="#92400E" strokeWidth="1.2" />
+    <text x="28" y="42" textAnchor="middle" fontFamily="Inter" fontWeight="700" fontSize="15" fill="#7C2D12">1</text>
+    <g stroke="#14532D" strokeWidth="1">
+      <circle cx="44" cy="18" r="3.6" fill="#16A34A" />
+      <circle cx="51" cy="18" r="3.6" fill="#86EFAC" />
+      <circle cx="47.5" cy="12.5" r="3.6" fill="#16A34A" />
+      <circle cx="47.5" cy="23" r="3.6" fill="#16A34A" />
+    </g>
+    <path d="M47.5 23 L46 30" stroke="#15803D" strokeWidth="1.6" />
+  </Strokey>
+);
+
+const Bandage = () => (
+  <Strokey>
+    <rect x="17" y="20" width="30" height="17" rx="5" fill="#E2E8F0" stroke="#1C2333" strokeWidth="1.5" />
+    <line x1="25" y1="20" x2="25" y2="37" stroke="#94A3B8" strokeWidth="1.2" />
+    <line x1="32" y1="20" x2="32" y2="37" stroke="#94A3B8" strokeWidth="1.2" />
+    <line x1="39" y1="20" x2="39" y2="37" stroke="#94A3B8" strokeWidth="1.2" />
+    <path d="M22 37 C20 43 26 47 24 53 L31 53 C32 47 27 43 29 37 Z" fill="#CBD5E1" stroke="#1C2333" strokeWidth="1.5" />
+    <rect x="27" y="25" width="10" height="7" rx="1.5" fill="#DC2626" opacity="0.9" />
+    <path d="M32 26.5 L32 30.5 M30 28.5 L34 28.5" stroke="#F0F4FA" strokeWidth="1.3" />
+  </Strokey>
+);
+
 // String-keyed lookup so the literal slugs below assign cleanly post-
-// M1.3.4a's ItemId broadening to a brand. Items outside this 12-prototype
-// subset fall back to ICONS['copper-coin'] at the call site (DraggableItem,
-// ShopSlot, etc.). Drop the fallback when icon-art expansion lands the
-// full M1 content set (post-M1.3.4b).
+// M1.3.4a's ItemId broadening to a brand. Items outside this 24-icon
+// subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand, the
+// higher-rarity recipe outputs) fall back to ICONS['copper-coin'] at the call
+// site (DraggableItem, ShopSlot, etc.). Drop the fallback when icon-art
+// expansion lands the full 45-item M1 content set.
 export const ICONS: Record<string, () => JSX.Element> = {
   'iron-sword': IronSword,
   'iron-dagger': IronDagger,
@@ -213,6 +396,19 @@ export const ICONS: Record<string, () => JSX.Element> = {
   'healing-salve': HealingSalve,
   'ember-brand': EmberBrand,
   'fire-oil': FireOil,
+  // Common batch 1 (2026-07-11) — 12 net-new placeholders
+  'wooden-club': WoodenClub,
+  'hand-axe': HandAxe,
+  'iron-mace': IronMace,
+  'throwing-knife': ThrowingKnife,
+  'buckler': Buckler,
+  'leather-vest': LeatherVest,
+  'iron-cap': IronCap,
+  'bread': Bread,
+  'mana-potion': ManaPotion,
+  'coin-pouch': CoinPouch,
+  'lucky-penny': LuckyPenny,
+  'bandage': Bandage,
 };
 
 // HUD glyphs

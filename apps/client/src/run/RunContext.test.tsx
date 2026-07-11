@@ -247,7 +247,7 @@ describe('RunProvider — RunBootFallback + dynamic-import (M1.5a PR 2 Phase 2b-
     // fell back to canonical 45-item ITEMS and emitted non-iconned
     // itemIds (wooden-club, hand-axe, iron-mace, etc.) into shop.slots.
     // Post-2.5f, createRun receives `itemsRegistry: SHOP_POOL_ITEMS`,
-    // constraining sim's internal makeShop pool to the 12 iconned IDs.
+    // constraining sim's internal makeShop pool to the 24 iconned IDs.
     // Asserted on both surfaces — sim's authoritative slots AND the
     // client's adapted shop — so a future refactor that decouples
     // client.shop from sim.shop.slots cannot regress either side.
