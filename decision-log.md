@@ -4,6 +4,38 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Icon batch 1 (Commons) landed: 20/20 Commons icon-complete (PR \#35, merge 72ef6fb)
+
+Wired the 12 net-new Common placeholder icons into the client ICONS map and widened
+ICONNED_ITEM_IDS by union (12 → 24). Commons are now icon-complete (12 new + 6 reused + 2
+anchors = 20/20), unblocking the M1 exit-gate playtest against a full Common shop pool.
+mana-potion body = `#06B6D4` per decision-log.md 2026-07-11 § "Mana Potion body color
+ratified". ICONNED_RECIPES unchanged at the 4 whose outputs stay iconned (r-steel-sword,
+r-healing-salve, r-fire-oil, r-ember-brand) — the 5 recipes gaining a newly-iconned input keep
+non-iconned outputs (runtime-checked: exactly the 4 survive). Client-only (apps/client); no
+sim/content/fixture surface; full workspace lint/typecheck/test/build green (25/25 turbo tasks,
+client 520 + sim 518 tests). Dev-server render of all 12 new icons: each resolved to its own
+ICONS component (none fell back to the copper-coin placeholder), throwing-knife a filled blade,
+mana-potion cyan.
+
+Codex (PR \#35): round 1 (5a5203f) → 1 P3 — throwing-knife blade had 3 collinear vertices (all
+x+y=66) → zero-area gradient fill, blade rendered as a bare stroke; verified independently
+(per-vertex check), fixed by making the base perpendicular (`M25.5 35.5 L30.5 40.5 L53 13 Z`,
+x+y = 61/71/66), amended to b58b8ca. Round 2 (b58b8ca) → CLEAN ("Didn't find any major
+issues"). Ceiling never approached (1/4 raw, P3-only, no meta-audit).
+
+Rule 20 (ratification-before-citation): a decision-log entry may not be cited as existing canon
+inside a dependent Claude Code prompt unless it has already landed with a confirmed commit SHA —
+sequenced as its own standalone docs-only hand-off, confirmed complete before any dependent
+prompt is issued. Third instance this session (icon-batch-1 mana-color sequencing); past
+second-instance bar, codified.
+
+**Counter: 56 / 20 / 8 / 31 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from
+tip 56/19/8/31/39 (decision-log.md 2026-07-11 § "Mana Potion body color ratified"): +1 rule
+(Rule 20 = ratification-before-citation); no catch/pattern/drift/CF delta.
+
+Merge: PR \#35, --no-ff, merge 72ef6fb.
+
 ## 2026-07-11 — Mana Potion body color ratified: `#06B6D4` (cyan-500)
 
 Signal-blue (`#3B82F6`) rejected — collides with rarity-rare's frame color, the case
