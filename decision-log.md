@@ -4,6 +4,30 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — CF 58 CLOSED (trigger_chance_pct echo proc + dedicated chanceRng stream; PR \#34, merge e0a056d)
+
+**CF 58 CLOSED** — trigger_chance_pct, a hard sim no-op since M1.2.3b, is now a real echo proc (summed active buff amount, capped 100, = % chance a trigger's effects resolve twice). Activates Rune Pedestal + Master Alchemist's Kit.
+
+Design (Phase-1-ratified 2026-07-10, §§ A + B): § A effects-only echo in fireTrigger (no cascade / no recordFire double-count / no re-roll; second item_trigger event); § B dedicated per-combat chanceRng, CHANCE_RNG_OFFSET = 32749 (combat.ts:153), draw-only-when-needed so it never touches the main cursor.
+
+Ratified offset correction: draft's 13 × 65521 = 851,773 collided with the shop-round-13 / ghost-round-6 lattice; corrected to prime 32749 (below both 65521/65519 strides, disjoint by construction — mirrors relicOffer.ts:8-11).
+
+Citation corrections (folded, no separate Catch): combatSeed at packages/sim/src/run/state.ts:1039 (not state.ts:1022-1030); items under packages/content/src/items.ts.
+
+Ratified corpus deviation — surgical terminal-only re-baseline, not full regeneration: CF 58 changes the replay terminal of exactly 8 fixtures (003/004/014/015/021/039-greedy, 207/208-relic-collector). Full generate-fixtures was ratified against (it re-bakes all 224 and drifts ~41 files vs the frozen corpus independent of CF 58 — see CF 64). Each of the 8 had its action stream replayed through the CF 58 sim and only its terminal line rewritten (header + actions byte-identical; per-file diff = 1 line), extending the README surgical re-baseline precedent. combats/*.json (12) + 6 scenario .json byte-identical.
+
+**Catch 56 (Category B — process-artifact-vs-execution):** PLAN-cf58-trigger-chance.md's Step 4 gate ("if a file outside the 21 diverges → leak → HALT") conflated the harness-divergence check (replay of committed actions → 8 files ⊆ 21) with full-regeneration blast radius (generate-fixtures re-bakes all 224, ~41-file frozen-corpus drift). Surfaced when generate-fixtures produced a 43-file diff including no-item fixtures (e.g. 000-greedy). Resolved by the surgical terminal-only re-baseline (this entry) + CF 64 for the drift.
+
+Rule 18 axes: (1) isolation — 8 divergent, zero outside the item set (harness + discarded spike); (2) corpus scope — git diff = exactly 8 .jsonl (1 line each) + README; (3) determinism — 224/224 byte-stable x2; (4) full gate 25/25; (5) sim unit tests (buff_apply/100%-echo/cap/dedupe/inert); (6) client popovers + flipped tests; (7) Rule 17 — chanceRng not serialized, combat never mid-flight at save.
+
+CF 64 OPENED (NEW): frozen-corpus regeneration-reproducibility drift. generate-fixtures re-bakes ~41 of the 224 .jsonl vs the frozen corpus, independent of CF 58 (pre-CF58 control reproduces it; generator deterministic + Node-version-invariant — Node 18 == Node 22 output). Replay-determinism (the harness) still holds 224/224 — accumulated re-bake drift since the M1.2.5/M1.2.6 freeze, not a determinism break. Backlog / non-blocking; its own future ratified full regeneration.
+
+Codex round(s): round 1 CLEAN — "Codex Review: Didn't find any major issues. You're on a roll." (landed as top-level issue comment id 4946372467's response 4946432072, reviewed commit 58aaa91139 = branch tip, not stale). Zero P1/P2 findings; ceiling never tripped (0/3); no meta-audit run.
+
+**Counter: 56 / 19 / 8 / 31 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from tip 55/19/8/31/39 (decision-log.md 2026-07-10 § "CF 58 Phase 1 (design) RATIFIED"): +1 catch (Catch 56, Category B — process-artifact-vs-execution: PLAN-cf58-trigger-chance.md's Step 4 gate conflated harness-divergence-check with full-regeneration blast radius; see CF 64); open-CFs net 0 (CF 58 closed −1, CF 64 opened +1); no new rule/pattern/drift.
+
+Merge: PR \#34, --no-ff, merge e0a056d — recorded post-merge.
+
 ## 2026-07-10 — CF 58 Phase 1 (design) RATIFIED — trigger_chance_pct echo mechanism + dedicated RNG stream
 
 Phase 1 ground-truth verification (3 parallel read-only Explore agents + firsthand grep on the
