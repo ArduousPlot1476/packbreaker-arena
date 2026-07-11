@@ -4,6 +4,31 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Batch 2 (Uncommon) color ratifications: stamina-tonic + poison-vial
+
+**Stamina Tonic body color ratified:** `#0E7490` base fill, `#06B6D4` highlight (mana-potion's
+established arcane-cyan), `#155E75` stroke. Supersedes the Design-artifact placeholder crimson
+(`#D64550`) — compliant but hue-adjacent to life-red, a combat-UI legibility risk. Extends
+mana-potion's arcane-cyan identity to the shared cooldown_pct buff-catalyst tag family
+(balance-bible.md § 7 calls stamina-tonic explicitly "Stronger Mana Potion"); deeper shade
+signals the stronger tier. **Pattern candidate (2nd instance, mana-potion → stamina-tonic):**
+cooldown_pct buff-catalyst consumables inherit cyan-family identity color. Codify as Pattern
+on next instance.
+
+**Poison Vial body color ratified:** `#65A30D` liquid fill, `#BEF264` bubble accents. Supersedes
+the Design-artifact placeholder `#22C55E` — technically compliant (item's own tier color) but
+leaves no headroom for future Rare/Epic poison items against Uncommon's frame, and doubles up
+green usage within the tier. Fills the tag-color slot visual-direction.md § 5 already
+anticipates (fire=warm, ice=cool); poison=toxic yellow-green, ~59° hue separation from
+rarity-uncommon.
+
+Both are fill/stroke substitutions on paths already authored in the Uncommon batch-2 Design
+artifact — no geometry change, no re-render.
+
+Counter: 56 / 20 / 8 / 31 / 39 — unchanged (docs-only design ratification; no catch/rule/pattern/
+drift/CF delta; stamina-tonic cyan-family logged as 2nd-instance Pattern candidate, held for
+next-instance codification per the entry body).
+
 ## 2026-07-11 — Icon batch 1 (Commons) landed: 20/20 Commons icon-complete (PR \#35, merge 72ef6fb)
 
 Wired the 12 net-new Common placeholder icons into the client ICONS map and widened
