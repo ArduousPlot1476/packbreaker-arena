@@ -3,10 +3,11 @@
 // Covers every one of the 6 Trigger variants and 6 Effect variants at least
 // once (real shipped items where they exist; synthetic fixtures / describeEffect
 // for the sim-inert effects and the positive-sign cooldown edge). The coverage
-// test asserts all 45 shipped items produce non-empty output — Rune Pedestal
-// (its only effect is the omitted trigger_chance_pct buff, no passives) is now
-// the sole tag-fallback item, pinned explicitly. As of CF 59 the four gold
-// items render real income copy instead of falling back.
+// test asserts all 45 shipped items produce non-empty output. As of CF 58 no
+// shipped item falls back to a structural tag summary — Rune Pedestal now
+// renders its trigger_chance_pct echo buff line; the four gold items render real
+// income copy (CF 59). The tag-fallback path is retained only as a defensive
+// guard, pinned explicitly.
 
 import { describe, expect, it } from 'vitest';
 import { ITEMS, getItem } from '@packbreaker/content';
@@ -145,24 +146,26 @@ describe('describeItem — buff_adjacent cooldown_pct sign (counterintuitive)', 
   });
 });
 
-describe('describeItem — inert trigger_chance_pct omission (CF 57 Q1)', () => {
-  it('effect-level: trigger_chance_pct buff returns null', () => {
+describe('describeItem — trigger_chance_pct echo copy (CF 58)', () => {
+  it('effect-level: trigger_chance_pct buff renders its chance copy', () => {
     expect(
       describeEffect({ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 30 }),
-    ).toBeNull();
+    ).toBe('nearby items +30% trigger chance');
   });
 
-  it('Master Alchemist’s Kit keeps its poison line, drops the proc-buff line', () => {
+  it('Master Alchemist’s Kit keeps its poison line AND gains the proc-buff line', () => {
     const lines = describeItem(getItem('master-alchemists-kit' as ItemId));
-    expect(lines).toEqual(['Round start — poison 3 to enemy']);
-    expect(lines.join(' ')).not.toMatch(/trigger|chance/i);
+    expect(lines).toEqual([
+      'Round start — poison 3 to enemy',
+      'When an adjacent consumable/gem triggers — nearby consumable/gem items +30% trigger chance',
+    ]);
   });
 
-  it('Rune Pedestal (only effect is inert, no passives) → structural tag fallback', () => {
-    // Sole item blanked by the omit rule; must fall back, NOT re-describe the buff.
+  it('Rune Pedestal now describes its buff (no longer a structural tag fallback)', () => {
     const lines = describeItem(getItem('rune-pedestal' as ItemId));
-    expect(lines).toEqual(['Tool · Gem']);
-    expect(lines.join(' ')).not.toMatch(/trigger|chance|%/);
+    expect(lines).toEqual([
+      'When an adjacent gem/consumable triggers — nearby gem/consumable items +20% trigger chance',
+    ]);
   });
 });
 
@@ -215,13 +218,15 @@ describe('describeItem — coverage: all 45 shipped items produce non-empty outp
     }
   });
 
-  // As of CF 59, Rune Pedestal is the SOLE tag-fallback item — its only effect
-  // is the omitted trigger_chance_pct buff and it has no passive. The four gold
-  // items no longer collide on "Gold"; they render their now-real income copy
-  // (goldPerRound passives + Lucky Penny's on_round_start add_gold). Pinned by
-  // name so a future content/tag change that alters any of these is caught.
-  it('pins Rune Pedestal as the sole tag-fallback; the 4 gold items render real income copy (CF 59)', () => {
-    expect(describeItem(getItem('rune-pedestal' as ItemId))).toEqual(['Tool · Gem']);
+  // As of CF 58, Rune Pedestal renders its now-real trigger_chance_pct echo
+  // buff, so NO shipped item hits the structural tag fallback anymore. The four
+  // gold items render their real income copy (goldPerRound passives + Lucky
+  // Penny's on_round_start add_gold, CF 59). Pinned by name so a future
+  // content/tag change that alters any of these is caught.
+  it('Rune Pedestal renders its echo buff (CF 58); the 4 gold items render real income copy (CF 59)', () => {
+    expect(describeItem(getItem('rune-pedestal' as ItemId))).toEqual([
+      'When an adjacent gem/consumable triggers — nearby gem/consumable items +20% trigger chance',
+    ]);
     expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Round start — +2 gold']);
     expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['+1 gold per round']);
     expect(describeItem(getItem('coin-pouch' as ItemId))).toEqual(['+2 gold per round']);

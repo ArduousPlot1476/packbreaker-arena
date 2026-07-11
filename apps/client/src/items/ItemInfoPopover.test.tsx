@@ -32,18 +32,17 @@ describe('ItemInfoPopover', () => {
     expect(popover).toHaveTextContent('Every 5s — 4 dmg to enemy');
   });
 
-  it('shows the structural tag fallback for Rune Pedestal (inert-only item)', () => {
+  it('renders Rune Pedestal’s trigger_chance_pct buff line (CF 58)', () => {
     render(<Harness itemId="rune-pedestal" />);
     const popover = screen.getByTestId('item-info-popover');
     expect(popover).toHaveTextContent('Rune Pedestal');
-    expect(popover).toHaveTextContent('Tool · Gem');
-    expect(popover.textContent ?? '').not.toMatch(/trigger|chance/i);
+    expect(popover).toHaveTextContent('nearby gem/consumable items +20% trigger chance');
   });
 
-  it('omits the inert proc-buff line but keeps real effects (Master Alchemist’s Kit)', () => {
+  it('keeps real effects AND renders the proc-buff line (Master Alchemist’s Kit, CF 58)', () => {
     render(<Harness itemId="master-alchemists-kit" />);
     const popover = screen.getByTestId('item-info-popover');
     expect(popover).toHaveTextContent('poison 3 to enemy');
-    expect(popover.textContent ?? '').not.toMatch(/trigger|chance/i);
+    expect(popover).toHaveTextContent('nearby consumable/gem items +30% trigger chance');
   });
 });

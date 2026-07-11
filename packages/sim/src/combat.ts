@@ -39,9 +39,10 @@
 //      damage carries info even at 0 (proves a hit landed); zero-gain heals
 //      don't.
 //
-// trigger_chance_pct buff: NO-OP in M1.2.3b. Schema-supported but no roll
-// mechanism implemented yet — Rune Pedestal's chance buff is silently dropped.
-// Defer to M1.2.5 fixture authoring.
+// trigger_chance_pct buff: CF 58 echo proc (ratified 2026-07-10). Active buffs
+// on the firing item give a summed-pct chance (capped 100) that the trigger's
+// effects resolve a second time — rolled from a dedicated per-combat chanceRng
+// stream (CHANCE_RNG_OFFSET) so buff-free combats stay trajectory-identical.
 //
 // summon_temp_item effect: NO-OP in M1.2.3b. No M1 content uses it.
 
@@ -66,6 +67,7 @@ import {
   type ItemRef,
   type PlacementId,
   type RelicSlots,
+  type SimSeed,
   type TargetSelector,
   type Trigger,
 } from '@packbreaker/content';
@@ -139,6 +141,17 @@ interface PendingDamage {
   isReaction: boolean;
 }
 
+/** CF 58: trigger_chance_pct echo. Chance rolls draw from a dedicated per-combat
+ *  RNG stream (chanceRng) so they can NEVER shift the main rng cursor
+ *  (random-target picks) — a combat with no active chance buff consumes zero
+ *  chance-stream draws and its main-stream trajectory is byte-identical to a
+ *  build without this mechanism. The stride prime is chosen DISJOINT from the
+ *  shop/ghost stride (65521) and the relic stride (65519): 32749 is prime and
+ *  strictly below both, so no positive multiple of any stride can equal it —
+ *  collision-proof even if combat seeding later moves sim-side (CF 34). Mirrors
+ *  the prime-disjointness rationale at relicOffer.ts:8-11. */
+const CHANCE_RNG_OFFSET = 32749;
+
 interface CombatState {
   tick: number;
   events: CombatEvent[];
@@ -151,6 +164,9 @@ interface CombatState {
   activeBuffs: ActiveBuff[];
   pendingDamage: PendingDamage[];
   rng: Rng;
+  /** CF 58: dedicated stream for trigger_chance_pct echo rolls, isolated from
+   *  `rng` so echo decisions never perturb the main random-target cursor. */
+  chanceRng: Rng;
   items: Readonly<Record<ItemId, Item>>;
   input: CombatInput;
   sideStats: { player: SideStats; ghost: SideStats };
@@ -189,6 +205,7 @@ export function simulateCombat(
     activeBuffs: [],
     pendingDamage: [],
     rng: createRng(input.seed),
+    chanceRng: createRng(((((input.seed as number) >>> 0) + CHANCE_RNG_OFFSET) >>> 0) as SimSeed),
     items,
     input,
     sideStats: {
@@ -547,6 +564,29 @@ function fireTrigger(
     resolveEffect(state, effect, sourceItemRef, side, !isTopLevel);
   }
 
+  // CF 58 echo proc (ratified 2026-07-10): active trigger_chance_pct buffs on
+  // the firing item give a summed-pct chance (capped at 100) that the trigger's
+  // effects resolve a SECOND time. Effects-only echo — no adjacent re-fire (no
+  // cascade), no recordFire double-count (maxTriggersPerCombat counts real fires
+  // only), and no chained re-roll (the echo does not itself roll again). The
+  // chance stream is consulted ONLY when a buff is active (draw-only-when-needed,
+  // mirroring pickRandomItemRef) so buff-free combats stay byte-identical.
+  // Random-target effects inside the echo draw from the MAIN rng via
+  // resolveEffect, exactly like the first resolution — only the echo DECISION
+  // uses chanceRng.
+  const chancePct = sumActiveBuffs(state.activeBuffs, sourceItemRef, 'trigger_chance_pct');
+  if (chancePct > 0 && state.chanceRng.nextInt(1, 100) <= Math.min(chancePct, 100)) {
+    state.events.push({
+      tick: state.tick,
+      type: 'item_trigger',
+      source: sourceItemRef,
+      trigger: trigger.type,
+    });
+    for (const effect of trigger.effects) {
+      resolveEffect(state, effect, sourceItemRef, side, !isTopLevel);
+    }
+  }
+
   const triggerState = side === 'player' ? state.playerTriggers : state.ghostTriggers;
   recordFire(
     triggerState,
@@ -692,12 +732,6 @@ function resolveEffect(
           const matched = effect.matchTags.some((tag) => adjItem.tags.includes(tag));
           if (!matched) continue;
         }
-        // trigger_chance_pct: NO-OP in M1.2.3b. Schema-supported but no roll
-        // mechanism implemented. Defer to M1.2.5. Skipping the entire buff
-        // (no list mutation, no event) — Rune Pedestal's buffs are silently
-        // dropped from the replay log until M1.2.5.
-        if (effect.stat === 'trigger_chance_pct') continue;
-
         const targetRef: ItemRef = { side: sourceSide, placementId: adj.placementId };
         // Locked answer 8: de-dupe by (source, target, stat). Same-tuple
         // re-application is a no-op — no event, no list mutation, durationTicks

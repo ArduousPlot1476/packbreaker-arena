@@ -4,6 +4,53 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-10 — CF 58 Phase 1 (design) RATIFIED — trigger_chance_pct echo mechanism + dedicated RNG stream
+
+Phase 1 ground-truth verification (3 parallel read-only Explore agents + firsthand grep on the
+Rule 5 item count, the 21-file fixture union, and the two central anchors) confirmed
+PLAN-cf58-trigger-chance.md's structural model against live main — no-op site, buff
+push/dedupe/emit, sumActiveBuffs, fireTrigger insertion point, single-stream RNG,
+draw-only-when-needed precedent, both items/amounts, BuffableStat membership — with two citation
+corrections (combatSeed at packages/sim/src/run/state.ts:1039, not state.ts:1022-1030; item paths
+under packages/content/src/items.ts) and one material design correction.
+
+**Stride offset corrected.** The draft's CHANCE_RNG_OFFSET = 13 × 65521 = 851,773 lands exactly on
+the existing shop-round-13 / ghost-round-6 lattice values — inert today only because the offset
+applies to the independently-drawn combat seed, not the run base seed, but a latent collision risk
+should combat seeding ever move sim-side (schemas.ts:744, CF 34). Corrected to CHANCE_RNG_OFFSET =
+32749 — a prime below both existing stride primes (65521, 65519), which by construction can never
+equal a positive multiple of either stride under any future seed-derivation refactor. Documented
+with the same disjointness rationale as relicOffer.ts:8-11.
+
+**Empirical spike (throwaway, discarded) confirmed §B's isolation claim**: full sim suite 249/249
+baseline → 8 failed / 241 passed with the corrected-offset spike in place → identical 8-file
+divergence on a second run (byte-stable) → 249/249 restored post-revert (git diff empty; combat.ts
+byte-for-byte back at HEAD 7d558cd). All 8 divergent .jsonl fixtures (003-greedy-1003,
+004-greedy-1004, 014-greedy-1014, 015-greedy-1015, 021-greedy-1021, 039-greedy-1039,
+207-relic-collector-2007, 208-relic-collector-2008) are a strict subset of the grep-verified
+21-file union (the other 13 hold an item but never place it adjacent to a firing match, so the
+mechanism never activates); both combats/*.json (12) and the 6 scenario fixtures stayed
+byte-identical throughout. No file outside the 21 diverged — no main-cursor leak.
+
+Rule 17: clean, no persistence-boundary change (per-combat chanceRng is not serialized; combat is
+provably never mid-flight at save — synchronous simulateCombat inside one no-await controller call;
+saves fire only at arranging-entry + terminal).
+
+**Ratified**: §§ A (effects-only echo, no cascade/no recordFire double-count/no chained re-roll)
+and B (dedicated combat-scoped RNG stream, corrected offset 32749) as the CF 58 design. Citation
+corrections and the stride fix fold into CF 58's eventual closing entry — no separate Catch
+(unratified-plan review findings don't get their own entry per standing convention).
+
+**Next**: branch cf58-trigger-chance off current main, implement §§ A+B, flip pinning tests, run
+the ratified corpus-regeneration protocol (224-file .jsonl regen under this justification, both
+.json corpora untouched), Codex cycle, Trey's --no-ff merge. Closing entry held until the real
+merge SHA exists (CF 59 sequencing fix, decision-log.md 2026-07-09 § "CF 59 merge SHA recorded").
+
+**Counter: 55 / 19 / 8 / 31 / 39** (catches / rules / patterns / drifts / open-CFs) — UNCHANGED
+from the tip 55/19/8/31/39 (decision-log.md 2026-07-10 § "CF 60 CLOSED …"). No Catch/Rule/Pattern/
+Drift; CF 58 remains OPEN — this is a Phase-1 design ratification, not a close (closing entry held
+until the implementation merge SHA exists).
+
 ## 2026-07-10 — CF 60 CLOSED (adjacency-trigger visual signal: arranging teal glow + combat burst; PR 33, merge dee67ee)
 
 **CF 60 CLOSED** — the on_adjacent_trigger mechanic, invisible board-wide (7 of 45
