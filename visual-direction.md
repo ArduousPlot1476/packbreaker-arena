@@ -49,6 +49,7 @@ References: *Hearthstone* (UI chrome restraint, rarity language), *Balatro* (tex
 | `rarity-rare` | `#3B82F6` | Signal blue |
 | `rarity-epic` | `#A855F7` | Signal purple |
 | `rarity-legendary` | `#F59E0B` | Signal amber |
+| `arcane-cyan` | `#06B6D4` | Mana Potion body fill only |
 
 Pure white, pure black, and bright neon shades are forbidden.
 

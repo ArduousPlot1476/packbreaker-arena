@@ -4,6 +4,18 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Mana Potion body color ratified: `#06B6D4` (cyan-500)
+
+Signal-blue (`#3B82F6`) rejected — collides with rarity-rare's frame color, the case
+visual-direction.md § 5 names as forbidden for a Common item. Cyan is mana's natural identity
+color, same precedent tier as the 2026-04-26 fire/food/gold resolution (Option A: natural
+material/identity colors exempt from the rarity-collision rule). No content-schema change —
+body-fill only, mana-potion gains no new tag. Companion palette row added to visual-direction.md
+§ 3 (`arcane-cyan`).
+
+Counter: 56 / 19 / 8 / 31 / 39 — unchanged (docs-only design ratification; no catch/rule/pattern/
+drift/CF delta).
+
 ## 2026-07-11 — M1 exit-gate playtest sequencing: icon-art coverage completion prioritized ahead of tester recruitment
 
 Repo audit (prompted by a read that current content felt "minimal") confirmed a real content
