@@ -4,6 +4,26 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — M1 exit-gate playtest sequencing: icon-art coverage completion prioritized ahead of tester recruitment
+
+Repo audit (prompted by a read that current content felt "minimal") confirmed a real content
+gap: SHOP_POOL_ITEMS gates the shop to 12 of 45 canonical items; recipes are filtered to 4 of
+12 (both keyed to icon-art completeness — decision-log 2026-05-02 § M1.3.4a). Testing the M1
+exit-gate criteria (pick-rate spread, recipe completion rate) against 27%/33% of designed
+content would produce a weak signal regardless of tester count. Decision: complete icon-art
+coverage for the remaining 33 items (Gridline placeholder system, already locked per
+visual-direction.md §§ 2-5, 10-11 — not M2 art, not a violation of the "final art before
+graybox playtests" anti-goal in § 1) before finalizing the M1 exit-gate testing path. The
+three-way testing-path question (solo self-cert / 1-2 testers / full 3-tester recruitment) is
+deferred, not resolved, pending content completion. Icon batches proceed by rarity tier
+(Common 20 → Uncommon 12 → Rare 8 → Epic 4 → Legendary 1); a follow-on Claude Code pass drops
+both filters once coverage lands. Open question carried forward: whether recipe logic for the
+other 8 recipes already exists in packages/content (client-filtered only) or needs authoring —
+unverified this session.
+
+Counter: 56 / 19 / 8 / 31 / 39 — unchanged (process/sequencing entry, no catch/rule/pattern/
+drift/CF delta).
+
 ## 2026-07-11 — CF 58 CLOSED (trigger_chance_pct echo proc + dedicated chanceRng stream; PR \#34, merge e0a056d)
 
 **CF 58 CLOSED** — trigger_chance_pct, a hard sim no-op since M1.2.3b, is now a real echo proc (summed active buff amount, capped 100, = % chance a trigger's effects resolve twice). Activates Rune Pedestal + Master Alchemist's Kit.
