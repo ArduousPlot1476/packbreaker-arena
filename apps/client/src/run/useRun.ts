@@ -61,7 +61,7 @@ import {
   INITIAL_CLIENT_STATE,
   type ClientRunState,
 } from './RunController';
-import { detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
+import { combineMatchKey, detectRecipes, scoutRecipes, type RecipeMatch } from './recipes';
 import {
   clientBagToSimBag,
   clientShopToSimShop,
@@ -327,6 +327,30 @@ export function useRun() {
     return scoutRecipes(state.bag).filter((r) => !ready.has(r.id));
   }, [state.bag, recipes]);
 
+  // Transient "no room to place the output" signal for a combine the
+  // sim rejected (findCombineRotation returned null → combineRecipe
+  // threw). Keyed by the tapped match's combineMatchKey so the CTA that
+  // was clicked (RecipeGlow overlay / CraftingTab row) can show an inline
+  // message instead of the tap silently no-op'ing. NOT a fit-predicate or
+  // glow-gate (those are CF 65) — purely surfaces the already-thrown
+  // rejection. Clears on any bag mutation (rearrange or a successful
+  // combine, both of which change state.bag) and on a 2.5s timeout.
+  const [combineRejection, setCombineRejection] = useState<string | null>(null);
+  const rejectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    setCombineRejection(null);
+    if (rejectTimer.current !== null) {
+      clearTimeout(rejectTimer.current);
+      rejectTimer.current = null;
+    }
+  }, [state.bag]);
+  useEffect(
+    () => () => {
+      if (rejectTimer.current !== null) clearTimeout(rejectTimer.current);
+    },
+    [],
+  );
+
   const dragRef = useRef<ClientRunState['drag']>(null);
   dragRef.current = state.drag;
 
@@ -504,9 +528,19 @@ export function useRun() {
         );
         dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
       } catch (err) {
+        // The output could not be placed in the freed footprint. Surface it
+        // at the tapped CTA instead of silently swallowing (the tap otherwise
+        // appears dead). Success path needs no explicit clear — the
+        // dispatch above mutates state.bag, and the [state.bag] effect clears.
         if (import.meta.env.DEV) {
-          console.warn('[useRun] sim rejected combine; ignoring:', err);
+          console.warn('[useRun] sim rejected combine; surfacing to CTA:', err);
         }
+        setCombineRejection(combineMatchKey(match));
+        if (rejectTimer.current !== null) clearTimeout(rejectTimer.current);
+        rejectTimer.current = setTimeout(() => {
+          setCombineRejection(null);
+          rejectTimer.current = null;
+        }, 2500);
       }
     },
     [simRun, state.state.outcome],
@@ -895,6 +929,7 @@ export function useRun() {
     beginRun,
     recipes,
     scoutedRecipes,
+    combineRejection,
     handleDragStart,
     handleDragOver,
     handleDragEnd,

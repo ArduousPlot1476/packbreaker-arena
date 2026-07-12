@@ -31,6 +31,12 @@ interface BagBoardProps {
   recipeMatches: RecipeMatch[];
   onCombine: (m: RecipeMatch) => void;
   /**
+   * combineMatchKey of a match the sim just rejected for lack of room —
+   * forwarded to RecipeGlow so the tapped COMBINE button shows an inline
+   * "NO ROOM — REARRANGE" note. Optional; omit for no active rejection.
+   */
+  combineRejection?: string | null;
+  /**
    * Compact mode (mobile): hides the BAG header + items-placed footer
    * rows so the bag fits in 240px (4 × 52px cells + 32px padding).
    * Default `false` (desktop layout).
@@ -52,6 +58,7 @@ export function BagBoard({
   dimmed,
   recipeMatches,
   onCombine,
+  combineRejection,
   compact = false,
   containerRef,
 }: BagBoardProps) {
@@ -142,7 +149,12 @@ export function BagBoard({
 
         <AdjacencyGlow bag={bag} synergies={synergies} />
 
-        <RecipeGlow bag={bag} matches={recipeMatches} onCombine={onCombine} />
+        <RecipeGlow
+          bag={bag}
+          matches={recipeMatches}
+          onCombine={onCombine}
+          rejectedKey={combineRejection}
+        />
 
         {preview && (
           <svg width={W} height={H} className="absolute inset-0 pointer-events-none">

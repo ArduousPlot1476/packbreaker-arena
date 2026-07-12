@@ -15,6 +15,14 @@ import type { BagItem, ItemId, Recipe, RecipeMatch } from './types';
 
 export type { RecipeMatch } from './types';
 
+/** Stable identity string for a ready match — recipe id + its input placement
+ *  uids (sorted). This is the exact key detectRecipes dedups matches on; it is
+ *  also reused to key transient per-match UI state (the rejected-combine
+ *  "no room" message) to the specific cluster the player tapped. */
+export function combineMatchKey(m: RecipeMatch): string {
+  return m.recipe.id + ':' + [...m.uids].sort().join(',');
+}
+
 export function detectRecipes(bag: BagItem[]): RecipeMatch[] {
   const matches: RecipeMatch[] = [];
   const cellOwner = new Map<string, string>();
@@ -78,7 +86,7 @@ export function detectRecipes(bag: BagItem[]): RecipeMatch[] {
   }
   const seen = new Set<string>();
   return matches.filter((m) => {
-    const k = m.recipe.id + ':' + [...m.uids].sort().join(',');
+    const k = combineMatchKey(m);
     if (seen.has(k)) return false;
     seen.add(k);
     return true;

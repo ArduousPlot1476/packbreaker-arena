@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { BagItem, ItemId, RecipeMatch } from '../run/types';
+import { combineMatchKey } from '../run/recipes';
 import { RecipeGlow } from './RecipeGlow';
 
 describe('RecipeGlow', () => {
@@ -40,5 +41,45 @@ describe('RecipeGlow', () => {
     );
     expect(container.querySelectorAll('rect')).toHaveLength(0);
     expect(container.querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('shows "NO ROOM — REARRANGE" only when rejectedKey matches the match', () => {
+    const bag: BagItem[] = [
+      { uid: 'a', itemId: 'iron-sword' as ItemId, col: 1, row: 0, rot: 0 },
+      { uid: 'b', itemId: 'iron-dagger' as ItemId, col: 2, row: 0, rot: 0 },
+    ];
+    const match: RecipeMatch = {
+      recipe: {
+        id: 'r-steel-sword',
+        inputs: ['iron-sword' as ItemId, 'iron-dagger' as ItemId],
+        output: 'steel-sword' as ItemId,
+      },
+      uids: ['a', 'b'],
+    };
+    const { rerender } = render(
+      <RecipeGlow bag={bag} matches={[match]} onCombine={vi.fn()} />,
+    );
+    // No active rejection → no message.
+    expect(screen.queryByText('NO ROOM — REARRANGE')).toBeNull();
+    // Rejection key equals this match's key → message renders.
+    rerender(
+      <RecipeGlow
+        bag={bag}
+        matches={[match]}
+        onCombine={vi.fn()}
+        rejectedKey={combineMatchKey(match)}
+      />,
+    );
+    expect(screen.getByText('NO ROOM — REARRANGE')).toBeInTheDocument();
+    // A non-matching key → no message (keyed to the tapped cluster only).
+    rerender(
+      <RecipeGlow
+        bag={bag}
+        matches={[match]}
+        onCombine={vi.fn()}
+        rejectedKey="r-steel-sword:zzz"
+      />,
+    );
+    expect(screen.queryByText('NO ROOM — REARRANGE')).toBeNull();
   });
 });

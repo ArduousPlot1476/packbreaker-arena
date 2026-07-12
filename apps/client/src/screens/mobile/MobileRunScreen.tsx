@@ -70,6 +70,7 @@ export function MobileRunScreen() {
     state,
     recipes,
     scoutedRecipes,
+    combineRejection,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
@@ -135,6 +136,7 @@ export function MobileRunScreen() {
               dimmed={state.combatActive}
               recipeMatches={recipes}
               onCombine={onCombine}
+              combineRejection={combineRejection}
               compact
               containerRef={bagContainerRef}
             />
@@ -152,6 +154,7 @@ export function MobileRunScreen() {
               recipes={recipes}
               scoutedRecipes={scoutedRecipes}
               onCombine={onCombine}
+              rejectedKey={combineRejection}
             />
           )}
           {activeTab === 'relics' && <RelicsTab state={state.state} />}

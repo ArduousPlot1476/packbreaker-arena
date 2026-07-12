@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/react';
 import { CraftingTab } from './CraftingTab';
-import type { RecipeMatch } from '../../../run/recipes';
+import { combineMatchKey, type RecipeMatch } from '../../../run/recipes';
 import type { ItemId, Recipe } from '../../../run/types';
 
 const SWORD = 'iron-sword' as ItemId;
@@ -57,6 +57,26 @@ describe('CraftingTab', () => {
     );
     fireEvent.click(getByRole('button', { name: 'COMBINE' }));
     expect(onCombine).toHaveBeenCalledWith(STEEL_MATCH);
+  });
+
+  it('swaps the ready row subtext to "NO ROOM — REARRANGE" when its match is rejected', () => {
+    const { getByText, queryByText, rerender } = render(
+      <CraftingTab recipes={[STEEL_MATCH]} scoutedRecipes={[]} onCombine={() => {}} />,
+    );
+    // Default: input count, no rejection note.
+    expect(getByText('2 INPUTS')).toBeInTheDocument();
+    expect(queryByText('NO ROOM — REARRANGE')).toBeNull();
+    // Rejected: subtext swaps for this match's row.
+    rerender(
+      <CraftingTab
+        recipes={[STEEL_MATCH]}
+        scoutedRecipes={[]}
+        onCombine={() => {}}
+        rejectedKey={combineMatchKey(STEEL_MATCH)}
+      />,
+    );
+    expect(queryByText('2 INPUTS')).toBeNull();
+    expect(getByText('NO ROOM — REARRANGE')).toBeInTheDocument();
   });
 
   it('COMBINE button meets the 44×44 touch-target floor', () => {
