@@ -541,12 +541,190 @@ const TreasureSack = () => (
   </Strokey>
 );
 
+// ---------- Rare batch 3 (2026-07-11) — 7 net-new placeholders ----------
+// Closes the Rare tier (ember-brand already shipped M1.3.x → 8/8). Ported
+// byte-faithful from the Rare Icons Batch 3 Design artifact (camelCased for
+// JSX), matching batch-2's rendered fidelity: flat-slate fills + colored
+// strokes (#8A94A8 / #565F78 / #6E7893 / #B8C0D0) + brass #C9A227 — NOT the
+// older anchor #1C2333-outline + bright-gradient style (that two-philosophy
+// coexistence shipped + merged at batch 2). Two Design-artifact literal
+// #FFFFFF highlights were swapped to palette near-whites per visual-
+// direction.md § 3 ("Pure white, pure black … are forbidden"): vampire-fang
+// gloss → #F5F2EA (its own bone-white, opacity 0.5 → 0.6), venom-flask shine
+// → #F0F4FA (matches StaminaTonic's glass shine #F0F4FA opacity 0.4).
+//
+// Body-color rule audit — batch 3 (visual-direction.md § 5). Metal-slate
+// bodies cite the steel-sword MATERIAL-IDENTITY precedent (M1.3.2 body-color
+// audit table above: "94A3B8 stop = rarity-common but is metallic base"),
+// NOT the 2026-04-26 Option A tag exemption — Option A covers plant/fire/
+// food/blood/gold TAG colors, not metal.
+//
+//   item           rarity  body palette                     pass-reason
+//   -------------  ------  -------------------------------  ----------------------------
+//   greatsword     rare    slate blade (8A94A8/B8C0D0) +    metal material identity
+//                          brass guard-tips (C9A227) + wood (steel-sword precedent,
+//                          grip (7A4B28)                    M1.3.2); no rarity accent
+//   warhammer      rare    slate head (8A94A8/565F78) +     metal material identity
+//                          wood haft (8A6A46/6B4F33) +      (steel-sword precedent);
+//                          brass band (C9A227)              no rarity accent
+//   vampire-fang   rare    bone (E5E1D6/F5F2EA/C7C2B4/      neutral bone material
+//                          B9B3A4)                          identity. Blood cue FLAGGED,
+//                                                           NOT rendered — a red tip
+//                                                           trends to reserved life-red
+//                                                           (EF4444/F87171); ships bone-
+//                                                           only per Rule 20 pending a
+//                                                           ratified non-colliding crimson
+//   tower-shield   rare    slate (8A94A8/B8C0D0/565F78) +   metal material identity +
+//                          #3B82F6 boss center              #3B82F6 = its OWN Rare tier
+//                                                           (§ 5 own-tier permitted, not a
+//                                                           foreign rarity color)
+//   forge-anvil    rare    slate (8A94A8/6E7893/565F78/     metal material identity
+//                          C9D2E0)                          (steel-sword precedent); no
+//                                                           rarity accent
+//   rune-pedestal  rare    stone plinth (7C8598/9AA6BE/     stone material identity;
+//                          6E7893) + #3B82F6 rune-gem       #3B82F6 gem = own Rare tier
+//                                                           (§ 5 own-tier permitted)
+//   venom-flask    rare    venom-green liquid (4D7C0F/      poison TAG color — derives
+//                          65A30D) + lime bubbles           from poison-vial's ratified
+//                          (A3E635/BEF264)                  toxic palette (498fef0: liquid
+//                                                           65A30D, accent BEF264),
+//                                                           darkened one step for the Rare
+//                                                           "stronger" read. Lime A3E635 ≠
+//                                                           rarity-uncommon 22C55E (distinct
+//                                                           hue). NOT Option A — poison was
+//                                                           ratified separately at 498fef0
+//
+// Pass: all 7. Metal-slate = material identity (steel-sword precedent); the
+// two #3B82F6 accents are the items' OWN Rare tier (§ 5 own-tier permitted);
+// venom-green = poison tag (498fef0 lineage). No body fill equals a foreign
+// rarity color; no pure white/black (§ 3). Frame + gem remain the rarity
+// authority per § 1.
+
+const Greatsword = () => (
+  <Strokey>
+    <path d="M32 5 L38 17 L36 44 L28 44 L26 17 Z" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" strokeLinejoin="round" />
+    <path d="M32 5 L26 17 L28 44 L32 44 Z" fill="#B8C0D0" />
+    <line x1="32" y1="17" x2="32" y2="43" stroke="#6E7893" strokeWidth="1.2" />
+    <path d="M32 5 L26 17 L28 44" fill="none" stroke="#C9D2E0" strokeWidth="1.2" strokeLinecap="round" />
+    <rect x="13" y="44" width="38" height="6" rx="3" fill="#565F78" />
+    <rect x="13" y="44" width="38" height="2" rx="2" fill="#8A94A8" />
+    <circle cx="14.5" cy="47" r="2.4" fill="#C9A227" stroke="#9A7B1F" strokeWidth="0.8" />
+    <circle cx="49.5" cy="47" r="2.4" fill="#C9A227" stroke="#9A7B1F" strokeWidth="0.8" />
+    <rect x="29" y="50" width="6" height="9" rx="1" fill="#7A4B28" />
+    <line x1="29" y1="52.5" x2="35" y2="52.5" stroke="#5A3820" strokeWidth="1" />
+    <line x1="29" y1="55.2" x2="35" y2="55.2" stroke="#5A3820" strokeWidth="1" />
+    <circle cx="32" cy="60" r="4" fill="#565F78" />
+    <circle cx="30.5" cy="58.6" r="1.3" fill="#8A94A8" />
+    <circle cx="32" cy="60" r="1.4" fill="#C9A227" />
+  </Strokey>
+);
+
+const Warhammer = () => (
+  <Strokey>
+    <rect x="30" y="15" width="4" height="45" rx="2" fill="#8A6A46" />
+    <rect x="33" y="15" width="1.2" height="45" fill="#6B4F33" />
+    <line x1="29.5" y1="50" x2="34.5" y2="50" stroke="#5A3820" strokeWidth="1" />
+    <line x1="29.5" y1="53" x2="34.5" y2="53" stroke="#5A3820" strokeWidth="1" />
+    <line x1="29.5" y1="56" x2="34.5" y2="56" stroke="#5A3820" strokeWidth="1" />
+    <rect x="14" y="10" width="36" height="17" rx="3" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" />
+    <rect x="14" y="10" width="7.5" height="17" rx="2.5" fill="#565F78" />
+    <rect x="42.5" y="10" width="7.5" height="17" rx="2.5" fill="#565F78" />
+    <rect x="22" y="12.5" width="20" height="4" rx="1.5" fill="#C9D2E0" />
+    <rect x="26" y="25" width="12" height="4" rx="1.5" fill="#565F78" />
+    <rect x="26" y="24" width="12" height="2" rx="1" fill="#C9A227" />
+    <circle cx="32" cy="59" r="3" fill="#565F78" />
+  </Strokey>
+);
+
+const VampireFang = () => (
+  <Strokey>
+    <path d="M25 13 Q23 12 26 12 L38 12 Q41 12 39 13 Q40 34 34 52 Q32 57 30 52 Q24 34 25 13 Z" fill="#E5E1D6" stroke="#B9B3A4" strokeWidth="1" strokeLinejoin="round" />
+    <path d="M27 14 Q25.5 32 31 50 Q29.5 34 29 14 Z" fill="#F5F2EA" />
+    <path d="M35 14 Q38.5 32 33.5 51 Q35 34 35 14 Z" fill="#C7C2B4" />
+    <path d="M26 14 L38 14 L37 18 L27 18 Z" fill="#F5F2EA" opacity="0.6" />
+    <path d="M31 20 Q30 34 32 48" fill="none" stroke="#C7C2B4" strokeWidth="1" />
+  </Strokey>
+);
+
+const TowerShield = () => (
+  <Strokey>
+    <path d="M17 15 Q32 7 47 15 L47 44 Q32 58 17 44 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M17 15 Q24.5 11 31 10 L31 55 Q23 50 17 44 Z" fill="#B8C0D0" opacity="0.5" />
+    <path d="M17 15 Q32 7 47 15" fill="none" stroke="#C9D2E0" strokeWidth="1.4" strokeLinecap="round" />
+    <line x1="32" y1="11" x2="32" y2="54" stroke="#C9D2E0" strokeWidth="2.5" />
+    <line x1="32" y1="11" x2="32" y2="54" stroke="#565F78" strokeWidth="0.9" />
+    <circle cx="32" cy="30" r="6.5" fill="#B8C0D0" stroke="#565F78" strokeWidth="1.4" />
+    <circle cx="32" cy="30" r="2.2" fill="#3B82F6" />
+    <circle cx="22" cy="19" r="1.8" fill="#565F78" />
+    <circle cx="42" cy="19" r="1.8" fill="#565F78" />
+    <circle cx="22" cy="42" r="1.8" fill="#565F78" />
+    <circle cx="42" cy="42" r="1.8" fill="#565F78" />
+  </Strokey>
+);
+
+const ForgeAnvil = () => (
+  <Strokey>
+    <path d="M15 24 Q6 25 4 27 Q6 29 15 30 Z" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" strokeLinejoin="round" />
+    <rect x="15" y="22" width="33" height="8" rx="1.5" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" />
+    <rect x="15" y="22" width="33" height="3" rx="1.5" fill="#C9D2E0" />
+    <rect x="25" y="30" width="14" height="8" fill="#565F78" />
+    <rect x="25" y="30" width="3" height="8" fill="#8A94A8" />
+    <path d="M17 38 L47 38 L51 52 L13 52 Z" fill="#6E7893" stroke="#565F78" strokeWidth="1" strokeLinejoin="round" />
+    <rect x="17" y="38" width="30" height="2.5" fill="#8A94A8" />
+  </Strokey>
+);
+
+const RunePedestal = () => (
+  <Strokey>
+    <circle cx="32" cy="15" r="11" fill="#3B82F6" opacity="0.16" />
+    <path d="M32 6 L41 15 L32 26 L23 15 Z" fill="#3B82F6" stroke="#2563EB" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M32 6 L23 15 L32 15 Z" fill="#93C5FD" />
+    <path d="M32 6 L41 15 L32 15 Z" fill="#60A5FA" />
+    <path d="M32 15 L41 15 L32 26 Z" fill="#2563EB" />
+    <path d="M38.5 9.5 l2.4 0 M39.7 8.3 l0 2.4" stroke="#F0F4FA" strokeWidth="1.2" strokeLinecap="round" />
+    <rect x="23" y="28" width="18" height="4" rx="1" fill="#7C8598" />
+    <rect x="23" y="28" width="18" height="1.5" fill="#9AA6BE" />
+    <rect x="27" y="32" width="10" height="12" fill="#7C8598" />
+    <rect x="27" y="32" width="3" height="12" fill="#9AA6BE" />
+    <rect x="35" y="32" width="2" height="12" fill="#565F78" />
+    <path d="M32 35 l0 6 M30.5 38 l3 0" stroke="#3B82F6" strokeWidth="1.2" strokeLinecap="round" />
+    <rect x="22" y="44" width="20" height="6" rx="1" fill="#7C8598" />
+    <rect x="22" y="44" width="20" height="2" fill="#9AA6BE" />
+    <rect x="18" y="50" width="28" height="6" rx="1" fill="#6E7893" />
+    <rect x="18" y="50" width="28" height="2" fill="#8A94A8" />
+  </Strokey>
+);
+
+const VenomFlask = () => (
+  <Strokey>
+    <defs>
+      <clipPath id="venomclip">
+        <circle cx="32" cy="41" r="14" />
+      </clipPath>
+    </defs>
+    <circle cx="32" cy="41" r="15" fill="#C9D2E0" opacity="0.26" />
+    <rect x="18" y="40" width="28" height="20" fill="#4D7C0F" clipPath="url(#venomclip)" />
+    <path d="M18 52 Q32 58 46 52 L46 60 L18 60 Z" fill="#3F6B0C" clipPath="url(#venomclip)" />
+    <rect x="18" y="40" width="28" height="2.6" fill="#65A30D" clipPath="url(#venomclip)" />
+    <circle cx="28" cy="48" r="2" fill="#A3E635" clipPath="url(#venomclip)" />
+    <circle cx="36" cy="50" r="1.6" fill="#BEF264" clipPath="url(#venomclip)" />
+    <circle cx="32" cy="54" r="1.8" fill="#A3E635" clipPath="url(#venomclip)" />
+    <circle cx="32" cy="41" r="15" fill="none" stroke="#8FA0B8" strokeWidth="1.4" />
+    <path d="M23 34 Q25 30 30 29" fill="none" stroke="#F0F4FA" strokeWidth="1.6" opacity="0.4" strokeLinecap="round" />
+    <rect x="27" y="11" width="10" height="3" rx="1.5" fill="#B8C0D0" />
+    <rect x="29" y="13" width="6" height="8" fill="#C9D2E0" stroke="#8FA0B8" strokeWidth="1.2" />
+    <rect x="27.5" y="6" width="9" height="6" rx="1.5" fill="#9A7B4F" />
+    <rect x="27.5" y="6" width="9" height="2" rx="1.5" fill="#B8965F" />
+  </Strokey>
+);
+
 // String-keyed lookup so the literal slugs below assign cleanly post-
-// M1.3.4a's ItemId broadening to a brand. Items outside this 33-icon
+// M1.3.4a's ItemId broadening to a brand. Items outside this 40-icon
 // subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand + the
-// 9 Uncommon batch-2 items) fall back to ICONS['copper-coin'] at the call
-// site (DraggableItem, ShopSlot, etc.). Drop the fallback when icon-art
-// expansion lands the full 45-item M1 content set.
+// 9 Uncommon batch-2 items + the 7 Rare batch-3 items) fall back to
+// ICONS['copper-coin'] at the call site (DraggableItem, ShopSlot, etc.).
+// Drop the fallback when icon-art expansion lands the full 45-item M1
+// content set (40/45 after this batch — 4 Epics + 1 Legendary remain).
 export const ICONS: Record<string, () => JSX.Element> = {
   'iron-sword': IronSword,
   'iron-dagger': IronDagger,
@@ -583,6 +761,14 @@ export const ICONS: Record<string, () => JSX.Element> = {
   'poison-vial': PoisonVial,
   'frost-shard': FrostShard,
   'treasure-sack': TreasureSack,
+  // Rare batch 3 (2026-07-11) — 7 net-new placeholders (union +7 → 40)
+  'greatsword': Greatsword,
+  'warhammer': Warhammer,
+  'vampire-fang': VampireFang,
+  'tower-shield': TowerShield,
+  'forge-anvil': ForgeAnvil,
+  'rune-pedestal': RunePedestal,
+  'venom-flask': VenomFlask,
 };
 
 // HUD glyphs
