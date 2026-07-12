@@ -4,7 +4,7 @@
 //
 // ITEMS adapts ALL canonical items (45 in M1) so a sim-generated id from
 // shop generation never throws on lookup. SHOP_POOL_ITEMS is filtered to
-// the iconned subset (44 icons post-batch-4) so the UI only ever
+// the iconned subset (45 icons post-batch-5 — COMPLETE) so the UI only ever
 // renders items that have inline-SVG renderings. Drop the SHOP_POOL_ITEMS
 // filter when icon-art expansion lands the full 45-item icon set
 // (post-M1.3.4b — visual-direction.md § 14 places it after sim integration
@@ -19,7 +19,7 @@ import {
 import type { ItemDef, ItemId, Recipe } from './types';
 
 /** Prototype-iconned subset. apps/client/src/icons/icons.tsx ICONS map
- *  covers exactly these 44. Any sim-generated id outside this set still
+ *  covers exactly these 45 (COMPLETE — all M1 items iconned). Any sim-generated id outside this set still
  *  has an ItemDef (for cost/rarity/name lookup) but renders via the
  *  copper-coin fallback in the ICONS map. */
 export const ICONNED_ITEM_IDS = [
@@ -97,6 +97,12 @@ export const ICONNED_ITEM_IDS = [
   'bloodmoon-plate',
   'master-alchemists-kit',
   'resonance-crystal',
+  // Legendary batch 5 (2026-07-12, FINAL) — union +1 → 45 COMPLETE. ICONNED_RECIPES
+  // stays 12/12 (world-forged-heart is in no recipe — neither output nor input).
+  // world-forged-heart is boss-reward-only (balance-bible § 10): it joins this set
+  // (icon coverage + combat/cost registry via SHOP_POOL_ITEMS) but is held OUT of
+  // the shop-offer + ghost pools by SHOP_EXCLUDED_ITEM_IDS below (CF 66).
+  'world-forged-heart',
 ] as const;
 
 const ICONNED_SET = new Set<string>(ICONNED_ITEM_IDS);
@@ -159,14 +165,46 @@ export const RECIPES: ReadonlyArray<Recipe> = ICONNED_RECIPES.map((r) => ({
   output: r.output as unknown as ItemId,
 }));
 
-/** Shop pool: filtered to iconned items so sim's generateShop never
- *  produces an item without an inline-SVG icon. Pass to sim-bridge's
- *  generateShop adapter as the `items` argument. */
+/** Complete iconned registry (45/45): every id here has an inline-SVG icon, so
+ *  combat/cost lookups + sim generateShop never resolve an unrenderable item.
+ *  NOTE: the shop OFFER and ghost pools use SHOP_OFFER_ITEMS (below), NOT this —
+ *  this registry also carries boss-reward-only items (world-forged-heart) that
+ *  must resolve for combat/cost but must not be offered/ghosted (CF 66). */
 export const SHOP_POOL_ITEMS: Readonly<Record<string, ContentItem>> = (() => {
   const out: Record<string, ContentItem> = {};
   for (const id of ICONNED_ITEM_IDS) {
     const item = (CONTENT_ITEMS as Readonly<Record<string, ContentItem | undefined>>)[id];
     if (item) out[id] = item;
+  }
+  return out;
+})();
+
+/** Boss-reward-only items: iconned + registered in SHOP_POOL_ITEMS (so combat +
+ *  cost/resolution lookups resolve them) but held OUT of the shop offer and ghost
+ *  builds. CF 66: world-forged-heart is a Legendary whose only intended acquisition
+ *  is the round-11 boss reward (balance-bible § 10), but the sim's buildPool rarity
+ *  gate reaches 'legendary' at round 11 — so once it's iconned (in SHOP_POOL_ITEMS)
+ *  it would otherwise become purchasable there. The exclusion is applied at the
+ *  CLIENT pool-generation sites (the sim-bridge generateShop input + combat/ghost.ts
+ *  derivation), NOT in the sim's buildPool: buildPool is shared with the determinism
+ *  harness, which runs the full registry and reaches round 11 in the frozen fixtures,
+ *  so excluding there would churn the DO-NOT-REGENERATE corpus. SHOP_POOL_ITEMS stays
+ *  complete. CF 66's broader question (whether RARITY_GATE_BY_ROUND[11]='legendary'
+ *  should exist at all) remains open/backlog. */
+export const SHOP_EXCLUDED_ITEM_IDS: ReadonlySet<string> = new Set<string>([
+  'world-forged-heart',
+]);
+
+/** Shop-offer + ghost pool: SHOP_POOL_ITEMS minus SHOP_EXCLUDED_ITEM_IDS. Pass THIS
+ *  to the sim's generateShop (via sim-bridge) and use it for ghost-build eligibility
+ *  so boss-reward-only items never surface as purchasable or as opponent items. It
+ *  is identical to the pre-batch-5 44-item pool (world-forged-heart is the only
+ *  exclusion), so shop + ghost RNG are unchanged — no client fixture churn. */
+export const SHOP_OFFER_ITEMS: Readonly<Record<string, ContentItem>> = (() => {
+  const out: Record<string, ContentItem> = {};
+  for (const id of Object.keys(SHOP_POOL_ITEMS)) {
+    if (SHOP_EXCLUDED_ITEM_IDS.has(id)) continue;
+    out[id] = SHOP_POOL_ITEMS[id]!;
   }
   return out;
 })();
