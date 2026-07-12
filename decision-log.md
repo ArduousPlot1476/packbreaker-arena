@@ -4,6 +4,34 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — Epic batch (batch 4) icon artifact ratified — one flagged item gated at wiring
+
+Reviewed against four named collision-risk groups (berserkers-greataxe vs greatsword/warhammer;
+bloodmoon-plate vs tower-shield; master-alchemists-kit vs forge-anvil/rune-pedestal/venom-flask;
+resonance-crystal vs rune-pedestal/frost-shard/poison-vial) — all pass on silhouette grounds.
+Direct hex audit against visual-direction.md § 3: no #FFFFFF/\#000000, no exact rarity-color
+collision except one flagged item. Bloodmoon-plate's crimson core (#D64550/#A83843) is an Option
+A blood-identity exception — thematically load-bearing (item name is literally "Bloodmoon"),
+distinct from vampire-fang's prior decision to withhold a crimson token, not drift. Resonance-
+crystal's amber (#E0B84A) does not exactly match rarity-legendary (#F59E0B) — compliant; the
+gold-adjacent aesthetic question is left open, non-blocking.
+
+FLAGGED: master-alchemists-kit's venom-nod accent (\#22C55E) exactly matches rarity-uncommon on
+an Epic item. "Poison"/"venom" is absent from the ratified Option A tag-color exception list
+(2026-04-26: fire, ice, plant, food, gold, blood). icons.tsx unavailable to Design this session
+(same gap as batch 3) — precedent from venom-flask/poison-vial's actual rendered color unverified.
+Gated at wiring: Claude Code Step 0 inspects the real poison accent color before wiring; matches
+\#22C55E → treat as established precedent (note for future Option A list update, don't action
+here); doesn't match → substitute master-alchemists-kit's venom nod to the established tone
+instead of the exact rarity-uncommon hex.
+
+ICONNED_ITEM_IDS to grow 40→44, ICONNED_RECIPES to grow 10→12 by construction once wired.
+
+Counter: 56 / 20 / 8 / 32 / 40 — unchanged (icon-artifact review/ratification only; no catch /
+rule / pattern / drift; no CF opened or closed — the ICONNED_ITEM_IDS 40→44 / ICONNED_RECIPES
+10→12 growth lands with the wiring PR, not here). Delta from tip 56/20/8/32/40 (decision-log.md
+2026-07-12 § "CF-65-entry pre-write-check \#34 discrepancy resolved"): none.
+
 ## 2026-07-12 — CF-65-entry pre-write-check \#34 discrepancy resolved (no landed-entry fix needed)
 
 The 2026-07-11 § "Icon batch 3 (Rare) landed" entry (which opened CF 65; landed at commit
