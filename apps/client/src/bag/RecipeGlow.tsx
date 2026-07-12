@@ -14,8 +14,10 @@
 // L-shapes, T-shapes — none of which exist in M1 recipe content per
 // balance-bible.md § 11).
 
+import { Fragment } from 'react'
 import { RARITY } from '@packbreaker/ui-kit'
 import { ITEMS } from '../run/content'
+import { combineMatchKey } from '../run/recipes'
 import type { BagItem, RecipeMatch } from '../run/types'
 import { useCellSize } from './CellSize'
 import { BAG_COLS, BAG_ROWS, combineAnchorPosition, glowCellsForMatches } from './layout'
@@ -24,9 +26,12 @@ interface RecipeGlowProps {
   bag: BagItem[]
   matches: RecipeMatch[]
   onCombine: (m: RecipeMatch) => void
+  /** combineMatchKey of a match the sim just rejected for lack of room —
+   *  the matching button shows an inline "NO ROOM — REARRANGE" note. */
+  rejectedKey?: string | null
 }
 
-export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
+export function RecipeGlow({ bag, matches, onCombine, rejectedKey }: RecipeGlowProps) {
   const cellSize = useCellSize()
   const W = BAG_COLS * cellSize
   const H = BAG_ROWS * cellSize
@@ -59,31 +64,56 @@ export function RecipeGlow({ bag, matches, onCombine }: RecipeGlowProps) {
       {matches.map((m, i) => {
         const anchor = combineAnchorPosition(m.uids, bag, cellSize)
         if (!anchor) return null
+        const rejected = rejectedKey != null && combineMatchKey(m) === rejectedKey
         return (
-          <button
-            key={`${m.recipe.id}:${i}`}
-            onClick={() => onCombine(m)}
-            className="absolute combine-pop label-cap ease-snap hover-lift"
-            style={{
-              left: anchor.cx,
-              top: anchor.cy,
-              transform: anchor.transform,
-              background: 'var(--r-legendary)',
-              color: 'var(--bg-deep)',
-              fontWeight: 700,
-              fontSize: 11,
-              letterSpacing: '0.12em',
-              border: '2px solid var(--coin-stroke)',
-              borderRadius: 6,
-              padding: '6px 12px',
-              cursor: 'pointer',
-              boxShadow: '0 6px 18px rgba(245,158,11,0.35)',
-              zIndex: 10,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            COMBINE → {ITEMS[m.recipe.output].name.toUpperCase()}
-          </button>
+          <Fragment key={`${m.recipe.id}:${i}`}>
+            <button
+              onClick={() => onCombine(m)}
+              className="absolute combine-pop label-cap ease-snap hover-lift"
+              style={{
+                left: anchor.cx,
+                top: anchor.cy,
+                transform: anchor.transform,
+                background: 'var(--r-legendary)',
+                color: 'var(--bg-deep)',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: '0.12em',
+                border: '2px solid var(--coin-stroke)',
+                borderRadius: 6,
+                padding: '6px 12px',
+                cursor: 'pointer',
+                boxShadow: '0 6px 18px rgba(245,158,11,0.35)',
+                zIndex: 10,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              COMBINE → {ITEMS[m.recipe.output].name.toUpperCase()}
+            </button>
+            {rejected && (
+              <div
+                className="absolute label-cap"
+                style={{
+                  left: anchor.cx,
+                  top: anchor.cy,
+                  transform: `${anchor.transform} translateY(30px)`,
+                  background: 'var(--surface-elev)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-default)',
+                  borderRadius: 6,
+                  padding: '4px 10px',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: '0.1em',
+                  whiteSpace: 'nowrap',
+                  pointerEvents: 'none',
+                  zIndex: 11,
+                }}
+              >
+                NO ROOM — REARRANGE
+              </div>
+            )}
+          </Fragment>
         )
       })}
     </>

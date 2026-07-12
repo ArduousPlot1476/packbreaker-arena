@@ -56,6 +56,7 @@ export function DesktopRunScreen() {
   const {
     state,
     recipes,
+    combineRejection,
     handleDragStart,
     handleDragOver,
     handleDragEnd,
@@ -102,6 +103,7 @@ export function DesktopRunScreen() {
               dimmed={state.combatActive}
               recipeMatches={recipes}
               onCombine={onCombine}
+              combineRejection={combineRejection}
               containerRef={bagContainerRef}
             />
           </div>

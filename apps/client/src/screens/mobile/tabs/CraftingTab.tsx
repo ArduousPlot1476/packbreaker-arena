@@ -19,16 +19,24 @@
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ITEMS } from '../../../run/content';
 import { ICONS } from '../../../icons/icons';
-import type { RecipeMatch } from '../../../run/recipes';
+import { combineMatchKey, type RecipeMatch } from '../../../run/recipes';
 import type { Recipe } from '../../../run/types';
 
 interface CraftingTabProps {
   recipes: RecipeMatch[];
   scoutedRecipes: Recipe[];
   onCombine: (m: RecipeMatch) => void;
+  /** combineMatchKey of a match the sim just rejected for lack of room —
+   *  its READY row shows "NO ROOM — REARRANGE" in place of the input count. */
+  rejectedKey?: string | null;
 }
 
-export function CraftingTab({ recipes, scoutedRecipes, onCombine }: CraftingTabProps) {
+export function CraftingTab({
+  recipes,
+  scoutedRecipes,
+  onCombine,
+  rejectedKey,
+}: CraftingTabProps) {
   return (
     <div
       style={{
@@ -42,7 +50,7 @@ export function CraftingTab({ recipes, scoutedRecipes, onCombine }: CraftingTabP
         gap: 16,
       }}
     >
-      <ReadySection recipes={recipes} onCombine={onCombine} />
+      <ReadySection recipes={recipes} onCombine={onCombine} rejectedKey={rejectedKey} />
       <ScoutedSection recipes={scoutedRecipes} />
     </div>
   );
@@ -51,9 +59,11 @@ export function CraftingTab({ recipes, scoutedRecipes, onCombine }: CraftingTabP
 function ReadySection({
   recipes,
   onCombine,
+  rejectedKey,
 }: {
   recipes: RecipeMatch[];
   onCombine: (m: RecipeMatch) => void;
+  rejectedKey?: string | null;
 }) {
   return (
     <div className="flex flex-col" style={{ gap: 8 }}>
@@ -96,6 +106,7 @@ function ReadySection({
           {recipes.map((m, i) => {
             const outDef = ITEMS[m.recipe.output];
             const Icon = ICONS[outDef.id] ?? ICONS['copper-coin'];
+            const rejected = rejectedKey != null && combineMatchKey(m) === rejectedKey;
             return (
               <div
                 key={`${m.recipe.id}:${i}`}
@@ -128,9 +139,13 @@ function ReadySection({
                   </div>
                   <div
                     className="label-cap"
-                    style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}
+                    style={{
+                      fontSize: 9,
+                      color: rejected ? 'var(--text-secondary)' : 'var(--text-muted)',
+                      marginTop: 2,
+                    }}
                   >
-                    {m.uids.length} INPUTS
+                    {rejected ? 'NO ROOM — REARRANGE' : `${m.uids.length} INPUTS`}
                   </div>
                 </div>
                 <button

@@ -37,6 +37,7 @@ import type {
   ContractId,
   DerivedModifiers,
   IsoTimestamp,
+  ItemId,
   RelicId,
   RelicSlots,
   RoundNumber,
@@ -49,6 +50,7 @@ import type {
 import { DEFAULT_RULESET } from '@packbreaker/content';
 import type { LocalSaveV1 } from '@packbreaker/shared';
 import { RunProvider, useRunContext } from './RunContext';
+import { combineMatchKey, type RecipeMatch } from './recipes';
 import { clientRunReducer, INITIAL_CLIENT_STATE } from './RunController';
 import { SHOP_POOL_ITEMS } from './content';
 import { loadLocal } from '../persistence';
@@ -455,6 +457,82 @@ describe('useRun onCombine — routes the SELECTED match to sim (Codex round 1 F
     // detected first — losing the player's specific selection.
     expect(recipeId).toBe('r-steel-sword');
     expect(placementIds).toEqual(['p-3', 'p-4']);
+  });
+});
+
+describe('useRun onCombine — surfaces a REAL sim footprint-rejection to the CTA (CF 65 silent-failure half)', () => {
+  it('sets combineRejection on an unfittable 2x2 combine, then clears it when a fittable retry succeeds', async () => {
+    const { getCtx } = await renderAndCapture();
+    expect(getCtx().simRun).not.toBeNull();
+
+    // Round-1 gold is 4 (4 base income; apprentices-loop grants rerolls, not
+    // gold), too little for any 2-input recipe. Advance to round 2 via a
+    // player_win so gold (>= 8 after +winBonus +4 base income) covers
+    // r-tower-shield's inputs (iron-shield 5 + iron-cap 3).
+    act(() => getCtx().onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+    act(() => {
+      getCtx().onCombatDone({
+        result: {
+          events: [],
+          outcome: 'player_win' as const,
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 30,
+        damageTaken: 6,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    const sim = getCtx().simRun!;
+    expect(sim.getState().gold).toBeGreaterThanOrEqual(8);
+
+    // Build a REAL rejection (no combineRecipe mock): r-tower-shield combines
+    // iron-shield + iron-cap (both 1x1) into tower-shield (2x2). Placing the
+    // two inputs vertically adjacent at the right edge (col 5 of the 6-wide
+    // bag) puts the 2x2 anchored at their top-left out of bounds, so
+    // findCombineRotation returns null and combineRecipe throws.
+    sim.overrideShopSlots(['iron-shield', 'iron-cap'] as ItemId[]);
+    sim.buyItem(0);
+    sim.buyItem(1);
+    const shieldPid = sim.placeItem('iron-shield' as ItemId, { col: 5, row: 0 }, 0);
+    const capPid = sim.placeItem('iron-cap' as ItemId, { col: 5, row: 1 }, 0);
+
+    const towerMatch = {
+      recipe: { id: 'r-tower-shield', inputs: ['iron-shield', 'iron-cap'], output: 'tower-shield' },
+      uids: [String(shieldPid), String(capPid)],
+    } as unknown as RecipeMatch;
+    const towerKey = combineMatchKey(towerMatch);
+
+    // (1) Unfittable combine → onCombine's catch sets the rejection signal,
+    //     keyed to the tapped match (proves the throw was surfaced, not swallowed).
+    act(() => {
+      getCtx().onCombine(towerMatch);
+    });
+    await waitFor(() => {
+      expect(getCtx().combineRejection).toBe(towerKey);
+    });
+
+    // Make room: move the SAME two inputs to the top-left corner so the 2x2
+    // now fits. (Sim-direct move does not dispatch, so state.bag is unchanged
+    // and the rejection persists until the fittable combine below.)
+    sim.moveItem(shieldPid, { col: 0, row: 0 }, 0);
+    sim.moveItem(capPid, { col: 0, row: 1 }, 0);
+
+    // (2) Fittable retry → the combine COMMITS (tower-shield in the bag) AND
+    //     the prior rejection clears (sync_from_sim mutates state.bag → the
+    //     [state.bag] effect resets combineRejection to null).
+    act(() => {
+      getCtx().onCombine(towerMatch);
+    });
+    await waitFor(() => {
+      expect(getCtx().combineRejection).toBeNull();
+    });
+    expect(
+      getCtx().simRun!.getState().bag.placements.some((p) => p.itemId === 'tower-shield'),
+    ).toBe(true);
   });
 });
 
