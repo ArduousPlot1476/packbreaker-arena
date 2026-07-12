@@ -4,6 +4,50 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Icon batch 2 (Uncommon) landed: 12/12 Uncommons icon-complete (PR \#36, merge ebbb817)
+
+Wired the 9 net-new Uncommon placeholder icons (war-axe, crossbow, spear, iron-shield,
+chainmail, stamina-tonic, poison-vial, frost-shard, treasure-sack) into the client ICONS map at
+anchor fidelity and widened ICONNED_ITEM_IDS by union (24 → 33; all 24 batch-1 entries
+preserved). With the 3 already-iconned recipe-output Uncommons (steel-sword, healing-salve,
+fire-oil), the Uncommon tier is now 12/12 icon-complete; total iconned coverage 33/45. SVG attrs
+camelCased for JSX; geometry byte-faithful to the Design artifact across all 9 (deterministic
+attr-value diff). stamina-tonic (arcane-cyan) and poison-vial (toxic-lime) bodies apply the two
+ratified overrides per decision-log.md 2026-07-11 § "Batch 2 (Uncommon) color ratifications"
+(498fef0), superseding the artifact's crimson and own-tier-green placeholders — no placeholder
+hex survives in the ported components.
+
+ICONNED_RECIPES grows 4 → 7 by construction: iconning the outputs iron-shield, stamina-tonic,
+treasure-sack (inputs already iconned) unlocks r-iron-shield, r-stamina-tonic, r-treasure-sack.
+r-tower-shield and r-venom-flask stay filtered — their inputs became fully iconned (iron-shield,
+poison-vial joined) but their outputs (tower-shield, venom-flask) remain non-iconned, so the
+output-side filter keeps them out (runtime-checked: exactly the 7 survive; ICONNED_ITEM_IDS 33,
+SHOP_POOL_ITEMS 33). Extended the body-color-rule audit table for the 9 items (each pass-reason,
+incl. the two ratified overrides). Client-only (apps/client); no sim/content/fixture surface;
+full workspace lint/typecheck/test/build green (25/25 turbo tasks, client 539 tests = 528 + 11
+new render tests). Render check: each of the 9 resolves to its own ICONS component (none fell
+back to copper-coin); the two consumables render the ratified hexes with placeholders gone.
+
+Codex (PR \#36): round 1 (reviewed d1e2109) CLEAN — "Didn't find any major issues" — 0 findings,
+ceiling never tripped, no meta-audit.
+
+Two Step-0 catches, folded as prose (pre-propagation self-catches, not counted — mirrors the
+drift-attribution exclusion of Step-0-caught issues): (1) the wiring prompt's Inputs section
+asserted the 9 SVG defs were supplied, but none were attached; the real artifact was located in
+Downloads (Uncommon Icons.dc.html) and actual geometry ported rather than plausible paths
+invented. (2) the prompt's "frozen 12-item batch-1 table" framing was inaccurate — the batch-1
+Commons shipped as a block comment, not a table extension; handled by building a proper 9-item
+audit table regardless. Both are Phase-1-review findings on an already-ratified batch, not
+standalone CF candidates.
+
+Counter: 56 / 20 / 8 / 31 / 39 — unchanged (icon-wiring PR merge; no catch/rule/pattern/drift/CF
+delta). Delta from tip 56/20/8/31/39 (decision-log.md 2026-07-11 § "Batch 2 (Uncommon) color
+ratifications"): none. The two Step-0 catches fold into prose as pre-propagation self-catches
+(not incremented); the color entry's held cooldown_pct Pattern candidate stays held (no 3rd
+instance this PR).
+
+Merge: PR \#36, --no-ff, merge ebbb817.
+
 ## 2026-07-11 — Batch 2 (Uncommon) color ratifications: stamina-tonic + poison-vial
 
 **Stamina Tonic body color ratified:** `#0E7490` base fill, `#06B6D4` highlight (mana-potion's
