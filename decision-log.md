@@ -4,6 +4,29 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Drift 32 logged: batch-2 "append at bottom" prompt vs codified "Newest at top" — 906eaa1 zero-delta re-walk corrected
+
+The batch-2 color-ratification hand-off prompt (ratified 498fef0) instructed "append at the
+bottom of the file," contradicting decision-log.md's codified "Append-only. Newest at top."
+convention (file-header line 3) and decision-log-close Step 3's "Position: newest-at-top" hard
+invariant. Caught at the decision-log-close grounding gate during the 498fef0 ratification and
+placed correctly at top before landing.
+
+**Drift 32 (Topic 2, master-dev; caught pre-landing).** Same shape as Drift 28 / Drift 29 /
+Drift 30 (master-dev claim contradicting canon, caught at the grounding gate pre-landing — each
+counted despite the pre-landing catch; see decision-log.md 2026-07-08 § "Combat-parity Phase 1
+ratified" for Drift 30). Distinct from the two Step-0 catches folded as prose at decision-log.md
+2026-07-11 § "Icon batch 2 (Uncommon) landed" (the "9 SVG defs supplied" input claim; the
+"frozen 12-item batch-1 table" framing) — those are input/framing-accuracy self-catches
+(report-internal class, the 17-vs-20 exclusion archetype), NOT contradictions of codified canon,
+and stay excluded. The 906eaa1 re-walk returned drifts:[] by over-applying the pre-propagation
+self-catch exclusion to this convention-contradiction; corrected here as a supersession, no edit
+to 906eaa1.
+
+**Counter: 56 / 20 / 8 / 32 / 39** (catches / rules / patterns / drifts / open-CFs). Delta from
+tip 56/20/8/31/39 (decision-log.md 2026-07-11 § "Icon batch 2 (Uncommon) landed"): drifts +1
+(Drift 32). No catch / rule / pattern; no CF opened or closed.
+
 ## 2026-07-11 — Icon batch 2 (Uncommon) landed: 12/12 Uncommons icon-complete (PR \#36, merge ebbb817)
 
 Wired the 9 net-new Uncommon placeholder icons (war-axe, crossbow, spear, iron-shield,
