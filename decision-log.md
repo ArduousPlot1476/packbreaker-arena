@@ -4,6 +4,23 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — CF-65-entry pre-write-check \#34 discrepancy resolved (no landed-entry fix needed)
+
+The 2026-07-11 § "Icon batch 3 (Rare) landed" entry (which opened CF 65; landed at commit
+237e116) carried a Step-4 pre-write check claiming "only issue refs \#37, \#34 (both escaped)." No
+\#34 reference of any kind exists in that entry — a phantom in the pre-write-check text only, never
+in the entry body. Verified read-only: grepping that entry's text for the literal "34" returns
+zero matches (the file's only bare-"34" runs are the substring inside merge SHA 25934f5, in the
+adjacent PR \#38 entry); grepping the whole log for `#` followed by "34" returns exactly two hits,
+both \#34 (escaped), both in the 2026-07-11 § "CF 58 CLOSED" entry (PR \#34, trigger_chance_pct
+echo) — unrelated to CF 65. The CF-65 entry's only issue-refs are three \#37, escaped throughout.
+No correction to the landed entry is needed. Flagged 2026-07-11, dropped across three hand-backs,
+closed here.
+
+Counter: 56 / 20 / 8 / 32 / 40 — unchanged (docs-only reconciliation; no catch / rule / pattern /
+drift; no CF opened or closed). Delta from tip 56/20/8/32/40 (decision-log.md 2026-07-11 §
+"onCombine combine-rejection surfaced at the CTA"): none.
+
 ## 2026-07-11 — onCombine combine-rejection surfaced at the CTA (PR \#38, merge 25934f5) — CF 65 silent-failure half
 
 Companion to CF 65 (decision-log.md 2026-07-11 § "Icon batch 3 (Rare) landed"). CF 65's finding
