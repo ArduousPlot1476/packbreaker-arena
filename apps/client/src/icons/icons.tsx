@@ -718,13 +718,132 @@ const VenomFlask = () => (
   </Strokey>
 );
 
+// ---------- Epic batch 4 (2026-07-12) ----------
+//
+// Body-color rule audit (visual-direction.md § 3/§ 5 + decision-log.md
+// 2026-04-26 Option A + 2026-07-12 § "Epic batch (batch 4) icon artifact
+// ratified"):
+//
+//   item                    rarity  body palette                     pass-reason
+//   ----------------------  ------  -------------------------------  ------------------------
+//   berserkers-greataxe     epic    slate twin-bit head (8A94A8/     metal material identity
+//                                   6E7893/565F78/C9D2E0) + wood      (steel-sword precedent);
+//                                   haft 7A4B28 + gold C9A227 +       collar 9B3B32 = war-axe
+//                                   collar 9B3B32                     precedent, not a rarity hue
+//   bloodmoon-plate         epic    slate plate (8A94A8/565F78/      metal material + BLOOD
+//                                   B8C0D0/6E7893) + blood crescent   identity (Option A; item is
+//                                   (D64550/A83843/E0737B/9B3B32)     literally "Bloodmoon"). No
+//                                                                     rarity-frame hue in body
+//   master-alchemists-kit   epic    wood case (8A6A46/6B4F33) +      metal/wood/gem material +
+//                                   slate anvil 8A94A8 + POISON       poison tag. Venom nod wired
+//                                   flask 65A30D/BEF264 + rune        65A30D (NOT the artifact's
+//                                   glyph 8FCDEB + gold C9A227        22C55E — see Step-0 note)
+//   resonance-crystal       epic    amber gem (E0B84A/F2D66A/        gold/amber identity (Option
+//                                   C39A2E/E8C85A) + gold aura        A; treasure-sack precedent);
+//                                   E0C048 + F0F4FA glint             E0B84A ≠ legendary F59E0B
+//
+// STEP-0 SUBSTITUTION (decision-log.md 2026-07-12 § "Epic batch (batch 4) …"):
+// the ratified artifact drew master-alchemists-kit's venom nod as 22C55E
+// (== rarity-uncommon frame). Ground-truth check of the shipped poison items
+// found the ratified tone is 65A30D (poison-vial, 498fef0) and venom-flask
+// 4D7C0F→65A30D, and BOTH explicitly REJECTED 22C55E as the rarity-uncommon
+// collision. So the nod is substituted 22C55E → 65A30D + highlight 86EFAC →
+// BEF264 (the shipped toxic-lime accent) — the gate's "doesn't match" branch,
+// not "matches → precedent". No new green introduced.
+//
+// Pass: all 4. No pure white/black (§ 3) — brightest is F0F4FA glint, darkest
+// 3D465C (kit rune-vial stroke). Epic A855F7 lives only on the frame + corner
+// gem, never in a body. Metal reads slate; blood + amber + poison are Option-A /
+// ratified identity tags; no body fill equals a non-own, non-exempt rarity hue.
+
+const BerserkersGreataxe = () => (
+  <Strokey>
+    <rect x="30.4" y="18" width="3.8" height="40" rx="1.6" fill="#7A4B28" />
+    <rect x="30.4" y="18" width="1.5" height="40" rx="0.7" fill="#96703F" />
+    <circle cx="32.3" cy="57.5" r="3" fill="#C9A227" stroke="#9A7B1F" strokeWidth="1" />
+    <rect x="28.6" y="44" width="7.2" height="9" rx="1.8" fill="#9B3B32" />
+    <rect x="28.4" y="42.8" width="7.6" height="2.3" rx="1" fill="#C9A227" />
+    <rect x="28.4" y="51.4" width="7.6" height="2.3" rx="1" fill="#C9A227" />
+    <path d="M32 13 C 23 11 13 11 8 15 C 6 22 7 31 11 38 C 18 34 26 31 32 29 C 29 24 29 18 32 13 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M32 13 C 41 11 51 11 56 15 C 58 22 57 31 53 38 C 46 34 38 31 32 29 C 35 24 35 18 32 13 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M11 38 C 18 34 26 31 32 29" fill="none" stroke="#6E7893" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M53 38 C 46 34 38 31 32 29" fill="none" stroke="#6E7893" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M8 15 C 6 22 7 31 11 38" fill="none" stroke="#C9D2E0" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M56 15 C 58 22 57 31 53 38" fill="none" stroke="#C9D2E0" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M29.4 15 L 32 5 L 34.6 15 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1" />
+    <path d="M27 15 L 32 11 L 37 15 L 37 27 L 32 31 L 27 27 Z" fill="#C9A227" stroke="#9A7B1F" strokeWidth="1" strokeLinejoin="round" />
+    <rect x="29.4" y="17" width="5.2" height="9" rx="1" fill="#E0C048" />
+  </Strokey>
+);
+
+const BloodmoonPlate = () => (
+  <Strokey>
+    <path d="M17 26 L 9 12 L 22 21 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M47 26 L 55 12 L 42 21 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M9 12 L 11.5 16 L 14 13.4 Z" fill="#A83843" />
+    <path d="M55 12 L 52.5 16 L 50 13.4 Z" fill="#A83843" />
+    <path d="M19 23 Q32 18 45 23 L 47 40 Q42 51 32 56 Q22 51 17 40 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="2" strokeLinejoin="round" />
+    <path d="M19 23 Q25.5 20 31 21 L 31 53.5 Q24 49 18.5 40 Z" fill="#B8C0D0" opacity="0.4" />
+    <path d="M45 23 Q38.5 20 33 21 L 33 53.5 Q40 49 45.5 40 Z" fill="#6E7893" opacity="0.4" />
+    <path d="M32 21 L 32 54" stroke="#565F78" strokeWidth="1.4" />
+    <circle cx="22" cy="26" r="1.4" fill="#565F78" />
+    <circle cx="42" cy="26" r="1.4" fill="#565F78" />
+    <circle cx="20.5" cy="38" r="1.4" fill="#565F78" />
+    <circle cx="43.5" cy="38" r="1.4" fill="#565F78" />
+    <circle cx="32" cy="36" r="8" fill="#D64550" />
+    <path d="M35.5 29 A 8 8 0 1 1 35.5 43 A 6.2 6.2 0 1 0 35.5 29 Z" fill="#A83843" />
+    <ellipse cx="29.2" cy="33" rx="2" ry="3.2" fill="#E0737B" opacity="0.85" transform="rotate(-22 29.2 33)" />
+    <circle cx="32" cy="36" r="8" fill="none" stroke="#9B3B32" strokeWidth="1.4" />
+  </Strokey>
+);
+
+const MasterAlchemistsKit = () => (
+  <Strokey>
+    <path d="M25 26 Q32 18 39 26" fill="none" stroke="#565F78" strokeWidth="2.4" strokeLinecap="round" />
+    <rect x="11" y="26" width="42" height="28" rx="4" fill="#8A6A46" stroke="#5A4127" strokeWidth="1.6" />
+    <rect x="18.5" y="27" width="3" height="3" fill="#9A7B4F" />
+    <path d="M18 30 h4 v4 l3 6 a2.4 2.4 0 0 1 -2.1 3.6 h-6.8 a2.4 2.4 0 0 1 -2.1 -3.6 l3 -6 z" fill="#C9D2E0" stroke="#8FA0B8" strokeWidth="1" />
+    <path d="M16.5 38 h9 l1.4 2.6 a2.4 2.4 0 0 1 -2.1 3.6 h-6.8 a2.4 2.4 0 0 1 -2.1 -3.6 z" fill="#65A30D" />
+    <circle cx="18.6" cy="41.6" r="0.9" fill="#BEF264" />
+    <rect x="28" y="28" width="8" height="14" rx="2" fill="#565F78" stroke="#3D465C" strokeWidth="1" />
+    <path d="M32 30.5 v9 M29.4 33 l5.2 3.2" stroke="#8FCDEB" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M39 34 h10 v2.2 l-2 1.8 v4 h-6 v-4 l-2 -1.8 z" fill="#8A94A8" stroke="#565F78" strokeWidth="1" strokeLinejoin="round" />
+    <rect x="41.5" y="31.2" width="5" height="2.8" rx="0.6" fill="#B8C0D0" />
+    <path d="M11 42 h42 v8 a4 4 0 0 1 -4 4 h-34 a4 4 0 0 1 -4 -4 z" fill="#6B4F33" stroke="#5A4127" strokeWidth="1.4" />
+    <rect x="28.5" y="44" width="7" height="6" rx="1.5" fill="#C9A227" stroke="#9A7B1F" strokeWidth="1" />
+    <path d="M12 47 v3 a4 4 0 0 0 4 4 h1.6" fill="none" stroke="#C9A227" strokeWidth="2" />
+    <path d="M52 47 v3 a4 4 0 0 1 -4 4 h-1.6" fill="none" stroke="#C9A227" strokeWidth="2" />
+  </Strokey>
+);
+
+const ResonanceCrystal = () => (
+  <Strokey>
+    <g stroke="#E0C048" strokeWidth="1.6" strokeLinecap="round">
+      <path d="M32 4 v5" />
+      <path d="M32 55 v5" />
+      <path d="M4 32 h5" />
+      <path d="M55 32 h5" />
+      <path d="M12 12 l3.4 3.4" />
+      <path d="M52 12 l-3.4 3.4" />
+      <path d="M12 52 l3.4 -3.4" />
+      <path d="M52 52 l-3.4 -3.4" />
+    </g>
+    <path d="M32 12 L 46 30 L 37 52 L 27 52 L 18 30 Z" fill="#E0B84A" stroke="#B78E2A" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M32 12 L 18 30 L 27 52 L 32 30 Z" fill="#F2D66A" />
+    <path d="M32 12 L 46 30 L 37 52 L 32 30 Z" fill="#C39A2E" />
+    <path d="M32 12 L 18 30 L 46 30 Z" fill="#E8C85A" opacity="0.9" />
+    <path d="M32 12 L 32 30 M18 30 L 46 30 M27 52 L 32 30 L 37 52" stroke="#B78E2A" strokeWidth="1.2" fill="none" />
+    <path d="M35 18 l3 0 M36.5 16.5 l0 3" stroke="#F0F4FA" strokeWidth="1.4" strokeLinecap="round" />
+  </Strokey>
+);
+
 // String-keyed lookup so the literal slugs below assign cleanly post-
-// M1.3.4a's ItemId broadening to a brand. Items outside this 40-icon
+// M1.3.4a's ItemId broadening to a brand. Items outside this 44-icon
 // subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand + the
-// 9 Uncommon batch-2 items + the 7 Rare batch-3 items) fall back to
-// ICONS['copper-coin'] at the call site (DraggableItem, ShopSlot, etc.).
-// Drop the fallback when icon-art expansion lands the full 45-item M1
-// content set (40/45 after this batch — 4 Epics + 1 Legendary remain).
+// 9 Uncommon batch-2 items + the 7 Rare batch-3 items + the 4 Epic batch-4
+// items) fall back to ICONS['copper-coin'] at the call site (DraggableItem,
+// ShopSlot, etc.). Drop the fallback when icon-art expansion lands the full
+// 45-item M1 content set (44/45 after this batch — 1 Legendary remains).
 export const ICONS: Record<string, () => JSX.Element> = {
   'iron-sword': IronSword,
   'iron-dagger': IronDagger,
@@ -769,6 +888,11 @@ export const ICONS: Record<string, () => JSX.Element> = {
   'forge-anvil': ForgeAnvil,
   'rune-pedestal': RunePedestal,
   'venom-flask': VenomFlask,
+  // Epic batch 4 (2026-07-12) — 4 net-new placeholders (union +4 → 44)
+  'berserkers-greataxe': BerserkersGreataxe,
+  'bloodmoon-plate': BloodmoonPlate,
+  'master-alchemists-kit': MasterAlchemistsKit,
+  'resonance-crystal': ResonanceCrystal,
 };
 
 // HUD glyphs

@@ -112,3 +112,47 @@ describe('Rare batch-3 icons render to their own SVG (not copper-coin fallback)'
     expect(m).toContain('#f0f4fa'); // swapped shine (was #FFFFFF)
   });
 });
+
+// Render-level guard for the Epic batch-4 icons (Rule 19). Each of the 4
+// resolves to its OWN icon (distinct from the copper-coin fallback), carries no
+// forbidden pure white/black (visual-direction.md § 3), and master-alchemists-
+// kit renders the Step-0 SUBSTITUTED venom tone (#65A30D, the shipped poison
+// identity) rather than the ratified artifact's #22C55E (== rarity-uncommon
+// frame) — decision-log.md 2026-07-12 § "Epic batch (batch 4) icon artifact
+// ratified", "doesn't match → substitute" branch.
+const EPIC_SIGNATURE: Record<string, string> = {
+  'berserkers-greataxe': '#96703F',
+  'bloodmoon-plate': '#D64550',
+  'master-alchemists-kit': '#65A30D',
+  'resonance-crystal': '#E8C85A',
+};
+
+describe('Epic batch-4 icons render to their own SVG (not copper-coin fallback)', () => {
+  for (const [id, hex] of Object.entries(EPIC_SIGNATURE)) {
+    it(`${id} renders <svg> with signature fill ${hex}, distinct from the fallback`, () => {
+      const Comp = ICONS[id] ?? ICONS['copper-coin'];
+      const markup = renderToStaticMarkup(<Comp />);
+      expect(markup).toContain('<svg');
+      expect(markup.toLowerCase()).toContain(hex.toLowerCase());
+      expect(markup).not.toBe(FALLBACK);
+    });
+  }
+
+  it('none of the 4 use forbidden pure white/black (visual-direction.md § 3)', () => {
+    for (const id of Object.keys(EPIC_SIGNATURE)) {
+      const Comp = ICONS[id];
+      const m = renderToStaticMarkup(<Comp />).toLowerCase();
+      expect(m).not.toContain('#ffffff');
+      expect(m).not.toContain('#000000');
+    }
+  });
+
+  it('master-alchemists-kit wires the Step-0 substituted venom tone, not the artifact #22C55E', () => {
+    const Comp = ICONS['master-alchemists-kit'];
+    const m = renderToStaticMarkup(<Comp />).toLowerCase();
+    expect(m).toContain('#65a30d'); // shipped poison identity (498fef0) — the substitution
+    expect(m).toContain('#bef264'); // shipped toxic-lime accent (highlight substitution)
+    expect(m).not.toContain('#22c55e'); // artifact placeholder == rarity-uncommon frame
+    expect(m).not.toContain('#86efac'); // artifact highlight, superseded
+  });
+});
