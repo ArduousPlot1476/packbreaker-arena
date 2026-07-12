@@ -31,7 +31,7 @@ Replay log
 Telemetry hooks per telemetry-plan.md  
 Placeholder art only
 
-Exit criteria: Trey \+ 3 internal testers each complete 5+ runs without crashes. Item pick-rate spread visible in dashboard. Median run length 12–20 min.  
+Exit criteria: Trey completes 10+ crash-free solo runs (self-cert testing path, ratified 2026-07-12 — see decision-log.md). Item pick-rate spread visible in dashboard. Median run length 12–20 min.  
 
 **Current sprint (2026-07-08).** The M1 exit-gate playtest (Trey + 3 testers × 5 crash-free runs) is intentionally **deferred** pending further product polish — Trey's call. Not blocked and not urgent: the M1 dashboard exit-gate is already **CLOSED** (see decision-log.md 2026-07-07 § M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog, Rule 19 minted). Active work continues on backlog in the interim.
 

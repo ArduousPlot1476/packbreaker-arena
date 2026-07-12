@@ -4,6 +4,67 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — CF-67 OPENED (corrected): boss win-reward item legs missing; relic branch already wired
+
+Exit-gate solo playtest surfaced round-11 boss win as apparently reward-less. Initial
+master-dev framing ("no item or relic grant fires") was wrong — caught by handoff-verify
+cross-checking CF-66's own logged text (decision-log.md 2026-07-12 § "Legendary-batch
+pre-scoping investigation ... → CF 66 OPENED") against live code before this entry was
+written. Corrected: a boss-relic offer is wired end-to-end (useRun.ts:604-611 trigger on
+round-11 win + empty boss slot → generateBossRelicOffer → RelicOfferModal → grantSelectedRelic
+→ state.ts:855 grantRelic('boss', …)). balance-bible.md § 15's 3-way choice {
+world-forged-heart (Legendary), random Epic, boss relic } is 1/3 wired, not 0/3.
+
+Disposition: extend the existing offer/modal to include world-forged-heart as a second option
+(relic OR legendary) — fixed 1×1 item, simplest placement case. Random-Epic leg (variable
+footprint, pool-random selection, real bag-placement UX) deferred to M2, alongside § 18 open
+lever \#8 (reward-set shape already flagged unsettled). Supersedes the void auto-grant draft,
+which assumed no offer flow existed.
+
+Process note: same-day cross-reference against a CF's own logged text (not a carried summary
+of it) is now a standing habit for master-dev before drafting a related CF, not just an
+existing Rule 10 checklist item.
+
+**CF 67 (OPENED)** — the two item legs of § 15's boss win-reward choice (world-forged-heart
+Legendary + random Epic) are unimplemented; only the boss-relic leg is wired, so
+world-forged-heart stays unobtainable in-game until at least the Legendary leg lands. Distinct
+from CF 66 (whether the round-11 legendary rarity-gate should exist at all) — CF 66 stays
+scoped to that narrower question. Number walked from canon: highest existing CF was 66
+(decision-log.md 2026-07-12 § "Legendary-batch pre-scoping investigation ... → CF 66 OPENED");
+grep confirms no CF 67+ at tip.
+
+Classification — NOT a process catch. The wrong initial framing was a pre-propagation
+self-catch: handoff-verify caught it before it entered the log, so it is excluded from the
+drift/catch count (same precedent as the batch-4 Step-0 venom-nod change-site contradiction
+caught pre-wire, decision-log.md 2026-07-12 § "Icon batch 4 (Epic) landed"). The CF-open is the
+recorded delta.
+
+Counter: 56 / 20 / 8 / 32 / 42 — open-CFs +1 (CF 67 opened); catches / rules / patterns /
+drifts unchanged. Delta from tip 56/20/8/32/41 (decision-log.md 2026-07-12 § "Icon batch 5
+(Legendary, FINAL) landed"): open-CFs +1.
+
+## 2026-07-12 — M1-exit-gate testing path: solo self-cert (roadmap.md amended)
+
+roadmap.md's M1 exit criteria required Trey + 3 internal testers × 5 crash-free
+runs. Deferred since M1 icon-art track began; unblocked at icon-track close
+(ec3f40b). Three options surfaced (solo self-cert / recruit 1–2 / full 3-tester);
+Trey chose solo self-cert — velocity over the recruiting/scheduling cost of
+external testers at this stage. D1/D2 dashboards don't require external testers
+to populate pick-rate/run-length signals, just real run volume.
+
+roadmap.md amended: tester clause replaced with "Trey completes 10+ crash-free
+solo runs (self-cert testing path)." Run count bumped 5→10 as partial offset for
+the lost 3-tester diversity signal — doesn't restore it, tightens crash-free
+confidence instead. Pick-rate-spread and run-length criteria unchanged.
+
+Accepted risk, logged: solo self-cert won't surface the blind spots a fresh
+player would (UX confusion points, non-obvious controls, unintuitive strategies).
+Revisit before M2 exit gate if later data suggests this cost us.
+
+Counter: 56 / 20 / 8 / 32 / 41 — unchanged (process/sequencing entry; roadmap.md M1
+exit-criteria amendment; no catch/rule/pattern/drift; opens/closes no CF). Delta from
+decision-log.md 2026-07-12 § "Icon batch 5 (Legendary, FINAL) landed" (56/20/8/32/41): none.
+
 ## 2026-07-12 — Icon batch 5 (Legendary, FINAL) landed: world-forged-heart wired — M1 icon-art COMPLETE 45/45 (PR \#40, merge 9e6f121); CF 66 immediate fix bundled
 
 Wired the final net-new icon world-forged-heart into the client ICONS map at anchor fidelity
