@@ -33,7 +33,7 @@ Placeholder art only
 
 Exit criteria: Trey completes 10+ crash-free solo runs (self-cert testing path, ratified 2026-07-12 — see decision-log.md). Item pick-rate spread visible in dashboard. Median run length 12–20 min.  
 
-**Current sprint (2026-07-08).** The M1 exit-gate playtest (Trey + 3 testers × 5 crash-free runs) is intentionally **deferred** pending further product polish — Trey's call. Not blocked and not urgent: the M1 dashboard exit-gate is already **CLOSED** (see decision-log.md 2026-07-07 § M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog, Rule 19 minted). Active work continues on backlog in the interim.
+**Current sprint (2026-07-12).** The M1 exit-gate playtest is now **live** — testing path ratified as solo self-cert (Trey completes 10+ crash-free solo runs; see decision-log.md 2026-07-12 § M1-exit-gate testing path: solo self-cert). The M1 dashboard exit-gate is already **CLOSED** (see decision-log.md 2026-07-07 § M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog, Rule 19 minted). Active work continues on backlog alongside the solo exit-gate runs.
 
 M1.5e — Authority Migration (CF 34, +CF 37)  
 Unwind Amendment A's client/sim bifurcation. gold+bag-together (sellItem bag-coupling forces single unit), bounded first PR, slice-sequenced after that. Re-handles ratified amendments B-F3 (restore-bag-init) and E-F9 (placementCounter collision-avoidance) sim-side. Phase 1 must lead with Amendment A rationale (see decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 design halt-gate ratified — Q2 Amendment A) before unwind is locked.  
