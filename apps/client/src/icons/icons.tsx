@@ -377,10 +377,174 @@ const Bandage = () => (
   </Strokey>
 );
 
+// ---------- Uncommon batch 2 (2026-07-11) — 9 net-new placeholders ----------
+// Body-color rule audit — batch 2 (same convention as the M1.3.2 table at the
+// top of this file; visual-direction.md § 5 + decision-log.md 2026-04-26
+// Option A identity/tag exemption). Two body colors were ratified by master-dev,
+// superseding the Design artifact's placeholders — decision-log.md 2026-07-11
+// § "Batch 2 (Uncommon) color ratifications" (commit 498fef0):
+//
+//   item           rarity    body palette                      pass-reason
+//   -------------  --------  --------------------------------  ----------------------------
+//   war-axe        uncommon  slate heads (8A94A8) + wood haft  metal material identity (Opt
+//                            (7A4B28) + gold binding (C9A227)  A); slate = rarity-common but
+//                                                              metallic base, as steel-sword
+//   crossbow       uncommon  wood stock (8A6A46/6B4F33) +      wood material identity (like
+//                            slate prod (8A94A8)               wooden-shield); brown no tier
+//                                                              frame color; no metal tag
+//   spear          uncommon  slate leaf-head (8A94A8) + wood   metal material identity (Opt
+//                            shaft (8A6A46) + collar (565F78)  A), as war-axe
+//   iron-shield    uncommon  slate body (8A94A8) + steel boss  metal material identity (Opt A)
+//                            + rivets (B8C0D0/565F78)
+//   chainmail      uncommon  slate hauberk (8A94A8) + steel    metal material identity (Opt A)
+//                            rings (565F78)
+//   stamina-tonic  uncommon  arcane-cyan 0E7490 base / 06B6D4  RATIFIED override — supersedes
+//                            highlight / 155E75 stroke; cork   artifact crimson placeholder
+//                            + glass (9A7B4F/C9D2E0) unchanged  (D64550: compliant but hue-
+//                                                              adjacent to life-red). Extends
+//                                                              mana-potion cooldown_pct buff-
+//                                                              catalyst cyan family; 06B6D4 ≠
+//                                                              rarity-rare frame 3B82F6
+//   poison-vial    uncommon  toxic-lime liquid 65A30D +        RATIFIED override — supersedes
+//                            bubbles BEF264; glass/cork        artifact 22C55E placeholder
+//                            (C9D2E0/9A7B4F) unchanged         (= rarity-uncommon frame: no
+//                                                              Rare/Epic-poison headroom).
+//                                                              poison tag color, ~59° hue off
+//                                                              rarity-uncommon; fills § 5 slot
+//   frost-shard    uncommon  icy-blue facets (8FCDEB/B9E3F7/   ice material/tag identity (Opt
+//                            6FB8DE/7CC3E6)                    A); paler, held off rarity-rare
+//                                                              3B82F6 (pre-existing ice exempt)
+//   treasure-sack  uncommon  gold/amber (E0B84A/F2D66A/        gold currency identity (Opt A),
+//                            C39A2E) + coin                    as copper-coin/coin-pouch; amber
+//                                                              near legendary F59E0B, identity
+//                                                              overrides
+//
+// Pass: all 9. Metal-tagged read slate (material identity); treasure-sack gold;
+// frost-shard held-off-Rare ice; crossbow wood-brown; the two consumables carry
+// the ratified overrides above. No body fill collides with a non-own, non-
+// identity-exempted rarity color. Frame + gem remain the rarity authority per § 1.
+
+const WarAxe = () => (
+  <Strokey>
+    <rect x="30" y="26" width="4" height="32" rx="1.5" fill="#7A4B28" />
+    <rect x="28.8" y="44" width="6.4" height="11" rx="1.8" fill="#9B3B32" />
+    <rect x="28.6" y="42.6" width="6.8" height="2.6" rx="1" fill="#C9A227" />
+    <rect x="28.8" y="54.2" width="6.4" height="3.8" rx="1.2" fill="#C9A227" />
+    <path d="M31 16 C 24 14 16 13 12 15 C 9 22 9 28 12 34 C 16 33 25 30 31 28 C 28 24 28 20 31 16 Z" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" strokeLinejoin="round" />
+    <path d="M33 16 C 40 14 48 13 52 15 C 55 22 55 28 52 34 C 48 33 39 30 33 28 C 36 24 36 20 33 16 Z" fill="#8A94A8" stroke="#6E7893" strokeWidth="1" strokeLinejoin="round" />
+    <path d="M12 15 C 9 22 9 28 12 34" fill="none" stroke="#B8C0D0" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M52 15 C 55 22 55 28 52 34" fill="none" stroke="#B8C0D0" strokeWidth="1.4" strokeLinecap="round" />
+    <path d="M26 17 L 32 14 L 38 17 L 38 27 L 32 30 L 26 27 Z" fill="#C9A227" stroke="#9A7B1F" strokeWidth="1" strokeLinejoin="round" />
+    <rect x="29.4" y="18.5" width="5.2" height="8" rx="1" fill="#E0C048" />
+  </Strokey>
+);
+
+const Crossbow = () => (
+  <Strokey>
+    <path d="M42 12 C 54 24 54 40 42 52" fill="none" stroke="#8A94A8" strokeWidth="4.5" strokeLinecap="round" />
+    <line x1="44" y1="14" x2="44" y2="50" stroke="#C9D2E0" strokeWidth="1.5" />
+    <rect x="12" y="29" width="34" height="7" rx="2.5" fill="#8A6A46" />
+    <rect x="11" y="25.5" width="7" height="15" rx="2" fill="#6B4F33" />
+    <rect x="16" y="31.4" width="30" height="2.4" rx="1" fill="#3A2E20" />
+    <path d="M45 29 L 52 32.6 L 45 36.2 Z" fill="#8A94A8" />
+    <path d="M16 29.4 L 20.5 32.6 L 16 35.8 Z" fill="#6B4F33" />
+  </Strokey>
+);
+
+const Spear = () => (
+  <Strokey>
+    <rect x="30.2" y="22" width="3.6" height="35" rx="1.8" fill="#8A6A46" />
+    <rect x="30.2" y="53.5" width="3.6" height="4" rx="1" fill="#565F78" />
+    <path d="M32 7 L 38.5 21 L 32 31 L 25.5 21 Z" fill="#8A94A8" stroke="#B8C0D0" strokeWidth="1.4" strokeLinejoin="round" />
+    <rect x="29" y="27" width="6" height="5" rx="1.5" fill="#565F78" />
+  </Strokey>
+);
+
+const IronShield = () => (
+  <Strokey>
+    <path d="M16 13 L 48 13 L 48 30 C 48 45 40 53 32 57 C 24 53 16 45 16 30 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="2" strokeLinejoin="round" />
+    <circle cx="32" cy="31" r="6.5" fill="#B8C0D0" stroke="#565F78" strokeWidth="1.4" />
+    <circle cx="32" cy="31" r="2" fill="#565F78" />
+    <circle cx="23" cy="20" r="1.8" fill="#565F78" />
+    <circle cx="41" cy="20" r="1.8" fill="#565F78" />
+    <circle cx="23" cy="41" r="1.8" fill="#565F78" />
+    <circle cx="41" cy="41" r="1.8" fill="#565F78" />
+  </Strokey>
+);
+
+const Chainmail = () => (
+  <Strokey>
+    <path d="M23 15 L 30 13 L 34 13 L 41 15 L 47 20 L 43 27 L 40 25 L 40 53 L 24 53 L 24 25 L 21 27 L 17 20 Z" fill="#8A94A8" stroke="#565F78" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M30 13 L 34 13 L 32 18 Z" fill="#565F78" />
+    <g fill="none" stroke="#565F78" strokeWidth="1.1">
+      <circle cx="28" cy="30" r="1.6" />
+      <circle cx="32" cy="30" r="1.6" />
+      <circle cx="36" cy="30" r="1.6" />
+      <circle cx="30" cy="34" r="1.6" />
+      <circle cx="34" cy="34" r="1.6" />
+      <circle cx="28" cy="38" r="1.6" />
+      <circle cx="32" cy="38" r="1.6" />
+      <circle cx="36" cy="38" r="1.6" />
+      <circle cx="30" cy="42" r="1.6" />
+      <circle cx="34" cy="42" r="1.6" />
+      <circle cx="28" cy="46" r="1.6" />
+      <circle cx="32" cy="46" r="1.6" />
+      <circle cx="36" cy="46" r="1.6" />
+    </g>
+  </Strokey>
+);
+
+const StaminaTonic = () => (
+  <Strokey>
+    <rect x="27.5" y="15" width="9" height="6" rx="1.5" fill="#9A7B4F" />
+    <rect x="28.5" y="20" width="7" height="10" fill="#C9D2E0" />
+    <circle cx="32" cy="41" r="15" fill="#0E7490" />
+    <path d="M20 38 A 15 15 0 0 1 44 38 Z" fill="#06B6D4" opacity="0.9" />
+    <ellipse cx="26" cy="36" rx="3" ry="5" fill="#F0F4FA" opacity="0.4" transform="rotate(-25 26 36)" />
+    <circle cx="32" cy="41" r="15" fill="none" stroke="#155E75" strokeWidth="1.6" />
+    <rect x="28.5" y="20" width="7" height="10" fill="none" stroke="#B8C0D0" strokeWidth="1.2" />
+  </Strokey>
+);
+
+const PoisonVial = () => (
+  <Strokey>
+    <rect x="27.5" y="9" width="9" height="6" rx="1.5" fill="#9A7B4F" />
+    <rect x="24.5" y="14" width="15" height="4" rx="1.5" fill="#B8C0D0" />
+    <path d="M26 18 L 38 18 L 38 46 C 38 54 26 54 26 46 Z" fill="#C9D2E0" />
+    <path d="M26 32 L 38 32 L 38 46 C 38 54 26 54 26 46 Z" fill="#65A30D" />
+    <path d="M26 18 L 38 18 L 38 46 C 38 54 26 54 26 46 Z" fill="none" stroke="#8FA0B8" strokeWidth="1.4" />
+    <circle cx="30" cy="42" r="1.3" fill="#BEF264" />
+    <circle cx="34" cy="46" r="1.1" fill="#BEF264" />
+    <circle cx="31" cy="49" r="0.9" fill="#BEF264" />
+  </Strokey>
+);
+
+const FrostShard = () => (
+  <Strokey>
+    <path d="M32 7 L 43 27 L 34 57 L 22 27 Z" fill="#8FCDEB" stroke="#5DA9D6" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M32 7 L 22 27 L 32 26 Z" fill="#B9E3F7" />
+    <path d="M32 7 L 43 27 L 32 26 Z" fill="#6FB8DE" />
+    <path d="M32 26 L 34 57 L 22 27 Z" fill="#7CC3E6" opacity="0.55" />
+    <path d="M18 42 L 23 39 L 21 50 Z" fill="#B9E3F7" stroke="#5DA9D6" strokeWidth="1" />
+    <path d="M39.5 14 l3 0 M41 12.5 l0 3" stroke="#F0F4FA" strokeWidth="1.4" strokeLinecap="round" />
+  </Strokey>
+);
+
+const TreasureSack = () => (
+  <Strokey>
+    <path d="M14 32 C 13 22 22 20 24 17 L 40 17 C 42 20 51 22 50 32 C 52 46 43 55 32 55 C 21 55 12 46 14 32 Z" fill="#E0B84A" stroke="#B78E2A" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M18 40 C 22 47 42 47 46 40 C 46 50 40 55 32 55 C 24 55 18 50 18 40 Z" fill="#C39A2E" opacity="0.55" />
+    <path d="M24 17 C 24 12 40 12 40 17 Z" fill="#C39A2E" />
+    <rect x="22" y="15" width="20" height="4.5" rx="2.2" fill="#B78E2A" />
+    <circle cx="39" cy="46" r="5.5" fill="#F2D66A" stroke="#B78E2A" strokeWidth="1.2" />
+    <circle cx="39" cy="46" r="2.2" fill="none" stroke="#B78E2A" strokeWidth="1" />
+  </Strokey>
+);
+
 // String-keyed lookup so the literal slugs below assign cleanly post-
-// M1.3.4a's ItemId broadening to a brand. Items outside this 24-icon
-// subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand, the
-// higher-rarity recipe outputs) fall back to ICONS['copper-coin'] at the call
+// M1.3.4a's ItemId broadening to a brand. Items outside this 33-icon
+// subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand + the
+// 9 Uncommon batch-2 items) fall back to ICONS['copper-coin'] at the call
 // site (DraggableItem, ShopSlot, etc.). Drop the fallback when icon-art
 // expansion lands the full 45-item M1 content set.
 export const ICONS: Record<string, () => JSX.Element> = {
@@ -409,6 +573,16 @@ export const ICONS: Record<string, () => JSX.Element> = {
   'coin-pouch': CoinPouch,
   'lucky-penny': LuckyPenny,
   'bandage': Bandage,
+  // Uncommon batch 2 (2026-07-11) — 9 net-new placeholders (union +9 → 33)
+  'war-axe': WarAxe,
+  'crossbow': Crossbow,
+  'spear': Spear,
+  'iron-shield': IronShield,
+  'chainmail': Chainmail,
+  'stamina-tonic': StaminaTonic,
+  'poison-vial': PoisonVial,
+  'frost-shard': FrostShard,
+  'treasure-sack': TreasureSack,
 };
 
 // HUD glyphs
