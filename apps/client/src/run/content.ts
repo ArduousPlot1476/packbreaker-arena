@@ -4,7 +4,7 @@
 //
 // ITEMS adapts ALL canonical items (45 in M1) so a sim-generated id from
 // shop generation never throws on lookup. SHOP_POOL_ITEMS is filtered to
-// the iconned subset (33 icons post-batch-2) so the UI only ever
+// the iconned subset (40 icons post-batch-3) so the UI only ever
 // renders items that have inline-SVG renderings. Drop the SHOP_POOL_ITEMS
 // filter when icon-art expansion lands the full 45-item icon set
 // (post-M1.3.4b — visual-direction.md § 14 places it after sim integration
@@ -19,7 +19,7 @@ import {
 import type { ItemDef, ItemId, Recipe } from './types';
 
 /** Prototype-iconned subset. apps/client/src/icons/icons.tsx ICONS map
- *  covers exactly these 33. Any sim-generated id outside this set still
+ *  covers exactly these 40. Any sim-generated id outside this set still
  *  has an ItemDef (for cost/rarity/name lookup) but renders via the
  *  copper-coin fallback in the ICONS map. */
 export const ICONNED_ITEM_IDS = [
@@ -69,6 +69,22 @@ export const ICONNED_ITEM_IDS = [
   'poison-vial',
   'frost-shard',
   'treasure-sack',
+  // Rare batch 3 (2026-07-11) — union +7 → 40. ICONNED_RECIPES grows 7 → 10 BY
+  // CONSTRUCTION: iconning the outputs greatsword, tower-shield, venom-flask —
+  // whose inputs (steel-sword+iron-mace, iron-shield+iron-cap, poison-vial+
+  // throwing-knife) are all already iconned — unlocks r-greatsword,
+  // r-tower-shield, r-venom-flask. The two capstones r-berserkers-greataxe
+  // (greatsword+warhammer+vampire-fang) and r-master-alchemists-kit (forge-anvil
+  // +rune-pedestal+venom-flask) do NOT switch on: their inputs are now all
+  // iconned but their Epic outputs (berserkers-greataxe, master-alchemists-kit)
+  // stay non-iconned, so the output-side filter keeps them out.
+  'greatsword',
+  'warhammer',
+  'vampire-fang',
+  'tower-shield',
+  'forge-anvil',
+  'rune-pedestal',
+  'venom-flask',
 ] as const;
 
 const ICONNED_SET = new Set<string>(ICONNED_ITEM_IDS);
@@ -109,8 +125,9 @@ export const ITEMS: Readonly<Record<string, ItemDef>> = (() => {
 
 /** Recipes filtered to those whose inputs and outputs are all in the
  *  iconned subset. Same filter logic as the M1.1 data.local.ts adapter —
- *  7 recipes survive post-batch-2 (steel-sword, healing-salve, fire-oil,
- *  ember-brand + iron-shield, stamina-tonic, treasure-sack). */
+ *  10 recipes survive post-batch-3 (steel-sword, healing-salve, fire-oil,
+ *  ember-brand + iron-shield, stamina-tonic, treasure-sack + greatsword,
+ *  tower-shield, venom-flask). */
 /** Iconned subset of the CANONICAL content recipes (content Recipe[]) — thread
  *  into sim's recipesRegistry (CF 37 / M1.5e PR 1) so sim's combine detection
  *  matches the client's iconned set, resolving the sim-default-vs-client-filter
