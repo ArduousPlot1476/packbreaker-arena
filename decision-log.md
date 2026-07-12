@@ -4,6 +4,70 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — Icon batch 5 (Legendary, FINAL) landed: world-forged-heart wired — M1 icon-art COMPLETE 45/45 (PR \#40, merge 9e6f121); CF 66 immediate fix bundled
+
+Wired the final net-new icon world-forged-heart into the client ICONS map at anchor fidelity
+(amber heart-cut gem, camelCased SVG, 64×64) and widened ICONNED_ITEM_IDS by union (44 → 45; all
+44 prior entries preserved). **M1 icon-art coverage is now 45/45 — COMPLETE.** ICONNED_RECIPES
+stays 12/12 (world-forged-heart is in no recipe — neither output nor input; content.test.ts locks
+the unchanged 12-set). Two ratification corrections applied: tagged `gem` only (the artifact
+footprint's "vitality" is flavor text, not a schema tag; items.ts already gem-only), and no stray
+22C55E leaked from the artifact's reference-only poison-vial illustration (shipped poison is
+65A30D). No pure white/black. Client-only (7 files); full turbo gate green (25/25; client 571
+passed / 15 skipped; sim determinism 224 fixtures pass).
+
+CF 66 IMMEDIATE FIX — bundled, with a RATIFIED DEVIATION from the literal ratification text.
+world-forged-heart is boss-reward-only (balance-bible § 10), but the sim's buildPool rarity gate
+reaches 'legendary' at round 11, so once iconned it would become purchasable in the round-11 shop
+and eligible for round-11 ghost builds. The CF-66 ratification (decision-log.md 2026-07-12 §
+"Legendary-batch pre-scoping investigation") specified an exclusion check IN the sim's buildPool.
+Implementation surfaced a determinism blocker: buildPool is shared with the determinism harness,
+which runs the sim with the FULL 45-item registry (state.ts: this.items = input.itemsRegistry ??
+ITEMS) and reaches round 11 ≥10× in the frozen fixtures, so an unconditional exclusion there would
+shift the round-11 weighted-select boundaries and CHURN the DO-NOT-REGENERATE 224-fixture corpus.
+Surfaced to master-dev; the deviation was ratified → CLIENT-SIDE exclusion instead:
+SHOP_EXCLUDED_ITEM_IDS + SHOP_OFFER_ITEMS (= SHOP_POOL_ITEMS minus exclusions) drive the sim-bridge
+shop-gen and ghost.ts pool; SHOP_POOL_ITEMS stays complete for combat + cost/resolution lookups.
+Chosen specifically because it leaves packages/sim UNTOUCHED — corpus safety by construction,
+CONFIRMED (not merely asserted) by the 224/224 pass in this PR's own gate. SHOP_OFFER_ITEMS == the
+pre-batch-5 44-item pool, so shop/ghost RNG is byte-identical → zero client fixture churn.
+
+NOT A CATCH. The determinism conflict-and-correction is process working correctly — a verified
+pre-merge conflict caught at implementation and resolved before it reached main — not a process
+failure. Same classification precedent as this session's CF-65-open (decision-log.md 2026-07-11 §
+"Icon batch 3 (Rare) landed": "Not a process Catch — a verified code finding spun to a CF") and the
+batch-4 Step-0 venom-nod substitution (decision-log.md 2026-07-12 § "Icon batch 4 (Epic) landed": a
+change-site contradiction caught pre-wire, counted as no catch). No catches delta.
+
+HARD MERGE GATE — shopExclusion.test.ts (new). Asserts world-forged-heart is absent from a
+generated round-11 shop offer (200 seeds × 2 classes × 3 rerolls) AND from round-11 ghost builds
+(200 seeds), and confirms it is rarity 'legendary' — round-11 rarity-gate-eligible — so the absence
+is the exclusion doing real work, not an artifact of the rarity gate alone. Codex (PR \#40): round
+1 (reviewed ae48715 = branch tip) CLEAN — "Didn't find any major issues. Swish!" — 0 findings,
+ceiling never tripped, no meta-audit; clean pass landed as a top-level issue comment, reviews
+endpoint empty.
+
+CF 66 broader question STAYS OPEN / backlog — whether RARITY_GATE_BY_ROUND[11] = 'legendary' should
+exist at all, given world-forged-heart is the only legendary and is boss-reward-only. Same
+immediate-fix-vs-broader-question split as CF 65's silent-failure/glow-gating division: only the
+immediate leak-prevention landed here. Sits alongside CF 56 (shop-gen RNG basis) and CF 64
+(frozen-corpus regen) in the backlog.
+
+**MILESTONE — M1 ICON-ART BATCH COMPLETION DONE.** All 45 M1 items iconned (Commons 20 / Uncommons
+12 / Rares 8 / Epics 4 / Legendary 1), all 12 recipes complete. This UNBLOCKS the M1-exit-gate
+testing-path decision (solo self-cert / recruit 1–2 / full 3-tester), previously deferred pending
+full icon coverage — that decision is now live for scoping, NOT resolved in this entry. A follow-on
+cleanup may also drop the now-unreachable ICONS['copper-coin'] fallback and reconsider the
+SHOP_POOL_ITEMS / ICONNED_RECIPES filters.
+
+Counter: 56 / 20 / 8 / 32 / 41 — unchanged (icon-wiring PR merge + CF-66 immediate fix; no catch /
+rule / pattern / drift; no CF opened or closed — CF 66 stays open for its broader rarity-gate
+question). Delta from tip 56/20/8/32/41 (decision-log.md 2026-07-12 § "Legendary batch (batch 5,
+FINAL) icon artifact ratified"): none.
+
+Merge: PR \#40, --no-ff, merge 9e6f121 (parents 592dca7 + ae48715); branch m1-icon-batch5-legendary
+deleted L+R. GitHub marked PR \#40 merged (merge_commit_sha 9e6f121, merged_at 2026-07-12T20:43:22Z).
+
 ## 2026-07-12 — Legendary batch (batch 5, FINAL) icon artifact ratified — coverage to close at 45/45 pending wiring
 
 Reviewed against balance-bible.md § 10 (1×1 gem, 12g, +15 max HP, on_low_health: 15 dmg to opp) —
