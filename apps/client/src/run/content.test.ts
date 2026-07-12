@@ -1,11 +1,10 @@
-// Iconned-content coverage — Epic batch 4 (2026-07-12) wiring guard.
-// Locks: the union widen (44 iconned ids, all 24 batch-1 + 9 batch-2 + 7
-// batch-3 entries intact); the ICONS map ⇄ ICONNED_ITEM_IDS 1:1 coverage (no
-// iconned id silently falls back to copper-coin); and the by-construction
-// ICONNED_RECIPES set (10 → 12 — the two Epic capstone OUTPUTS berserkers-
-// greataxe / master-alchemists-kit are now iconned, and their inputs were all
-// iconned since batch 3, so r-berserkers-greataxe / r-master-alchemists-kit
-// switch on; bloodmoon-plate + resonance-crystal are shop-only, no recipe).
+// Iconned-content coverage — Legendary batch 5 (2026-07-12, FINAL) wiring guard.
+// Locks: the union widen (45 iconned ids — COMPLETE, all 24 batch-1 + 9 batch-2
+// + 7 batch-3 + 4 batch-4 entries intact); the ICONS map ⇄ ICONNED_ITEM_IDS 1:1
+// coverage (no iconned id silently falls back to copper-coin); and that
+// ICONNED_RECIPES stays 12/12 (world-forged-heart is in no recipe — neither
+// output nor input — so iconning it adds no recipe). CF-66's shop/ghost
+// exclusion of world-forged-heart is covered separately in shopExclusion.test.ts.
 
 import { describe, expect, it } from 'vitest';
 import { ICONNED_ITEM_IDS, ICONNED_RECIPES } from './content';
@@ -34,10 +33,12 @@ const BATCH4_4 = [
   'resonance-crystal',
 ];
 
-describe('ICONNED_ITEM_IDS — Epic batch 4 union widen', () => {
-  it('totals 44 unique ids', () => {
-    expect(ICONNED_ITEM_IDS).toHaveLength(44);
-    expect(new Set(ICONNED_ITEM_IDS).size).toBe(44);
+const BATCH5_1 = ['world-forged-heart'];
+
+describe('ICONNED_ITEM_IDS — Legendary batch 5 union widen (45/45 COMPLETE)', () => {
+  it('totals 45 unique ids', () => {
+    expect(ICONNED_ITEM_IDS).toHaveLength(45);
+    expect(new Set(ICONNED_ITEM_IDS).size).toBe(45);
   });
 
   it('preserves all 24 batch-1 entries exactly (union, not replace)', () => {
@@ -52,13 +53,17 @@ describe('ICONNED_ITEM_IDS — Epic batch 4 union widen', () => {
     for (const id of BATCH3_7) expect(ICONNED_ITEM_IDS).toContain(id);
   });
 
-  it('adds the 4 net-new Epic batch-4 ids', () => {
+  it('preserves all 4 batch-4 entries exactly (union, not replace)', () => {
     for (const id of BATCH4_4) expect(ICONNED_ITEM_IDS).toContain(id);
   });
 
-  it('is exactly the 24 batch-1 + 9 batch-2 + 7 batch-3 + 4 batch-4 ids (no extras)', () => {
+  it('adds the 1 net-new Legendary batch-5 id (world-forged-heart)', () => {
+    for (const id of BATCH5_1) expect(ICONNED_ITEM_IDS).toContain(id);
+  });
+
+  it('is exactly the 24 + 9 + 7 + 4 + 1 = 45 ids (no extras)', () => {
     expect(new Set(ICONNED_ITEM_IDS)).toEqual(
-      new Set([...BATCH1_24, ...BATCH2_9, ...BATCH3_7, ...BATCH4_4]),
+      new Set([...BATCH1_24, ...BATCH2_9, ...BATCH3_7, ...BATCH4_4, ...BATCH5_1]),
     );
   });
 });
@@ -70,12 +75,12 @@ describe('ICONS map ⇄ ICONNED_ITEM_IDS coverage', () => {
     }
   });
 
-  it('has a distinct component for each of the 4 batch-4 icons', () => {
-    for (const id of BATCH4_4) expect(ICONS[id]).toBeTypeOf('function');
+  it('has a distinct component for the batch-5 Legendary icon (world-forged-heart)', () => {
+    for (const id of BATCH5_1) expect(ICONS[id]).toBeTypeOf('function');
   });
 });
 
-describe('ICONNED_RECIPES — by-construction 10 → 12 (Epic capstone outputs iconned)', () => {
+describe('ICONNED_RECIPES — stays 12/12 (world-forged-heart adds no recipe)', () => {
   const ids = ICONNED_RECIPES.map((r) => String(r.id)).sort();
 
   it('is exactly the 12 expected recipes, nothing else', () => {
@@ -95,14 +100,13 @@ describe('ICONNED_RECIPES — by-construction 10 → 12 (Epic capstone outputs i
     ]);
   });
 
-  it('switches ON the two Epic capstones (outputs now iconned; inputs iconned since batch 3)', () => {
-    expect(ids).toContain('r-berserkers-greataxe');
-    expect(ids).toContain('r-master-alchemists-kit');
+  it('stays 12 — iconning world-forged-heart adds no recipe (it is in none)', () => {
+    expect(ids).toHaveLength(12);
+    expect(ids).not.toContain('r-world-forged-heart');
   });
 
-  it('keeps the batch-3 outputs on (r-greatsword / r-tower-shield / r-venom-flask)', () => {
-    expect(ids).toContain('r-greatsword');
-    expect(ids).toContain('r-tower-shield');
-    expect(ids).toContain('r-venom-flask');
+  it('keeps the two Epic capstones on (r-berserkers-greataxe / r-master-alchemists-kit)', () => {
+    expect(ids).toContain('r-berserkers-greataxe');
+    expect(ids).toContain('r-master-alchemists-kit');
   });
 });

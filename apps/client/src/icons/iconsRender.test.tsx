@@ -156,3 +156,36 @@ describe('Epic batch-4 icons render to their own SVG (not copper-coin fallback)'
     expect(m).not.toContain('#86efac'); // artifact highlight, superseded
   });
 });
+
+// Render-level guard for the Legendary batch-5 icon (Rule 19, FINAL — closes
+// icon-art at 45/45). world-forged-heart renders its own SVG (amber heart-cut,
+// distinct from the copper-coin fallback), carries no forbidden pure white/black
+// (visual-direction.md § 3) and NO reserved life-red (#EF4444/#F87171) despite
+// the name — vitality is cued via warm gold. Also asserts the reference-only
+// #22C55E from the artifact's poison-vial illustration did not leak in by
+// copy-paste (decision-log.md 2026-07-12 § "Legendary batch (batch 5, FINAL)
+// icon artifact ratified").
+describe('Legendary batch-5 icon renders to its own SVG (not copper-coin fallback)', () => {
+  it('world-forged-heart renders <svg> with signature amber fill #E0B84A, distinct from the fallback', () => {
+    const Comp = ICONS['world-forged-heart'] ?? ICONS['copper-coin'];
+    const markup = renderToStaticMarkup(<Comp />);
+    expect(markup).toContain('<svg');
+    expect(markup.toLowerCase()).toContain('#e0b84a');
+    expect(markup).not.toBe(FALLBACK);
+  });
+
+  it('uses no forbidden pure white/black and no reserved life-red (§ 3)', () => {
+    const Comp = ICONS['world-forged-heart'];
+    const m = renderToStaticMarkup(<Comp />).toLowerCase();
+    expect(m).not.toContain('#ffffff');
+    expect(m).not.toContain('#000000');
+    expect(m).not.toContain('#ef4444'); // life-red fill — hearts/damage only
+    expect(m).not.toContain('#f87171'); // life-red stroke — reserved
+  });
+
+  it('did not leak the artifact reference-only #22C55E poison color', () => {
+    const Comp = ICONS['world-forged-heart'];
+    const m = renderToStaticMarkup(<Comp />).toLowerCase();
+    expect(m).not.toContain('#22c55e');
+  });
+});

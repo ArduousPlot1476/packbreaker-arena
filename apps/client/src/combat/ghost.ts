@@ -3,9 +3,10 @@
 //
 // The template scales item count + rarity-gate with round so combat
 // difficulty grows monotonically: round 1 → 1 item, round 11+ → 5 items.
-// Items are drawn from the iconned subset (apps/client/src/run/content
-// SHOP_POOL_ITEMS) so the ghost build stays visually coherent with the
-// items the player sees in their own shop. Class alternates by parity:
+// Items are drawn from the shop-offer subset (apps/client/src/run/content
+// SHOP_OFFER_ITEMS — the iconned set minus boss-reward-only exclusions, CF 66)
+// so the ghost build stays visually coherent with the items the player sees in
+// their own shop. Class alternates by parity:
 // odd rounds → marauder, even rounds → tinker — a deliberate
 // affinity-mix so combat dynamics differ round-to-round.
 //
@@ -29,7 +30,7 @@ import {
   type SimSeed,
 } from '@packbreaker/content';
 import { createRng } from '@packbreaker/sim';
-import { ITEMS, SHOP_POOL_ITEMS } from '../run/content';
+import { ITEMS, SHOP_OFFER_ITEMS } from '../run/content';
 import { shopSeedFor } from '../run/sim-bridge';
 
 const RARITY_ORDER: ReadonlyArray<Rarity> = [
@@ -75,9 +76,12 @@ export function makeGhostForRound(
   const maxRarityIdx = RARITY_ORDER.indexOf(maxRarity);
   const targetCount = ITEM_COUNT_BY_ROUND[round - 1] ?? 5;
 
-  // Pool: iconned items at or below the rarity gate. Sorted for
-  // deterministic iteration (rng draws are independent of insertion order).
-  const eligibleIds = (Object.keys(SHOP_POOL_ITEMS) as ItemId[])
+  // Pool: shop-offer items (iconned minus the boss-reward-only SHOP_EXCLUDED_
+  // ITEM_IDS, CF 66) at or below the rarity gate. Using SHOP_OFFER_ITEMS keeps a
+  // boss-reward-only Legendary (world-forged-heart) out of ghost builds the same
+  // way it's kept out of the shop. Sorted for deterministic iteration (rng draws
+  // are independent of insertion order).
+  const eligibleIds = (Object.keys(SHOP_OFFER_ITEMS) as ItemId[])
     .sort()
     .filter((id) => RARITY_ORDER.indexOf(ITEMS[id]!.rarity) <= maxRarityIdx);
 

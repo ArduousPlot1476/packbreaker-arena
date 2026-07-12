@@ -32,7 +32,7 @@ import type {
 } from '@packbreaker/content';
 import type { Rng } from '@packbreaker/sim';
 import { createRng, effectiveItemCost, generateShop as simGenerateShop } from '@packbreaker/sim';
-import { SHOP_POOL_ITEMS } from './content';
+import { SHOP_OFFER_ITEMS, SHOP_POOL_ITEMS } from './content';
 import type { BagItem, ItemId, ShopSlot } from './types';
 
 /** Re-exported from sim so UI affordability state and the reducer's
@@ -83,8 +83,11 @@ export function shopSeedFor(baseSeed: SimSeed, round: number, rerollCount: numbe
  *  rerollsThisRound }`); the client adapter wraps slots in client ShopSlot
  *  records (uid + itemId | null) for React-keyed rendering.
  *
- *  Pool is constrained to SHOP_POOL_ITEMS (iconned subset) — generateShop's
- *  output is therefore always renderable by the apps/client ICONS map. */
+ *  Pool is constrained to SHOP_OFFER_ITEMS (iconned subset minus the
+ *  boss-reward-only SHOP_EXCLUDED_ITEM_IDS, CF 66) — generateShop's output is
+ *  therefore always renderable by the apps/client ICONS map AND never offers a
+ *  boss-reward-only item (world-forged-heart). SHOP_POOL_ITEMS stays the complete
+ *  registry for the cost lookup below + combat resolution. */
 export function generateShop(
   baseSeed: SimSeed,
   round: number,
@@ -94,7 +97,7 @@ export function generateShop(
   uidPrefix: string,
 ): ShopSlot[] {
   const rng = createRng(shopSeedFor(baseSeed, round, rerollCount));
-  const shopState = simGenerateShop(round, classId, ruleset.shopSize, rng, SHOP_POOL_ITEMS);
+  const shopState = simGenerateShop(round, classId, ruleset.shopSize, rng, SHOP_OFFER_ITEMS);
   return shopState.slots.map((itemId, i) => ({
     uid: `${uidPrefix}${i}`,
     itemId: itemId as ItemId,

@@ -837,13 +837,45 @@ const ResonanceCrystal = () => (
   </Strokey>
 );
 
+// ---------- Legendary batch 5 (2026-07-12, FINAL) ----------
+//
+// world-forged-heart — 1×1 gem, boss-reward-only (balance-bible § 10). Closes
+// M1 icon-art coverage at 45/45. Body: amber heart-cut gem (E0B84A body /
+// ECCB6E + C39A2E facets / A97E1E girdle + outline / F9C33C molten seam /
+// FBBF24 core / F7E4AC glint) — gold/amber is the item's OWN Legendary tier (no
+// Option A needed), the established treasure-sack/resonance-crystal precedent.
+// Vitality (+15 HP) is cued by warm gold, NOT life-red (reserved for hearts/
+// damage, visual-direction.md § 3); no pure white/black. The heart silhouette
+// shares shape-language with the HUD hearts-pip but is fully color-differentiated
+// (gold vs life-red) — ratified acceptable (decision-log.md 2026-07-12 §
+// "Legendary batch (batch 5, FINAL) icon artifact ratified"). Legendary rarity
+// chrome lives only on the frame + corner gem, never in the body.
+//
+// SHOP-EXCLUDED: world-forged-heart is iconned + registered (ICONNED_ITEM_IDS
+// 45) but boss-reward-only, so run/content.ts's SHOP_EXCLUDED_ITEM_IDS keeps it
+// out of the shop-offer + ghost pools (CF 66). SHOP_POOL_ITEMS stays complete so
+// combat/cost lookups still resolve it.
+
+const WorldForgedHeart = () => (
+  <Strokey>
+    <path d="M32 22 C30 18 27 15 22 15 C15 15 11 20 11 26 C11 34 20 43 32 53 C44 43 53 34 53 26 C53 20 49 15 42 15 C37 15 34 18 32 22 Z" fill="#E0B84A" />
+    <path d="M32 23 L13 28 L32 51 Z" fill="#ECCB6E" />
+    <path d="M32 23 L51 28 L32 51 Z" fill="#C39A2E" />
+    <line x1="13" y1="28" x2="51" y2="28" stroke="#A97E1E" strokeWidth="1" />
+    <line x1="32" y1="24" x2="32" y2="50" stroke="#F9C33C" strokeWidth="2" strokeLinecap="round" />
+    <circle cx="32" cy="38" r="1.7" fill="#FBBF24" />
+    <path d="M32 22 C30 18 27 15 22 15 C15 15 11 20 11 26 C11 34 20 43 32 53 C44 43 53 34 53 26 C53 20 49 15 42 15 C37 15 34 18 32 22 Z" fill="none" stroke="#A97E1E" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M18.5 20 l3.4 0 M20.2 18.3 l0 3.4" stroke="#F7E4AC" strokeWidth="1.4" strokeLinecap="round" />
+  </Strokey>
+);
+
 // String-keyed lookup so the literal slugs below assign cleanly post-
-// M1.3.4a's ItemId broadening to a brand. Items outside this 44-icon
-// subset (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand + the
-// 9 Uncommon batch-2 items + the 7 Rare batch-3 items + the 4 Epic batch-4
-// items) fall back to ICONS['copper-coin'] at the call site (DraggableItem,
-// ShopSlot, etc.). Drop the fallback when icon-art expansion lands the full
-// 45-item M1 content set (44/45 after this batch — 1 Legendary remains).
+// M1.3.4a's ItemId broadening to a brand. This subset now covers all 45 M1
+// items (20 Commons + steel-sword/healing-salve/fire-oil/ember-brand + the
+// 9 Uncommon batch-2 + 7 Rare batch-3 + 4 Epic batch-4 + the 1 Legendary
+// batch-5 item) — icon-art is 45/45 COMPLETE, so the ICONS['copper-coin']
+// fallback at the call sites (DraggableItem, ShopSlot, etc.) is now unreachable
+// for canonical content and can be dropped in a follow-on cleanup.
 export const ICONS: Record<string, () => JSX.Element> = {
   'iron-sword': IronSword,
   'iron-dagger': IronDagger,
@@ -893,6 +925,8 @@ export const ICONS: Record<string, () => JSX.Element> = {
   'bloodmoon-plate': BloodmoonPlate,
   'master-alchemists-kit': MasterAlchemistsKit,
   'resonance-crystal': ResonanceCrystal,
+  // Legendary batch 5 (2026-07-12, FINAL) — 1 net-new (union +1 → 45 COMPLETE)
+  'world-forged-heart': WorldForgedHeart,
 };
 
 // HUD glyphs
