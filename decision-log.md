@@ -4,6 +4,59 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — Icon batch 4 (Epic) landed: 4/4 Epics icon-complete, coverage 44/45 (PR \#39, merge 7ee4bdf); ICONNED_RECIPES 10→12
+
+Wired the 4 net-new Epic placeholder icons (berserkers-greataxe, bloodmoon-plate, master-
+alchemists-kit, resonance-crystal) into the client ICONS map at anchor fidelity (camelCased SVG,
+64×64, existing Strokey/use pattern) and widened ICONNED_ITEM_IDS by union (40 → 44; all 24
+batch-1 + 9 batch-2 + 7 batch-3 entries preserved). The Epic tier is now 4/4 icon-complete; total
+iconned coverage 44/45 — only Legendary (world-forged-heart) remains for the final batch. Client-
+only (apps/client, 4 files); no sim/content/fixture surface; full turbo gate green (25/25 tasks;
+client 561 passed / 15 skipped).
+
+ICONNED_RECIPES grows 10 → 12 BY CONSTRUCTION: iconning the two Epic capstone OUTPUTS berserkers-
+greataxe and master-alchemists-kit — whose inputs (greatsword+warhammer+vampire-fang and forge-
+anvil+rune-pedestal+venom-flask) are all iconned as of batch 3 — switches on r-berserkers-greataxe
+and r-master-alchemists-kit (content.test.ts locks the exact 12-recipe set). bloodmoon-plate and
+resonance-crystal are shop-only (appear in recipes.ts as neither output nor input), so they add
+coverage but no recipe.
+
+STEP-0 VENOM-NOD SUBSTITUTION (master-alchemists-kit). The e1cd797 wiring gate (decision-log.md
+2026-07-12 § "Epic batch (batch 4) icon artifact ratified") required a ground-truth check of the
+shipped poison items before wiring: the ratified artifact drew master-alchemists-kit's venom-nod
+accent as 22C55E, the exact rarity-uncommon frame color on an Epic item. Inspection of icons.tsx
+found the shipped poison identity is the 65A30D toxic-lime family — poison-vial renders 65A30D
+liquid / BEF264 bubbles, venom-flask 4D7C0F→65A30D + A3E635/BEF264 — and BOTH prior poison items
+had already explicitly rejected 22C55E as the rarity-uncommon collision. So the gate's "doesn't
+match → substitute" branch fired: the venom nod was wired 22C55E → 65A30D and its highlight
+86EFAC → BEF264 (the shipped accent). A render-test assertion (iconsRender.test.tsx) locks that the
+substituted tone renders and 22C55E does not; the Step-6 re-sweep found no FFFFFF/000000 in any of
+the 4.
+
+Provenance: poison-vial's body color was set away from 22C55E to the 65A30D toxic-lime family at
+commit 498fef0 (decision-log.md 2026-07-11 § "Batch 2 (Uncommon) color ratifications"), the
+Uncommon batch-2 color ratification — that pre-existing off-collision decision is exactly what made
+the Step-0 gate resolvable.
+
+Option A tag-color list — RESOLVED, NOT open. The e1cd797 gate's alternate "matches → note for a
+future Option A list update" path did NOT fire; that was the "matches" branch. On the actual
+"doesn't match → substitute" branch there is NO Option A tag-color list update needed — poison's
+identity color was already established off-collision (65A30D, since 498fef0) before this batch, and
+22C55E was only the Design artifact's placeholder guess, never the shipped precedent. Closed here,
+not a lingering to-do for a future session.
+
+Codex (PR \#39): round 1 (reviewed 5a03d41 = branch tip) CLEAN — "Didn't find any major issues" —
+0 findings, ceiling never tripped, no meta-audit. Landed as a top-level issue comment (clean-pass
+shape), reviews-with-findings endpoint empty.
+
+Counter: 56 / 20 / 8 / 32 / 40 — unchanged (icon-wiring PR merge; no catch / rule / pattern /
+drift; no CF opened or closed — consistent with every prior batch close). Delta from tip
+56/20/8/32/40 (decision-log.md 2026-07-12 § "Epic batch (batch 4) icon artifact ratified"): none.
+
+Merge: PR \#39, --no-ff, merge 7ee4bdf (parents e1cd797 + 5a03d41); branch m1-icon-batch4-epic
+deleted L+R. GitHub marked PR \#39 merged (merge_commit_sha 7ee4bdf, merged_at
+2026-07-12T16:08:09Z).
+
 ## 2026-07-12 — Epic batch (batch 4) icon artifact ratified — one flagged item gated at wiring
 
 Reviewed against four named collision-risk groups (berserkers-greataxe vs greatsword/warhammer;
