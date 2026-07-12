@@ -4,6 +4,47 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — CF-67 Phase 1 ratified (auto-place disposition, reverses earlier player-placement lean)
+
+Phase 1 (read-only, tip a3174dc) confirmed the extend-existing-offer approach. Dispositions:
+
+- **Offer typing**: client-side discriminated union OfferCard = {kind:'relic', relicId} |
+  {kind:'item', itemId} at the pendingRelicOffer/modal layer. generateBossRelicOffer stays
+  relic-only/pure; boss branch (useRun.ts:604-611) appends a fixed world-forged-heart item
+  card. Future-proofs the M2 random-Epic leg as another kind:'item' card.
+- **Placement — AUTO-PLACE, reverses the original hand-off's player-placement lean.**
+  Evidence: the item lands in a bag never arranged or fought with again — run ends
+  immediately after the round-11 win (state.ts:1150-1160) — and RunEndScreen's ratified
+  8-field spec (decision-log.md 2026-05-19 § M1.5b PR 2 Phase 1 ratified, Q-set (b)) doesn't
+  display bag/items at all. Bag-arrangement pillar governs pre-combat strategy; there's no
+  next combat here. Player-placement would be ceremonial cost with no gameplay or display
+  payoff. Revisit if M2 ghost-seeding or a final-bag display later makes placement
+  consequential — no such mechanism exists in M1.
+- **Determinism**: confirmed safe by construction (client-side/disjoint-seed offer
+  generation, zero-RNG grant methods, FixtureTerminalState excludes bag/relics). No fixture
+  regeneration required.
+- **Effort**: ~2 days (auto-place variant, confirmed).
+
+New telemetry event required, mirroring relic_granted's shape (M1.2.6 precedent: RunId,
+itemId, round). Scope for Phase 2: heterogeneous card type, modal item-card render,
+grantBossItem sim method + grant_boss_item action variant, client dispatch, telemetry event
++ telemetry-plan.md update, tests. No fixture work. Random-Epic leg stays deferred to M2.
+Plus: RunEndScreen gains a conditional 9th field — 'Reward: World-Forged Heart' — displayed
+only when the Legendary leg was granted this run, mirroring how the boss relic already
+surfaces by name in the Boss slot. Minimal reward-legibility parity fix scoped to CF-67's own
+reward moment; not a reopening of the ratified 8-field RunEndScreen spec for general
+bag/inventory display.
+
+CF 67 stays OPEN — Phase 1 (design) complete + ratified; Phase 2 (implementation) pending under
+its own Step-0 halt-gate. Phase 1 was read-only (no code, no fixtures touched). Verification
+attached to this ratification: RunEndScreen renders relic slots only, no bag/items
+(apps/client/src/screens/RunEndScreen.tsx § "relic loadout"); relic_granted carries
+runId/slot/relicId/round (packages/content/src/schemas.ts § relic_granted, schema v0.5 additive).
+
+Counter: 56 / 20 / 8 / 32 / 42 — unchanged (Phase-1 design ratification; no catch / rule /
+pattern / drift; CF 67 stays open, none opened or closed). Delta from tip 56/20/8/32/42
+(decision-log.md 2026-07-12 § "CF-67 OPENED (corrected)"): none.
+
 ## 2026-07-12 — CF-67 OPENED (corrected): boss win-reward item legs missing; relic branch already wired
 
 Exit-gate solo playtest surfaced round-11 boss win as apparently reward-less. Initial
