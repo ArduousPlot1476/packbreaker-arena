@@ -4,6 +4,47 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — Legendary batch (batch 5, FINAL) icon artifact ratified — coverage to close at 45/45 pending wiring
+
+Reviewed against balance-bible.md § 10 (1×1 gem, 12g, +15 max HP, on_low_health: 15 dmg to opp) —
+spec match confirmed. Full six-test silhouette discipline checklist run (hero-tier item, per
+visual-direction.md § 11) — all six pass: monochrome legibility holds to 16px; blur/pinprick
+survival distinct against resonance-crystal/frost-shard/poison-vial/rune-pedestal; sibling
+distinction documented across three comparison groups; weight-match ink-fill quantified (heart
+~46%, in-band with resonance-crystal ~44% and frost-shard ~38%); frame-redundancy confirmed (body
+reads without frame chrome); hand-off spec fully reproducible.
+
+Life-red trap explicitly avoided — no #EF4444/#F87171 anywhere; vitality cued via the established
+gold/amber family (#E0B84A body, matching treasure-sack/resonance-crystal precedent) instead of a
+literal red heart, despite the item's name. Body-color rule compliant: gold body is the item's own
+rarity (Legendary), no Option A exception needed. No #FFFFFF/\#000000. No exact-hex collision with
+any other rarity or the coin-gold semantic extension.
+
+Two non-blocking corrections noted for wiring:
+1. The artifact's poison-vial reference render (Test 2/3, illustrative only, not being wired) uses
+   \#22C55E — the already-rejected placeholder color superseded at 498fef0 in favor of \#65A30D.
+   Doesn't affect world-forged-heart's own spec; flagged so it doesn't propagate as an assumption
+   elsewhere.
+2. Footprint label lists "gem, vitality." balance-bible.md § 10 tags world-forged-heart as `gem`
+   only. "Vitality" is flavor text, not a schema tag. Do not wire a vitality tag.
+
+Reviewed and accepted (master-dev call, not to be re-litigated at wiring): the heart silhouette
+shares shape-language with the HUD's life/hearts pip icon, even though color is fully
+differentiated (gold vs. life-red). Judged acceptable — the shape directly reflects the item's
+actual name, and the rule's protection is specifically color-based (life-red reserved for
+hearts/damage), which this artifact honors.
+
+Coverage: ICONNED_ITEM_IDS to close 44→45/45, ICONNED_RECIPES stays 12/12 (non-issue — item is in
+no recipe) upon wiring. This is the final icon batch — M1 icon-art track closes at 45/45 once
+wired. The Legendary wiring PR also bundles CF 66's immediate fix (shop/ghost-pool exclusion for
+world-forged-heart specifically); CF 66's broader question (whether RARITY_GATE_BY_ROUND[11] =
+'legendary' should exist at all) remains open/backlog, not resolved by this PR — same split
+pattern as CF 65's silent-failure/glow-gating division.
+
+Counter: 56 / 20 / 8 / 32 / 41 — unchanged (icon-artifact review/ratification only; no catch /
+rule / pattern / drift; no CF opened or closed). Delta from tip 56/20/8/32/41 (decision-log.md
+2026-07-12 § "Legendary-batch pre-scoping investigation"): none.
+
 ## 2026-07-12 — Legendary-batch pre-scoping investigation: shop-pool boss-reward-only gap (world-forged-heart) → CF 66 OPENED
 
 Read-only Phase-1 investigation ahead of scoping the Legendary icon batch (world-forged-heart, the
