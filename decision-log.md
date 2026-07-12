@@ -4,6 +4,73 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — Legendary-batch pre-scoping investigation: shop-pool boss-reward-only gap (world-forged-heart) → CF 66 OPENED
+
+Read-only Phase-1 investigation ahead of scoping the Legendary icon batch (world-forged-heart, the
+sole remaining un-iconned item, 44/45 → 45/45): does adding it to ICONNED_ITEM_IDS "just work," or
+must something else change at the same time. Content-side grep evidence across
+apps/client/src/run/content.ts and packages/sim (Rule 5).
+
+RECIPE SIDE — non-issue. world-forged-heart appears in no recipe (neither output nor input; grep
+of packages/content/src/recipes.ts), so ICONNED_RECIPES stays 12/12 automatically. Nothing to
+touch.
+
+SHOP SIDE — real gap. SHOP_POOL_ITEMS (run/content.ts) is derived directly from ICONNED_ITEM_IDS
+with no further gating, and is consumed by the sim's generateShop/buildPool (shop generation),
+ghost.ts (ghost-build pool), plus combat-registry and cost/resolution lookups in sim-bridge.ts.
+buildPool filters ONLY by rarity ceiling and weight: RARITY_GATE_BY_ROUND round-11 = 'legendary'
+and RARITY_POOL_WEIGHT.legendary = 1 (positive), and advancePhase generates makeShop(11) BEFORE
+the boss combat (shouldEndRun only fires after round-11 combat resolves). So a round-11 shop is
+already generated at the legendary ceiling. The moment world-forged-heart enters ICONNED_ITEM_IDS
+it becomes purchasable in the round-11 shop AND eligible for round-11 ghost builds — contradicting
+"boss reward only in M1" (balance-bible.md § 10). No item-level shop-eligibility flag exists
+anywhere for buildPool to honor (the 'boss_only' matches are a CONTRACT MUTATOR on boss combat
+stats, not item shop-gating). Same "latent gap re-activated by a content drop" shape as CF 42 /
+CF 65.
+
+Separately confirmed: the boss-reward ITEM grant is not implemented at all — the wired boss-win
+path (state.ts grantRelic('boss', …)) grants a RELIC, not this item; bible § 10's win-reward
+choice (1 of 3 incl. world-forged-heart) has no runtime code. world-forged-heart is presently
+dormant/unreachable in-game regardless of icon status. ITEMS (all 45, non-icon-filtered) already
+carries its ItemDef for cost/rarity/name; only the ICONS map lacks an entry (copper-coin fallback
+if ever rendered).
+
+DISPOSITION — bundle, don't defer. The fix has no meaning until world-forged-heart actually enters
+ICONNED_ITEM_IDS, so it can't ship as a standalone PR ahead of the Legendary batch; it lands in the
+SAME PR that wires the Legendary icon, halt-gated (confirm world-forged-heart absent from the
+shop-offer AND ghost-build pools post-wire before merge). Bundling over deferring because a
+purchasable Legendary reaching main — even briefly — risks contaminating pick-rate/win-rate signal
+during the M1-exit-gate playtest window (same contamination logic that pulled PR \#38's onCombine
+fix out of CF 65's backlog rather than deferring it).
+
+APPROACH RATIFIED (exact implementation left to Phase-1 inspection at wiring): an explicit
+exclusion check (SHOP_EXCLUDED_ITEM_IDS-style, naming TBD) at the two pool-GENERATION sites (the
+sim's buildPool and ghost.ts's pool derivation) — NOT a blanket removal from SHOP_POOL_ITEMS
+itself, since that symbol is also consumed for combat-registry and cost/resolution lookups that
+may need to resolve world-forged-heart once a real boss-reward item-grant path exists. Rejected a
+bossRewardOnly ItemDef schema field (content-schemas.ts touch) as disproportionate for a single M1
+item — consistent with the minimal-footprint-over-speculative-generality discipline (cf CF 56 /
+CF 38 deferrals).
+
+**CF 66 (OPENED)** — whether RARITY_GATE_BY_ROUND round-11 = 'legendary' should exist at all,
+given world-forged-heart is the only legendary and is boss-reward-only, so the round-11 legendary
+gate currently has no legitimately-shoppable legendary to justify it. Backlog, non-blocking, its
+own future Phase 1; sits alongside CF 56 (shop-gen RNG basis) and CF 64 (frozen-corpus regen).
+Number walked from canon: highest existing CF was 65 (decision-log.md 2026-07-11 § "Icon batch 3
+(Rare) landed"); grep confirms no CF 66+ at tip.
+
+Classification — NOT a process catch (resolved this walk-forward, master-dev call). Per
+decision-log.md 2026-07-11 § "Icon batch 3 (Rare) landed" ("Not a process Catch — a verified code
+finding spun to a CF") and the batch-4 Step-0 venom-nod precedent (decision-log.md 2026-07-12 §
+"Icon batch 4 (Epic) landed", a change-site contradiction caught pre-wire, counted as no catch),
+this verified code finding spun to CF 66 is CF-only — the CF-open is the recorded delta, no
+separate catch. (The Phase-1-halt-gate "caught before the change" framing was weighed and did not
+override the two on-point precedents.)
+
+Counter: 56 / 20 / 8 / 32 / 41 — open-CFs +1 (CF 66 opened); catches / rules / patterns / drifts
+unchanged. Delta from tip 56/20/8/32/40 (decision-log.md 2026-07-12 § "Icon batch 4 (Epic)
+landed"): open-CFs +1.
+
 ## 2026-07-12 — Icon batch 4 (Epic) landed: 4/4 Epics icon-complete, coverage 44/45 (PR \#39, merge 7ee4bdf); ICONNED_RECIPES 10→12
 
 Wired the 4 net-new Epic placeholder icons (berserkers-greataxe, bloodmoon-plate, master-
