@@ -4,6 +4,60 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — Icon batch 3 (Rare) landed: 8/8 Rares icon-complete, coverage 40/45 (PR \#37, merge 2a22b17); CF 65 OPENED
+
+Wired the 7 net-new Rare placeholder icons (greatsword, warhammer, vampire-fang, tower-shield,
+forge-anvil, rune-pedestal, venom-flask) into the client ICONS map at anchor fidelity
+(byte-faithful geometry, camelCased for JSX) and widened ICONNED_ITEM_IDS by union (33 → 40; all
+24 batch-1 + 9 batch-2 entries preserved). With the already-shipped ember-brand (M1.3.x), the
+Rare tier is now 8/8 icon-complete; total iconned coverage 40/45 (4 Epics + 1 Legendary remain).
+Client-only (apps/client); no sim/content/fixture surface; full workspace gate green (25/25 turbo
+tasks; client 551 passed / 15 skipped).
+
+ICONNED_RECIPES grows 7 → 10 by construction: iconning the outputs greatsword, tower-shield,
+venom-flask (inputs steel-sword+iron-mace, iron-shield+iron-cap, poison-vial+throwing-knife all
+already iconned) unlocks r-greatsword, r-tower-shield, r-venom-flask. The two Epic capstones
+r-berserkers-greataxe and r-master-alchemists-kit stay filtered — their inputs became fully
+iconned but their Epic outputs (berserkers-greataxe, master-alchemists-kit) remain non-iconned
+(runtime-checked: exactly the 10 survive; content.test.ts locks the split). Two Design-artifact
+literal #FFFFFF highlights swapped to palette near-whites per visual-direction.md § 3 ("Pure
+white … forbidden"): vampire-fang gloss → #F5F2EA, venom-flask shine → #F0F4FA. vampire-fang
+ships bone-only — the flagged blood cue is NOT rendered (would collide with reserved life-red
+#EF4444/#F87171); RATIFIED canonical this session (no crimson token, per Rule 20). Metal-slate
+bodies (greatsword/warhammer/forge-anvil, tower-shield) cite the steel-sword MATERIAL-IDENTITY
+precedent (M1.3.2 body-color audit: "94A3B8 stop = rarity-common but is metallic base"), NOT the
+2026-04-26 Option A tag exemption — Option A covers plant/fire/food/blood/gold tag colors, not
+metal; the two #3B82F6 accents (tower-shield boss, rune-pedestal gem) are each the item's own
+Rare tier (§ 5 own-tier permitted).
+
+Codex (PR \#37): round 1 (reviewed 13117ac) → 1 P2 finding, verified real against the repo (4/4
+claims: detectRecipes multiset+adjacency-only, apps/client/src/run/recipes.ts:18-86; sim
+combineRecipe throws "no rotation fits the freed footprint", packages/sim/src/run/state.ts:824;
+onCombine swallows it, apps/client/src/run/useRun.ts:508). Disposition (master-dev): merge as-is,
+spin the finding to CF 65 (below), do NOT patch in this PR. Not a process Catch — a verified code
+finding spun to a CF.
+
+**CF 65 (OPENED)** — combine-CTA-vs-output-fit. Client detectRecipes
+(apps/client/src/run/recipes.ts:18-86) surfaces the COMBINE glow/CTA on multiset + edge-adjacency
+only, with no output-footprint fit-check against the freed cells; if the sim-authoritative output
+cannot fit, the combine is rejected and the CTA appears to do nothing. Reactivated by batch-3's
+first ICONNED_RECIPES entries whose output footprint is non-conformal to the freed input cells —
+r-greatsword and r-tower-shield both output SHAPE_2x2 (batch-2's largest reachable output,
+treasure-sack 2×1_H, always rotated to fit the input domino exactly). Same latent-reactivated-by-
+content shape as CF 42. Proper fix needs a fit-predicate the sim exposes and the client consumes
+for glow-gating (cross-package; own Phase 1). **Scoped to the glow-gating half only** — the
+silent-failure half (onCombine swallowing the sim throw at useRun.ts:508) is a separate immediate
+follow-up PR, tracked outside this CF. Backlog / non-blocking, alongside CF 56 (shop-gen RNG) +
+CF 64 (frozen-corpus regen). Number walked from canon: highest existing CF was 64
+(decision-log.md 2026-07-11 § "CF 58 CLOSED"); grep confirms no CF 65+ at tip.
+
+**Counter: 56 / 20 / 8 / 32 / 40** (catches / rules / patterns / drifts / open-CFs). Delta from
+tip 56/20/8/32/39 (decision-log.md 2026-07-11 § "Drift 32 logged"): open-CFs +1 (CF 65 opened).
+No catch / rule / pattern / drift; no CF closed.
+
+Merge: PR \#37, --no-ff, merge 2a22b17 (parents 9cec7da + 13117ac); branch icon-batch-3-rare
+deleted L+R.
+
 ## 2026-07-11 — Drift 32 logged: batch-2 "append at bottom" prompt vs codified "Newest at top" — 906eaa1 zero-delta re-walk corrected
 
 The batch-2 color-ratification hand-off prompt (ratified 498fef0) instructed "append at the
