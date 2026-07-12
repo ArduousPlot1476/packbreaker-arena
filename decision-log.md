@@ -4,6 +4,41 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-11 — onCombine combine-rejection surfaced at the CTA (PR \#38, merge 25934f5) — CF 65 silent-failure half
+
+Companion to CF 65 (decision-log.md 2026-07-11 § "Icon batch 3 (Rare) landed"). CF 65's finding
+split into two halves at disposition: the glow-gating half (client detectRecipes surfaces the
+COMBINE CTA on multiset + adjacency alone, no output-fit check) and the silent-failure half
+(onCombine swallowed the sim's footprint-rejection throw with only a DEV console.warn). This PR
+fixes the silent-failure half ONLY; CF 65 stays OPEN for the glow-gating half (cross-package
+fit-predicate, its own Phase 1).
+
+onCombine's catch (apps/client/src/run/useRun.ts) now sets a transient combineRejection signal
+keyed by combineMatchKey (exported from run/recipes.ts — the exact string detectRecipes dedups
+on) instead of swallowing; it clears on any bag mutation (rearrange or a successful combine, both
+of which change state.bag) and after a 2.5s timeout. Both COMBINE-CTA surfaces render an inline
+"NO ROOM — REARRANGE" note for the tapped match: RecipeGlow (bag overlay) a pill below the
+button, CraftingTab (mobile ready row) a subtext swap. Threaded hook → screens → BagBoard /
+CraftingTab via an optional prop — no toast/notification infrastructure, no glow-gating, no
+fit-predicate. Client-only (9 source/test files under apps/client); no sim/content/fixture
+surface. Full gate green (25/25 turbo tasks; client 554 passed / 15 skipped).
+
+A real-sim regression test drives a genuine combineRecipe rejection through useRun.onCombine (no
+mock): advances to round 2 for gold, edge-places r-tower-shield's iron-shield + iron-cap so the
+2×2 output is out of bounds → the sim throws "no rotation fits the freed footprint" →
+combineRejection is set; a corner-move retry then commits the tower-shield AND clears the
+rejection.
+
+Codex (PR \#38): round 1 (d7803d7) CLEAN; round 2 (de8c61f, after the real-sim test push) CLEAN
+— 0 findings across both, ceiling never approached.
+
+Counter: 56 / 20 / 8 / 32 / 40 — unchanged (client point-fix PR merge; no catch/rule/pattern/
+drift; no CF opened or closed — CF 65 stays open for its glow-gating half). Delta from tip
+56/20/8/32/40 (decision-log.md 2026-07-11 § "Icon batch 3 (Rare) landed"): none.
+
+Merge: PR \#38, --no-ff, merge 25934f5 (parents 237e116 + de8c61f); branch oncombine-reject-
+surface deleted L+R.
+
 ## 2026-07-11 — Icon batch 3 (Rare) landed: 8/8 Rares icon-complete, coverage 40/45 (PR \#37, merge 2a22b17); CF 65 OPENED
 
 Wired the 7 net-new Rare placeholder icons (greatsword, warhammer, vampire-fang, tower-shield,
