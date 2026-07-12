@@ -1,11 +1,11 @@
-// Iconned-content coverage — Rare batch 3 (2026-07-11) wiring guard.
-// Locks: the union widen (40 iconned ids, all 24 batch-1 + 9 batch-2 entries
-// intact); the ICONS map ⇄ ICONNED_ITEM_IDS 1:1 coverage (no iconned id
-// silently falls back to copper-coin); and the by-construction ICONNED_RECIPES
-// set (7 → 10 — greatsword/tower-shield/venom-flask outputs now iconned unlock
-// r-greatsword/r-tower-shield/r-venom-flask; the two Epic capstones stay
-// filtered because their OUTPUTS remain non-iconned even though their inputs
-// are now all iconned).
+// Iconned-content coverage — Epic batch 4 (2026-07-12) wiring guard.
+// Locks: the union widen (44 iconned ids, all 24 batch-1 + 9 batch-2 + 7
+// batch-3 entries intact); the ICONS map ⇄ ICONNED_ITEM_IDS 1:1 coverage (no
+// iconned id silently falls back to copper-coin); and the by-construction
+// ICONNED_RECIPES set (10 → 12 — the two Epic capstone OUTPUTS berserkers-
+// greataxe / master-alchemists-kit are now iconned, and their inputs were all
+// iconned since batch 3, so r-berserkers-greataxe / r-master-alchemists-kit
+// switch on; bloodmoon-plate + resonance-crystal are shop-only, no recipe).
 
 import { describe, expect, it } from 'vitest';
 import { ICONNED_ITEM_IDS, ICONNED_RECIPES } from './content';
@@ -29,10 +29,15 @@ const BATCH3_7 = [
   'rune-pedestal', 'venom-flask',
 ];
 
-describe('ICONNED_ITEM_IDS — Rare batch 3 union widen', () => {
-  it('totals 40 unique ids', () => {
-    expect(ICONNED_ITEM_IDS).toHaveLength(40);
-    expect(new Set(ICONNED_ITEM_IDS).size).toBe(40);
+const BATCH4_4 = [
+  'berserkers-greataxe', 'bloodmoon-plate', 'master-alchemists-kit',
+  'resonance-crystal',
+];
+
+describe('ICONNED_ITEM_IDS — Epic batch 4 union widen', () => {
+  it('totals 44 unique ids', () => {
+    expect(ICONNED_ITEM_IDS).toHaveLength(44);
+    expect(new Set(ICONNED_ITEM_IDS).size).toBe(44);
   });
 
   it('preserves all 24 batch-1 entries exactly (union, not replace)', () => {
@@ -43,13 +48,17 @@ describe('ICONNED_ITEM_IDS — Rare batch 3 union widen', () => {
     for (const id of BATCH2_9) expect(ICONNED_ITEM_IDS).toContain(id);
   });
 
-  it('adds the 7 net-new Rare batch-3 ids', () => {
+  it('preserves all 7 batch-3 entries exactly (union, not replace)', () => {
     for (const id of BATCH3_7) expect(ICONNED_ITEM_IDS).toContain(id);
   });
 
-  it('is exactly the 24 batch-1 + 9 batch-2 + 7 batch-3 ids (no extras)', () => {
+  it('adds the 4 net-new Epic batch-4 ids', () => {
+    for (const id of BATCH4_4) expect(ICONNED_ITEM_IDS).toContain(id);
+  });
+
+  it('is exactly the 24 batch-1 + 9 batch-2 + 7 batch-3 + 4 batch-4 ids (no extras)', () => {
     expect(new Set(ICONNED_ITEM_IDS)).toEqual(
-      new Set([...BATCH1_24, ...BATCH2_9, ...BATCH3_7]),
+      new Set([...BATCH1_24, ...BATCH2_9, ...BATCH3_7, ...BATCH4_4]),
     );
   });
 });
@@ -61,21 +70,23 @@ describe('ICONS map ⇄ ICONNED_ITEM_IDS coverage', () => {
     }
   });
 
-  it('has a distinct component for each of the 7 batch-3 icons', () => {
-    for (const id of BATCH3_7) expect(ICONS[id]).toBeTypeOf('function');
+  it('has a distinct component for each of the 4 batch-4 icons', () => {
+    for (const id of BATCH4_4) expect(ICONS[id]).toBeTypeOf('function');
   });
 });
 
-describe('ICONNED_RECIPES — by-construction 7 → 10 (batch-3 outputs iconned)', () => {
+describe('ICONNED_RECIPES — by-construction 10 → 12 (Epic capstone outputs iconned)', () => {
   const ids = ICONNED_RECIPES.map((r) => String(r.id)).sort();
 
-  it('is exactly the 10 expected recipes, nothing else', () => {
+  it('is exactly the 12 expected recipes, nothing else', () => {
     expect(ids).toEqual([
+      'r-berserkers-greataxe',
       'r-ember-brand',
       'r-fire-oil',
       'r-greatsword',
       'r-healing-salve',
       'r-iron-shield',
+      'r-master-alchemists-kit',
       'r-stamina-tonic',
       'r-steel-sword',
       'r-tower-shield',
@@ -84,14 +95,14 @@ describe('ICONNED_RECIPES — by-construction 7 → 10 (batch-3 outputs iconned)
     ]);
   });
 
-  it('switches ON r-greatsword / r-tower-shield / r-venom-flask (batch-3 outputs now iconned)', () => {
+  it('switches ON the two Epic capstones (outputs now iconned; inputs iconned since batch 3)', () => {
+    expect(ids).toContain('r-berserkers-greataxe');
+    expect(ids).toContain('r-master-alchemists-kit');
+  });
+
+  it('keeps the batch-3 outputs on (r-greatsword / r-tower-shield / r-venom-flask)', () => {
     expect(ids).toContain('r-greatsword');
     expect(ids).toContain('r-tower-shield');
     expect(ids).toContain('r-venom-flask');
-  });
-
-  it('does NOT switch on the Epic capstones (inputs now all iconned, Epic outputs not)', () => {
-    expect(ids).not.toContain('r-berserkers-greataxe');
-    expect(ids).not.toContain('r-master-alchemists-kit');
   });
 });
