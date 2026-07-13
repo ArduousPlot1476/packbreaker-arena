@@ -918,8 +918,10 @@ export function useRun() {
   // advancePhase is resumed inside grantSelectedRelic phase-conditionally
   // (so the boss grant lands while sim is still in 'resolution', then
   // sim transitions to 'ended' via the resumed advancePhase). Predicate
-  // mirrors the boss branch of the pendingRelicOffer useMemo — same three
-  // readings; inline rather than helper because of the one call site.
+  // mirrors the boss branch of the pendingRelicOffer useMemo — same four
+  // readings (CF-67 Codex round 2: bossRewardItemId === null joins the mirror, so
+  // a restored state with the item leg already taken advances to run-end instead
+  // of deferring forever with no modal); inline rather than helper (one call site).
   const onCombatDone = useCallback((payload: CombatDonePayload) => {
     if (simRun === null) return;
     if (state.state.outcome !== 'in_progress') return;
@@ -945,7 +947,8 @@ export function useRun() {
     const shouldDeferAdvance =
       lastEntry?.round === 11 &&
       lastEntry?.outcome === 'win' &&
-      postApply.relics.boss === null;
+      postApply.relics.boss === null &&
+      postApply.bossRewardItemId === null;
     if (!shouldDeferAdvance) {
       simRun.advancePhase();
       // B2 Option 1: advancePhase → makeShop consumed this.rng (kept for

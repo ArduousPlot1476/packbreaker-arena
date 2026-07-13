@@ -1084,6 +1084,66 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
     expect(advancePhaseSpy).not.toHaveBeenCalled();
   });
 
+  it('CF-67 Codex round 2 — shouldDeferAdvance mirrors bossRewardItemId: a round-11 win with the item leg already taken (relics.boss null, bossRewardItemId set) does NOT defer — it advances to run-end', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx0 = getCtx();
+    act(() => ctx0.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+
+    const baseSnapshot = ctx0.simRun!.getState();
+    vi.spyOn(ctx0.simRun!, 'applyCombatOutcome').mockImplementation(() => {});
+    const advancePhaseSpy = vi
+      .spyOn(ctx0.simRun!, 'advancePhase')
+      .mockImplementation(() => {});
+    // Previously-divergent state: boss relic slot empty BUT the item leg already
+    // taken (bossRewardItemId set). Before the round-2 fix, shouldDeferAdvance saw
+    // only relics.boss === null → deferred forever with no modal; now the fourth
+    // reading (bossRewardItemId === null) is false, so it must NOT defer.
+    vi.spyOn(ctx0.simRun!, 'getState').mockReturnValue({
+      ...baseSnapshot,
+      currentRound: 11 as RoundNumber,
+      outcome: 'in_progress' as RunOutcome,
+      relics: {
+        starter: 'apprentices-loop',
+        mid: 'resonant-anchor',
+        boss: null,
+      } as RelicSlots,
+      bossRewardItemId: 'world-forged-heart' as ItemId,
+      history: [
+        {
+          round: 11 as RoundNumber,
+          outcome: 'win',
+          damageDealt: 30,
+          damageTaken: 0,
+          goldEarnedThisRound: 5,
+          opponentGhostId: null,
+          opponentClassId: null,
+        },
+      ] as ReadonlyArray<RunHistoryEntry>,
+    });
+
+    act(() => {
+      ctx0.onCombatDone({
+        result: {
+          outcome: 'player_win',
+          events: [],
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: null,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+
+    // advancePhase IS called (the run advances to end rather than hanging in
+    // resolution with no modal), and no boss offer shows (item leg already taken).
+    expect(advancePhaseSpy).toHaveBeenCalled();
+    expect(getCtx().pendingRelicOffer).toBeNull();
+  });
+
   it.skip("grantSelectedRelic('boss', ...) clears the offer, resumes advancePhase, and transitions sim outcome to 'won' + phase to 'ended'", async () => {
     const { getCtx } = await renderAndCapture();
     const ctx0 = getCtx();
