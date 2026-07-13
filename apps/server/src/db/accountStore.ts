@@ -7,7 +7,7 @@
 // idempotency paths are unit-tested with NO live credentials (the real
 // SQL is the deferred live-verify surface, like db/client.ts healthCheck).
 
-import { eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from './schema.js'
 
@@ -25,9 +25,12 @@ export interface AccountStore {
     clerkUserId: string
     anonIdAtSignup: string
   }): Promise<AccountRecord>
-  /** Sets anon_id_at_signup for an account. Callers gate this on the
-   *  current value being null (link-if-null; never overwrite). */
-  linkAnonId(accountId: string, anonId: string): Promise<void>
+  /** Atomically sets anon_id_at_signup ONLY if it is currently null
+   *  (`WHERE id = ? AND anon_id_at_signup IS NULL`). Returns true iff THIS
+   *  call performed the link — so two concurrent link requests that both
+   *  observed null can't overwrite each other (the never-overwrite contract
+   *  holds at the SQL layer, not just via the handler's read-then-check). */
+  linkAnonIdIfNull(accountId: string, anonId: string): Promise<boolean>
 }
 
 /** Builds the real store over a drizzle handle (accounts schema). */
@@ -64,11 +67,18 @@ export function createAccountStore(
         anonIdAtSignup: row.anonIdAtSignup,
       }
     },
-    async linkAnonId(accountId, anonId) {
-      await db
+    async linkAnonIdIfNull(accountId, anonId) {
+      const rows = await db
         .update(schema.accounts)
         .set({ anonIdAtSignup: anonId })
-        .where(eq(schema.accounts.id, accountId))
+        .where(
+          and(
+            eq(schema.accounts.id, accountId),
+            isNull(schema.accounts.anonIdAtSignup),
+          ),
+        )
+        .returning({ id: schema.accounts.id })
+      return rows.length > 0
     },
   }
 }

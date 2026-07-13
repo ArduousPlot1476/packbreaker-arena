@@ -16,17 +16,24 @@ import { loadLocal } from '../persistence';
 export function AccountLinkOnSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
   const apiFetch = useApiFetch();
-  const prevSignedIn = useRef(false);
+  const linkedThisSession = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    const was = prevSignedIn.current;
-    prevSignedIn.current = isSignedIn;
-    if (was || !isSignedIn) return; // only fire on false → true
+    // Reset on sign-out so a later sign-in re-links (server is idempotent).
+    if (!isSignedIn) {
+      linkedThisSession.current = false;
+      return;
+    }
+    if (!isLoaded || linkedThisSession.current) return;
 
+    // The anonId is eagerly persisted at app startup (ensureAnonIdPersisted),
+    // so it is normally present here. Guard anyway: if it is not yet
+    // available, do NOT mark the session linked — retry on the next change
+    // rather than consuming the transition (Codex round 1 P1).
     const anonId = loadLocal()?.telemetryAnonId;
     if (anonId === undefined) return;
 
+    linkedThisSession.current = true;
     // Best-effort: sign-in must never break on a link failure (server is
     // idempotent). Errors are swallowed; a later sign-in retries.
     void apiFetch('/v1/account/link', {

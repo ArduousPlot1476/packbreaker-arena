@@ -56,8 +56,10 @@ export function registerAccountLinkRoute(
         return reply.status(200).send({ accountId: created.id, linked: true })
       }
       if (existing.anonIdAtSignup === null) {
-        await store.linkAnonId(existing.id, anonId)
-        return reply.status(200).send({ accountId: existing.id, linked: true })
+        // Atomic link-if-null: `linked` is false if a concurrent request set
+        // it first (never overwrite), true if THIS call performed the link.
+        const linked = await store.linkAnonIdIfNull(existing.id, anonId)
+        return reply.status(200).send({ accountId: existing.id, linked })
       }
       // Already linked — never overwrite.
       return reply.status(200).send({ accountId: existing.id, linked: false })

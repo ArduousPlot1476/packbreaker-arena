@@ -41,13 +41,17 @@ function makeFakeAccountStore(seed: AccountRecord[] = []): {
       byClerk.set(input.clerkUserId, rec)
       return rec
     },
-    async linkAnonId(accountId, anonId) {
+    async linkAnonIdIfNull(accountId, anonId) {
       for (const rec of byClerk.values()) {
         if (rec.id === accountId) {
+          // Mirror the real SQL's atomic null-predicate: only link when
+          // currently null; report whether this call actually linked.
+          if (rec.anonIdAtSignup !== null) return false
           byClerk.set(rec.clerkUserId, { ...rec, anonIdAtSignup: anonId })
-          break
+          return true
         }
       }
+      return false
     },
   }
   return { store, get: (id) => byClerk.get(id) ?? null }
@@ -132,6 +136,17 @@ describe('POST /v1/account/link', () => {
     expect(res.statusCode).toBe(200)
     expect(JSON.parse(res.body)).toEqual({ accountId: 'acct_1', linked: false })
     // The original link is preserved — NOT overwritten by ANON_B.
+    expect(fake.get(USER_ID)?.anonIdAtSignup).toBe(ANON_A)
+  })
+
+  it('linkAnonIdIfNull is atomic: a lost race returns false and never overwrites', async () => {
+    // Simulates the concurrent case: the row was null at find-time but a
+    // competing request set it before this update runs.
+    const fake = makeFakeAccountStore([
+      { id: 'acct_1', clerkUserId: USER_ID, anonIdAtSignup: ANON_A },
+    ])
+    const linked = await fake.store.linkAnonIdIfNull('acct_1', ANON_B)
+    expect(linked).toBe(false)
     expect(fake.get(USER_ID)?.anonIdAtSignup).toBe(ANON_A)
   })
 })
