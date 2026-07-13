@@ -908,6 +908,15 @@ class RunControllerImpl implements RunController {
           `grantRelic: 'boss' grant requires resolution phase after a round-11 player_win (current: round ${this.currentRound}, phase '${this.phase}', last outcome '${lastOutcome}')`,
         );
       }
+      // CF-67 (Codex round 1): boss reward is choose-ONE. If the Legendary item
+      // leg was already taken this run, the boss relic leg is closed — cross-guard
+      // mirroring grantBossItem's relics.boss check so the sim enforces exclusivity
+      // symmetrically.
+      if (this.bossRewardItemId !== null) {
+        throw new Error(
+          `grantRelic: 'boss' reward already granted as an item ('${String(this.bossRewardItemId)}'); boss reward is choose-one`,
+        );
+      }
     }
 
     this.relics = { ...this.relics, [slot]: relicId };
@@ -946,6 +955,16 @@ class RunControllerImpl implements RunController {
     if (this.bossRewardItemId !== null) {
       throw new Error(
         `grantBossItem: boss reward item already granted ('${String(this.bossRewardItemId)}')`,
+      );
+    }
+    // CF-67 (Codex round 1): boss reward is choose-ONE. If the boss RELIC leg was
+    // already taken this run, the item leg is closed — cross-guard mirroring the
+    // grantRelic('boss') bossRewardItemId check. The client offer gate already
+    // prevents this, but the raw action / controller API exposes both grant paths
+    // in the same resolution window, so the sim enforces exclusivity itself.
+    if (this.relics.boss !== null) {
+      throw new Error(
+        `grantBossItem: boss reward already granted as a relic ('${String(this.relics.boss)}'); boss reward is choose-one`,
       );
     }
     const item = this.items[itemId];

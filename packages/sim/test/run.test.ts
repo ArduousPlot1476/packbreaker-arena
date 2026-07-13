@@ -1589,6 +1589,19 @@ describe('grantBossItem (CF-67 boss-win Legendary reward)', () => {
     expect(ctrl.getState().bag.placements).toHaveLength(24);
     expect(ctrl.getState().bag.placements.some((p) => p.itemId === 'world-forged-heart')).toBe(false);
   });
+
+  it('choose-one exclusivity (Codex round 1): boss relic-then-item throws, and item-then-relic throws', () => {
+    // Direction A — boss relic first, then the item leg is closed.
+    const a = driveTo11();
+    a.ctrl.startCombat(emptyGhost(1));
+    a.ctrl.grantRelic('boss', RelicId('worldforge-seed'));
+    expect(() => a.ctrl.grantBossItem(WFH)).toThrow(/choose-one/);
+    // Direction B — item first, then the boss relic leg is closed.
+    const b = driveTo11();
+    b.ctrl.startCombat(emptyGhost(1));
+    b.ctrl.grantBossItem(WFH);
+    expect(() => b.ctrl.grantRelic('boss', RelicId('worldforge-seed'))).toThrow(/choose-one/);
+  });
 });
 
 // ─── applyCombatOutcome (M1.5a PR 1) ───────────────────────────────
