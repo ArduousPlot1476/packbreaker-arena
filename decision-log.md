@@ -4,6 +4,74 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-13 — M2.1 PR1 CLOSED: server scaffolding (Neon/Drizzle DB + Clerk auth seam + daily-contract route) merged (PR \#42, merge d4ab7b3); Codex clean round 1; CF-68 opened (daily-route drift — server leg closed, client leg open); Drift 33 + 34 codified
+
+M2.1 PR1 (Persistence & Auth Backbone — server scaffolding) merged `--no-ff` to main at
+d4ab7b365c57557355f37e63a763d3a109b6b2b9 (PR \#42, parents 4a63c0e + 30748dc; branch
+m2.1-pr1-server-scaffolding; GitHub merged=true, merged_at 2026-07-13T21:33:23Z,
+merge_commit_sha d4ab7b3). Pre-merge gate green: `turbo lint typecheck test --force` → 23/23
+tasks; 81 server tests (sim 527 / client 573 also green). Codex round 1 CLEAN — 0 findings,
+ceiling never tripped, reviewed SHA 30748dc143 == tip; the clean pass landed as a top-level issue
+comment ("Didn't find any major issues. Chef's kiss."), reviews endpoint empty (the documented
+clean-pass shape, PR \#30 precedent).
+
+**CF-68 OPENED — daily-contract-route drift — PARTIAL close (NOT a full feature closure).**
+tech-architecture.md § 6.1 documented `GET /v1/contract/daily` but it was never registered in code
+(only `POST /v1/telemetry/batch` shipped, M1.5c PR 2 / CF 49). This PR splits the drift into two legs:
+- **Server-registration leg — CLOSED at merge d4ab7b3.** `GET /v1/contract/daily` is now registered
+  (routes/contract.ts), returning the canonical `DailyContractResponse` built from the sole authored
+  daily contract (`CONTRACTS['daily-placeholder']`) + an FNV-1a date-stable seed, Zod output-guarded
+  (validates its own output → 500 on regression).
+- **Client-fetch leg — OPEN, remains CF-68's live scope (M2 backlog).** The client never fetches the
+  endpoint: `apps/client/src/run/useRun.ts:278` and `apps/client/src/run/RunController.ts:89` still
+  hardcode `contractId: 'neutral' as ContractId`. Wiring the client to fetch + run the daily contract
+  is a separate M2 backlog item; CF-68 stays OPEN. This entry closes the server half only.
+
+**Phase 1 architecture ratification (recorded canonically here — no prior log entry exists; this
+session's master-dev ratification is the source).** M2.1 persistence/auth stack: auth = **Clerk**;
+DB = **Neon** (Postgres); driver = **pg / node-postgres** (NOT @neondatabase/serverless — apps/server
+is a persistent Fastify container, not an edge/serverless runtime); ORM = **Drizzle**; Clerk
+integration = `@clerk/backend` `verifyToken` behind a narrow `ClerkVerifier` DI seam mirroring the
+CF-49 posthog-sink null-or-real factory pattern (`createDbClient` / `createClerkVerifier` return
+null-and-warn when their env is unset → the server boots without DB/auth, and secretless CI stays
+green); identity model = **anonymous-default / account-optional** — `telemetryAnonId` is the
+pre-account identity, LINKED via `accounts.anon_id_at_signup`, NOT replaced, at signup. `accounts` is
+the only table this PR (id, clerk_user_id, anon_id_at_signup, created_at); migration
+`drizzle/0000_real_the_captain.sql` generated offline + committed.
+
+**tech-architecture.md § 6.1 / § 6.3 corrected in this PR.** § 6.1: M1 shipped telemetry-only; the
+daily route was specced-but-unregistered drift (now closed, server leg). § 6.3: Neon + Drizzle + Clerk
+resolved (was "M1 no DB; M2+ Postgres (RDS or Neon)"). **DTO-shape supersession (explicit):** the
+shipped `DailyContractResponse` nests `contract: Contract` (which carries the full `ruleset`),
+SUPERSEDING § 6.1's original inline sketch `{ date, contract_id, seed, ruleset }` — per § 6.4 (API
+contract location): the canonical TS DTO (in packages/shared/src/api, def content-schemas.ts § 14)
+governs the wire shape, not an informal doc sketch.
+
+**Two master-dev chat-side drift instances codified (Topic 2 lineage) — Drift 33 + Drift 34.** Both
+were inaccurate premises in the Phase 1 investigation prompt, caught during the read-only investigation
+(Rule 8 halt-and-surface) before any code depended on them:
+- **Drift 33** — the prompt asserted `packages/shared/src/save.ts` defines `LocalSaveV1`; no such file
+  exists. Canonical def is content-schemas.ts § 13 (`LocalSaveV1`, `schemaVersion: 1`), re-exported by
+  `packages/shared/src/save/index.ts` (a types-only barrel).
+- **Drift 34** — the prompt asserted `apps/client/src/telemetry/emit.ts` generates `telemetryAnonId`
+  (uuid v4); `emit.ts` only consumes an already-resolved anonId. Generation lives in
+  `apps/client/src/telemetry/identifiers.ts` (`resolveAnonId` → `crypto.randomUUID`), invoked from
+  `useRun.ts`.
+
+**Deferred / carried (unchanged from ratification), non-blocking:**
+- Live DB verification — Neon health-check run + `drizzle-kit migrate` apply — awaits a real
+  `DATABASE_URL` (ratified "build offline, defer live verify"). `healthCheck()` + migration SQL exist;
+  only the live run is deferred.
+- Redis (ghost-pool LRU) — later.
+- § 6.2 routes `POST /v1/ghost`, `GET/POST /v1/run/save`, `GET /v1/leaderboard/daily`,
+  `POST /v1/replay/validate` — PR2 / PR3.
+- CF-68 client-fetch leg (above).
+
+Counter: 56/23/8/32/41 → 56/23/8/34/42 — drifts +2 (Drift 33 save.ts-wrong-path premise; Drift 34
+emit.ts-anonId-generation premise); open-CFs +1 (CF-68 opened; server-registration leg closed at merge
+d4ab7b3, client-fetch leg remains open); catches / rules / patterns unchanged (Codex round 1 clean,
+0 findings; the DI seam reuses the existing CF-49 posthog pattern — no new rule/pattern).
+
 ## 2026-07-13 — M1 EXIT GATE CLOSED
 
 All three amended M1 exit criteria (roadmap.md § M1) satisfied:
