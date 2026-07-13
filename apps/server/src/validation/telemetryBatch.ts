@@ -118,6 +118,10 @@ const recipeCompleted = z
 const relicGranted = z
   .object({ ...baseShape, name: z.literal('relic_granted'), runId: idString, slot: RelicSlotSchema, relicId: idString, round: num })
   .strict()
+// CF-67: boss-win reward item. Mirrors relicGranted (runId + granted id + round).
+const itemGranted = z
+  .object({ ...baseShape, name: z.literal('item_granted'), runId: idString, itemId: idString, round: num })
+  .strict()
 const combatStart = z
   .object({ ...baseShape, name: z.literal('combat_start'), runId: idString, round: num, opponentGhostId: idString.nullable() })
   .strict()
@@ -156,6 +160,7 @@ export const TelemetryEventSchema = z.discriminatedUnion('name', [
   itemMoved,
   recipeCompleted,
   relicGranted,
+  itemGranted,
   combatStart,
   combatEnd,
   tutorialStepReached,
@@ -202,6 +207,7 @@ function _assertVariantNamesExhaustive(name: TelemetryEventName): void {
     case 'item_moved':
     case 'recipe_completed':
     case 'relic_granted':
+    case 'item_granted':
     case 'combat_start':
     case 'combat_end':
     case 'tutorial_step_reached':

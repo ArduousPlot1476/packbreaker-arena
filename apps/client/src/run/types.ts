@@ -113,6 +113,10 @@ export interface RunState {
   contractId: ContractId;
   derived: DerivedModifiers;
   relics: RelicSlots;
+  /** Boss-win reward item (CF-67), projected from sim getState via
+   *  applySimSnapshot. Materialized (never undefined) client-side; RunEndScreen's
+   *  conditional 9th field reads this as the single source of truth. */
+  bossRewardItemId: ItemId | null;
   outcome: RunOutcome;
   seed: SimSeed;
   history: RunHistoryEntry[];

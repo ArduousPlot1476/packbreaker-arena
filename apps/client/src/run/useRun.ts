@@ -18,6 +18,7 @@ import type {
   ContractId,
   GhostId,
   IsoTimestamp,
+  ItemId,
   PlacementId,
   RecipeId,
   RelicId,
@@ -96,6 +97,17 @@ export interface PendingRunInput {
    *  a concrete value (the two paths diverge here but converge at createRun). */
   readonly entryMode: 'class_select' | 'replay_same_class';
 }
+
+/** A boss-win offer card — a relic OR (CF-67) a fixed Legendary item. The
+ *  discriminated union lets RelicOfferModal render + dispatch each kind, and
+ *  future-proofs the M2 random-Epic leg as another kind:'item' card. */
+export type OfferCard =
+  | { readonly kind: 'relic'; readonly relicId: RelicId }
+  | { readonly kind: 'item'; readonly itemId: ItemId };
+
+/** The fixed Legendary item offered as the second boss-win reward option
+ *  (CF-67, balance-bible.md § 15). */
+const BOSS_REWARD_ITEM_ID = 'world-forged-heart' as ItemId;
 
 export function useRun() {
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
@@ -592,29 +604,45 @@ export function useRun() {
   // re-renders that didn't change deps return the same card arrays and
   // the modal doesn't reshuffle.
   const pendingRelicOffer = useMemo<
-    | { readonly slot: 'mid' | 'boss'; readonly cards: ReadonlyArray<RelicId> }
+    | { readonly slot: 'mid' | 'boss'; readonly cards: ReadonlyArray<OfferCard> }
     | null
   >(() => {
     if (simRun === null) return null;
     if (state.state.outcome !== 'in_progress') return null;
     if (state.combatActive) return null;
 
-    // Boss first — tighter gate (round 11 + win + boss slot empty).
+    // Boss first — tighter gate (round 11 + win + NEITHER boss reward taken).
+    // CF-67: the offer is "pick ONE boss reward" — a relic OR the Legendary item.
+    // Picking the relic sets relics.boss; picking the item sets bossRewardItemId.
+    // Gating on both (not just relics.boss) dismisses the offer on the item pick
+    // too, rather than relying solely on the deferred advancePhase to end the run.
     const last = state.state.history[state.state.history.length - 1];
     if (
       last !== undefined &&
       last.round === 11 &&
       last.outcome === 'win' &&
-      state.state.relics.boss === null
+      state.state.relics.boss === null &&
+      state.state.bossRewardItemId === null
     ) {
-      const cards = generateBossRelicOffer(state.state.seed, state.state.classId);
+      const relicCards: OfferCard[] = generateBossRelicOffer(
+        state.state.seed,
+        state.state.classId,
+      ).map((relicId) => ({ kind: 'relic', relicId }));
+      // CF-67: append the fixed Legendary item option (balance-bible § 15).
+      const cards: OfferCard[] = [
+        ...relicCards,
+        { kind: 'item', itemId: BOSS_REWARD_ITEM_ID },
+      ];
       return { slot: 'boss', cards };
     }
 
     // Mid — round 6+, mid slot empty.
     if (state.state.round < 6) return null;
     if (state.state.relics.mid !== null) return null;
-    const cards = generateMidRelicOffer(state.state.seed, state.state.classId);
+    const cards: OfferCard[] = generateMidRelicOffer(
+      state.state.seed,
+      state.state.classId,
+    ).map((relicId) => ({ kind: 'relic', relicId }));
     return { slot: 'mid', cards };
   }, [
     simRun,
@@ -623,6 +651,7 @@ export function useRun() {
     state.state.round,
     state.state.relics.mid,
     state.state.relics.boss,
+    state.state.bossRewardItemId,
     state.state.history.length,
     state.state.seed,
     state.state.classId,
@@ -859,6 +888,25 @@ export function useRun() {
     [simRun, state.state.outcome],
   );
 
+  // CF-67: item-branch dispatch — mirrors grantSelectedRelic but for the boss
+  // reward ITEM (grantBossItem). MUST resume the deferred advancePhase: the
+  // pendingRelicOffer boss branch fires while outcome is in_progress, so ending
+  // the run (advancePhase → 'ended') is what dismisses the offer and finalizes
+  // the win. grantBossItem also sets bossRewardItemId, which the offer gate reads
+  // — belt-and-suspenders so the offer never re-shows the already-taken reward.
+  const grantSelectedItem = useCallback(
+    (itemId: ItemId) => {
+      if (simRun === null) return;
+      if (state.state.outcome !== 'in_progress') return;
+      simRun.grantBossItem(itemId);
+      if (simRun.getPhase() === 'resolution') {
+        simRun.advancePhase();
+      }
+      dispatch({ type: 'sync_from_sim', snapshot: simRun.getState() });
+    },
+    [simRun, state.state.outcome],
+  );
+
   // CombatOverlay computes damageDealt / damageTaken / opponentGhostId /
   // opponentClassId at combat-end (it has the input + result on hand)
   // and forwards them to onCombatDone.
@@ -870,8 +918,10 @@ export function useRun() {
   // advancePhase is resumed inside grantSelectedRelic phase-conditionally
   // (so the boss grant lands while sim is still in 'resolution', then
   // sim transitions to 'ended' via the resumed advancePhase). Predicate
-  // mirrors the boss branch of the pendingRelicOffer useMemo — same three
-  // readings; inline rather than helper because of the one call site.
+  // mirrors the boss branch of the pendingRelicOffer useMemo — same four
+  // readings (CF-67 Codex round 2: bossRewardItemId === null joins the mirror, so
+  // a restored state with the item leg already taken advances to run-end instead
+  // of deferring forever with no modal); inline rather than helper (one call site).
   const onCombatDone = useCallback((payload: CombatDonePayload) => {
     if (simRun === null) return;
     if (state.state.outcome !== 'in_progress') return;
@@ -897,7 +947,8 @@ export function useRun() {
     const shouldDeferAdvance =
       lastEntry?.round === 11 &&
       lastEntry?.outcome === 'win' &&
-      postApply.relics.boss === null;
+      postApply.relics.boss === null &&
+      postApply.bossRewardItemId === null;
     if (!shouldDeferAdvance) {
       simRun.advancePhase();
       // B2 Option 1: advancePhase → makeShop consumed this.rng (kept for
@@ -941,6 +992,7 @@ export function useRun() {
     pendingRelicOffer,
     isRunEnded,
     grantSelectedRelic,
+    grantSelectedItem,
     resetRun,
     replaySameClass,
     abandonRun,

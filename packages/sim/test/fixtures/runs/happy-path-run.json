@@ -182,6 +182,7 @@
       "mid": null,
       "boss": null
     },
+    "bossRewardItemId": null,
     "shop": {
       "slots": [
         "iron-sword",

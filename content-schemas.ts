@@ -559,6 +559,15 @@ export interface RunState {
   readonly currentRound: RoundNumber
   readonly bag: BagState
   readonly relics: RelicSlots
+  /** Boss-win reward item (CF-67). null until the round-11-win offer's Legendary
+   *  leg is chosen — grantBossItem sets it as the idempotency guard (mirror of
+   *  the relic slot-occupied throw) and RunEndScreen reads it as the single
+   *  source of truth for its conditional reward field (no bag scan). OPTIONAL on
+   *  the persisted shape: pre-CF-67 saves omit it, and the client load boundary
+   *  validates-not-transforms (Rule 17), so null is materialized at the restore
+   *  consumption point — NOT via a Zod .default(). getState() always emits it
+   *  (null or an id) on live snapshots. */
+  readonly bossRewardItemId?: ItemId | null
   readonly shop: ShopState
   // rerollCount + trophy: sim-authoritative per CF 34 / M1.5e PR 1 (were
   // client-owned under Q2 Amendment A). rerollCount projects
@@ -912,6 +921,15 @@ export type TelemetryEvent =
       readonly runId: RunId
       readonly slot: 'mid' | 'boss'
       readonly relicId: RelicId
+      readonly round: RoundNumber
+    })
+
+  // Boss-win reward item (CF-67, schema additive — mirrors relic_granted's
+  // shape: RunId + the granted id + round). Emitted by grantBossItem.
+  | (TelemetryBase & {
+      readonly name: 'item_granted'
+      readonly runId: RunId
+      readonly itemId: ItemId
       readonly round: RoundNumber
     })
 

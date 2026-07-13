@@ -97,6 +97,9 @@ Events are grouped by lifecycle. Property shapes are codified in `content-schema
 **`relic_granted`** — fires when `RunController.grantRelic` succeeds (M1.2.6 schema v0.5).
 - `slot` (`'mid' | 'boss'`), `relicId`, `round`. Drives mid/boss relic pick-rate analysis. Answers "are mid/boss relic choices balanced?" in M1, seeds M2 ladder analytics. Phase-gated: mid only fires in round 6+ arranging, boss only after a round-11 player_win. Starter-relic equip is part of `run_start` and does NOT emit a separate `relic_granted`.
 
+**`item_granted`** — fires when `RunController.grantBossItem` succeeds (CF-67, schema additive; mirrors `relic_granted`'s shape).
+- `itemId`, `round`. Records the boss-win Legendary reward item (`world-forged-heart`) when the player picks the item leg of the round-11 win offer instead of the boss relic. Answers "how often is the Legendary reward chosen over the boss relic?" — the CF-67 leg's pick-rate, complementary to `relic_granted`'s boss slot. Phase-gated identically to the boss `relic_granted`: only fires in resolution phase after a round-11 player_win. Shop purchases and recipe outputs do NOT emit `item_granted` — this event is scoped to the boss reward grant path only.
+
 ### Combat
 
 **`combat_start`** — fires at first sim tick.

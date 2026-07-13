@@ -1444,6 +1444,166 @@ describe('grantRelic', () => {
   });
 });
 
+// ─── grantBossItem (CF-67 boss-win Legendary reward) ────────────────
+//
+// Mirrors the grantRelic boss-branch validation matrix (phase / round /
+// win-outcome gates + idempotency), plus grantBossItem-specific coverage:
+// auto-placement, the item_granted telemetry, and the best-effort full-bag path.
+// grantBossItem looks the id up in the run's items registry (this.items), NOT
+// the global RELICS registry, so the local drive helper seeds world-forged-heart
+// into the registry (driveToRound's knife-only registry would 'unknown itemId').
+
+describe('grantBossItem (CF-67 boss-win Legendary reward)', () => {
+  const WFH = ItemId('world-forged-heart');
+
+  /** Drive to round 11 ARRANGING (no round-11 combat yet) with a 30-damage
+   *  knife that one-shots emptyGhost(1) each round. Registry carries the knife,
+   *  world-forged-heart, and any extra items. overrideShopSlots pins slot 0 to
+   *  the knife so buyItem(0) is deterministic under a multi-item registry. */
+  function driveTo11(extra: Record<string, Item> = {}): {
+    ctrl: ReturnType<typeof createRun>;
+    events: TelemetryEvent[];
+  } {
+    const knife = defineTestItem(
+      'bi-knife',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const items: Record<string, Item> = { [knife.id]: knife, [WFH]: ITEMS[WFH]!, ...extra };
+    const events: TelemetryEvent[] = [];
+    const ctrl = createRun(
+      baseInput({ itemsRegistry: items, onTelemetryEvent: (e) => events.push(e) }),
+    );
+    ctrl.overrideShopSlots([knife.id]);
+    ctrl.buyItem(0);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    for (let r = 1; r < 11; r++) {
+      ctrl.startCombat(emptyGhost(1));
+      ctrl.advancePhase();
+    }
+    return { ctrl, events };
+  }
+
+  it('after player_win on round 11: records bossRewardItemId, auto-places, emits item_granted', () => {
+    const { ctrl, events } = driveTo11();
+    ctrl.startCombat(emptyGhost(1));
+    expect(ctrl.getPhase()).toBe('resolution');
+    const before = ctrl.getState().bag.placements.length;
+    ctrl.grantBossItem(WFH);
+    // Single source of truth set.
+    expect(ctrl.getState().bossRewardItemId).toBe('world-forged-heart');
+    // Auto-placed (bag had room).
+    const placements = ctrl.getState().bag.placements;
+    expect(placements).toHaveLength(before + 1);
+    expect(placements.some((p) => p.itemId === 'world-forged-heart')).toBe(true);
+    // Telemetry mirrors relic_granted's shape (runId + granted id + round).
+    const granted = events.find((e) => e.name === 'item_granted');
+    expect(granted).toBeDefined();
+    if (granted?.name === 'item_granted') {
+      expect(granted.itemId).toBe('world-forged-heart');
+      expect(granted.round).toBe(11);
+      expect(granted.runId).toBe(ctrl.getState().runId);
+    }
+    // advancePhase ends the run; the boss relic slot stays empty (item leg chosen).
+    ctrl.advancePhase();
+    expect(ctrl.getState().outcome).toBe('won');
+    expect(ctrl.getState().relics.boss).toBeNull();
+  });
+
+  it('idempotent: a second grantBossItem throws (mirror of grantRelic slot-occupied throw)', () => {
+    const { ctrl } = driveTo11();
+    ctrl.startCombat(emptyGhost(1));
+    ctrl.grantBossItem(WFH);
+    expect(() => ctrl.grantBossItem(WFH)).toThrow(/already granted/);
+  });
+
+  it('after a round-11 LOSS throws (win-outcome gate)', () => {
+    const hammer = defineTestItem(
+      'bi-hammer',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 60, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const { ctrl } = driveTo11({ [hammer.id]: hammer });
+    const tank: Combatant = {
+      bag: {
+        dimensions: { width: 6, height: 4 },
+        placements: [
+          { placementId: PlacementId('bl-g'), itemId: hammer.id, anchor: { col: 0, row: 0 }, rotation: 0 },
+        ],
+      },
+      relics: NO_RELICS,
+      classId: TINKER,
+      startingHp: 200, // tank: knife's 30 leaves 170; hammer's 60 kills the player at 30 HP
+    };
+    ctrl.startCombat(tank);
+    expect(ctrl.getState().history[ctrl.getState().history.length - 1]!.outcome).toBe('loss');
+    expect(() => ctrl.grantBossItem(WFH)).toThrow(/player_win/);
+  });
+
+  it('in round 6 (wrong phase + round) throws', () => {
+    const knife = defineTestItem(
+      'bi-k6',
+      [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] }],
+      { tags: ['weapon'] },
+    );
+    const c = createRun(baseInput({ itemsRegistry: { [knife.id]: knife, [WFH]: ITEMS[WFH]! } }));
+    c.overrideShopSlots([knife.id]);
+    c.buyItem(0);
+    c.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    for (let r = 1; r < 6; r++) {
+      c.startCombat(emptyGhost(1));
+      c.advancePhase();
+    }
+    expect(c.getState().currentRound).toBe(6);
+    expect(() => c.grantBossItem(WFH)).toThrow(/resolution phase after a round-11/);
+  });
+
+  it('unknown itemId throws', () => {
+    const { ctrl } = driveTo11();
+    ctrl.startCombat(emptyGhost(1));
+    expect(() => ctrl.grantBossItem(ItemId('not-a-real-item'))).toThrow(/unknown itemId/);
+  });
+
+  it('full bag: reward RECORDED (bossRewardItemId + telemetry) but NOT placed — best-effort', () => {
+    const filler = defineTestItem('bi-fill', [], { cost: 0 });
+    const { ctrl, events } = driveTo11({ [filler.id]: filler });
+    // Fill the 23 cells the knife (at 0,0) does not occupy.
+    const fillCells: Array<{ col: number; row: number }> = [];
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 6; col++) {
+        if (row === 0 && col === 0) continue;
+        fillCells.push({ col, row });
+      }
+    }
+    ctrl.overrideShopSlots(fillCells.map(() => filler.id));
+    fillCells.forEach((_, i) => ctrl.buyItem(i));
+    fillCells.forEach((cell) => ctrl.placeItem(filler.id, cell, 0));
+    expect(ctrl.getState().bag.placements).toHaveLength(24); // full
+    ctrl.startCombat(emptyGhost(1));
+    expect(ctrl.getPhase()).toBe('resolution');
+    ctrl.grantBossItem(WFH);
+    // Reward recorded + telemetry emitted...
+    expect(ctrl.getState().bossRewardItemId).toBe('world-forged-heart');
+    expect(events.some((e) => e.name === 'item_granted')).toBe(true);
+    // ...but NOT placed — bag stays full at 24, no world-forged-heart placement.
+    expect(ctrl.getState().bag.placements).toHaveLength(24);
+    expect(ctrl.getState().bag.placements.some((p) => p.itemId === 'world-forged-heart')).toBe(false);
+  });
+
+  it('choose-one exclusivity (Codex round 1): boss relic-then-item throws, and item-then-relic throws', () => {
+    // Direction A — boss relic first, then the item leg is closed.
+    const a = driveTo11();
+    a.ctrl.startCombat(emptyGhost(1));
+    a.ctrl.grantRelic('boss', RelicId('worldforge-seed'));
+    expect(() => a.ctrl.grantBossItem(WFH)).toThrow(/choose-one/);
+    // Direction B — item first, then the boss relic leg is closed.
+    const b = driveTo11();
+    b.ctrl.startCombat(emptyGhost(1));
+    b.ctrl.grantBossItem(WFH);
+    expect(() => b.ctrl.grantRelic('boss', RelicId('worldforge-seed'))).toThrow(/choose-one/);
+  });
+});
+
 // ─── applyCombatOutcome (M1.5a PR 1) ───────────────────────────────
 //
 // Direct-action path coverage for the new 'apply_combat_outcome' variant.

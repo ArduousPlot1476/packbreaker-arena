@@ -14,7 +14,7 @@
 // arithmetic. The breadcrumb walks state.state.history; everything
 // else reads ClientRunState fields populated by applySimSnapshot.
 
-import { CLASSES, RELICS } from '@packbreaker/content';
+import { CLASSES, ITEMS, RELICS } from '@packbreaker/content';
 import type { RunOutcome } from '@packbreaker/content';
 import { HeartGlyph } from '../icons/icons';
 import { useRunContext } from '../run/RunContext';
@@ -340,6 +340,51 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           <RelicSlotCard relicName={bossName} tierLabel="Boss" testId="runend-relic-boss" />
         </div>
       </div>
+
+      {/* boss reward item — CF-67 conditional 9th field. Shown ONLY when the
+          Legendary leg of the boss-win offer was chosen (bossRewardItemId set);
+          mirrors the Boss-relic-name display above for legibility parity. No
+          empty state / placeholder when the relic leg was taken — pure
+          conditional presence. Single source of truth: bossRewardItemId (never a
+          bag scan). */}
+      {state.state.bossRewardItemId !== null && (
+        <div style={{ width: '100%', marginBottom: 24 }}>
+          <div style={{ marginBottom: 10 }}>
+            <span style={sectionLabelStyle}>Reward</span>
+          </div>
+          <div
+            data-testid="runend-reward"
+            style={{
+              border: '1px solid var(--border, #444)',
+              background: 'var(--bg-card, #2a2a2a)',
+              borderRadius: 8,
+              padding: '16px 14px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <div
+              data-testid="runend-reward-name"
+              style={{ fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center' }}
+            >
+              {ITEMS[state.state.bossRewardItemId]?.name ?? '—'}
+            </div>
+            <div
+              style={{
+                fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
+                fontSize: 9,
+                letterSpacing: '0.16em',
+                color: '#6a6a6a',
+                textTransform: 'uppercase',
+              }}
+            >
+              Legendary
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* per-round breadcrumb */}
       <div style={{ width: '100%', marginBottom: 24 }}>

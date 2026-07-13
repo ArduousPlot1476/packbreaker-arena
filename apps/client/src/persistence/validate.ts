@@ -264,6 +264,17 @@ const SerializedRunStateSchema = z
     currentRound: RoundNumberSchema,
     bag: BagStateSchema,
     relics: RelicSlotsSchema,
+    // CF-67: boss-win reward item. OPTIONAL (permissive) so a pre-CF-67 save
+    // lacking it still validates rather than being hard-rejected. Rule 17 applied
+    // explicitly (NOT auto-inherited from the bornFromRecipe precedent): the load
+    // boundary VALIDATES but does not transform — validateLocalSaveV1 returns
+    // `safeParse(x).success` (a boolean) and loadLocal returns the RAW parsed
+    // object, not Zod's `.data`, so a `.default(null)` here would be discarded and
+    // give a false sense of a materialized default. Mechanism used: `.optional()`
+    // (no `.default`) here + `?? null` at the consumption site (state.ts ctor
+    // restore branch). `.optional()` also keeps the dual-satisfies bracket honest
+    // against the OPTIONAL canonical RunState.bossRewardItemId field.
+    bossRewardItemId: ItemIdSchema.nullable().optional(),
     shop: ShopStateSchema,
     trophiesAtStart: z.number(),
     history: z.array(RunHistoryEntrySchema).readonly(),

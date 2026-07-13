@@ -40,6 +40,7 @@ function makeRunStateFixture(overrides: Partial<RunState> = {}): RunState {
     contractId: 'neutral' as ContractId,
     derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
     relics: { starter: 'apprentices-loop' as RelicId, mid: null, boss: null },
+    bossRewardItemId: null,
     outcome: 'in_progress' as RunOutcome,
     seed: 12345 as SimSeed,
     history: [],
