@@ -61,6 +61,7 @@ export type RunControllerAction =
       readonly slot: 'mid' | 'boss';
       readonly relicId: RelicId;
     }
+  | { readonly type: 'grant_boss_item'; readonly itemId: ItemId }
   | { readonly type: 'start_combat'; readonly ghost: Combatant }
   | { readonly type: 'start_combat_from_ghost_build'; readonly ghost: GhostBuild }
   | { readonly type: 'enter_combat_phase' }
@@ -104,6 +105,9 @@ export function applyAction(
       return;
     case 'grant_relic':
       controller.grantRelic(action.slot, action.relicId);
+      return;
+    case 'grant_boss_item':
+      controller.grantBossItem(action.itemId);
       return;
     case 'start_combat':
       controller.startCombat(action.ghost);

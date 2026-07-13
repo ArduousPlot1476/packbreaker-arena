@@ -13,6 +13,7 @@ import { fireEvent, render } from '@testing-library/react';
 import type {
   ClassId,
   ContractId,
+  ItemId,
   RelicId,
   RoundNumber,
   RunId,
@@ -73,6 +74,7 @@ function makeCtx(stateOverrides: Partial<ClientRunState['state']> = {}): { state
         mid: 'berserkers-pendant' as RelicId,
         boss: 'conquerors-crown' as RelicId,
       },
+      bossRewardItemId: null,
       outcome: 'won' as RunOutcome,
       seed: 12345 as SimSeed,
       history: Array.from({ length: 11 }, (_, i) => ({
@@ -310,5 +312,20 @@ describe('RunEndScreen — defensive null render when outcome is in_progress', (
     mocks.ctxValue = makeCtx({ outcome: 'in_progress' });
     const { container } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
     expect(container.firstChild).toBeNull();
+  });
+});
+
+describe('RunEndScreen — CF-67 conditional reward field (9th field, boss Legendary)', () => {
+  it('does NOT render the reward field when bossRewardItemId is null (relic leg or no reward)', () => {
+    mocks.ctxValue = makeCtx({ bossRewardItemId: null });
+    const { queryByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
+    expect(queryByTestId('runend-reward')).toBeNull();
+  });
+
+  it('renders the reward field with the item name when bossRewardItemId is set (Legendary leg)', () => {
+    mocks.ctxValue = makeCtx({ bossRewardItemId: 'world-forged-heart' as ItemId });
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
+    expect(getByTestId('runend-reward')).toBeInTheDocument();
+    expect(getByTestId('runend-reward-name').textContent).toBe('World-Forged Heart');
   });
 });

@@ -20,6 +20,7 @@ import {
   ClassId,
   ContractId,
   GhostId,
+  ItemId,
   PlacementId,
   RelicId,
   SimSeed,
@@ -272,6 +273,48 @@ describe('restoreRun — fidelity round-trip', () => {
     expect(legacy.bornFromRecipe).toBeUndefined();
     const restored = restoreRun(legacy);
     expect(restored.getRecipeBornPlacementIds()).toEqual([]);
+  });
+
+  it('CF 67 backward-compat: restoreRun tolerates a pre-CF-67 snapshot with no bossRewardItemId (materializes null, no throw)', () => {
+    const original = createRun({
+      seed: 12345 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    // Legacy save: SerializedRunState with bossRewardItemId absent. getState() now
+    // emits the field (null), so delete it to reproduce a genuine pre-CF-67
+    // snapshot. The client load boundary validates without transforming (Rule 17),
+    // so a real legacy snapshot reaches restoreRun with the field undefined;
+    // restoreRun materializes it to null (`?? null`).
+    const legacy = {
+      ...original.getState(),
+      rngState: original.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+    };
+    delete (legacy as { bossRewardItemId?: unknown }).bossRewardItemId;
+    expect(legacy.bossRewardItemId).toBeUndefined();
+    const restored = restoreRun(legacy as SerializedRunState);
+    expect(restored.getState().bossRewardItemId).toBeNull();
+  });
+
+  it('CF 67: restoreRun preserves a set bossRewardItemId from the snapshot', () => {
+    const original = createRun({
+      seed: 12345 as SimSeed,
+      classId: TINKER,
+      contractId: NEUTRAL,
+      startingRelicId: APPRENTICES_LOOP,
+    });
+    const snap: SerializedRunState = {
+      ...original.getState(),
+      bossRewardItemId: ItemId('world-forged-heart'),
+      rngState: original.getRngState(),
+      rerollCount: 0,
+      trophy: 0,
+    };
+    const restored = restoreRun(snap);
+    expect(restored.getState().bossRewardItemId).toBe('world-forged-heart');
   });
 });
 

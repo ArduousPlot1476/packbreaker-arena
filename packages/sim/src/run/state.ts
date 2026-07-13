@@ -199,6 +199,13 @@ export interface RunController {
    *  subsequent shop generations and combats; the CURRENT round's shop is NOT
    *  regenerated. Fires `relic_granted` telemetry on success only. */
   grantRelic(slot: 'mid' | 'boss', relicId: RelicId): void;
+
+  /** Grants the boss-win reward ITEM (CF-67 Legendary leg). Phase-gated like
+   *  grantRelic's boss branch (resolution phase, round 11, win); idempotent via
+   *  the bossRewardItemId guard (throws if already granted); auto-places the item
+   *  at the first free anchor (best-effort — a full bag records the reward via
+   *  bossRewardItemId without adding a placement). Fires `item_granted`. */
+  grantBossItem(itemId: ItemId): void;
   /** Transitions phase 'arranging' → 'combat' without running combat.
    *  Counterpart to applyCombatOutcome for the client-driven combat path:
    *  client invokes enterCombatPhase, side-runs simulateCombat externally,
@@ -285,6 +292,10 @@ class RunControllerImpl implements RunController {
   private relics: RelicSlots;
   private history: RunHistoryEntry[] = [];
   private outcome: RunOutcome = 'in_progress';
+  // Boss-win reward item (CF-67). null until grantBossItem records the Legendary
+  // leg; exposed via getState (RunState.bossRewardItemId) and rehydrated in the
+  // restore branch (`?? null`, Rule 17 materialization).
+  private bossRewardItemId: ItemId | null = null;
 
   // Internal-only run state (NOT serialized in RunState).
   private readonly pendingItems: ItemId[] = [];
@@ -340,6 +351,11 @@ class RunControllerImpl implements RunController {
       this.currentRound = restoreFrom.currentRound;
       this.history = restoreFrom.history.slice();
       this.outcome = restoreFrom.outcome;
+      // CF-67: rehydrate the boss reward item. `?? null` materializes the
+      // default for pre-CF-67 saves — the load boundary validates without
+      // transforming (Rule 17), so a legacy snapshot arrives with the field
+      // absent (undefined); treat that as null (no reward granted yet).
+      this.bossRewardItemId = restoreFrom.bossRewardItemId ?? null;
       // Quiescent-save invariant: save fires at arranging-entry or terminal.
       // Restored phase derives directly from outcome.
       this.phase = restoreFrom.outcome === 'in_progress' ? 'arranging' : 'ended';
@@ -487,6 +503,7 @@ class RunControllerImpl implements RunController {
       currentRound: this.currentRound,
       bag: { dimensions: this.bag.dimensions, placements: this.bag.placements.slice() },
       relics: { ...this.relics },
+      bossRewardItemId: this.bossRewardItemId,
       shop: {
         slots: this.shop.slots.slice(),
         purchased: this.shop.purchased.slice(),
@@ -912,6 +929,56 @@ class RunControllerImpl implements RunController {
     });
   }
 
+  grantBossItem(itemId: ItemId): void {
+    // Phase gate — identical to grantRelic's boss branch: resolution phase after
+    // a round-11 player_win (M1.2.6 precedent, decision-log.md 2026-04-30).
+    const last = this.history[this.history.length - 1];
+    const lastOutcome = last?.outcome ?? null;
+    const lastRound = last?.round ?? 0;
+    if (this.phase !== 'resolution' || lastRound !== 11 || lastOutcome !== 'win') {
+      throw new Error(
+        `grantBossItem: requires resolution phase after a round-11 player_win (current: round ${this.currentRound}, phase '${this.phase}', last outcome '${String(lastOutcome)}')`,
+      );
+    }
+    // Idempotency guard — mirror of grantRelic's slot-occupied throw.
+    // bossRewardItemId is the single source of truth: once set, a second grant
+    // throws rather than double-recording / double-placing.
+    if (this.bossRewardItemId !== null) {
+      throw new Error(
+        `grantBossItem: boss reward item already granted ('${String(this.bossRewardItemId)}')`,
+      );
+    }
+    const item = this.items[itemId];
+    if (!item) {
+      throw new Error(`grantBossItem: unknown itemId '${String(itemId)}'`);
+    }
+    // Record the reward FIRST — single source of truth for idempotency + the
+    // RunEndScreen conditional field. Placement below is best-effort.
+    this.bossRewardItemId = itemId;
+    // Auto-place at the first free anchor (row-major first-fit, mirroring
+    // combineRecipe's isValidPlacement-based fit check). Best-effort: a full bag
+    // records the reward (bossRewardItemId + telemetry + RunEndScreen) without a
+    // placement — the run ends immediately after the round-11 win, so an unplaced
+    // reward has no gameplay consequence and a full bag must not crash the grant.
+    const fit = this.findFirstFreeAnchor(itemId);
+    if (fit !== null) {
+      this.bag.placements.push({
+        placementId: this.nextPlacementId(),
+        itemId,
+        anchor: fit.anchor,
+        rotation: fit.rotation,
+      });
+    }
+    this.emit({
+      tsClient: this.startedAt,
+      sessionId: this.sessionId,
+      name: 'item_granted',
+      runId: this.runId,
+      itemId,
+      round: this.currentRound,
+    });
+  }
+
   enterCombatPhase(): void {
     this.requirePhase('arranging', 'enterCombatPhase');
     this.phase = 'combat';
@@ -1119,6 +1186,32 @@ class RunControllerImpl implements RunController {
       if (occupied.has(`${cell.row}:${cell.col}`)) return false;
     }
     return true;
+  }
+
+  /** First free anchor for a granted item, scanned row-major (top-left origin).
+   *  Reuses isValidPlacement for the bounds + overlap check. Returns null when
+   *  the item's footprint fits nowhere (full bag). Rotation 0 only: M1's boss-
+   *  reward item (world-forged-heart) is 1x1, so rotation is moot; a variable-
+   *  footprint reward (the M2 random-Epic leg) would iterate rotations here. */
+  private findFirstFreeAnchor(
+    itemId: ItemId,
+  ): { anchor: CellCoord; rotation: Rotation } | null {
+    const w = this.bag.dimensions.width;
+    const h = this.bag.dimensions.height;
+    for (let row = 0; row < h; row++) {
+      for (let col = 0; col < w; col++) {
+        const candidate: BagPlacement = {
+          placementId: 'cand-fit-check' as PlacementId,
+          itemId,
+          anchor: { col, row },
+          rotation: 0,
+        };
+        if (this.isValidPlacement(candidate)) {
+          return { anchor: { col, row }, rotation: 0 };
+        }
+      }
+    }
+    return null;
   }
 
   private makeShop(round: RoundNumber): MutableShopState {

@@ -89,6 +89,7 @@ export function createInitialState(classId: ClassId): ClientRunState {
       contractId: 'neutral' as ContractId,
       derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
       relics: emptyRelicSlots(),
+      bossRewardItemId: null,
       outcome: 'in_progress' as RunOutcome,
       seed,
       history: [],
@@ -178,6 +179,9 @@ function applySimSnapshot(state: ClientRunState, snapshot: SimRunState): ClientR
       className: CLASSES[snapshot.classId]!.displayName,
       round: snapshot.currentRound,
       relics: snapshot.relics,
+      // CF-67: materialize null defensively — the snapshot field is optional-typed
+      // (RunState.bossRewardItemId?), though a live getState always emits it.
+      bossRewardItemId: snapshot.bossRewardItemId ?? null,
       outcome: snapshot.outcome,
       history: snapshot.history.slice(),
       gold: snapshot.gold,

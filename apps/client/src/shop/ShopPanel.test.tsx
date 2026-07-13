@@ -35,6 +35,7 @@ const TEST_RUN_STATE: RunState = {
   contractId: 'neutral' as ContractId,
   derived: { extraRerollsPerRound: 0, itemCostDelta: 0, bonusGoldOnWin: 0 },
   relics: { starter: null, mid: null, boss: null },
+  bossRewardItemId: null,
   outcome: 'in_progress' as RunOutcome,
   seed: TEST_SEED,
   history: [],

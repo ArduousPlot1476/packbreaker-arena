@@ -935,9 +935,14 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
     // (resonant-anchor + catalyst). Order is seed-shuffled by
     // generateMidRelicOffer; assert count + membership only.
     expect(ctx.pendingRelicOffer!.cards).toHaveLength(2);
-    expect(new Set(ctx.pendingRelicOffer!.cards)).toEqual(
-      new Set(['resonant-anchor', 'catalyst']),
-    );
+    // CF-67: cards are OfferCard now; mid offers carry relic cards only.
+    expect(
+      new Set(
+        ctx.pendingRelicOffer!.cards.map((c) =>
+          c.kind === 'relic' ? c.relicId : c.itemId,
+        ),
+      ),
+    ).toEqual(new Set(['resonant-anchor', 'catalyst']));
   });
 
   it('pendingRelicOffer is null when round < 6 (mid gate)', async () => {
@@ -1070,8 +1075,11 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
     const offer = getCtx().pendingRelicOffer;
     expect(offer).not.toBeNull();
     expect(offer!.slot).toBe('boss');
-    // Tinker boss pool: worldforge-seed (1 relic per balance-bible.md § 12).
-    expect(offer!.cards).toHaveLength(1);
+    // CF-67: boss offer = the boss relic (worldforge-seed) + the fixed Legendary
+    // item (world-forged-heart). 1 relic + 1 item = 2 cards.
+    expect(offer!.cards).toHaveLength(2);
+    expect(offer!.cards).toContainEqual({ kind: 'relic', relicId: 'worldforge-seed' });
+    expect(offer!.cards).toContainEqual({ kind: 'item', itemId: 'world-forged-heart' });
     // advancePhase NOT called by onCombatDone on round-11-win-boss-empty defer.
     expect(advancePhaseSpy).not.toHaveBeenCalled();
   });
