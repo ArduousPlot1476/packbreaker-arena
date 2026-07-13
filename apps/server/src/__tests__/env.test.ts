@@ -22,6 +22,8 @@ describe('readEnv', () => {
     expect(env.posthogHost).toBe('https://us.i.posthog.com')
     expect(env.port).toBe(4000)
     expect(env.logLevel).toBe('info')
+    expect(env.databaseUrl).toBeNull()
+    expect(env.clerkSecretKey).toBeNull()
   })
 
   it('reads provided values', () => {
@@ -30,15 +32,24 @@ describe('readEnv', () => {
       POSTHOG_HOST: 'https://eu.i.posthog.com',
       PORT: '8080',
       LOG_LEVEL: 'debug',
+      DATABASE_URL: 'postgresql://user:pass@host:5432/db',
+      CLERK_SECRET_KEY: 'sk_test_x',
     })
     expect(env.posthogProjectKey).toBe('phc_abc')
     expect(env.posthogHost).toBe('https://eu.i.posthog.com')
     expect(env.port).toBe(8080)
     expect(env.logLevel).toBe('debug')
+    expect(env.databaseUrl).toBe('postgresql://user:pass@host:5432/db')
+    expect(env.clerkSecretKey).toBe('sk_test_x')
   })
 
   it('treats a blank project key as null', () => {
     expect(readEnv({ POSTHOG_PROJECT_KEY: '   ' }).posthogProjectKey).toBeNull()
+  })
+
+  it('treats a blank DATABASE_URL / CLERK_SECRET_KEY as null', () => {
+    expect(readEnv({ DATABASE_URL: '   ' }).databaseUrl).toBeNull()
+    expect(readEnv({ CLERK_SECRET_KEY: '  ' }).clerkSecretKey).toBeNull()
   })
 
   it('falls back to default port on an unparseable PORT', () => {

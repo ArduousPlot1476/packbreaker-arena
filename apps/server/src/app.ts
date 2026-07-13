@@ -13,7 +13,11 @@
 // events rather than dropping them at process exit.
 
 import Fastify, { type FastifyInstance } from 'fastify'
+import { registerClerkAuth } from './clerk/middleware.js'
+import type { ClerkVerifier } from './clerk/verifier.js'
+import type { DbClient } from './db/client.js'
 import type { TelemetrySink } from './posthog/client.js'
+import { registerDailyContractRoute } from './routes/contract.js'
 import { registerTelemetryRoute } from './routes/telemetry.js'
 
 /** Body cap for incoming batches. Comfortably exceeds the client's
@@ -25,6 +29,12 @@ const DEFAULT_BODY_LIMIT = 256 * 1024
 export interface AppOptions {
   /** Telemetry forward target. `null` = accept batches, do not forward. */
   readonly posthog: TelemetrySink | null
+  /** Database client. `null`/omitted = no DB (DB-backed features degrade).
+   *  Optional so existing callers/tests need not thread a DB. */
+  readonly db?: DbClient | null
+  /** Clerk token verifier. `null`/omitted = auth disabled → every request
+   *  resolves to anonymous. Optional for the same reason as `db`. */
+  readonly clerk?: ClerkVerifier | null
   /** Pino level passed to Fastify's logger. Default: 'info'. */
   readonly logLevel?: string
   /** Override the incoming body cap (bytes). Default: 256 KiB. */
@@ -37,14 +47,23 @@ export function createApp(opts: AppOptions): FastifyInstance {
     bodyLimit: opts.bodyLimit ?? DEFAULT_BODY_LIMIT,
   })
 
+  // Non-enforcing auth: resolves request.auth (userId | null) for every
+  // request; enforcement is per-route (none require an account in PR1).
+  registerClerkAuth(app, opts.clerk ?? null)
+
+  registerDailyContractRoute(app)
   registerTelemetryRoute(app, opts.posthog)
 
-  // Drain the sink's buffer on graceful shutdown. Without this, events
-  // queued inside posthog-node (per flushAt/flushInterval) are dropped
-  // at process exit — the Catch 36 multi-lifetime mechanism.
+  // Drain per-dependency buffers/pools on graceful shutdown. Without the
+  // posthog drain, events queued inside posthog-node (per flushAt/
+  // flushInterval) are dropped at process exit — the Catch 36
+  // multi-lifetime mechanism; the DB pool is drained the same way.
   app.addHook('onClose', async () => {
     if (opts.posthog !== null) {
       await opts.posthog.shutdown()
+    }
+    if (opts.db) {
+      await opts.db.close()
     }
   })
 

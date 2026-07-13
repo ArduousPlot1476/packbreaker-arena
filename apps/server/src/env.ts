@@ -18,6 +18,11 @@
 // validate at construction and swallows flush failures — no boot throw,
 // so empty-string fallback is sufficient there.)
 //
+// DATABASE_URL / CLERK_SECRET_KEY (M2 PR1) are required-or-warn like
+// POSTHOG_PROJECT_KEY: unset → null, and their DI-seam factories
+// (db/client.ts, clerk/verifier.ts) construct nothing and warn, so the
+// server boots without a DB or auth (secretless CI stays green).
+//
 // Pure reader: takes a ProcessEnv-shaped source (default process.env)
 // so tests exercise the required/optional matrix without mutating the
 // real environment.
@@ -32,6 +37,12 @@ export interface ServerEnv {
   readonly port: number
   /** Pino log level. Default: 'info'. */
   readonly logLevel: string
+  /** Neon Postgres connection string. `null` when unset → the DB client
+   *  is not constructed (server boots; DB-backed features degrade). */
+  readonly databaseUrl: string | null
+  /** Clerk backend secret key. `null` when unset → the auth verifier is
+   *  not constructed; every request resolves to anonymous (userId null). */
+  readonly clerkSecretKey: string | null
 }
 
 const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com'
@@ -83,11 +94,15 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): ServerEnv {
   const rawHost = source.POSTHOG_HOST?.trim()
   const rawPort = source.PORT?.trim()
   const rawLevel = source.LOG_LEVEL?.trim()
+  const rawDbUrl = source.DATABASE_URL?.trim()
+  const rawClerkKey = source.CLERK_SECRET_KEY?.trim()
 
   return {
     posthogProjectKey: rawKey && rawKey.length > 0 ? rawKey : null,
     posthogHost: rawHost && rawHost.length > 0 ? rawHost : DEFAULT_POSTHOG_HOST,
     port: parsePort(rawPort),
     logLevel: parseLogLevel(rawLevel),
+    databaseUrl: rawDbUrl && rawDbUrl.length > 0 ? rawDbUrl : null,
+    clerkSecretKey: rawClerkKey && rawClerkKey.length > 0 ? rawClerkKey : null,
   }
 }
