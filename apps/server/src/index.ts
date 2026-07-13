@@ -1,15 +1,19 @@
 // @packbreaker/server — Fastify entrypoint (M1.5c PR 2 / CF 49).
 //
-// Thin bootstrap: read env → build the PostHog sink → createApp →
-// listen. Two endpoints are planned per tech-architecture.md § 6.1
-// (GET /v1/contract/daily lands later); this PR ships POST
-// /v1/telemetry/batch (server half of the telemetry pipeline).
+// Thin bootstrap: read env → build the injectable seams (PostHog sink,
+// DB client, Clerk verifier) → createApp → listen. This PR (M2 PR1) ships
+// both § 6.1 endpoints — GET /v1/contract/daily and POST
+// /v1/telemetry/batch — plus the DB (Neon/Drizzle) + auth (Clerk)
+// scaffolding. Each seam is required-or-warn: unset env → null seam, and
+// the server still boots (see env.ts).
 //
 // SIGTERM/SIGINT trigger app.close(), which fires the onClose hook
-// (app.ts) to drain the PostHog buffer before the process exits.
+// (app.ts) to drain the PostHog buffer + DB pool before the process exits.
 
 import pino from 'pino'
 import { createApp } from './app.js'
+import { createClerkVerifier } from './clerk/verifier.js'
+import { createDbClient } from './db/client.js'
 import { readEnv } from './env.js'
 import { createPosthogSink } from './posthog/client.js'
 
@@ -23,8 +27,10 @@ async function main(): Promise<void> {
     { projectKey: env.posthogProjectKey, host: env.posthogHost },
     bootLog,
   )
+  const db = createDbClient({ databaseUrl: env.databaseUrl }, bootLog)
+  const clerk = createClerkVerifier({ secretKey: env.clerkSecretKey }, bootLog)
 
-  const app = createApp({ posthog, logLevel: env.logLevel })
+  const app = createApp({ posthog, db, clerk, logLevel: env.logLevel })
 
   // Graceful shutdown: close the app (fires onClose → posthog.shutdown)
   // then exit. Guard against double-invocation if both signals arrive.

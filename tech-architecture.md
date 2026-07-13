@@ -212,16 +212,18 @@ M1 keeps the sim on the main thread. Combat sims are tiny — even a 200-tick co
 ## 6. Server / API
 
 ### 6.1 M1 server scope (minimal)
-Only two endpoints:
+Two endpoints were specced:
 
 ```
-GET  /v1/contract/daily          → { date, contract_id, seed, ruleset }
+GET  /v1/contract/daily          → DailyContractResponse { date, contractId, contract, seed }
 POST /v1/telemetry/batch         → 204 (accepts batched events)
 ```
 
 That's it. No accounts, no ghosts, no persistence beyond a tiny in-memory daily contract registry seeded at deploy.
 
 Local saves use `localStorage`, namespaced under `pba.v1.*`.
+
+**Amended 2026-07-13 / M2 PR1:** In M1 only `POST /v1/telemetry/batch` was actually registered (M1.5c PR 2 / CF 49); `GET /v1/contract/daily` was specced here but never wired — a doc/code drift. M2 PR1 closes it: the daily route now ships, returning the canonical `DailyContractResponse` (content-schemas.ts § 14 — `contract` nests the full `ruleset`, so the earlier `{ …, ruleset }` sketch is superseded) built from the sole authored daily contract (`CONTRACTS['daily-placeholder']`) plus a date-stable seed (FNV-1a of the UTC date → mulberry32 domain). The route validates its own output against a Zod mirror before serving (500 on regression). M2 PR1 also introduces the first server persistence + auth scaffolding — see § 6.3.
 
 ### 6.2 M2 server scope (full)
 - Auth (TBD provider).
@@ -235,7 +237,9 @@ Local saves use `localStorage`, namespaced under `pba.v1.*`.
 - Fastify 4.x.
 - Zod for request validation, schemas live in `packages/shared`.
 - Pino for logging.
-- M1: single container, no DB. M2+: Postgres (RDS or Neon), Redis for ghost pool LRU.
+- M1: single container, no DB. M2+: Postgres (**Neon** — chosen M2 PR1), Redis for ghost pool LRU.
+
+**Amended 2026-07-13 / M2 PR1 (DB + auth scaffolding):** The M2 stack is now resolved and scaffolded — **Neon** (Postgres provider), **Drizzle** (ORM + migrations), **Clerk** (auth). `apps/server` gains: a `DATABASE_URL`-driven, lazily-connecting node-postgres (`pg`) Pool wrapped by drizzle-orm behind a null-or-real DI seam (`db/client.ts`, mirroring the CF-49 posthog sink seam); the first table — `accounts` (`id`, `clerk_user_id`, `anon_id_at_signup`, `created_at`) — with its committed Drizzle migration under `apps/server/drizzle/`; and a non-enforcing Clerk `verifyToken` `onRequest` hook that populates `request.auth` (`userId | null`). Identity model: anonymous-default / account-optional — `telemetryAnonId` is the pre-account identity, **linked** (`anon_id_at_signup`), not replaced, at signup. Every seam is required-or-warn (unset env → null seam, server still boots; secretless CI stays green). Live DB verification (health-check + `migrate` apply) is deferred until a `DATABASE_URL` is provisioned. `POST /v1/ghost` / `/v1/run/save` / `/v1/leaderboard/daily` / `/v1/replay/validate` (§ 6.2) and Redis remain later-PR work.
 
 **Zod scope (amended 2026-05-21 / M1.5b PR 3 Phase 2.5j):** Zod also runs in `apps/client` for the LocalSaveV1 load-boundary validator (`apps/client/src/persistence/validate.ts`). The validator is schema-derived with dual-`satisfies` type-enforced completeness against the canonical `SerializedRunState` / `LocalSaveV1` types in `packages/content/src/schemas.ts`. This is the structural close for the Class A "validator-as-enumeration" failure family — see decision-log Catch 22 / 24 / 25 + Rule 11 for context. Future client-side persistence schema bumps (LocalSaveV2+) add a sibling Zod schema in the same module and route via the migration dispatcher.
 
