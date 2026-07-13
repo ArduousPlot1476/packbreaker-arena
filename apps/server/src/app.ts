@@ -15,8 +15,10 @@
 import Fastify, { type FastifyInstance } from 'fastify'
 import { registerClerkAuth } from './clerk/middleware.js'
 import type { ClerkVerifier } from './clerk/verifier.js'
+import type { AccountStore } from './db/accountStore.js'
 import type { DbClient } from './db/client.js'
 import type { TelemetrySink } from './posthog/client.js'
+import { registerAccountLinkRoute } from './routes/account.js'
 import { registerDailyContractRoute } from './routes/contract.js'
 import { registerTelemetryRoute } from './routes/telemetry.js'
 
@@ -35,6 +37,10 @@ export interface AppOptions {
   /** Clerk token verifier. `null`/omitted = auth disabled → every request
    *  resolves to anonymous. Optional for the same reason as `db`. */
   readonly clerk?: ClerkVerifier | null
+  /** Account persistence for /v1/account/link. `null`/omitted = no DB
+   *  (route returns 503). Injected directly so tests fake it without a
+   *  live drizzle handle. Derived from `db` in index.ts. */
+  readonly accountStore?: AccountStore | null
   /** Pino level passed to Fastify's logger. Default: 'info'. */
   readonly logLevel?: string
   /** Override the incoming body cap (bytes). Default: 256 KiB. */
@@ -53,6 +59,7 @@ export function createApp(opts: AppOptions): FastifyInstance {
 
   registerDailyContractRoute(app)
   registerTelemetryRoute(app, opts.posthog)
+  registerAccountLinkRoute(app, opts.accountStore ?? null)
 
   // Drain per-dependency buffers/pools on graceful shutdown. Without the
   // posthog drain, events queued inside posthog-node (per flushAt/
