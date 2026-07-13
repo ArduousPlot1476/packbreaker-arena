@@ -14,6 +14,7 @@ import {
   Pips,
   RelicCard,
 } from './class-select/atoms';
+import { SignInAffordance } from '../auth/SignInAffordance';
 
 interface DesktopClassSelectScreenProps {
   classId: ClassId | null;
@@ -38,7 +39,10 @@ export function DesktopClassSelectScreen({
   const stage: 1 | 2 = classId === null ? 1 : 2;
   return (
     <PanelShell>
-      {/* Top chrome row: wordmark (left) + stepper (right) */}
+      {/* Top chrome row: wordmark (left) + stepper & optional sign-in (right).
+          Sign-in is a stopgap affordance in existing chrome — no Title/Settings
+          screen (deferred). Renders nothing when Clerk is unconfigured, so the
+          anonymous layout is unchanged. */}
       <div
         style={{
           position: 'absolute',
@@ -51,7 +55,10 @@ export function DesktopClassSelectScreen({
         }}
       >
         <Label>Packbreaker Arena</Label>
-        <Pips stage={stage} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <Pips stage={stage} />
+          <SignInAffordance />
+        </div>
       </div>
 
       {stage === 1 ? (
