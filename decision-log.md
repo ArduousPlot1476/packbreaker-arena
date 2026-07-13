@@ -4,6 +4,122 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-12 — CF-67 Phase 2 CLOSED: boss-win Legendary reward (world-forged-heart) auto-placed + choose-one exclusivity (PR \#41, merge f6a2102); Codex clean 2 rounds; Rules 21 + 22 codified
+
+CF-67's boss-win reward item leg shipped. `world-forged-heart` (Legendary) is now the second
+option in the round-11 boss-win offer alongside the boss relic, auto-placed first-fit on grant,
+with a conditional RunEndScreen 9th field. Random-Epic leg stays M2. Client flow: pendingRelicOffer
+boss branch appends a fixed {kind:'item', itemId:'world-forged-heart'} OfferCard → RelicOfferModal
+item card → grantSelectedItem → grantBossItem. Merge f6a2102 (--no-ff, PR \#41, parents 0a8dcb4 +
+b4b607b); branch cf67-phase2-boss-legendary-grant deleted L+R; GitHub marked PR \#41 merged
+(merge_commit_sha f6a2102, merged_at 2026-07-13T02:30:36Z UTC).
+
+STEP 0 (idempotency guard) — OPTION A RATIFIED. grantBossItem has no relic-style "slot", so its
+double-grant guard needed a chosen shape. Ratified **bossRewardItemId: ItemId | null on RunState** —
+the single source of truth for BOTH grantBossItem idempotency (throw if set, mirror of grantRelic's
+slot-occupied throw) AND the RunEndScreen 9th field (render iff non-null, name via ITEMS[id]). Chosen
+over (B) a boolean flag — same persistence surface for less information, and the M2 random-Epic leg
+would repeat the ripple — and (C) a bag-presence scan — the named anti-pattern for RunEndScreen and
+equally fragile as a sim-side guard ("idempotent" ≠ "something in the bag happens to match"; they
+coincide today only because no other acquisition path exists yet).
+
+RULE 17 MECHANISM (reported explicitly, not assumed). The guard field, on RunState and thus (via
+SerializedRunState extends RunState) on the persisted shape, hit the client Zod load boundary.
+Mechanism used: bossRewardItemId is OPTIONAL on RunState (forced — validate.ts's dual-satisfies
+bracket requires an optional canonical field to match an optional Zod field, and `extends` forbids
+narrowing required→optional); the Zod field is ItemIdSchema.nullable().optional() with NO .default();
+null is materialized at the restore consumption site (restoreFrom.bossRewardItemId ?? null). Why not
+.default(null): the load boundary VALIDATES but does not transform — validateLocalSaveV1 returns
+safeParse(x).success (a boolean) and loadLocal returns the RAW parsed object, not Zod's .data, so a
+.default() would be discarded and give a false sense of a materialized default (the class of bug
+Rule 17 exists to catch). Verified: dual-satisfies compiles; restoreRun legacy-absent test
+materializes null.
+
+TWO CONFIRMED STEP-0 FINDINGS (held through Phase 2). (1) The item-branch client dispatch MUST call
+advancePhase (mirroring grantSelectedRelic): the boss offer re-fires on relics.boss === null, which
+the item pick doesn't set, so ending the run is what dismisses the offer. (2) The determinism ripple
+was entirely CLIENT-PERSISTENCE (validate.ts / SerializedRunState), not the sim corpus — grantRelic /
+grantBossItem are zero-RNG and the reward fires post-final-combat.
+
+CORRECTED PHASE-1 FIXTURE CLAIM. Phase 1's "No fixture regeneration required" (decision-log.md
+2026-07-12 § "CF-67 Phase 1 ratified") was TRUE for the frozen 224-.jsonl DO-NOT-REGENERATE corpus
+(Phase 1 checked FixtureTerminalState = outcome/rounds/hearts/combatEvents, which excludes bag/relics;
+confirmed still 231/231 green, untouched) but INCOMPLETE for the 6-.json scenario corpus
+(run-fixtures.test.ts), which deep-equals the FULL getState() and so failed on the new
+bossRewardItemId: null key. Resolved by HAND re-baseline: +"bossRewardItemId": null added to each of
+the 6 expectedFinalState blocks — exactly 6 one-line additions, git-verified 1 add / 0 del per file,
+zero trajectory change.
+
+RULE 21 (codified) — additive-field fixture re-baseline eligibility. An additive field on ANY
+fixture-comparison surface (run-state OR telemetry) that provably adds a single constant/null key with
+zero trajectory change is hand-re-baseline-eligible via one-line-per-file diffs; regenerators are
+reserved for changes that can't be proven additive by hand. Extends the CF 41 / M1.5c PR 1 precedent
+(worded for telemetry fields) to any comparison surface — the load-bearing principle was always
+"provably additive, zero-trajectory-change," not "telemetry specifically." Bend criteria: structurally
+generic failure shape, low-burden discipline (a hand diff is inspectable in a way a regenerator's
+reflow is not), predictable upcoming surface (the M2 random-Epic leg + any future RunState field bump
+re-introduce the shape).
+
+FULL-BAG BEST-EFFORT — validates the option-A call. grantBossItem auto-places at the first free anchor
+(first-fit, mirroring combineRecipe) but is best-effort: a full bag records the reward
+(bossRewardItemId + item_granted telemetry + RunEndScreen) WITHOUT a placement — the run ends
+immediately after the round-11 win, so an unplaced reward has no gameplay consequence and a full bag
+must not crash the grant. This is exactly why option A (bossRewardItemId, not bag presence, driving
+the RunEndScreen field) is correct: the display still shows the reward with zero extra code even when
+placement is skipped, whereas the ruled-out option C (bag-presence scan) would have SILENTLY broken
+this case (no placement → no bag match → no reward shown).
+
+CODEX REVIEW — 3 rounds, clean; 2 P2 findings FOLDED into CF-67 (no separate Catch numbers). Per the
+established "Catch numbers reserved for defects that reached shipped/committed state" ruling, these
+pre-merge findings on an unmerged PR fold into CF-67's substance. Round 1 (P2): sim-side cross-guards —
+grantBossItem now also rejects if relics.boss !== null; grantRelic('boss') now also rejects if
+bossRewardItemId !== null (fixed 3e3f74a). Round 2 (P2): client-side mirror gap — shouldDeferAdvance
+in onCombatDone was missing the bossRewardItemId === null reading present in pendingRelicOffer's boss
+branch and documented as a three-reading mirror; updated to four, comment corrected (fixed b4b607b).
+Round 3: CLEAN ("Didn't find any major issues. Swish!", reviewed b4b607b = tip). Ceiling never tripped
+(peaked 2/4). Both findings shared ONE root cause: a new exclusivity field propagated to the guard
+site being actively changed but not to every other site already encoding the same invariant. No formal
+meta-audit ran — at round 2 the invariant's surface was grep-enumerated inline (exactly 4 choose-one
+guard sites: pendingRelicOffer, grantBossItem, grantRelic('boss'), shouldDeferAdvance; 3 already
+mirrored, shouldDeferAdvance the last), so the enumeration was complete without a formal pass.
+
+RULE 22 (codified) — grep-enumerate invariant sites at Step 1. When a PR introduces a field enforcing
+an invariant already partially encoded elsewhere, Step 1 MUST grep-enumerate every existing site
+reading the analogous state and verify each is updated for consistency — BEFORE Step 2 implementation,
+not discovered reactively via Codex rounds. Second-instance-equivalent: both CF-67 Codex findings were
+this exact shape (bossRewardItemId added to the site under change but not its mirror). Bend criteria:
+structurally generic, low-burden (one grep before implementing), predictable upcoming surface — the M2
+random-Epic leg introduces the same shape again (a new reward field needing the same multi-site mirror).
+
+ACTUAL EFFORT vs the stale ~2-day estimate — the causal chain (preserved verbatim for M2 scoping).
+Phase 1 estimated ~2 days for the auto-place variant. Actual was materially larger, driven by two
+things Phase 1 did not price: (1) Step 0's discovery that the idempotency guard (bossRewardItemId on
+RunState) forced a FULL persistence-surface ripple — schema-sync (content-schemas.ts +
+packages/content/src/schemas.ts byte-identical), the validate.ts dual-satisfies Zod field, client
+projection (types.ts + applySimSnapshot + createInitialState), legacy-save optional/materialize
+handling, AND the server telemetry validator (item_granted Zod variant + exhaustiveness switch) — none
+of which were in the original 7-step Phase 2 scope; and (2) two Codex rounds, each a
+fix→verify→re-push→re-trigger cycle. The M2 random-Epic leg will re-incur (1) partially (likely no new
+RunState field if it reuses bossRewardItemId, but a variable-footprint placement + pool-random
+selection + a choice-UI beyond the fixed second card) and should be scoped with the
+full-persistence-surface + Codex-cycle overhead in mind, not the naive method-plus-test estimate.
+
+BRANCH/COMMIT TOPOLOGY. Off main 0a8dcb4. 149e883 (Phase 2 base: impl + tests + 6-.json re-baseline +
+server validator) → 3e3f74a (Codex round 1 fix: sim cross-guards) → b4b607b (Codex round 2 fix: client
+mirror). Merge f6a2102 (--no-ff, parents 0a8dcb4 + b4b607b). Full gate green at each verify: lint 8/8,
+typecheck all (incl. server + validate.ts dual-satisfies), schema-sync byte-identical, test (sim 527 /
+server 67 / client 572), determinism 224 .jsonl (231/231) + 6 re-baselined .json, build all.
+
+CF 67 CLOSED. Opened → corrected → Phase 1 ratified → Phase 2 shipped: the boss-win Legendary reward
+is now obtainable in-game (the concrete gap the exit-gate solo playtest surfaced). Distinct from CF 66
+(the round-11 legendary-rarity-gate question), which stays open/backlog.
+
+Counter: 56 / 22 / 8 / 32 / 41 — rules +2 (Rule 21 additive-field-fixture-re-baseline-eligibility;
+Rule 22 grep-enumerate-invariant-sites-at-Step-1), open-CFs −1 (CF 67 closed). Catches / patterns /
+drifts unchanged — the 2 Codex P2s fold into CF-67 per the shipped/committed-defect Catch ruling, no
+separate Catch numbers. Delta from tip 56/20/8/32/42 (decision-log.md 2026-07-12 § "CF-67 Phase 1
+ratified"): rules +2, open-CFs −1.
+
 ## 2026-07-12 — CF-67 Phase 1 ratified (auto-place disposition, reverses earlier player-placement lean)
 
 Phase 1 (read-only, tip a3174dc) confirmed the extend-existing-offer approach. Dispositions:
