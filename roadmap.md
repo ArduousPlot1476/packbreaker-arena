@@ -31,7 +31,7 @@ Replay log
 Telemetry hooks per telemetry-plan.md  
 Placeholder art only
 
-Exit criteria: Trey completes 10+ crash-free solo runs (self-cert testing path, ratified 2026-07-12 — see decision-log.md). Item pick-rate spread visible in dashboard. Median run length 12–20 min.  
+Exit criteria: Trey completes 10+ crash-free solo runs (self-cert testing path, ratified 2026-07-12 — see decision-log.md). Item pick-rate spread visible in dashboard. Runs resolve in a bounded, non-degenerate wall-clock range (graybox sanity check; true 12–20 min pacing validation deferred to M2 — see decision-log.md 2026-07-13).  
 
 **Current sprint (2026-07-12).** The M1 exit-gate playtest is now **live** — testing path ratified as solo self-cert (Trey completes 10+ crash-free solo runs; see decision-log.md 2026-07-12 § M1-exit-gate testing path: solo self-cert). The M1 dashboard exit-gate is already **CLOSED** (see decision-log.md 2026-07-07 § M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog, Rule 19 minted). Active work continues on backlog alongside the solo exit-gate runs.
 

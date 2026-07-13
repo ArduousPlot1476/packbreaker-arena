@@ -4,6 +4,70 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-13 — M1 EXIT GATE CLOSED
+
+All three amended M1 exit criteria (roadmap.md § M1) satisfied:
+
+1. **10+ crash-free solo runs** — completed, self-cert testing path (ratified
+   2026-07-12), confirmed crash-free by Trey.
+2. **Item pick-rate spread visible in dashboard** — D2 "Pick Rate by Item" shows a
+   healthy long-tail spread (24 down to 1 across ~38 items), no single item dominant.
+   Commons leading is expected (round-1 availability = more total purchase
+   opportunities), not a flag. Epic/Legendary correctly absent from this
+   purchase-based table — world-forged-heart is granted (CF-67), never bought.
+3. **Runs resolve in a bounded, non-degenerate wall-clock range** (amended same day,
+   see prior entry) — median 4.92 min / 13 completed runs, D1 SQL tile. True 12–20 min
+   pacing validation explicitly deferred to M2.
+
+M1 graybox prototype is exit-gate CLOSED. M2 planning is unblocked.
+
+Carried into M2 planning, non-blocking: CF-56 (shop-gen RNG basis), CF-64 (corpus
+regen-reproducibility drift), CF-65 (combine-CTA glow-gating), CF-66 (round-11
+legendary-rarity-gate rationale — lower-stakes now that a legendary is obtainable at
+all), M2 random-Epic leg (CF-67's deferred 3rd reward option). **Also flagged, not yet
+actioned:** Run Health Overview's Tick-Cap Draw Rate shows ~15–30% over the same
+window — telemetry-plan.md's stated guardrail is <1%. Disposition pending; open
+question whether this warrants its own CF now or is small-sample noise.
+
+Counter: unchanged from the prior entry (56/23/8/32/41) — this entry opens/closes no CF.
+
+## 2026-07-13 — M1 exit-gate run-length criterion amended: graybox sanity check, real pacing deferred to M2
+
+roadmap.md's M1 exit criteria included "Median run length 12–20 min." D1's Median
+Wall-Clock Run Length tile initially showed a false ~49-50s median — traced to a Funnel
+insight silently computing actor-level conversion (1 entry, all 10+ of Trey's runs
+collapsed under one telemetryAnonId) instead of occurrence-level pairing. Rebuilt as a
+raw SQL insight (median_minutes + completed_runs, runId join, outcome filtered to
+won/eliminated, matching D2's proven query pattern) — returned a real, valid number:
+median_minutes = 4.92, completed_runs = 13. Trey confirmed (not sample contamination)
+that his actual runs genuinely felt ~5 min each, not 12–20.
+
+This materializes the accepted risk already logged at the solo-self-cert ratification
+(decision-log.md 2026-07-12 § M1-exit-gate testing path): solo self-cert can't surface
+pacing calibrated for an unfamiliar player, because the sole tester is also the sole
+developer and structurally plays faster than any target player would. Compounding: M1 is
+graybox/placeholder-art — 12–20 min is an experience target that also depends on
+animation/combat-pacing feel that doesn't exist yet.
+
+Disposition: amend roadmap.md's run-length criterion for M1 to a graybox sanity check
+(runs resolve in a bounded, non-degenerate wall-clock range) rather than the literal
+12–20 min target. True pacing validation deferred to M2, where real art/animation and
+non-developer testers both exist. Ruled out: (a) treating this as a live balance problem
+to tune now — would optimize graybox pacing against a target that can't be honestly
+measured until M2 regardless of tuning; (b) holding M1 open for a non-Trey data point —
+reopens the already-ratified solo-self-cert tradeoff for a single low-n sample that
+wouldn't meaningfully resolve anything.
+
+**Rule 23, codified:** PostHog Funnel insights compute actor-level conversion ("did this
+actor ever pass both steps"), not occurrence-level pairing counts. Any metric measuring a
+repeatable event-pair against a single actor (a solo tester looping run_start→run_end
+many times) must be built as raw SQL joining on the correlating ID, not a Funnel — Funnels
+silently collapse repeat occurrences into one data point per actor. Applies to any future
+per-run or per-session repeatable M2 metric (ghost-battle results, daily-contract
+attempts, etc.).
+
+Counter: 56/22/8/32/41 → 56/23/8/32/41 (rules +1, Rule 23; no CF opened/closed).
+
 ## 2026-07-12 — CF-67 Phase 2 CLOSED: boss-win Legendary reward (world-forged-heart) auto-placed + choose-one exclusivity (PR \#41, merge f6a2102); Codex clean 2 rounds; Rules 21 + 22 codified
 
 CF-67's boss-win reward item leg shipped. `world-forged-heart` (Legendary) is now the second
