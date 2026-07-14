@@ -13,6 +13,7 @@
 import pino from 'pino'
 import { createApp } from './app.js'
 import { createClerkVerifier } from './clerk/verifier.js'
+import { createAccountStore } from './db/accountStore.js'
 import { createDbClient } from './db/client.js'
 import { readEnv } from './env.js'
 import { createPosthogSink } from './posthog/client.js'
@@ -29,8 +30,17 @@ async function main(): Promise<void> {
   )
   const db = createDbClient({ databaseUrl: env.databaseUrl }, bootLog)
   const clerk = createClerkVerifier({ secretKey: env.clerkSecretKey }, bootLog)
+  // Account store for /v1/account/link — derived from the DB handle
+  // (null when no DATABASE_URL → the route returns 503).
+  const accountStore = db === null ? null : createAccountStore(db.db)
 
-  const app = createApp({ posthog, db, clerk, logLevel: env.logLevel })
+  const app = createApp({
+    posthog,
+    db,
+    clerk,
+    accountStore,
+    logLevel: env.logLevel,
+  })
 
   // Graceful shutdown: close the app (fires onClose → posthog.shutdown)
   // then exit. Guard against double-invocation if both signals arrive.

@@ -17,6 +17,7 @@ import {
   Pips,
   RelicCard,
 } from '../class-select/atoms';
+import { SignInAffordance } from '../../auth/SignInAffordance';
 
 interface MobileClassSelectScreenProps {
   classId: ClassId | null;
@@ -44,7 +45,10 @@ export function MobileClassSelectScreen({
   const stage: 1 | 2 = classId === null ? 1 : 2;
   return (
     <PanelShell>
-      {/* Status placeholder row + stepper pips */}
+      {/* Status placeholder row + stepper pips + optional sign-in (the
+          mobile equivalent of the desktop top-right cluster; renders
+          nothing when Clerk is unconfigured, so anonymous builds are
+          unchanged). */}
       <div
         style={{
           position: 'absolute',
@@ -55,10 +59,12 @@ export function MobileClassSelectScreen({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-end',
+          gap: 12,
           padding: '0 22px',
         }}
       >
         <Pips stage={stage} />
+        <SignInAffordance />
       </div>
 
       {stage === 1 ? (
