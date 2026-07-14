@@ -186,4 +186,27 @@ describe('POST /v1/account/link', () => {
     const winnerAnon = b1.linked === true ? ANON_A : ANON_B
     expect(fake.get(USER_ID)?.anonIdAtSignup).toBe(winnerAnon)
   })
+
+  it('maps a transient store failure to a retryable 503, not a 500', async () => {
+    const throwingStore: AccountStore = {
+      async findByClerkUserId() {
+        throw new Error('db connection blip')
+      },
+      async createIfAbsent() {
+        throw new Error('db connection blip')
+      },
+      async linkAnonIdIfNull() {
+        throw new Error('db connection blip')
+      },
+    }
+    app = createApp({
+      posthog: null,
+      clerk: verifier,
+      accountStore: throwingStore,
+      logLevel: 'silent',
+    })
+    const res = await inject(app, { auth: true, body: { anonId: ANON_A } })
+    expect(res.statusCode).toBe(503)
+    expect(JSON.parse(res.body).error).toBe('db_unavailable')
+  })
 })
