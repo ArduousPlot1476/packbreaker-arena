@@ -12,10 +12,14 @@
 //   401 — no authenticated user (requireAuth preHandler).
 //   503 — no database configured (store null; env-unset path).
 //
-// Idempotency (never overwrite an existing link):
-//   absent            → create with anon_id_at_signup = anonId   (linked: true)
-//   present, null     → set  anon_id_at_signup = anonId          (linked: true)
-//   present, non-null → no-op                                    (linked: false)
+// Idempotency + concurrency (never overwrite; never 500 on the race —
+// Codex round 2). The create path is an atomic INSERT … ON CONFLICT
+// (clerk_user_id) DO NOTHING RETURNING, so two concurrent first-sign-ins
+// can't both insert and 500 on the unique constraint:
+//   inserted (row returned)      → created + linked        (linked: true)
+//   conflict (no row) → re-read, then link-if-null:
+//     present, null              → set anon_id_at_signup    (linked: true)
+//     present, non-null          → no-op                    (linked: false)
 
 import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../clerk/requireAuth.js'
@@ -47,13 +51,25 @@ export function registerAccountLinkRoute(
       }
       const { anonId } = parsed.data
 
+      // Atomic create-or-nothing — no find-then-create race. If we inserted
+      // the row, we created + linked it in one shot.
+      const created = await store.createIfAbsent({
+        clerkUserId: userId,
+        anonIdAtSignup: anonId,
+      })
+      if (created !== null) {
+        return reply.status(200).send({ accountId: created.id, linked: true })
+      }
+
+      // Conflict: a concurrent/prior call already created the row. Re-read
+      // and apply link-if-null (this subsumes the present/null +
+      // present/non-null paths).
       const existing = await store.findByClerkUserId(userId)
       if (existing === null) {
-        const created = await store.create({
-          clerkUserId: userId,
-          anonIdAtSignup: anonId,
-        })
-        return reply.status(200).send({ accountId: created.id, linked: true })
+        // Unreachable in practice — the conflict proves a row exists. Guard
+        // defensively rather than assert (this is NOT the race path).
+        request.log.error({ userId }, 'account row missing after insert conflict')
+        return reply.status(500).send({ error: 'account_unavailable' })
       }
       if (existing.anonIdAtSignup === null) {
         // Atomic link-if-null: `linked` is false if a concurrent request set

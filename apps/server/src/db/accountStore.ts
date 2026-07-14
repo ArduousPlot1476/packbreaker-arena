@@ -21,10 +21,15 @@ export interface AccountRecord {
 /** Narrow account persistence surface the link route depends on. */
 export interface AccountStore {
   findByClerkUserId(clerkUserId: string): Promise<AccountRecord | null>
-  create(input: {
+  /** Atomically inserts the account, or does NOTHING if a row for this
+   *  clerkUserId already exists (`ON CONFLICT (clerk_user_id) DO NOTHING`).
+   *  Returns the created record, or null when a concurrent/prior call
+   *  already created it — so a concurrent first-sign-in can't 500 on the
+   *  unique constraint; the caller re-reads + link-if-nulls instead. */
+  createIfAbsent(input: {
     clerkUserId: string
     anonIdAtSignup: string
-  }): Promise<AccountRecord>
+  }): Promise<AccountRecord | null>
   /** Atomically sets anon_id_at_signup ONLY if it is currently null
    *  (`WHERE id = ? AND anon_id_at_signup IS NULL`). Returns true iff THIS
    *  call performed the link — so two concurrent link requests that both
@@ -52,15 +57,17 @@ export function createAccountStore(
         anonIdAtSignup: row.anonIdAtSignup,
       }
     },
-    async create(input) {
+    async createIfAbsent(input) {
       const rows = await db
         .insert(schema.accounts)
         .values({
           clerkUserId: input.clerkUserId,
           anonIdAtSignup: input.anonIdAtSignup,
         })
+        .onConflictDoNothing({ target: schema.accounts.clerkUserId })
         .returning()
       const row = rows[0]
+      if (row === undefined) return null // conflict — a row already existed
       return {
         id: row.id,
         clerkUserId: row.clerkUserId,

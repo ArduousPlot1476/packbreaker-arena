@@ -31,7 +31,11 @@ function makeFakeAccountStore(seed: AccountRecord[] = []): {
     async findByClerkUserId(clerkUserId) {
       return byClerk.get(clerkUserId) ?? null
     },
-    async create(input) {
+    async createIfAbsent(input) {
+      // Mirror ON CONFLICT (clerk_user_id) DO NOTHING: the has+set is one
+      // synchronous step, so concurrent injects serialize atomically —
+      // exactly one insert wins, the rest return null (conflict).
+      if (byClerk.has(input.clerkUserId)) return null
       n += 1
       const rec: AccountRecord = {
         id: `acct_${n}`,
@@ -148,5 +152,29 @@ describe('POST /v1/account/link', () => {
     const linked = await fake.store.linkAnonIdIfNull('acct_1', ANON_B)
     expect(linked).toBe(false)
     expect(fake.get(USER_ID)?.anonIdAtSignup).toBe(ANON_A)
+  })
+
+  it('concurrent first sign-ins: both 200 (never 500), exactly one links, no overwrite', async () => {
+    const fake = makeFakeAccountStore()
+    app = createApp({ posthog: null, clerk: verifier, accountStore: fake.store, logLevel: 'silent' })
+    // Two near-simultaneous first-sign-in calls for the same brand-new Clerk
+    // user, each carrying a different anonId. The ON CONFLICT create path
+    // means one insert wins and the other falls back to re-read + no-op —
+    // neither 500s on the unique constraint (Codex round 2).
+    const [r1, r2] = await Promise.all([
+      inject(app, { auth: true, body: { anonId: ANON_A } }),
+      inject(app, { auth: true, body: { anonId: ANON_B } }),
+    ])
+    expect(r1.statusCode).toBe(200)
+    expect(r2.statusCode).toBe(200)
+    const b1 = JSON.parse(r1.body)
+    const b2 = JSON.parse(r2.body)
+    // Exactly one call created/linked; the other hit the conflict fallback.
+    expect([b1.linked, b2.linked].sort()).toEqual([false, true])
+    // Both reference the same account row.
+    expect(b1.accountId).toBe(b2.accountId)
+    // The winner's anonId is stored and never overwritten by the loser.
+    const winnerAnon = b1.linked === true ? ANON_A : ANON_B
+    expect(fake.get(USER_ID)?.anonIdAtSignup).toBe(winnerAnon)
   })
 })
