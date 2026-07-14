@@ -4,6 +4,116 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-14 — M2.1 PR2 CLOSED: Clerk integration + account-link merged (PR \#43, merge 393860c); Codex cycle TERMINAL (6 rounds / 9 findings / 1 meta-audit); Rule 24 codified (Rule-17 sibling); CF-69 opened (Title/Settings screen); Drift 35 + 36
+
+M2.1 PR2 (Persistence & Auth Backbone — client Clerk integration + the account-link endpoint,
+PR2.5 folded in) merged `--no-ff` to main at 393860c2ec1f1f1093a08f28d955a24ec6cda414 (PR \#43,
+branch m2.1-pr2-clerk-integration; GitHub merged=true, merged_at 2026-07-14T16:21:01Z,
+merge_commit_sha 393860c). Eight fold-in commits: f6ef7e7 (client Clerk integration) · 0f096e4
+(POST /v1/account/link) · c2bf2b3 (R1) · d3c60ad (R2) · 6de49b0 (R3 meta-audit) · fd05b75 (R4) ·
+847ce27 (R5) · 9490492 (R6). Pre-merge gate green: `turbo lint typecheck test --force` → 23/23
+tasks; 91 server tests / 591 client (+15 pre-existing skips inherited from main, unrelated).
+
+**Codex cycle — the project's deepest to date: 6 rounds, 9 raw findings, 1 meta-audit, TERMINAL at
+round 6 (master-dev steer, no round 7).** Per round: R1 (2 — anonId-persist race + link-if-null
+overwrite) · R2 (1 — create-race) · R3 (2 — response-readiness + anonId-uuid-contract → cumulative
+reached finding \#4, ceiling tripped → read-only meta-audit of the account-link surface, lettered
+catalog A–E, single structural fix pass) · R4 (2 — mobile affordance missing + multi-session
+switch) · R5 (1 — salvage-anonId-on-validation-failure) · R6 (1 — transient-store → 503). Codex
+findings on an UNMERGED PR take NO Catch numbers (the pre-merge review loop caught them before
+merge; CF-67 precedent). Zero findings left unaddressed: eight fixed + folded in; F2
+(multi-session) explicitly N/A (below), not deferred-open. Each fold-in reviewed at its tip SHA;
+final reviewed SHA 847ce27 + R6 (9490492) landed post-terminal-steer.
+
+**Phase 1 design ratifications (M2.1 PR2 scoping — recorded canonically here).**
+- **PR resequencing:** client Clerk = PR2 (this) · run-save = PR3 · ghost storage = PR4.
+- **Anonymous-keyed run-save RULED OUT** — run-save keys on a real (Clerk) account only; an
+  anonymous-keyed save doesn't serve the cross-device / ranked-integrity point of persistence.
+- **Save schema = Option B:** a new `player_saves` table, 1:1 FK to `accounts` — RESERVED for PR3,
+  NOT built here (separates identity from progression per CF-57's "overload → split, not patch",
+  NOT "Rule 21" — see Drift 35).
+- **LocalSaveV1 field disposition:** `trophies` / `dailyStreak` / `lastDailyAttempted` are PR3
+  server-authoritative candidates (tech-architecture.md § 7.2); `tutorialCompleted` / `inProgressRun`
+  stay device-local (inProgressRun is same-device crash-recovery, not cross-device-meaningful).
+- **Sign-in entry point** is a STOPGAP in the existing class-select chrome (desktop top-right
+  cluster + the mobile equivalent), NOT a new Title/Settings screen — see CF-69.
+
+**Account-link design (PR2.5, folded in).** `POST /v1/account/link` — reusable per-route
+`requireAuth` preHandler (reads PR1's populated `request.auth.userId`, 401 if null; the global
+onRequest hook stays non-enforcing) · Zod body `{ anonId }` · narrow `AccountStore` DI seam (fake in
+tests, real over drizzle). Three idempotency paths, account keyed by the AUTHED Clerk userId (never
+the body): absent → create+link (linked:true); present-null → link-if-null (linked:true);
+present-non-null → no-op (linked:false, never overwrite). Concurrency hardened (R2) via atomic
+`INSERT … ON CONFLICT (clerk_user_id) DO NOTHING RETURNING` + re-read fallback — a concurrent
+first-sign-in cannot 500 on the unique constraint. link-if-null is atomic at the SQL layer
+(`WHERE … AND anon_id_at_signup IS NULL` returning affected-count, R1).
+
+**anonId contract — account-link validator relaxed `.uuid()` → `z.string().min(1)` (R3).** Matches
+telemetry (telemetryBatch `anonId`) + LocalSaveV1 (validate.ts `telemetryAnonId`). The client anonId
+producer (identifiers.ts) has a live non-RFC-4122 `fallback-…` path, so `.uuid()` would 400
+legacy/fallback ids and never link them. **Explicitly coupled to CF-51:** when CF-51 tightens the
+telemetry anonId validator to uuid, account-link's tightens IN THE SAME PASS — not independently —
+so the anonId contract stays single-sourced.
+
+**Effect-readiness rework (R3, supersedes the original fire-and-forget).** `AccountLinkOnSignIn` now
+marks the session linked ONLY on a genuine 2xx (`postAccountLink`), with a bounded retry for
+transient 401/503 and NEVER a retry on 400; any failure leaves the session unlinked so a later
+sign-in re-attempts. R6 completed the server half: a transient account-store throw now maps to a
+retryable 503 (was an uncaught 500 the client would not retry), so the client's 401/503 retry
+covers transient DB failures.
+
+**Rule 24 codified (Rule-17 SIBLING — persistence-load-boundary class, CF-45 / CF-46 lineage), from
+R5.** When the client load boundary rejects a WHOLE persisted object because any field fails
+validation (e.g. a stale/future `inProgressRun` after a content-schema change — a live-ops trigger,
+not just corruption), SALVAGE still-valid top-level fields directly from the raw pre-migration blob
+rather than discarding the whole object and regenerating. `ensureAnonIdPersisted` now recovers a
+valid top-level `telemetryAnonId` via `loadRaw()` before generating fresh, so a content deploy
+cannot silently fork the pre-account device identity this PR exists to preserve. Bend-criteria met
+(codified on a single instance): shape is structurally generic (salvage-valid-subfields-across-
+whole-object-validation-failure), the discipline is low-burden (a narrow top-level field read), and
+the surface is predictable (LocalSaveV2+ / run-save schema bumps keep making old saves whole-invalid
+while sub-fields stay valid). Sibling to Rule 17 (load boundary validates-not-transforms), same class.
+
+**F2 (multi-session account-switch) — N/A, NOT a deferred-open item.** Clerk multi-session handling
+is opt-in and off by default, and this game has no product rationale to enable it. The single-session
+assumption (one account per signed-in session) is documented in-code above `AccountLinkOnSignIn`'s
+session ref; keying on `userId` is only needed if multi-session is ever enabled. No open item, no CF.
+
+**CF-69 OPENED — gdd.md § 14 Title/Settings screen is unbuilt.** No Title or Settings screen exists
+in code on EITHER viewport — the app boots straight into `ClassSelectScreen` (no menu precedes it).
+Sign-in is bolted onto the class-select chrome as a stopgap (desktop + mobile) this PR. The real
+Title/Settings screen is an M2 refined-art / Claude Design deliverable, tracked separately. Related
+to but distinct from CF-68's daily-route client-fetch leg.
+
+**Two master-dev chat-side drift instances codified (Topic 2 lineage) — Drift 35 + Drift 36**, both
+from the M2.1 PR2-scoping investigation prompt, caught during the read-only scoping investigation
+(Rule 8 halt-and-surface):
+- **Drift 35** — the prompt cited "Rule 21's separated-concerns precedent" for the
+  accounts-vs-new-table schema question. Rule 21 is actually additive-field-fixture-re-baseline-
+  eligibility (decision-log.md 2026-07-12 § "CF-67 Phase 2 CLOSED"); the real separated-concerns
+  precedent is CF-57's "overload → split, not patch" (decision-log.md 2026-07-06 § "CF 57 CLOSED").
+- **Drift 36** — the prompt assumed gdd § 14's Title/Settings screen was built (sign-in to be
+  "attached" there); confirmed doc-only / unbuilt in code on both viewports. Now tracked as CF-69.
+
+**Process note (calibration, not a flag on this PR).** This 6-round / 9-finding / 1-meta-audit Codex
+cycle is the project's deepest to date (vs. CF-67's 3-round baseline). Attributable to greenfield
+auth/identity work — a brand-new client↔server surface (Clerk, session lifecycle, anonId contract,
+persistence-load edges) getting proportionate adversarial scrutiny, not a quality regression. The
+findings narrowed round-over-round (silent-link-failure → concurrency → mobile parity → config
+assumption → corrupted-save corner → transient-DB status), the expected diminishing-returns shape;
+TERMINAL was called at round 6 rather than chasing an unbounded LLM-reviewer tail.
+
+**Deferred / carried (unchanged):** live DB verification (Neon health-check + `drizzle-kit migrate`
+apply — awaits a real `DATABASE_URL`); Clerk live signed-in flow (awaits a publishable key; the
+anonymous path is fully verified, tests run Clerk-off); § 6.2 routes (`/v1/ghost`, `/v1/run/save`,
+`/v1/leaderboard/daily`, `/v1/replay/validate`) → PR3/PR4; `player_saves` table → PR3; CF-68
+daily-contract client-fetch leg (stays open); CF-69 Title/Settings screen (above).
+
+Counter: 56/23/8/34/42 → 56/24/8/36/43 — rules +1 (Rule 24, R5-salvage / Rule-17 sibling); drifts +2
+(Drift 35 Rule-21-misattribution; Drift 36 gdd-§14-assumed-built); open-CFs +1 (CF-69 opened; CF-68
+stays open — no CF closed); catches / patterns unchanged (Codex pre-merge findings take no Catch
+numbers, CF-67 precedent).
+
 ## 2026-07-13 — M2.1 PR1 CLOSED: server scaffolding (Neon/Drizzle DB + Clerk auth seam + daily-contract route) merged (PR \#42, merge d4ab7b3); Codex clean round 1; CF-68 opened (daily-route drift — server leg closed, client leg open); Drift 33 + 34 codified
 
 M2.1 PR1 (Persistence & Auth Backbone — server scaffolding) merged `--no-ff` to main at
