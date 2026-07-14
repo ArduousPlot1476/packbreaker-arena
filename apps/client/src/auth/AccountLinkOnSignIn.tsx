@@ -18,6 +18,12 @@ import { postAccountLink } from './postAccountLink';
 export function AccountLinkOnSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
   const apiFetch = useApiFetch();
+  // Single-session assumption: one account per signed-in session. Clerk
+  // multi-session handling is opt-in and off by default, and this app never
+  // enables it. If it is ever turned on in the Clerk Dashboard, this must
+  // key on the Clerk `userId` instead of a bare boolean — an in-session
+  // account switch keeps `isSignedIn` true, so a boolean would silently skip
+  // linking the newly active account (Codex round 4 F2).
   const linkedThisSession = useRef(false);
 
   useEffect(() => {
