@@ -25,6 +25,10 @@ import { migrate } from './migrations';
 
 export type { LocalSaveV1 } from '@packbreaker/shared';
 export type { SaveStorageAdapter } from './storage';
+// Raw (parsed-but-unmigrated) read primitive. Exposed for the narrow
+// anonId-salvage path (telemetry/ensureAnonId.ts) that must recover a valid
+// top-level telemetryAnonId when the FULL LocalSaveV1 fails validation.
+export { loadRaw } from './storage';
 
 /** Write a LocalSaveV1 to local storage. Pass a custom storage adapter
  *  for tests; default is globalThis.localStorage (SSR-safe — silent

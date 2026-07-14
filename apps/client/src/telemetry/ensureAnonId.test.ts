@@ -24,4 +24,30 @@ describe('ensureAnonIdPersisted', () => {
     ensureAnonIdPersisted();
     expect(loadLocal()?.telemetryAnonId).toBe(first);
   });
+
+  it('salvages a valid top-level anonId when the full save fails validation', () => {
+    // A save whose inProgressRun is an invalid/future shape → loadLocal()
+    // rejects the whole LocalSaveV1, but the top-level telemetryAnonId is
+    // intact (the content-deploy scenario). Seed the raw storage key directly
+    // (SAVE_STORAGE_KEY = 'pba.v1.save', storage.ts).
+    localStorage.setItem(
+      'pba.v1.save',
+      JSON.stringify({
+        schemaVersion: 1,
+        trophies: 0,
+        dailyStreak: 0,
+        lastDailyAttempted: null,
+        tutorialCompleted: false,
+        telemetryAnonId: 'pre-account-id-123',
+        inProgressRun: { bogus: 'future-shape' },
+      }),
+    );
+    // Precondition: validation rejects the whole save.
+    expect(loadLocal()).toBeNull();
+
+    ensureAnonIdPersisted();
+
+    // The pre-existing device id is preserved, NOT replaced by a fresh one.
+    expect(loadLocal()?.telemetryAnonId).toBe('pre-account-id-123');
+  });
 });
