@@ -4,12 +4,19 @@
 // safeParse entrypoint; the route maps !success → 400 and .data → handler.
 // Body carries only the device anonId to link (the account is identified
 // server-side by the authenticated Clerk userId, never from the body).
+//
+// anonId contract: NON-EMPTY STRING (`.min(1)`), matching telemetryBatch's
+// anonId + LocalSaveV1.telemetryAnonId. NOT `.uuid()` — the client anonId
+// generator (identifiers.ts) has a live non-UUID `fallback-…` path, and
+// the whole system validates anonId as a plain string; a stricter uuid()
+// here would 400 those legacy/fallback ids and never link them. (CF-51's
+// telemetry-side uuid tightening is separate + hasn't fired.)
 
 import { z } from 'zod'
 
 export const AccountLinkRequestSchema = z
   .object({
-    anonId: z.string().uuid(),
+    anonId: z.string().min(1),
   })
   .strict()
 

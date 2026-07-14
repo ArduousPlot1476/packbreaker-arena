@@ -54,4 +54,28 @@ describe('AccountLinkOnSignIn', () => {
     expect(init.method).toBe('POST');
     expect(JSON.parse(init.body as string)).toEqual({ anonId: 'anon-uuid-xyz' });
   });
+
+  it('does not consume the session on a 4xx — a later sign-in retries', async () => {
+    const spy = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ error: 'x' }), { status: 400 }),
+      );
+    vi.stubGlobal('fetch', spy);
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    const { rerender } = render(<AccountLinkOnSignIn />);
+
+    // First sign-in → attempt 1 (400 is NOT retried by postAccountLink).
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    rerender(<AccountLinkOnSignIn />);
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+
+    // Sign out then back in: the 400 did NOT mark the session linked, so a
+    // fresh attempt fires on the next transition.
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    rerender(<AccountLinkOnSignIn />);
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    rerender(<AccountLinkOnSignIn />);
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+  });
 });

@@ -93,13 +93,22 @@ describe('POST /v1/account/link', () => {
     expect(JSON.parse(res.body).error).toBe('auth_required')
   })
 
-  it('400 on a missing / non-uuid anonId', async () => {
+  it('400 on a missing / empty anonId', async () => {
     const { store } = makeFakeAccountStore()
     app = createApp({ posthog: null, clerk: verifier, accountStore: store, logLevel: 'silent' })
     const missing = await inject(app, { auth: true, body: {} })
     expect(missing.statusCode).toBe(400)
-    const notUuid = await inject(app, { auth: true, body: { anonId: 'not-a-uuid' } })
-    expect(notUuid.statusCode).toBe(400)
+    const empty = await inject(app, { auth: true, body: { anonId: '' } })
+    expect(empty.statusCode).toBe(400)
+  })
+
+  it('accepts a non-UUID legacy/fallback-shaped anonId (min(1) contract, not uuid)', async () => {
+    const fake = makeFakeAccountStore()
+    app = createApp({ posthog: null, clerk: verifier, accountStore: fake.store, logLevel: 'silent' })
+    const res = await inject(app, { auth: true, body: { anonId: 'fallback-abc-123' } })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.parse(res.body).linked).toBe(true)
+    expect(fake.get(USER_ID)?.anonIdAtSignup).toBe('fallback-abc-123')
   })
 
   it('503 when no database is configured (store null)', async () => {
