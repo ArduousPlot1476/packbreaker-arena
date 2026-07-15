@@ -4,6 +4,62 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — Catch 59 (Class C2 — `updated_at`-advancement claim shipped with zero falsifying test; Catch 58's shape INSIDE the PR that exists to close it) + Pattern 9 codified ("server registers, client never calls", 3 instances)
+
+Both surfaced by the PR3 read-only meta-audit (PR \#45; ceiling bent by ratification at raw
+count 3 rather than waiting for finding \#4 — the Rule-17-sibling early-bend, per
+[[feedback_meta_audit_structural]]'s precedent). Ordinals walked live from canon at write time
+(highest existing catch = 58; highest existing pattern = 8).
+
+**Catch 59 (NEW, Class C2 — framework-internal architecture gap; Rule 4 instance, the THIRD).**
+`db/playerSaveStore.ts`'s upsert sets `updatedAt: sql`now()`` in its `DO UPDATE` branch, with a
+comment asserting "*a write always advances updatedAt even when every other column is
+byte-identical*". **Nothing tested it.** The claim is not self-evident: `updated_at`'s
+`DEFAULT now()` fires on **INSERT ONLY**, so removing the explicit set freezes the column at
+insert time — and every other test in the repo still passes, because none read it. Proven, not
+argued: with the line removed the new test fails `expected 1784159079083 to be greater than
+1784159079083` (identical timestamps — frozen), and passes with it restored.
+
+Same anatomy as **Catch 58** (decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"): a
+belief about a real external system's behaviour at a DB boundary, asserted in a comment,
+unfalsifiable because no test exercises it. The sharp part: this shipped **inside PR3 — the PR
+whose entire purpose was closing that class** (CF-73 / Rule 4 broadened to external-SYSTEM).
+Writing the antidote does not immunise the author from the disease. Caught by the meta-audit,
+not by Codex (Codex passed the surrounding code in rounds 1–3). Code was already CORRECT — the
+defect was the missing falsifier, which is exactly what Rule 4 legislates. Catches 58 → 59.
+
+**Pattern 9 (NEW — "server registers, client never calls").** A server-side or descriptive
+surface ships with its consumer *assumed* rather than verified, so the feature is inert while
+looking complete. Three instances, two of them Codex catches, none caught by a gate:
+- **CF-57** (decision-log.md 2026-07-06 § "CF 57 CLOSED") — `describeItem` advertised an
+  `add_gold` grant no consumer ever applied. CLOSED.
+- **CF-68** (decision-log.md 2026-07-13 § "M2.1 PR1 CLOSED") — daily-contract route: "*server
+  leg closed, client leg open*". OPEN.
+- **CF-75** (decision-log.md 2026-07-15 § "CF-75 OPENED") — `/v1/player/save`: table + both
+  endpoints, zero client callers. OPEN.
+Second-instance threshold passed at CF-68; the third earns the ordinal. Patterns 8 → 9.
+
+**Pattern 9's METHODOLOGICAL half — the part that generalises.** A consumer-count audit MUST
+exclude test-only references. A raw grep/file-count over `apps/client/src` scores
+`/v1/contract/daily` at **1 consumer** — which is `client.test.ts`. **A test reference is not a
+production consumer.** Excluding tests drops it to **0**, consistent with CF-68 being open. So
+the naive audit reports the gap as CLOSED and the careful one reports it OPEN, on the same
+repo, the same day. The audit that found this pattern would have missed two of its own three
+instances if run by file-count. Corollary to [[feedback_verify_field_has_consumer]]: "grep for
+a real consumer" means grep for a **non-test** consumer, and report the enumeration, not the
+count (Rule 18 lineage).
+
+Verified production-consumer sweep at this commit (tests excluded): `/v1/telemetry/batch` → 2 ·
+`/v1/account/link` → 2 · `/v1/contract/daily` → **0** (CF-68) · `/v1/player/save` → **0**
+(CF-75).
+
+Counter: 58/24/8/38/48 → 59/24/9/38/48 — catches +1 (Catch 59, Class C2, 3rd Rule-4 instance);
+patterns +1 (Pattern 9, "server registers, client never calls", 3 instances). Rules unchanged
+at 24 (Rule 4 already covers Catch 59 — this is an instance of it, not a new rule; Pattern 9's
+methodological corollary is recorded as pattern text, not minted as a rule — master-dev's call
+if it should be one). Drifts unchanged at 38. Open-CFs unchanged at 48 (none opened, none
+closed — CF-73 + CF-74 still close on PR \#45's merge, which has not happened).
+
 ## 2026-07-15 — CF-75 OPENED: player-save client sync leg unwired (server registers, client never calls — 3rd instance of the class); PR3's "syncs zeros" framing corrected
 
 Surfaced by Codex round 2 on PR \#45 (review 4708847690, commit c48b909), P1, and confirmed

@@ -129,6 +129,50 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (M2.1 PR3)', 
     expect(typeof found!.lastDailyAttempted).toBe('string')
   })
 
+  // Catch 59. playerSaveStore's upsert sets `updatedAt: sql`now()`` in its DO
+  // UPDATE branch, with a comment claiming "a write always advances updatedAt
+  // even when every other column is byte-identical". Nothing tested that.
+  //
+  // The claim is NOT self-evident, and that is the point: `updated_at`'s
+  // DEFAULT now() fires on INSERT ONLY. Drop the explicit set from the DO
+  // UPDATE branch and updated_at silently FREEZES at insert time — every other
+  // test in this repo still passes, because none of them read it. That is
+  // Catch 58's anatomy exactly (an untested belief about a real system's
+  // behaviour at a DB boundary), sitting inside the PR that exists to close
+  // that class.
+  //
+  // The byte-identical payload is load-bearing: a write that changes a column
+  // could plausibly advance updated_at by some other mechanism, so a no-op
+  // write is the only case that isolates the explicit `now()`.
+  it('upsert advances updated_at even when every other column is byte-identical', async () => {
+    const accounts = createAccountStore(real.db)
+    const acc = await accounts.createIfAbsent({
+      clerkUserId: 'user_ps_updated_at',
+      anonIdAtSignup: 'anon-updated-at',
+    })
+    const payload = {
+      accountId: acc!.id,
+      trophies: 11,
+      dailyStreak: 2,
+      lastDailyAttempted: '2026-07-15',
+    }
+
+    const first = await store.upsert(payload)
+    // Re-write the SAME values — a semantic no-op. Only the explicit
+    // `now()` in the DO UPDATE branch can move updated_at here.
+    const second = await store.upsert(payload)
+
+    expect(second.trophies).toBe(first.trophies)
+    expect(second.dailyStreak).toBe(first.dailyStreak)
+    expect(second.lastDailyAttempted).toBe(first.lastDailyAttempted)
+    // The assertion the claim was missing.
+    expect(second.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime())
+
+    // And it is persisted, not merely returned by RETURNING.
+    const reread = await store.findByAccountId(acc!.id)
+    expect(reread!.updatedAt.getTime()).toBe(second.updatedAt.getTime())
+  })
+
   it('ON DELETE CASCADE removes the save when its account is deleted', async () => {
     const accounts = createAccountStore(real.db)
     const acc = await accounts.createIfAbsent({
