@@ -4,6 +4,125 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-14 — M2.1 PR3 PHASE 1 RATIFIED: `player_saves` plumbing-only (Option A); schema + sync contract + endpoints ratified; § 7.2 amended (write direction) + § 6.2 renamed; Rule 4 broadened in place (external-SYSTEM boundary — 2nd instance); Catch 58 (Class C2); Drift 37; CF-72 + CF-73 + CF-74 opened
+
+Phase 1 was a read-only investigation (no code, no migrations). It returned six evidenced halts
+(H1–H6); this entry ratifies a disposition for every one — none left silently unaddressed. Per
+Rule 20 (ratification-before-citation; decision-log.md 2026-07-11 § "Icon batch 1 (Commons)
+landed") this entry is sequenced as its own standalone docs-only hand-off — PR3 implementation may
+cite it only once it has landed with a confirmed SHA.
+
+**PR3 SCOPE — Option A RATIFIED: plumbing-only.** PR3 ships the table, the two routes, the H4
+composer fix, and the real-SQL test. All three server-authoritative fields sync their CURRENT
+stubbed values (zeros / null); NO producers are wired this PR. Option B (absorbing the trophy
+schedule + client mutation surfaces + CF-68) rejected as a scope explosion. Consequence to state
+plainly: **PR3 knowingly syncs zeros.** That is the point — it lands the pipe so a later PR wires
+the taps, and it keeps the auth/persistence seam honest rather than pretending values exist.
+
+**Schema RATIFIED as proposed** (`player_saves`, appended to db/schema.ts; `accounts` untouched):
+`account_id` uuid **PRIMARY KEY** + `REFERENCES accounts(id) ON DELETE CASCADE` — PK **is** the FK,
+which is the 1:1 constraint (no surrogate id, no separate UNIQUE) · `trophies` integer NOT NULL
+DEFAULT 0, **signed, NO non-negative CHECK** (gdd.md § 13 "Lose → -trophies" makes trophies
+non-monotonic; a CHECK would be wrong and `max()`-style merges are ruled out) · `daily_streak`
+integer NOT NULL DEFAULT 0 · `last_daily_attempted` **pg `date`, mode:'string'** (matches
+`IsoDate = Brand<string,'IsoDate'>`, packages/content/src/schemas.ts:137 — NOT timestamp; a JS Date
+would break the brand and reintroduce TZ bugs) · `updated_at` timestamptz NOT NULL DEFAULT now().
+**No `schemaVersion` column** — the table is drizzle-migrated and the DTO is route-versioned;
+LocalSaveV1's schemaVersion stays a client-envelope concern. Migration: `drizzle-kit generate
+--name=player_saves` → `apps/server/drizzle/0001_player_saves.sql` + `meta/0001_snapshot.json`,
+`_journal.json` gains idx 1. Ratified departure from PR1's auto-minted codename
+(`0000_real_the_captain`) for readability.
+
+**Sync contract.** PULL (server → client, on sign-in after account-link 2xx + on signed-in boot):
+**§ 7.2 holds unchanged — server wins, client toasts "synced."** PUSH: **§ 7.2 is AMENDED for the
+write direction**, which it never covered (read as a write rule, "server wins" makes every push a
+no-op). Ratified write semantics: **PUT body is `{ trophies, lastDailyAttempted }` ONLY.
+`dailyStreak` is NEVER client-settable** — always server-derived from `lastDailyAttempted` + the
+current server date (yesterday → +1; today → unchanged; else → reset to 1). That is authoritative,
+cheat-resistant, and needs no schedule decision. The **trophy trust-model** (absolute value vs
+delta+schedule vs `/v1/replay/validate` re-simulation) is **explicitly DEFERRED** → CF-72. Not
+blocking: PR3 only ever pushes zero.
+
+**Endpoints.** `GET/POST /v1/run/save` (tech-architecture.md § 6.2) **RENAMED → `GET/PUT
+/v1/player/save`; § 6.2 amended.** The old name was actively wrong for this surface — PR3 stores
+meta-progression, while `inProgressRun` is device-local by ratification, so nothing "run"-shaped
+is saved server-side. Both routes `requireAuth`-gated (anonymous users have no row by
+construction). Status map mirrors routes/account.ts: 200 · 400 invalid_body · 401 auth_required ·
+**404 `account_not_linked`** · 503 db_unavailable (store null OR transient store throw → retryable,
+R6 precedent). **404 + client re-fires PR2's link flow is RATIFIED over auto-create** — it keeps
+PR2's account-link as the SOLE account-creating authority rather than duplicating that authority in
+a second route. Write concurrency: `ON CONFLICT (account_id) DO UPDATE` so a concurrent first-write
+cannot 500 (R2 precedent).
+
+**Catch 58 (NEW, Class C2 — framework-internal architecture gap; Rule 4 instance, the SECOND).**
+`createAccountStore` — PR2's REAL drizzle SQL — is referenced in **zero** tests (grep-verified).
+account.route.test.ts injects a fake that HAND-MIRRORS the assumed SQL, in its own comment:
+"*Mirror ON CONFLICT (clerk_user_id) DO NOTHING: the has+set is one synchronous step*". That is
+CF-70's exact anatomy one layer over: a test asserting against the author's BELIEF about an
+external system's semantics, so the belief is never falsifiable. verifier.ts believed
+`verifyToken` returned `{data, errors}`; the fake believes the SQL behaves a certain way. Both pass
+forever if the belief is wrong. Caught by this Phase 1 read, not by Codex. Catches 57 → 58.
+
+**Rule 4 BROADENED IN PLACE (fold, not fork — no new ordinal; same mechanism as the CF-70 fold).**
+Prior committed wording (decision-log.md 2026-07-14 § "CF-70 OPENED + CLOSED"): "*at least one test
+per **external-library** boundary must exercise the REAL library shape, not an assumed one*."
+Broadened to: "***external-system** boundary … must exercise the REAL system's behaviour, not an
+assumed one*" — covering databases/SQL, not only libraries. **Second instance across two distinct
+PRs** (CF-70's verifyToken return-shape in PR2/the hotfix; Catch 58's AccountStore SQL surfaced in
+PR3 Phase 1) — same mechanism, different subsystem, which is what earns the broadening. Rules
+unchanged at 24: broadening an existing rule mints no ordinal.
+
+**Test strategy.** PR3 MUST include a **real-Postgres test** for `player_saves` (testcontainers OR
+a GitHub Actions Postgres service container — implementation choice deferred to Phase 2; a
+fake-store-only plan is REJECTED). The same harness is extended to add one real-SQL test for the
+EXISTING AccountStore `ON CONFLICT … DO NOTHING` path — closing Catch 58 / CF-73 **inside PR3
+without reopening PR2**. Note the standing tension this resolves: CI ships no secrets (env.ts's
+required-or-warn posture exists for exactly that), so a `skipIf(!DATABASE_URL)` local-only test
+would give zero CI protection — which is the posture that let this gap persist.
+
+**Drift 37 (Topic 2 — master-dev chat, per Rule 15's drift-vs-clerical boundary).** The Phase 1
+prompt cited `balance-bible.md` as the trophy-authority source; balance-bible.md contains **zero**
+trophy references (it is combat constants / economy curves / item tables). Actual authority is
+**gdd.md § 13**. Counts rather than being clerical: had it not been self-corrected during the read,
+the investigation would have checked the wrong doc and missed H2 entirely. Drifts 36 → 37.
+
+**H1–H6 dispositions (every halt answered):**
+- **H1** balance-bible trophy-authority misattribution → **Drift 37** (above); real source gdd.md § 13.
+- **H2** trophy schedule contradiction → **CF-72 OPENED** (below). Non-blocking for PR3.
+- **H3** the three fields have no producers (useRun.ts:789-791 "*no surfaces exist yet to mutate
+  them. M2 will wire them*") → **resolved by the Option A ratification**: acknowledged and accepted;
+  PR3 syncs the stubbed values. No CF — this is scope, not a defect.
+- **H4** composer hardcoded-zero bug → **CF-74 OPENED**, a **REQUIRED PR3 precondition**, closes
+  inside PR3. Not deferred.
+- **H5** § 7.2 omits `lastDailyAttempted` from its "server stores authoritative…" line → **no CF**;
+  a required one-line § 7.2 amendment folded into PR3's docs touch (alongside the write-direction
+  amendment above).
+- **H6** `dailyStreak`'s real producer is blocked because the client never fetches
+  `/v1/contract/daily` → **no new CF**; a dependency on the EXISTING open **CF-68** only. Recorded
+  as a dependency, not re-tracked.
+
+**CFs OPENED (3) — ordinals walked live from canon (highest existing = CF-71):**
+- **CF-72 — trophy award schedule contradiction.** gdd.md § 13 "Win → +trophies (**scaled by round
+  reached**). Lose → -trophies (small)" vs tech-architecture.md:264 "`trophy` … **+18 per win**; M2
+  schedule defers". Flat vs scaled; the loss penalty is unquantified; floor-at-zero undecided.
+  Blocks the trophy PUSH trust-model; does NOT block PR3 (which pushes zero).
+- **CF-73 — AccountStore real-SQL coverage gap** (Catch 58's tracking CF; 2nd instance of CF-70's
+  class). Opened here, **scheduled to close INSIDE PR3** via the shared real-Postgres harness — not
+  a standalone fix, not a PR2 reopen.
+- **CF-74 — composer hardcoded-zero bug.** useRun.ts:846-848 writes literal `trophies: 0,
+  dailyStreak: 0, lastDailyAttempted: null` on EVERY quiescent save. The 2026-05-23 Phase-2.5g
+  meta-audit hardened `clearLocal` to preserve these cross-session fields and persistence/index.ts:62-64
+  explicitly names the risk ("*cumulative trophies resetting on every abandon*") — but only the
+  clear half was fixed; the composer half still zeroes them. Latent today (values are always 0);
+  live the instant PR3 hydrates a non-zero server value. **REQUIRED PR3 precondition**, closes
+  inside PR3.
+
+Counter: 57/24/8/36/44 → 58/24/8/37/47 — catches +1 (Catch 58, Class C2, 2nd Rule-4 instance);
+drifts +1 (Drift 37, balance-bible trophy-authority misattribution, Topic 2 / Rule 15); open-CFs +3
+(CF-72, CF-73, CF-74 opened; none closed this entry — CF-73 + CF-74 are scheduled to close inside
+PR3, CF-68 + CF-71 stay open); rules unchanged at 24 (Rule 4 BROADENED in place — fold, not fork,
+no new ordinal); patterns unchanged at 8.
+
 ## 2026-07-14 — CF-70 close-out reconciliation: PR \#44 merged at 3a0f4b1; docs commit 05c8be2. SUPERSEDES the "NOT MERGED / PR \#44 OPEN" framing in the entry below. Counter unchanged.
 
 **State reconciliation only — this step mints nothing on any axis:** no catch, no drift, no rule,
