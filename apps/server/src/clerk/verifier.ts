@@ -45,17 +45,20 @@ export function createClerkVerifier(
   return {
     async verify(token) {
       try {
-        const result = await verifyToken(token, { secretKey })
-        if (result.errors) return null
-        // verifyToken's success `data` is loosely typed in this
-        // @clerk/backend version; read the one claim we need (JWT `sub` =
-        // the Clerk user id) through a minimal shape rather than coupling
-        // to Clerk's exact payload union.
-        const claims = result.data as { sub?: string } | undefined
-        return claims?.sub ?? null
+        // The TOP-LEVEL `verifyToken` export is withLegacyReturn-wrapped
+        // (@clerk/backend dist/index.js: `verifyToken2 =
+        // withLegacyReturn(verifyToken)`, re-exported as `verifyToken`).
+        // The wrapper UNWRAPS the internal `{ data, errors }` union: it
+        // RESOLVES the JwtPayload directly (`sub` at the top level) and
+        // THROWS a TokenVerificationError on an invalid token. Reading
+        // `.data`/`.errors` here therefore always yields undefined — the
+        // CF-70 bug. Read `sub` (the Clerk user id) off the payload
+        // through a minimal shape rather than coupling to Clerk's exact
+        // payload type.
+        const payload = await verifyToken(token, { secretKey })
+        return (payload as { sub?: string }).sub ?? null
       } catch {
-        // verifyToken returns { errors } for a bad token, but guard
-        // against an unexpected throw (malformed input, network) — a
+        // Invalid/expired/malformed token, or a JWKS network failure — a
         // verification failure must resolve to anonymous, never crash.
         return null
       }
