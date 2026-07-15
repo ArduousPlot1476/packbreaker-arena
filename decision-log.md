@@ -4,6 +4,116 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-14 — CF-70 OPENED + CLOSED: Clerk verifier misread `verifyToken`'s return shape — every authenticated request 401'd since PR \#43; fix on PR \#44 (Codex clean round 1, NOT yet merged); Catch 57 (Class C2); Rule 4 amended in place; CF-71 opened; PR1 + PR2 deferred live-credential DoD items closed
+
+> Dating convention: decision-log entries use local decision-day, not UTC. This entry's PR/Codex timestamps read 2026-07-15Z; decision-day is 2026-07-14.
+
+**NOT MERGED.** PR \#44 (branch `m2.1-hotfix-clerk-verifier-shape`, commit d92e6fa, base main
+88bcd09) is OPEN and awaiting Trey's `--no-ff` merge. This entry records the ratified cycle; the
+merge SHA lands in a follow-up close.
+
+**CF-70 (opened AND closed this cycle) — the auth backbone never worked once merged.** `POST
+/v1/account/link` — the only enforced route — was permanently 401 from the moment PR \#43 merged
+(393860c, decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED"). The top-level `verifyToken` export of
+`@clerk/backend@3.11.4` is `withLegacyReturn`-wrapped (`dist/index.js:294` `verifyToken: () =>
+verifyToken2`; `dist/index.js:7872` `var verifyToken2 = withLegacyReturn(verifyToken);`): the
+wrapper UNWRAPS the internal `{ data, errors }` union — it RESOLVES the `JwtPayload` directly
+(`sub` at top level) and THROWS on an invalid token, declared at `dist/index.d.ts:7` as
+`=> Promise<NonNullable<JwtPayload>>`. `verifier.ts` read that export as `{ data, errors }`-shaped,
+so `result.data` was always `undefined` → `claims?.sub ?? null` returned null for EVERY token →
+`resolveAuthContext` set `userId: null` on every request → `requireAuth` 401'd every enforced
+route. The package genuinely exports TWO `verifyToken` symbols — the internal one
+(`dist/tokens/verify.d.ts:84`) DOES return `{ data, errors }` — which is what makes the misread
+easy, and is exactly what defeated review (below).
+
+**Fix (d92e6fa)** — `verifier.ts` `verify()` body only: `const payload = await verifyToken(token,
+{ secretKey }); return (payload as { sub?: string }).sub ?? null`, `null` on catch. 3 files,
++89/−10, `apps/server` only. No other logic changed.
+
+**Four independent proofs of root cause** (live-verify pass, all pre-fix): (1) a probe running the
+REAL verifier in an app-identical process returned `sub: null` for a token `verifyToken` had just
+accepted (`result.data.sub` undefined); (2) runtime throw-path — top-level
+`verifyToken('not.a.valid.jwt')` threw `_TokenVerificationError (reason: token-invalid)`, it did
+NOT resolve `{ errors }`; (3) the export chain above; (4) the top-level type signature. Corollary
+resolved: the diagnostic session's sub-2ms 401s were the cached-JWKS path (the first authed call
+cold-fetched JWKS ~173ms and `verifyToken` SUCCEEDED — `verify()` still returned null), not a
+dropped `Authorization` header; the Vite dev proxy was never implicated.
+
+**Catch 57 (NEW, Class C2 — framework-internal architecture gap; Rule 4 instance).** Post-merge
+escape: shipped through a 6-round / 9-finding / 1-meta-audit Codex cycle AND full unit coverage.
+Distinct from the CF-67 precedent that pre-merge Codex findings take no Catch number — this one
+reached main. Catches 56 → 57.
+
+**Test-gap mechanism — why 6 Codex rounds and 91 server tests all missed it.** Every test at this
+boundary injected a fake/mocked `ClerkVerifier`; `clerk.test.ts` even documented the avoidance in
+its header comment ("The 'set key → non-null' factory test does NOT call verify() (which would
+reach @clerk/backend)"). A mocked boundary can only confirm the assumption it was built from — the
+code's ASSUMED return shape was never once checked against the library's ACTUAL one. Codex reads
+the diff, not the library's runtime contract, so external review could not see it either.
+
+**Rule 4 AMENDED IN PLACE (fold, not fork — no new ordinal; Rule 10 category-5 fold precedent).**
+Rule 4 (Codex automated-review catch checkpoint) gains: *external review cannot see through a
+mocked boundary; at least one test per external-library boundary must exercise the REAL library
+shape, not an assumed one.* Rules unchanged at 24 — an amendment does not mint an ordinal.
+
+**Antidote shipped (both tests, d92e6fa):**
+- `clerk.verifier-shape.test.ts` — mocks `verifyToken` to RESOLVE a `JwtPayload`, asserts `verify()`
+  returns the sub. Verified to FAIL on pre-fix code, verbatim: `Expected: "user_123"` /
+  `Received: null` (`Test Files 1 failed | 1 passed`; `Tests 1 failed | 2 passed`). The antidote
+  reproduces CF-70.
+- `clerk.realshape.test.ts` — exercises the REAL, unmocked top-level `verifyToken`, pinning its
+  contract (throws on an invalid token; does not resolve `{ errors }`). Hermetic: a malformed token
+  fails at decode, before any key use or JWKS network call — CI-safe, no secrets. This is the
+  structural antidote the Rule 4 amendment requires.
+
+**Verification methodology — first-instance candidate, HELD (no counter increment).** Not evaluated
+against Topic 2 — wrong axis, not a master-dev-chat artifact. Held as a first-instance candidate
+instead: unanimous agreement among multiple static-read agents that share a common anchor (all
+three fixated on the internal `verifyToken` symbol) is correlated error, not independent
+confirmation. The empirical/runtime probe is what caught the real export shape. Codify as a rule on
+second instance, per standing convention. No counter increment.
+
+**Codex cycle: 1 round, CLEAN, 0 findings, ceiling never tripped, no meta-audit.** Reviewed SHA
+`d92e6fa7a5` == branch tip (stale-SHA guard passed). Verbatim: "Codex Review: Didn't find any major
+issues. More of your lovely PRs please." The clean pass landed as a top-level ISSUE comment, not a
+review — the Catch 55 channel. Round 1 fired only after an explicit top-level `@codex review`
+comment; it never auto-fires on the PAT path.
+
+**PR1 + PR2 deferred live-credential DoD items — NOW CLOSED** (carried as "Deferred / carried" in
+decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED" and 2026-07-13 § "M2.1 PR1 CLOSED"):
+- **Neon health-check: PASS** — `SELECT 1` succeeded on attempt 1 (no cold-start retry needed), via
+  the shipped `new pg.Pool({ connectionString })` construction, so it exercises the real client and
+  not the null DI stub.
+- **`drizzle-kit migrate` apply: PASS**, proven by introspection rather than exit code — `accounts`
+  absent pre-migrate; post-migrate columns `id` uuid NOT NULL / `clerk_user_id` text NOT NULL /
+  `anon_id_at_signup` text NULL / `created_at` timestamptz NOT NULL; constraints `accounts_pkey`
+  (PK) + `accounts_clerk_user_id_unique` (UNIQUE); `drizzle.__drizzle_migrations` = 1 row.
+- **Clerk live signed-in round-trip: PASS post-fix**, via the REAL client path (browser → Vite proxy
+  → `:4000`): two sign-out/sign-in cycles → `POST /v1/account/link` 200 (1690ms — cold JWKS + real
+  Neon INSERT), then 200 (407ms); `accounts` 0 → 1 and NOT 2 — the second link created no row, so
+  populate-once holds LIVE and not merely in the mocked unit tests; `anon_id_at_signup` populated
+  exactly once. `GET /v1/contract/daily` regression clean both anon (200, `daily-placeholder`) and
+  authed (200, `daily-placeholder`).
+
+**CF-71 OPENED — the client test suite is not hermetic w.r.t. `VITE_CLERK_PUBLISHABLE_KEY`.** Vite
+loads `apps/client/.env` into `import.meta.env` during Vitest, so once a developer configures a real
+publishable key (as M2.1 credential setup requires), `clerkEnabled` flips true and 8 client tests
+across 3 files fail. Verified PRE-EXISTING on pristine main 88bcd09 — NOT introduced by PR \#44,
+whose diff is `apps/server`-only. CI stays green only because it ships no `.env`; consequence, the
+local gate and CI silently disagree for any credentialed dev. NOT fixed here (minimal-diff hotfix).
+The PR \#44 gate was therefore run under CI-equivalent conditions (`apps/client/.env` moved aside):
+`turbo lint typecheck test --force` → `Tasks: 23 successful, 23 total`; server 91 → 94 tests; client
+591 passed + 15 skipped.
+
+**CF ordinals walked from canon:** highest existing CF at the tip = 69 (decision-log.md 2026-07-14
+§ "M2.1 PR2 CLOSED") → CF-70 and CF-71 are the next free ordinals.
+
+Counter: 56/24/8/36/43 → 57/24/8/36/44 — catches +1 (Catch 57, Class C2 post-merge escape / Rule 4
+instance); open-CFs +1 (CF-70 opened AND closed this cycle = net 0; CF-71 opened = +1; CF-68 stays
+open); rules unchanged at 24 (Rule 4 amended in place — fold, not fork, no new ordinal); patterns
+unchanged at 8; drifts unchanged at 36 (the correlated-error observation is a HELD first-instance
+candidate, not a Topic-2 drift — wrong axis).
+
 ## 2026-07-14 — M2.1 PR2 CLOSED: Clerk integration + account-link merged (PR \#43, merge 393860c); Codex cycle TERMINAL (6 rounds / 9 findings / 1 meta-audit); Rule 24 codified (Rule-17 sibling); CF-69 opened (Title/Settings screen); Drift 35 + 36
 
 M2.1 PR2 (Persistence & Auth Backbone — client Clerk integration + the account-link endpoint,
