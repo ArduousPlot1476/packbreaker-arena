@@ -4,6 +4,36 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-14 — Drift 38 logged: Rule 4's boundary term paraphrased as "external-verifier" in master-dev chat; no retroactive edit to any prior entry
+
+Across two consecutive master-dev turns, Rule 4's boundary term was paraphrased as
+"**external-verifier** boundary." That matches neither the rule's prior committed wording — "*at
+least one test per **external-library** boundary must exercise the REAL library shape, not an
+assumed one*" (decision-log.md 2026-07-14 § "CF-70 OPENED + CLOSED") — nor its current wording
+after the broadening: "***external-system** boundary … must exercise the REAL system's behaviour,
+not an assumed one*" (decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"). Caught
+pre-commit; no artifact carried the paraphrase into canon.
+
+**Drift 38 (Topic 2, master-dev; caught pre-landing).** Same shape as the Drift 28 / 29 / 30 / 32
+lineage — master-dev claim contradicting codified canon, caught at the grounding gate pre-landing,
+each counted despite the pre-landing catch; lineage and the exclusion boundary are set out at
+decision-log.md 2026-07-11 § "Drift 32 logged". Counts rather than being clerical, and is NOT the
+excluded input/framing-accuracy self-catch class: the paraphrase narrows Rule 4 from any external
+system to the verifier alone — had it propagated, it would have re-excluded precisely the SQL
+surface the broadening was minted to cover (Catch 58 / CF-73). Second Topic-2 instance this cycle,
+distinct from Drift 37 (balance-bible trophy-authority misattribution, decision-log.md 2026-07-14
+§ "M2.1 PR3 PHASE 1 RATIFIED") — same class, different artifact.
+
+**No retroactive edits.** Rule 4's committed text is correct as written at both entries cited
+above; the paraphrase lived only in master-dev chat prose. Nothing in the log is superseded by
+this entry, and no prior line is amended.
+
+Counter: 58/24/8/37/47 → 58/24/8/38/47 — drifts +1 (Drift 38, Rule-4 boundary-term paraphrase,
+Topic 2 / Rule 15). Delta from tip (decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"):
+drifts +1, all other axes unchanged. Catches unchanged at 58; rules unchanged at 24 (Rule 4's
+committed wording is untouched here — nothing amended, nothing minted); patterns unchanged at 8;
+open-CFs unchanged at 47 (none opened, none closed).
+
 ## 2026-07-14 — M2.1 PR3 PHASE 1 RATIFIED: `player_saves` plumbing-only (Option A); schema + sync contract + endpoints ratified; § 7.2 amended (write direction) + § 6.2 renamed; Rule 4 broadened in place (external-SYSTEM boundary — 2nd instance); Catch 58 (Class C2); Drift 37; CF-72 + CF-73 + CF-74 opened
 
 Phase 1 was a read-only investigation (no code, no migrations). It returned six evidenced halts
