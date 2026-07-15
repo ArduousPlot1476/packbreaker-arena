@@ -30,6 +30,23 @@
 // there means the harness broke, and silently skipping would recreate the
 // exact zero-coverage posture CF-73 exists to close.
 //
+// TURBO ENV PASSTHROUGH — load-bearing, see turbo.json's `test.env`.
+// Turborepo filters the task environment: a var set on a CI *step* does NOT
+// reach vitest unless declared. Round 1 proved it — TEST_DATABASE_URL was set
+// on the workflow step, never arrived, and this guard failed the build rather
+// than skipping. Two notes on that declaration:
+//   - `env` (hashed), NOT `passThroughEnv` (unhashed), because the DB URL must
+//     be part of the cache key. Otherwise a cached run from a machine with no
+//     database (suite skipped) could satisfy a CI run required to execute it —
+//     silently restoring the very posture CF-73 closes.
+//   - CI is declared even though it already reaches the task (round 1's THROW
+//     is only reachable when CI==='true'). It arrives via Turborepo's implicit
+//     system-var allowlist, not a declared path, and the throw-vs-skip branch
+//     below depends on it. If that implicit behaviour changed, this guard would
+//     silently downgrade from throw to skip. Declaring it makes the
+//     precondition explicit rather than assumed — which is CF-73's whole
+//     lesson: coverage must not rest on an unfalsifiable assumption.
+//
 // ISOLATION: every run gets a throwaway schema and drops it afterwards, so
 // a real DATABASE_URL (Neon) can be targeted without touching live rows.
 // Migration SQL is applied with its `"public".` qualifier stripped so the

@@ -25,6 +25,20 @@
 
 import { z } from 'zod'
 
+/** Postgres `integer` (int4) bounds. `player_saves.trophies` is int4
+ *  (db/schema.ts), so a value outside this range is a BAD PAYLOAD, not a
+ *  database outage — and the difference is user-visible. Unbounded, an
+ *  out-of-range value passed validation, reached the INSERT, and Postgres
+ *  rejected it; the route's catch-all then mapped that to a RETRYABLE 503
+ *  db_unavailable, telling the client to try again later for a request that
+ *  can never succeed. Bounded here, it is an honest 400 invalid_body.
+ *  (Codex round 1, P2.)
+ *
+ *  Bounding rather than widening the column: int4 is ratified, and the
+ *  trophy schedule (CF-72) gives no reason to expect values near 2^31. */
+const PG_INT4_MIN = -2_147_483_648
+const PG_INT4_MAX = 2_147_483_647
+
 /** True iff `s` is a real calendar date, not merely YYYY-MM-DD shaped.
  *  Round-trip catches rollovers: `2026-02-30` → Mar 2 → mismatch. */
 function isRealCalendarDate(s: string): boolean {
@@ -43,8 +57,11 @@ export const IsoDateSchema = z
 
 export const PlayerSaveWriteRequestSchema = z
   .object({
-    /** Signed on purpose — see header. */
-    trophies: z.number().int(),
+    /** Signed on purpose (see header), but bounded to the int4 column's
+     *  range so an oversized value is a 400, not a 503. The LOWER bound is
+     *  the column limit, NOT a non-negativity floor — negative trophies stay
+     *  legal (gdd § 13). */
+    trophies: z.number().int().min(PG_INT4_MIN).max(PG_INT4_MAX),
     /** null = the player has never attempted a daily. */
     lastDailyAttempted: IsoDateSchema.nullable(),
   })

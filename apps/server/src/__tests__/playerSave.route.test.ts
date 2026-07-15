@@ -248,6 +248,50 @@ describe('PUT /v1/player/save', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  // Codex round 1, P2. player_saves.trophies is int4. Unbounded, an
+  // out-of-range value passed validation, hit the INSERT, Postgres rejected
+  // it, and the route's catch-all mapped that to a RETRYABLE 503 — telling
+  // the client to retry a request that can never succeed. The assertion that
+  // matters is `not 503`: a 400 that regressed to 503 would still be an
+  // error status, so asserting only "not 200" would not catch the bug.
+  it('400 (NOT 503) on trophies above the int4 max', async () => {
+    const res = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { trophies: 2147483648, lastDailyAttempted: null },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).not.toBe(503)
+    expect(res.json().error).toBe('invalid_body')
+  })
+
+  it('400 (NOT 503) on trophies below the int4 min', async () => {
+    const res = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { trophies: -2147483649, lastDailyAttempted: null },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).not.toBe(503)
+  })
+
+  // The bound must not become a non-negativity floor by accident — the int4
+  // limits are exactly representable, so both edges must still be accepted.
+  it('accepts the exact int4 boundary values', async () => {
+    for (const trophies of [-2147483648, 2147483647]) {
+      const res = await build({}).inject({
+        method: 'PUT',
+        url: '/v1/player/save',
+        headers: AUTH,
+        payload: { trophies, lastDailyAttempted: null },
+      })
+      expect(res.statusCode, `expected 200 for ${trophies}`).toBe(200)
+      expect(res.json().trophies).toBe(trophies)
+    }
+  })
+
   it('accepts NEGATIVE trophies — non-monotonic by gdd § 13', async () => {
     const res = await build({}).inject({
       method: 'PUT',
