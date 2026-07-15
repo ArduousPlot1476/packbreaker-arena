@@ -248,6 +248,20 @@ describe('PUT /v1/player/save', () => {
     expect(res.statusCode).toBe(400)
   })
 
+  // Codex round 2, P1 — the stale half of the same gate. A PAST date is a
+  // claim about a day that has already closed; persisting it is what re-armed
+  // the streak-inflation exploit (see the sequence test below).
+  it('400 on a STALE (past) lastDailyAttempted', async () => {
+    const res = await build({ now: () => new Date('2026-07-15T12:00:00Z') }).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { trophies: 0, lastDailyAttempted: '2026-07-14' },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toBe('invalid_body')
+  })
+
   // Codex round 1, P2. player_saves.trophies is int4. Unbounded, an
   // out-of-range value passed validation, hit the INSERT, Postgres rejected
   // it, and the route's catch-all mapped that to a RETRYABLE 503 — telling
@@ -370,6 +384,65 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       payload: { trophies: 0, lastDailyAttempted: null },
     })
     expect(res.json().dailyStreak).toBe(0)
+  })
+
+  // ── Codex round 2, P1: STREAK-INFLATION EXPLOIT, end-to-end regression ──
+  //
+  // The proven pre-fix sequence: alternating (yesterday, today) PUTs drove the
+  // streak 2→3→4→5→6 on ONE server day, because each stale PUT re-persisted
+  // yesterday and re-armed the "+1 from yesterday" branch. dailyStreak being
+  // absent from the body did NOT prevent it — the client steered the streak
+  // via lastDailyAttempted instead.
+  //
+  // Drives the REAL route through the REAL store fake with a FROZEN clock, so
+  // the whole server day is a single instant. Asserts the ceiling: one
+  // legitimate yesterday→today transition, and no more, however many times the
+  // pair is replayed.
+  it('EXPLOIT REGRESSION: alternating stale/today PUTs cannot inflate the streak', async () => {
+    const NOW = () => new Date('2026-07-15T12:00:00Z')
+    const YESTERDAY = '2026-07-14'
+    const TODAY = '2026-07-15'
+
+    // Seed the row as if yesterday's legitimate attempt already landed.
+    const app0 = build({
+      now: NOW,
+      saves: fakeSaves({
+        accountId: ACCOUNT_ID,
+        trophies: 0,
+        dailyStreak: 1,
+        lastDailyAttempted: YESTERDAY,
+        updatedAt: new Date(),
+      }),
+    })
+
+    const put = (lastDailyAttempted: string) =>
+      app0.inject({
+        method: 'PUT',
+        url: '/v1/player/save',
+        headers: AUTH,
+        payload: { trophies: 0, lastDailyAttempted },
+      })
+
+    // One legitimate transition: yesterday(stored) → today ⇒ streak 1 → 2.
+    const first = await put(TODAY)
+    expect(first.statusCode).toBe(200)
+    expect(first.json().dailyStreak).toBe(2)
+
+    // Now replay the exploit pair. Each stale PUT must be REFUSED (400) so the
+    // stored date can never regress to yesterday and re-arm the +1 branch.
+    for (let i = 0; i < 5; i++) {
+      const stale = await put(YESTERDAY)
+      expect(stale.statusCode, 'stale PUT must be rejected').toBe(400)
+      const again = await put(TODAY)
+      expect(again.statusCode).toBe(200)
+      // The ceiling: still 2. Pre-fix this read 3, 4, 5, 6, 7…
+      expect(again.json().dailyStreak, `inflated on iteration ${i}`).toBe(2)
+    }
+
+    // Final read: the day's streak is exactly one increment, not six.
+    const final = await app0.inject({ method: 'GET', url: '/v1/player/save', headers: AUTH })
+    expect(final.json().dailyStreak).toBe(2)
+    expect(final.json().lastDailyAttempted).toBe(TODAY)
   })
 
   // The rule exists to be cheat-resistant: a client cannot inflate the

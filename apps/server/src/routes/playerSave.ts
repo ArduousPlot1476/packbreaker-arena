@@ -6,18 +6,25 @@
 // is device-local by ratification, so nothing "run"-shaped is stored
 // server-side. This route stores meta-progression only.
 //
-// SCOPE (Option A, plumbing-only): PR3 knowingly syncs ZEROS. No producers
-// are wired, so the client always pushes `{ trophies: 0,
-// lastDailyAttempted: null }`. That is the point — it lands the pipe so a
-// later PR can wire the taps, and it keeps the auth/persistence seam honest
-// rather than pretending values exist.
+// SCOPE (Option A, plumbing-only): PR3 ships the sync plumbing SERVER-SIDE —
+// the table and both endpoints. It does NOT wire a client caller: nothing in
+// apps/client calls either route (repo-wide grep: zero callers). So no sync
+// actually occurs yet, in either direction — the PULL on sign-in/boot and the
+// PUSH on quiescent save are deferred to CF-75.
+//
+// This wording is deliberate. PR3's framing was previously "PR3 knowingly
+// syncs zeros", which was inaccurate: with no caller, PR3 syncs NOTHING. The
+// zeros are what a client WOULD push once CF-75 wires it, because no producers
+// exist for the three fields yet. Those are two different deferrals and
+// collapsing them hid the second one (Codex round 2, P1).
 //
 // Status map (mirrors routes/account.ts):
 //   200 — GET: the save (defaults for an account that has never written).
 //         PUT: the persisted row.
 //   400 — invalid_body. Includes a body carrying `dailyStreak` (.strict()
 //         rejects it — the field is server-derived, never client-settable)
-//         and a future `lastDailyAttempted` (see below).
+//         and any `lastDailyAttempted` that is not the current server date
+//         (see the streak-inflation note below).
 //   401 — no authenticated user (requireAuth preHandler).
 //   404 — account_not_linked: authenticated, but no accounts row. The
 //         client re-fires PR2's link flow. RATIFIED OVER AUTO-CREATE — it
@@ -83,8 +90,15 @@ function previousDay(iso: string): string {
  *  PR3's own zero-push (`lastDailyAttempted: null`) would write a streak of
  *  1 while storing null — an incoherent row. This is the ONLY path PR3
  *  actually exercises; the +1/unchanged branches are dormant until a
- *  producer is wired. Flagged as a Phase-2 quirk: the ratified sentence is
- *  silent on null and on a client PUTting a stale (non-today) date.
+ *  producer is wired.
+ *
+ *  The stale-date case IS now resolved (Codex round 2, P1): the route rejects
+ *  any non-null value that is not `serverToday` with a 400, so a stale date is
+ *  never persisted and the "+1 from yesterday" branch cannot be re-armed. The
+ *  guard below is defence in depth for a caller that skips the route gate —
+ *  the exploit's damage came from PERSISTING the stale date, so the route is
+ *  the load-bearing half, but a derivation that silently trusts a stale claim
+ *  is exactly the assumption class Rule 4 exists for.
  */
 export function deriveDailyStreak(input: {
   prevLastDailyAttempted: string | null
@@ -94,6 +108,11 @@ export function deriveDailyStreak(input: {
 }): number {
   // No attempt recorded ⇒ no streak. PR3's live path.
   if (input.nextLastDailyAttempted === null) return 0
+  // Defence in depth: an attempt that is not TODAY is not a real attempt.
+  // Unreachable through the route (400), so never advance a streak on it.
+  if (input.nextLastDailyAttempted !== input.serverToday) {
+    return input.prevDailyStreak
+  }
   // Already counted today — a same-day re-PUT must not double-count.
   if (input.prevLastDailyAttempted === input.serverToday) {
     return input.prevDailyStreak
@@ -165,16 +184,29 @@ export function registerPlayerSaveRoutes(
     const serverToday = isoDay(now)
     const { trophies, lastDailyAttempted } = parsed.data
 
-    // A future attempt date is not a real attempt — reject rather than let
-    // it seed a streak. Cheap anti-cheat on the one client-settable date;
-    // the streak itself is server-derived regardless.
-    if (lastDailyAttempted !== null && lastDailyAttempted > serverToday) {
+    // A non-null attempt MUST be the current server date. You can only attempt
+    // the daily *now*, so "I attempted on date X" is only meaningful for
+    // X = today; a future date is not a real attempt and a past date is a
+    // claim about a day that has already closed.
+    //
+    // THIS IS THE FIX FOR THE STREAK-INFLATION EXPLOIT (Codex round 2, P1).
+    // Previously only FUTURE dates were rejected, so a client could persist a
+    // STALE date and re-arm the "+1 from yesterday" branch on demand:
+    //   PUT 07-14 (stored: 07-14) → PUT 07-15 (prev=07-14=yesterday ⇒ +1)
+    //   PUT 07-14 (prev=07-15=today ⇒ streak kept, but 07-14 is RE-STORED)
+    //   PUT 07-15 (prev=07-14=yesterday ⇒ +1 again) …
+    // Proven to run 2→3→4→5→6 on a single server day. The regression of the
+    // STORED date is what re-arms the branch, so the fix is to refuse to
+    // persist a stale date at all — not merely to leave the streak unchanged.
+    // With this gate the stored date can only ever be a date that WAS today
+    // when it was written, so it can never regress within a server day.
+    if (lastDailyAttempted !== null && lastDailyAttempted !== serverToday) {
       return reply.status(400).send({
         error: 'invalid_body',
         issues: [
           {
             path: ['lastDailyAttempted'],
-            message: 'lastDailyAttempted is in the future',
+            message: `lastDailyAttempted must be the current server date (${serverToday}) or null`,
           },
         ],
       })

@@ -4,6 +4,52 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-75 OPENED: player-save client sync leg unwired (server registers, client never calls — 3rd instance of the class); PR3's "syncs zeros" framing corrected
+
+Surfaced by Codex round 2 on PR \#45 (review 4708847690, commit c48b909), P1, and confirmed
+by repo-wide grep: **zero callers of either `/v1/player/save` endpoint exist in
+apps/client** (`useApiFetch` is still consumed only by `AccountLinkOnSignIn`; the M2.1 PR3
+composer writes `localStorage` only). PR3 ships the table and both routes; nothing invokes
+them.
+
+**CF-75 — player-save client sync leg.** The ratified sync contract
+(decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED") specifies a PULL (server → client,
+on sign-in after account-link 2xx + on signed-in boot) and a PUSH (`{trophies,
+lastDailyAttempted}` on quiescent save). Neither is built. Ordinal walked live from canon
+(highest existing = CF-74).
+
+**NOT a PR3 defect — correctly out of scope, ratified.** Two independent confirmations: the
+ratification's own language — "*it lands the pipe so a later PR wires the taps*" — and its
+four-item scope enumeration ("*PR3 ships the table, the two routes, the H4 composer fix, and
+the real-SQL test*"), which names no client caller. The PR3 Phase 2 hand-off's task list was
+likewise all server-side + docs + H4, with no client-wiring step. CF-75 tracks the gap; it
+does not reopen PR3.
+
+**Framing corrected (the part that WAS wrong).** PR3's stated framing — "**PR3 knowingly syncs
+zeros**" — is inaccurate and is superseded here: with zero callers, PR3 syncs **nothing**, in
+either direction. The zeros are what a client *would* push once CF-75 wires it, because no
+producers exist for the three fields (H3). Those are **two distinct deferrals** — no caller
+(CF-75) and no producers (H3) — and collapsing them into one sentence is what hid the first.
+Corrected in the PR body and in routes/playerSave.ts's header. No prior entry is edited; this
+supersedes the framing.
+
+**PATTERN — "server registers, client never calls", now the THIRD instance.** Sibling to:
+CF-57's `add_gold` (decision-log.md 2026-07-06 § "CF 57 CLOSED") — `describeItem` advertised a
+grant no consumer applied; and CF-68 (decision-log.md 2026-07-13 § "M2.1 PR1 CLOSED") — the
+daily-contract route, "*server leg closed, client leg open*", the same split one milestone
+earlier and **still open**. Each shipped a server-side or descriptive surface whose consumer
+was assumed rather than verified, and each was caught by review rather than by a gate. Two of
+the three were Codex catches. Recorded as an observation for master-dev's disposition — no
+rule is minted here (a codification would be master-dev's call, and the natural antidote,
+"grep for a real consumer before reporting a surface wired", is already
+[[feedback_verify_field_has_consumer]]'s subject and Rule 18's neighbourhood).
+
+Counter: 58/24/8/38/47 → 58/24/8/38/48 — open-CFs +1 (CF-75 opened; none closed this entry —
+CF-73 + CF-74 remain scheduled to close on PR \#45's merge, which has not happened). Catches
+unchanged at 58 (Codex found it in-cycle, pre-merge — no post-merge escape; the shipped/
+committed-defect ruling applies, same as CF-67's Codex P2s). Rules unchanged at 24; patterns
+unchanged at 8; drifts unchanged at 38.
+
 ## 2026-07-14 — Drift 38 logged: Rule 4's boundary term paraphrased as "external-verifier" in master-dev chat; no retroactive edit to any prior entry
 
 Across two consecutive master-dev turns, Rule 4's boundary term was paraphrased as
