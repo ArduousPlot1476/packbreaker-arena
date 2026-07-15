@@ -4,6 +4,36 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-14 — CF-70 close-out reconciliation: PR \#44 merged at 3a0f4b1; docs commit 05c8be2. SUPERSEDES the "NOT MERGED / PR \#44 OPEN" framing in the entry below. Counter unchanged.
+
+**State reconciliation only — this step mints nothing on any axis:** no catch, no drift, no rule,
+no pattern, no CF. **Anticipated by design, not a miss.** The prior entry (decision-log.md
+2026-07-14 § "CF-70 OPENED + CLOSED") was deliberately frozen pre-merge and names its own
+successor verbatim: "This entry records the ratified cycle; the merge SHA lands in a follow-up
+close." The freeze was the correct call — committing the log entry onto the branch would have
+pushed a 4th file past the Codex-reviewed SHA d92e6fa7a5 and invalidated the clean round-1 pass.
+Per canon (decision-log.md is insertion-only), this entry SUPERSEDES rather than edits: the prior
+entry's text is untouched and stays readable as accurate-at-ratification-time.
+
+**Superseded:** the prior entry's "**NOT MERGED.** PR \#44 ... is OPEN and awaiting Trey's
+`--no-ff` merge" paragraph. Replaced by the recorded facts:
+
+- **Merge — PR \#44 merged `--no-ff` to main at 3a0f4b1dd4c3d71784babc770ea50b7b1aa96220** (branch
+  `m2.1-hotfix-clerk-verifier-shape`). Parents 88bcd09437e89b6a8d21d91dc2f926ba02b0ef3c +
+  d92e6fa7a5b69072660b9a67c722e2c5b4531a03 — two parents, a true `--no-ff`, no fast-forward.
+  GitHub server-side: `state: closed`, `merged: true`, `merged_at 2026-07-15T00:59:58Z`,
+  `merge_commit_sha 3a0f4b1dd4c3d71784babc770ea50b7b1aa96220` (matches local). Merged content: 3
+  files, +89/−10, `apps/server` only.
+- **Docs — the CF-70 entry landed separately on main at 05c8be2358933b8507feb612224a2f2dac16b38c**
+  (`decision-log.md` alone; 110 insertions, 0 deletions). Two commits in the ratified order — merge
+  first, docs second — mirroring the PR2 shape (decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED":
+  merge 393860c, then docs close 88bcd09).
+- **Merge-time drift guard:** the branch tip at merge was d92e6fa7a5b69072660b9a67c722e2c5b4531a03,
+  identical to the Codex-reviewed SHA — so the clean round-1 pass covers exactly what merged.
+
+Counter: 57/24/8/36/44 → 57/24/8/36/44 — unchanged on every axis (catches / rules / patterns /
+drifts / open-CFs). A reconciliation entry records state that already happened; it mints nothing.
+
 ## 2026-07-14 — CF-70 OPENED + CLOSED: Clerk verifier misread `verifyToken`'s return shape — every authenticated request 401'd since PR \#43; fix on PR \#44 (Codex clean round 1, NOT yet merged); Catch 57 (Class C2); Rule 4 amended in place; CF-71 opened; PR1 + PR2 deferred live-credential DoD items closed
 
 > Dating convention: decision-log entries use local decision-day, not UTC. This entry's PR/Codex timestamps read 2026-07-15Z; decision-day is 2026-07-14.
