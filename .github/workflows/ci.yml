@@ -30,6 +30,37 @@ jobs:
     name: install / lint / typecheck / test / build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    # Real-Postgres service container (M2.1 PR3 / CF-73 / Rule 4 broadened).
+    #
+    # Phase 1 REJECTED a fake-store-only plan and required a real-Postgres
+    # test, leaving testcontainers-vs-service-container to Phase 2. Chosen:
+    # service container. testcontainers needs a Docker daemon, which the dev
+    # box lacks — the harness would be unrunnable locally, so nobody could
+    # verify it before pushing. This needs no Docker in test code.
+    #
+    # The credentials here are NOT secrets — they are a throwaway container
+    # on localhost. That is the whole point: § 8.2's secretless-CI posture is
+    # exactly why the AccountStore SQL gap (Catch 58) survived, because a
+    # `skipIf(!DATABASE_URL)` test would silently skip in CI and give zero
+    # protection. With a non-secret URL the real-SQL suite ALWAYS runs here,
+    # and the harness THROWS rather than skips when CI=true and the var is
+    # unset (src/__tests__/realsql/harness.ts).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pba_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -57,6 +88,12 @@ jobs:
 
       - name: Test
         run: pnpm turbo test
+        env:
+          # Consumed by src/__tests__/realsql/harness.ts. Non-secret by
+          # construction (throwaway localhost container), so the real-SQL
+          # suite is non-skippable here — see the `services` block above.
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/pba_test
+          CI: 'true'
 
       - name: Build
         run: pnpm turbo build
