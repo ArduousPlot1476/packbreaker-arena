@@ -4,6 +4,36 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-16 — CF-72 CLOSED (trophy award schedule shipped); CF-38 AMENDED (narrowed to gold axis, remains open)
+
+### Framing
+
+PR \#46 (`m2.1-cf72-trophy-schedule`) merged into `main` via `--no-ff` at merge commit `f4be0ed036f19ab28ea9b5c79549911589a74f33` on 2026-07-16T18:12:35Z. Two parents (`34f2f14` + `333d3b3`) — genuine merge, no squash/rebase. Branch deleted local + remote, clean (no merge-state drift). Pre-merge drift check confirmed live (not cached): local main = origin/main = 34f2f14 going in, feature tip still 333d3b3, CI green, `mergeable_state: clean`.
+
+### Mechanism shipped
+
+Ratified design (9744f87) + corrected mechanism (4e3b0e2): `trophyDeltaFor(outcome, round, currentTrophy)` — win branch `10 + 2 × (round − 1)`; loss branch `Math.max(0, currentTrophy - 5) - currentTrophy` (post-clamp actual delta, not a flat −5, preventing edge-clamp co-drift). Lives in `run/ruleset.ts` beside `baseIncomeForRound`, exported through the run barrel. Exactly two call sites: sim write branch (`state.ts:1045`) and display (`CombatOverlay.tsx:292`) — agreement by construction, no independent literals survive. Draws take the loss branch, consistent with the existing hearts semantic (M1.3.4a) — now costs 5 trophy where it previously cost 0; addendum to the ratification, not a deviation. `state.ts:363-366`'s stale pre-CF-34 comment corrected as a drive-by.
+
+Unanticipated Step 1 findings — already recorded at `34f2f14` (Catch 61: `RoundResolution.tsx` sign fix, Class A; Catch 62: two LOCKED scenario-fixture hand-edits, `happy-path-run` 54→36 and `boss-fight-victory` 198→220, both matching the formula's arithmetic exactly, Class C1; Rule 25: closure-sweep discipline, 2nd instance) — referenced here, not recounted.
+
+### Codex
+
+1 round, clean pass ("Didn't find any major issues"), 0 confirmed findings, ceiling never tripped, 0 meta-audit cycles. Landed as a top-level issue comment (the documented clean-pass shape); reviewed SHA (333d3b3) matched branch tip, not stale.
+
+### CI
+
+`install / lint / typecheck / test / build`: all success. Rule 13 (N≥3 full-workspace cold-cache `--force`) satisfied pre-merge, 23/23 tasks green each run, 0 cached.
+
+### CF disposition
+
+- **CF-72 CLOSED.** Formula ratified, mechanism corrected, implementation shipped, Codex clean, CI green, merged.
+- **CF-38 AMENDED — narrowed to gold axis only.** The trophy half closes with this merge. The gold half remains open and unresolved: `CombatOverlay.tsx:279`'s `goldEarned = isWin ? ruleset.winBonusGold : 0` still under-reports against the sim's actual credit (`winBonusGold` + `derived.bonusGoldOnWin` + `baseIncomeForRound(round+1)`) — the same co-drift shape CF-38 originally named, now isolated to one axis. Disposition target: separate Phase 1 ratification — the gold delta spans two sim calls (harder than the single-formula trophy case) and deserves its own scoping rather than riding this closure.
+- CF-18 — already amended at `9744f87` (contract modifiers + win-streak multipliers only); unchanged this entry.
+
+### Counters
+
+Baseline (`34f2f14`) 62/25/9/42/47 → **62/25/9/42/46**. Delta: open-CFs **−1** (CF-72 closed); catches / rules / patterns / drifts unchanged (all recorded at the `34f2f14` interim entry; this closing entry adds none new).
+
 ## 2026-07-15 — CF-72 Phase 2 Step 1 reviewed; Catch 61/62; Rule 25 codified; Drift 42 (master-dev premature-closing claim, self-caught)
 
 ### Step 1 sign-off (commit 333d3b3, branch m2.1-cf72-trophy-schedule, not yet pushed)
