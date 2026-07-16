@@ -4,6 +4,24 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-72 Phase 2 Step 0 halt: trophy-delta mechanism corrected (Drift 41); CF-38 antidote ratified
+
+Framing: the Phase 2 hand-off following 9744f87 instructed mirroring `goldDelta`'s before/after capture for the trophy display sync. Step 0 halted: that pattern was retired by CF-34 (285e7c3, M1.5e PR 1, 2026-07-05) — sim is sole trophy/gold writer (`useRun.ts:962-964` documents the retirement explicitly); no before/after capture exists to mirror. Root citation was `state.ts:363-366`, a comment describing the pre-CF-34 mechanism, orphaned by CF-34's closure and never updated.
+
+Independently, the original CF-38 structural blocker still holds regardless of CF-34: `RoundResolution` paints the trophy number at `phase === 'resolved'`, strictly before `applyCombatOutcome` commits on the NEXT click. Any before/after capture across the combat call fires after the number is already on-screen — incompatible with the NEXT-click commit semantic on its own terms.
+
+**Ratified mechanism (CF-38 antidote):** shared pure `trophyDeltaFor(outcome, round, currentTrophy)` exported from `@packbreaker/sim`. Win branch: CF-72's ratified formula. Loss branch: post-clamp actual delta (`Math.max(0, currentTrophy - 5) - currentTrophy`), preventing edge-clamp co-drift (e.g. trophy=3 losing: sim applies −3, panel must say −3, not −5). Sim's write branch and `CombatOverlay.tsx`'s pre-commit display both call this one function with matching `(round, currentTrophy)` inputs — agreement by construction, not twin literals. No client accumulator reintroduced; CF-34's sim authority stands.
+
+**Drift 41** — master-dev Phase 2 hand-off asserted a before/after capture mechanism CF-34 had already retired, directly contradicting the sole-authority fact the same hand-off chain had just ratified in commit 9744f87 one turn prior. Same family as Drift 39/40 (master-dev chat claim contradicting codified canon, caught at Step 0, unpropagated) — no new class needed for this event specifically.
+
+**HELD candidate (1st instance, not codified)** — "closure entries don't sweep/flag other canon (code comments, earlier CF citations) describing the mechanism they retire." CF-34's closure left `state.ts:363-366` and CF-38's own citation of it undisturbed, both describing a now-retired mechanism; this fed the Drift-41 citation. Codify on second instance per standing convention.
+
+**Stale comment disposition** — `state.ts:363-366` correction folds into the Phase 2 implementation PR (same file, drive-by), not a separate docs commit.
+
+CF-18 / CF-38 status unchanged this entry — both stay open; CF-38 closes at Phase 2 merge once the shared-derivation mechanism lands.
+
+Counters: baseline (commit 9744f87) 60/24/9/40/47 → **60/24/9/41/47**. Delta: Topic-2 drifts +1 (Drift 41); catches/rules/patterns/open-CFs unchanged.
+
 ## 2026-07-15 — CF-72 Phase 1 RATIFIED (trophy award schedule design decided; implementation pending)
 
 Framing: `gdd.md` § 13 (win → +trophies scaled by round reached; lose → −trophies, small) vs. the shipped placeholder since M1.3.4a ratification 5 (2026-05-02: flat +18 win / +0 loss, explicit M0-placeholder). Contradiction confirmed, resolved as follows.
