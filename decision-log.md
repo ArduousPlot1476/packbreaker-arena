@@ -4,6 +4,59 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-76 OPENED: daily-attempt trust model (`dailyStreak` is BOUNDED, not cheat-resistant); tech-architecture.md § 7.2's "cheat-resistant" claim corrected — 2nd overstated-canon-claim this PR, deliberately NOT a Drift
+
+Surfaced by Codex round 4 on PR \#45 (review 4709008039, commit 182ebbc), P1. Ordinal walked
+live from canon at write time (highest existing = CF-75).
+
+**CF-76 — daily-attempt trust model.** `lastDailyAttempted` is **client-supplied** (it is in the
+PUT body by ratification), so a `dailyStreak` derived from it is **one indirection away from
+client-settable**. An authenticated caller can assert "I attempted today" without having
+attempted anything and mint an increment. This is a flaw in the RATIFIED DESIGN, not in the
+implementation — routes/playerSave.ts implements the ratified contract faithfully.
+
+**Bounded, not unbounded — the round-2 fix already did real work.** The server-date gate
+(decision-log.md 2026-07-15 § "CF-75 OPENED", commit 5d578d0) caps exposure at **one increment
+per server day**. Pre-gate it was **unbounded**: alternating stale/today writes drove a streak
+2→3→4→5→6 within a single server day, because re-persisting a stale date re-armed the "+1 from
+yesterday" branch. A cap is not immunity, but the difference is not cosmetic.
+
+**Why it is deferred, not fixed.** Genuine cheat-resistance needs **server-side evidence** of
+participation — a verified daily-completion event. None exists: the client does not fetch
+`/v1/contract/daily` at all (**CF-68**, open). Building that inside PR3 would pull CF-68's
+client leg into a plumbing-only PR — the exact scope explosion Option A was ratified to avoid.
+Sibling to **CF-72** (trophy trust-model: absolute vs delta+schedule vs `/v1/replay/validate`
+re-simulation), same shape one field over — a client-asserted value the server cannot presently
+verify.
+
+**DORMANT — and that is precisely the trap.** Nothing calls these routes at all (**CF-75**), so
+today there is no exposure. **Whoever wires CF-75's client caller MUST resolve CF-76 in the same
+PR.** A naive "PUT today's date on quiescent save" caller does not discover this gap — it
+ACTIVATES a known one. Recorded here, at § 7.2, and inline at the derivation site so a future
+reader (or Codex round) meets it in context rather than rediscovering it cold.
+
+**§ 7.2 AMENDED (accuracy correction).** The clause claimed the derivation was "*authoritative
+and cheat-resistant*". Corrected in place to **bounded, not cheat-resistant**, citing CF-76.
+The route's status map is also corrected: a `lastDailyAttempted` that is not the current server
+date is a 400 (previously documented as future-dates-only).
+
+**TAXONOMY — this is NOT a Drift, and the distinction is load-bearing.** This is the SECOND
+overstated-canon claim this PR (after "*PR3 knowingly syncs zeros*", corrected at
+decision-log.md 2026-07-15 § "CF-75 OPENED"). Both are **design-doc/ratification claims that
+overstate what the code does, caught by Codex at PR review**. That is a DIFFERENT shape from
+the Drift ledger, which is reserved for **Topic-2 master-dev-chat paraphrase-vs-canon** drift
+caught at the grounding gate (the Drift 28 / 29 / 30 / 32 / 37 / 38 lineage; see
+decision-log.md 2026-07-11 § "Drift 32 logged" for the exclusion boundary). Minting a Drift ordinal here would blur two
+distinct failure ledgers and inflate the Topic-2 count with events that never happened in the
+master-dev chat. **Drifts stay at 38.** Recorded as a labelled observation; if the recurrence
+(now 2 instances) deserves its own ledger or ordinal class, that is master-dev's call to make,
+not this entry's.
+
+Counter: 59/24/9/38/48 → 59/24/9/38/49 — open-CFs +1 (CF-76 opened; none closed — CF-73 + CF-74
+still close on PR \#45's merge, which has not happened). Catches unchanged at 59 (Codex found it
+in-cycle, pre-merge — no post-merge escape; same ruling as CF-67's Codex P2s and CF-75). Rules
+unchanged at 24; patterns unchanged at 9; **drifts unchanged at 38** (see TAXONOMY above).
+
 ## 2026-07-15 — Catch 59 (Class C2 — `updated_at`-advancement claim shipped with zero falsifying test; Catch 58's shape INSIDE the PR that exists to close it) + Pattern 9 codified ("server registers, client never calls", 3 instances)
 
 Both surfaced by the PR3 read-only meta-audit (PR \#45; ceiling bent by ratification at raw

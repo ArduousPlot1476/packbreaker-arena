@@ -158,6 +158,27 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (M2.1 PR3)', 
     }
 
     const first = await store.upsert(payload)
+
+    // CLOCK GUARD (Codex round 4, P2). Postgres stores timestamptz at
+    // MICROsecond precision, but node-postgres hands it back as a JS `Date`,
+    // which is MILLIsecond-resolution — so a real advance of, say, 300µs
+    // collapses to the same `getTime()` and the strict assertion below flakes
+    // even though `now()` fired correctly.
+    //
+    // Not hypothetical, and note WHY it never flaked locally: this suite runs
+    // against remote Neon, whose 40–55ms round-trips mask the collision by
+    // accident. CI runs a LOCALHOST service container with sub-millisecond
+    // round-trips, where two consecutive upserts land in the same millisecond
+    // routinely. The local pass was an artifact of network latency, not a
+    // property of the code.
+    //
+    // The fix is a guard, NOT a weaker assertion. Relaxing to `>=` would make
+    // this test pass when updated_at fails to advance at all — i.e. it would
+    // pass in exactly the scenario it exists to catch (Catch 59), which is
+    // worse than deleting it. 10ms comfortably clears the 1ms boundary on any
+    // machine while costing one tick.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
     // Re-write the SAME values — a semantic no-op. Only the explicit
     // `now()` in the DO UPDATE branch can move updated_at here.
     const second = await store.upsert(payload)

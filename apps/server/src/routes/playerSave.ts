@@ -82,8 +82,24 @@ function previousDay(iso: string): string {
  *  "always server-derived from lastDailyAttempted + the current server date
  *  (yesterday → +1; today → unchanged; else → reset to 1)". Anchored on what
  *  the server ALREADY knew (`prevLastDailyAttempted`) relative to its OWN
- *  today — never on a client-supplied date — which is what makes it
- *  cheat-resistant.
+ *  today.
+ *
+ *  ⚠ CF-76 — THIS IS BOUNDED, **NOT** CHEAT-RESISTANT. Read before "hardening"
+ *  it. The ratification (and § 7.2, since corrected) called this
+ *  cheat-resistant; that was overstated, and Codex round 4 (PR \#45) showed
+ *  why: `nextLastDailyAttempted` is CLIENT-SUPPLIED, so a caller can assert
+ *  "I attempted today" without attempting anything and mint one increment per
+ *  server day. The route's server-date gate CAPS that exposure at +1/day
+ *  (pre-gate it was unbounded — alternating stale/today writes ran a streak
+ *  2→3→4→5→6 within one day), but a cap is not immunity.
+ *
+ *  Real cheat-resistance needs SERVER-SIDE EVIDENCE of participation (a
+ *  verified daily-completion event), which does not exist yet — the client
+ *  does not even fetch /v1/contract/daily (CF-68). Deferred to CF-76, sibling
+ *  to CF-72's trophy trust-model. Dormant today because nothing calls these
+ *  routes at all (CF-75) — which is exactly the trap: **whoever wires CF-75's
+ *  client caller must resolve CF-76 in the same PR.** Shipping a naive "PUT
+ *  today's date" caller activates a known gap rather than discovering one.
  *
  *  The null case is not covered by the ratified sentence and is resolved
  *  here: a save with no recorded attempt has no streak (0). Without this,
