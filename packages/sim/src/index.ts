@@ -82,6 +82,7 @@ export {
   detectRecipes,
   composeRuleset,
   baseIncomeForRound,
+  trophyDeltaFor,
   generateShop,
   computeRerollCost,
   effectiveItemCost,

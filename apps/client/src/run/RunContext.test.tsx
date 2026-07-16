@@ -657,18 +657,20 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
   });
 });
 
-describe('useRun onCombatDone — trophy client-authoritative accumulation (M1.5a PR 2 Phase 2.5h Codex Finding 4 restore)', () => {
-  // Phase 2.5g audit (TROPHY-SHAPED-LOCKED for `trophy`) confirmed sim
-  // never mutates trophiesAtStart — getState returns hardcoded 0 at
-  // sim state.ts:336 with // M2 concern. comment. PR 2 Phase 2b-2's
-  // combat_done collapse delegated trophy to sync_from_sim's overwrite
-  // path (snapshot.trophiesAtStart === 0 always), dropping the pre-PR-2
-  // +18-per-win accumulator and producing the TopBar trophy-stuck-at-zero
-  // gap Codex flagged as Finding 4. Phase 2.5h restores client-side
-  // accumulation per decision-log.md 2026-05-11 § M1.5a Phase 1 design
-  // take-2 ratification §6e Q13 ("client-owned trophy for 5a").
+describe('useRun onCombatDone — trophy accumulation through sim authority (CF-34 → CF-72)', () => {
+  // Lineage, because the older framing here is no longer true. These tests were
+  // written at M1.5a PR 2 Phase 2.5h to cover a CLIENT-side +18/win accumulator
+  // (Codex Finding 4: sync_from_sim was overwriting trophy from a snapshot that
+  // was hardcoded 0, stranding the TopBar at zero). CF 34 / M1.5e PR 1 then
+  // retired that client accumulator outright and made the sim the sole trophy
+  // writer, so what these now exercise is sim accumulation surviving
+  // sync_from_sim — not client-owned accumulation.
+  //
+  // CF-72 replaces the flat +18 M0 placeholder with the ratified schedule
+  // (win → 10 + 2 × (round − 1); loss → −5 floored at zero), so the expected
+  // values below are per-round rather than flat.
 
-  it('win path increments trophy by +18 (M0-placeholder per M1.3.4a ratification 5)', async () => {
+  it('win path increments trophy by the round-1 award of +10 (CF-72 ratified schedule)', async () => {
     const { getCtx } = await renderAndCapture();
     const ctx = getCtx();
     act(() => ctx.onContinue());
@@ -691,16 +693,24 @@ describe('useRun onCombatDone — trophy client-authoritative accumulation (M1.5
       });
     });
     await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
-    expect(getCtx().state.state.trophy).toBe(trophyBefore + 18);
+    // CF-72: this combat resolves round 1, so the award is 10 + 2 × (1 − 1) = 10.
+    // Was +18 flat (the M0 placeholder retired by CF-72).
+    expect(getCtx().state.state.trophy).toBe(trophyBefore + 10);
   });
 
-  it('loss path leaves trophy unchanged', async () => {
+  it('loss path leaves trophy unchanged AT THE ZERO FLOOR (clamped, not penalty-free)', async () => {
     const { getCtx } = await renderAndCapture();
     const ctx = getCtx();
     act(() => ctx.onContinue());
     await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
 
     const trophyBefore = getCtx().state.state.trophy;
+    // Pin WHY this stays flat. Pre-CF-72 the loss branch never touched trophy,
+    // so "unchanged" was unconditional. Post-CF-72 a loss costs −5, and this
+    // fresh run is at the zero floor — so the delta clamps to 0 and the value
+    // holds for a completely different reason. Asserting the precondition keeps
+    // the test from silently re-passing on the old meaning.
+    expect(trophyBefore).toBe(0);
     const lossResult = {
       events: [],
       outcome: 'ghost_win' as const,
@@ -717,10 +727,56 @@ describe('useRun onCombatDone — trophy client-authoritative accumulation (M1.5
       });
     });
     await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
-    expect(getCtx().state.state.trophy).toBe(trophyBefore);
+    expect(getCtx().state.state.trophy).toBe(0);
   });
 
-  it('three consecutive wins accumulate +54 trophy (confirms sync_from_sim does not clobber accumulator between dispatches)', async () => {
+  it('loss path deducts 5 from a nonzero trophy (win first, then lose)', async () => {
+    const { getCtx } = await renderAndCapture();
+    const ctx = getCtx();
+
+    // Round 1 win banks 10, lifting the run clear of the zero floor so the
+    // full −5 penalty is observable rather than clamped.
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+    act(() => {
+      ctx.onCombatDone({
+        result: {
+          events: [],
+          outcome: 'player_win' as const,
+          finalHp: { player: 30, ghost: 0 },
+          endedAtTick: 5,
+        },
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 30,
+        damageTaken: 0,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    expect(getCtx().state.state.trophy).toBe(10);
+
+    // Round 2 loss: unclamped, so the flat penalty applies in full.
+    act(() => ctx.onContinue());
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(true));
+    act(() => {
+      ctx.onCombatDone({
+        result: {
+          events: [],
+          outcome: 'ghost_win' as const,
+          finalHp: { player: 0, ghost: 12 },
+          endedAtTick: 3,
+        },
+        opponentGhostId: null,
+        opponentClassId: 'marauder' as ClassId,
+        damageDealt: 18,
+        damageTaken: 30,
+      });
+    });
+    await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
+    expect(getCtx().state.state.trophy).toBe(5);
+  });
+
+  it('three consecutive wins accumulate +36 trophy across rounds 1-3 (confirms sync_from_sim does not clobber accumulator between dispatches)', async () => {
     const { getCtx } = await renderAndCapture();
     const ctx = getCtx();
     const trophyBefore = getCtx().state.state.trophy;
@@ -744,7 +800,10 @@ describe('useRun onCombatDone — trophy client-authoritative accumulation (M1.5
       });
       await waitFor(() => expect(getCtx().state.combatActive).toBe(false));
     }
-    expect(getCtx().state.state.trophy).toBe(trophyBefore + 54);
+    // CF-72: rounds 1/2/3 award 10 + 12 + 14 = 36 (was 3 × 18 = 54 flat).
+    // The per-round spread is what makes this a real accumulator check now —
+    // a stuck round value would land on 30, not 36.
+    expect(getCtx().state.state.trophy).toBe(trophyBefore + 36);
   });
 });
 

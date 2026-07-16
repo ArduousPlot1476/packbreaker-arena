@@ -8,7 +8,7 @@ export type { RecipeMatch } from './recipes';
 export { detectRecipes } from './recipes';
 
 export type { ComposedRuleset, DerivedModifiers } from './ruleset';
-export { composeRuleset, baseIncomeForRound } from './ruleset';
+export { composeRuleset, baseIncomeForRound, trophyDeltaFor } from './ruleset';
 
 export {
   computeRerollCost,

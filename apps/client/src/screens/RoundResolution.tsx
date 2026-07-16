@@ -77,7 +77,11 @@ export function RoundResolution({
             TROPHY
           </div>
           <div className="tnum heading-tight" style={{ fontSize: 22 }}>
-            +{trophyEarned}
+            {/* Sign is derived, not hardcoded: CF-72 made trophyEarned signed
+                (loss → negative), so a literal '+' would render '+-5'. Negative
+                values already carry their own '-'. */}
+            {trophyEarned >= 0 ? '+' : ''}
+            {trophyEarned}
           </div>
         </div>
         <div>

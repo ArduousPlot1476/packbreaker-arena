@@ -21,6 +21,7 @@ import {
   type Relic,
   type RelicId,
   type RelicSlots,
+  type RoundOutcome,
   type Ruleset,
 } from '@packbreaker/content';
 
@@ -114,4 +115,29 @@ export function baseIncomeForRound(round: number, ruleset: Ruleset): number {
     ruleset.baseGoldPerRound +
     Math.floor((round - 1) / ruleset.goldStepRounds) * ruleset.goldStepAmount
   );
+}
+
+/** Trophy delta for a round that just resolved. THE single trophy-award
+ *  derivation: the sim's write branch (state.ts applyCombatOutcome) and the
+ *  client's pre-commit resolution panel (CombatOverlay) both call this with the
+ *  same (round, currentTrophy), so the number shown and the number applied agree
+ *  by construction rather than by twin literals — the CF-38 co-drift antidote
+ *  (decision-log.md 2026-07-15 § "CF-72 Phase 2 Step 0 halt").
+ *
+ *  Win: CF-72's ratified schedule — 10 + 2 × (round − 1); round 1 → 10,
+ *  round 11 (boss) → 30. Strictly increasing, so floor-at-zero cannot bind.
+ *  Loss: flat −5 floored at zero, returned as the POST-CLAMP ACTUAL delta, so a
+ *  run at trophy 3 returns −3 (not −5) and the panel announces what the sim
+ *  applies. `round` is unused on this branch — the ratified loss penalty is flat.
+ *
+ *  Contract modifiers and win-streak multipliers are deliberately absent
+ *  (CF-18, open). Ratified at decision-log.md 2026-07-15 § "CF-72 Phase 1
+ *  RATIFIED"; supersedes the M0 +18/win placeholder. */
+export function trophyDeltaFor(
+  outcome: RoundOutcome,
+  round: number,
+  currentTrophy: number,
+): number {
+  if (outcome === 'win') return 10 + 2 * (round - 1);
+  return Math.max(0, currentTrophy - 5) - currentTrophy;
 }
