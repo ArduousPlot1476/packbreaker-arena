@@ -13,11 +13,15 @@ import { useAuth } from '@clerk/react';
 import { useEffect, useRef } from 'react';
 import { useApiFetch } from '../api/useApiFetch';
 import { loadLocal } from '../persistence';
+import { useSetAccountLinked } from './AccountLinkContext';
 import { postAccountLink } from './postAccountLink';
 
 export function AccountLinkOnSignIn() {
   const { isLoaded, isSignedIn } = useAuth();
   const apiFetch = useApiFetch();
+  // CF-75: publish the linked transition so the player-save sync (GET pull +
+  // PUT push) can gate on it. Kept in step with linkedThisSession below.
+  const setLinked = useSetAccountLinked();
   // Single-session assumption: one account per signed-in session. Clerk
   // multi-session handling is opt-in and off by default, and this app never
   // enables it. If it is ever turned on in the Clerk Dashboard, this must
@@ -30,6 +34,7 @@ export function AccountLinkOnSignIn() {
     // Reset on sign-out so a later sign-in re-links (server is idempotent).
     if (!isSignedIn) {
       linkedThisSession.current = false;
+      setLinked(false);
       return;
     }
     if (!isLoaded || linkedThisSession.current) return;
@@ -49,12 +54,13 @@ export function AccountLinkOnSignIn() {
     void postAccountLink(apiFetch, anonId).then((linked) => {
       if (!cancelled && linked) {
         linkedThisSession.current = true;
+        setLinked(true);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, apiFetch]);
+  }, [isLoaded, isSignedIn, apiFetch, setLinked]);
 
   return null;
 }

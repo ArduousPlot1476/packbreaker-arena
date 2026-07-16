@@ -15,6 +15,8 @@
 import { ClerkProvider, useAuth } from '@clerk/react';
 import { useCallback, type ReactNode } from 'react';
 import { AccountLinkOnSignIn } from './AccountLinkOnSignIn';
+import { AccountLinkProvider } from './AccountLinkContext';
+import { PlayerSaveSyncOnSignIn } from './PlayerSaveSyncOnSignIn';
 import { AuthTokenContext, type GetSessionToken } from './authToken';
 import { CLERK_PUBLISHABLE_KEY } from './config';
 
@@ -39,8 +41,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY}>
       <ClerkTokenBridge>
-        <AccountLinkOnSignIn />
-        {children}
+        {/* AccountLinkProvider wraps BOTH the link effect and everything that
+            gates on linked state — the player-save GET pull below and the PUT
+            push inside RunProvider (a descendant of {children}). (CF-75) */}
+        <AccountLinkProvider>
+          <AccountLinkOnSignIn />
+          <PlayerSaveSyncOnSignIn />
+          {children}
+        </AccountLinkProvider>
       </ClerkTokenBridge>
     </ClerkProvider>
   );

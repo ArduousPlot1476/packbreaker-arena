@@ -815,6 +815,24 @@ export interface TelemetryBatchRequest {
   readonly events: ReadonlyArray<TelemetryEvent>
 }
 
+// GET/PUT /v1/player/save wire DTOs (M2.1 CF-75). Mirror the server surface
+// (apps/server/src/routes/playerSave.ts + validation/playerSave.ts). The GET
+// response carries `dailyStreak` (server-derived, READ-only to the client);
+// the PUT request deliberately OMITS it — `dailyStreak` is never client-
+// settable (the server's `.strict()` 400s a body carrying it). Per CF-76's
+// bounded posture the client always sends `lastDailyAttempted: null` until
+// CF-68 wires a real attempt date.
+export interface PlayerSaveResponse {
+  readonly trophies: number
+  readonly dailyStreak: number
+  readonly lastDailyAttempted: IsoDate | null
+}
+
+export interface PlayerSaveWriteRequest {
+  readonly trophies: number
+  readonly lastDailyAttempted: IsoDate | null
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // § 15 — TELEMETRY EVENT TYPES  (packages/shared)

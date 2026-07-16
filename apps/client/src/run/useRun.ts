@@ -109,7 +109,17 @@ export type OfferCard =
  *  (CF-67, balance-bible.md § 15). */
 const BOSS_REWARD_ITEM_ID = 'world-forged-heart' as ItemId;
 
-export function useRun() {
+export interface UseRunOptions {
+  /** CF-75: invoked with the composed LocalSaveV1 immediately after each
+   *  quiescent `saveLocal`, so a server PUT can ride the EXACT same trigger
+   *  (no separate effect, no divergence). Injected by RunProvider — useRun
+   *  stays auth/network-free and unit-testable. Fire-and-forget; must not
+   *  throw. */
+  readonly onQuiescentSave?: (save: LocalSaveV1) => void;
+}
+
+export function useRun(options: UseRunOptions = {}) {
+  const { onQuiescentSave } = options;
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   // Sim RunController instance — dynamic-imported when pendingRunInput
@@ -879,6 +889,13 @@ export function useRun() {
       inProgressRun: serialized,
     };
     saveLocal(payload);
+    // CF-75: mirror the local persist to the server on the SAME quiescent
+    // trigger. RunProvider injects a callback that PUTs when signed-in +
+    // linked; useRun itself stays auth/network-free. Reads `onQuiescentSave`
+    // via closure (stable ref from RunProvider), so it is deliberately absent
+    // from the deps below — same pattern as the state reads. No-op on the
+    // anonymous path (no callback injected).
+    onQuiescentSave?.(payload);
     // Deps intentionally narrow: round + outcome are the only
     // quiescent-transition signals. state.state.gold/bag/rerollCount
     // /trophy ARE read inside the effect (via closure) but are NOT in

@@ -21,6 +21,7 @@
 
 import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react';
 import { useRun } from './useRun';
+import { usePlayerSavePush } from './usePlayerSavePush';
 
 // Lazy-import the class-select screen so its atoms + Desktop + Mobile
 // components ship in a dedicated chunk rather than the main bundle.
@@ -65,7 +66,11 @@ function RunBootFallback() {
 }
 
 export function RunProvider({ children }: { children: ReactNode }) {
-  const value = useRun();
+  // CF-75: mirror each quiescent local save to the server (PUT), gated on
+  // signed-in + linked. useRun invokes this right after saveLocal, so the
+  // push rides the exact same trigger. No-op on the anonymous path.
+  const onQuiescentSave = usePlayerSavePush();
+  const value = useRun({ onQuiescentSave });
   if (value.simRun === null) {
     if (value.pendingRunInput === null) {
       return (
