@@ -4,6 +4,28 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-72 Phase 1 RATIFIED (trophy award schedule design decided; implementation pending)
+
+Framing: `gdd.md` § 13 (win → +trophies scaled by round reached; lose → −trophies, small) vs. the shipped placeholder since M1.3.4a ratification 5 (2026-05-02: flat +18 win / +0 loss, explicit M0-placeholder). Contradiction confirmed, resolved as follows.
+
+Ratified:
+- Win: `trophyGain(round) = 10 + 2 × (round − 1)`. Round 1 = 10, round 11 (boss) = 30.
+- Loss: flat −5, any round.
+- Floor-at-zero: trophy (in-run running total and account-persistent value) cannot go negative.
+- Contract modifiers + win-streak multipliers: explicitly OUT of CF-72 scope; remain CF-18.
+
+Trophy authority confirmed sim-side per CF-34 closure (2026-07-05, M1.5e PR 1, merge `285e7c3`) — `state.ts:1038` (`this.trophy += 18`) is the sole writer; no client reducer exists. Phase 2 targets this site directly; no Step-0 rediscovery needed.
+
+**CF-18 AMENDED** — scope narrowed to "contract modifiers + win-streak multipliers → M2." The per-round schedule leg is superseded by this entry's ratified formula; CF-72 owns that leg. Prevents dual-CF ownership of the same scope.
+
+CF-72 stays OPEN pending Phase 2 implementation — this entry ratifies design only. Closing entry lands at that PR's merge per standing convention.
+
+Phase 2 de-risk (Claude Code Step-0 grep): `trophyAtRecord` across the 224-file DO-NOT-REGENERATE fixture corpus is hardcoded 0 at its producers (`ghost-generator.ts:91`, `boss.ts:51`) — never derived from `this.trophy`. Formula change should not churn the corpus; confirm at Phase 2 close.
+
+**Drift 40** — master-dev hand-off posed trophy authority (client-vs-sim) as an open Phase-2 question; CF-34 had already closed this 10 days prior (2026-07-05, M1.5e PR 1) and canon states sim is sole-authoritative. Same shape as Drift 39 (master-dev chat claim contradicting codified canon, caught at Step-0, never propagated) — counted per that precedent despite being caught pre-landing.
+
+Counters: baseline (tip `5aac368`) 60/24/9/39/47 → **60/24/9/40/47** this entry. Delta: Topic-2 drifts +1 (Drift 40); catches / rules / patterns / open-CFs unchanged (CF-18 amended, not opened/closed; CF-72 stays open).
+
 ## 2026-07-16 — M2.1 PR3 CLOSED: `player_saves` + GET/PUT `/v1/player/save` (Option A, plumbing-only) merged (PR \#45, merge 5c3939a); CF-73 + CF-74 CLOSED; CF-75 + CF-76 opened; Catch 59 + **Catch 60 (class C3, NEW)** + Pattern 9 codified; Drift 39
 
 **Merge.** PR \#45, merge commit `5c3939a94718744f8afd9cf6a113a8edb6725f11`, `--no-ff`, parents
