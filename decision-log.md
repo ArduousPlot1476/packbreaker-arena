@@ -4,6 +4,135 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-16 — M2.1 PR3 CLOSED: `player_saves` + GET/PUT `/v1/player/save` (Option A, plumbing-only) merged (PR \#45, merge 5c3939a); CF-73 + CF-74 CLOSED; CF-75 + CF-76 opened; Catch 59 + **Catch 60 (class C3, NEW)** + Pattern 9 codified; Drift 39
+
+**Merge.** PR \#45, merge commit `5c3939a94718744f8afd9cf6a113a8edb6725f11`, `--no-ff`, parents
+`6da6d99` (main) + `6d0dd04` (branch). Committed 2026-07-15T19:22:33-05:00 = **2026-07-16T00:22:33Z**;
+GitHub `merged_at` 2026-07-16T00:23:51Z. 19 files, +1947/−8. Branch chain: `f5a9065` → `c48b909`
+→ `5d578d0` → `182ebbc` → `6d0dd04`. Implements decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1
+RATIFIED" (916cb79) as ratified — schema, sync contract, endpoints and the 404-over-auto-create
+call all landed unchanged. Merged on Codex's review alone (no human read the diff), authorized
+directly by Trey. **Structural precedent: this entry follows the M2.1-era close format** (running
+counter line + delta) per decision-log-close Step 1's "match the nearest same-weight entry" —
+M2.1 PR1 + PR2 closes both use it and neither re-enumerates the open-CF set.
+
+**Scope as shipped — server-side ONLY.** PR3 lands the table and both routes; **no client caller
+exists**, so no sync occurs in either direction (CF-75). The ratification's "*PR3 knowingly syncs
+zeros*" framing was inaccurate and was corrected pre-merge: with zero callers PR3 syncs
+**nothing**. The zeros are what a client *would* push once CF-75 wires it, because no producers
+exist (H3). Two distinct deferrals — no caller, no producers — that one sentence collapsed.
+
+**CF-73 CLOSED** (Catch 58's tracking CF; closed INSIDE PR3, no PR2 reopen, exactly as ratified).
+`createAccountStore`'s real `ON CONFLICT (clerk_user_id) DO NOTHING` is now asserted against a
+real Postgres rather than a fake hand-mirroring the author's belief. Harness = **GitHub Actions
+Postgres service container**, NOT testcontainers: no Docker daemon exists on the dev box, so
+testcontainers would be unrunnable AND unverifiable before push. CI injects a **non-secret**
+localhost URL, so the suite ALWAYS runs there — the protection Phase 1 demanded when it rejected
+`skipIf(!DATABASE_URL)` local-only. The harness **THROWS rather than skips** when `CI=true` and
+the var is unset (proven empirically). Isolated throwaway schema per run; `search_path` pinned as
+a libpq **startup parameter** on the **direct** (non-`-pooler`) endpoint — a session `SET` is
+unreliable under Neon's transaction-mode pooling. 13/13 real-SQL green.
+
+**CF-74 CLOSED** (REQUIRED PR3 precondition, as ratified). `useRun.ts`'s composer hardcoded the
+cross-session fields on EVERY quiescent save; the 2026-05-23 Phase-2.5g meta-audit hardened
+`clearLocal` but never the composer half. Now reads the envelope through, defaults materialized
+at the consumption point per the CF-43 rule. Regression **proven to fail pre-fix** ("*expected +0
+to be 137*"). **Bundled ratified deviation:** the fix covers a FOURTH field (`tutorialCompleted`)
+beyond CF-74's ratified three — identical defect, zero marginal cost to include, extra code to
+exclude. **CF-66 precedent; ruled NOT-A-CATCH** (process working). Authorized by Trey 2026-07-15.
+
+**CF-75 OPENED** — player-save client sync leg unwired; see decision-log.md 2026-07-15 § "CF-75
+OPENED". **CF-76 OPENED** — daily-attempt trust model, BOUNDED (+1/server-day) not
+cheat-resistant, dormant while CF-75 leaves no caller; see decision-log.md 2026-07-15 § "CF-76
+OPENED". **The two are COUPLED: whoever wires CF-75's caller MUST resolve CF-76 in the same PR** —
+a naive "PUT today's date" caller ACTIVATES a known gap rather than discovering one.
+
+**Catch 59** (Class C2, 3rd Rule-4 instance) — see decision-log.md 2026-07-15 § "Catch 59 …".
+`updated_at`-advancement claim shipped with zero falsifying test, inside the PR that exists to
+close that class. Code was already correct; the missing falsifier WAS the defect. **Caught by the
+meta-audit, not Codex** (which passed the surrounding code in rounds 1–3) — which is why it takes
+a Catch number and the Codex findings below do not.
+
+**Pattern 9** — "server registers, client never calls" (CF-57 closed / CF-68 open / CF-75 open);
+see decision-log.md 2026-07-15 § "Catch 59 … + Pattern 9 codified". Methodological half:
+consumer-count audits MUST exclude test-only references — a raw file-count scores
+`/v1/contract/daily` at 1 consumer (`client.test.ts`) when the real production count is **0**.
+
+**Catch 60 (NEW) — CATCH CLASS C3 RATIFIED: ratified-claim overstatement.** A canon/design-doc
+claim asserting behaviour the implementation does not deliver, caught at review rather than
+upstream at ratification. **Founding pair, both in PR3:**
+- "***PR3 knowingly syncs zeros***" — with zero client callers PR3 syncs nothing (Codex round 2).
+- "***authoritative and cheat-resistant***" (§ 7.2, `dailyStreak`) — `lastDailyAttempted` is
+  client-supplied, so the derivation is one indirection from client-settable; it is **bounded**,
+  not cheat-resistant (Codex round 4).
+
+**Why this does NOT contradict "Codex pre-merge findings take no Catch numbers"** (the CF-67
+ruling, restated at decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED"). That ruling governs **code**
+defects Codex catches pre-merge: the process worked, nothing escaped, no Catch. C3 is a different
+object — the defect is **in the ratified TEXT**, not in the code, and the gate that should have
+caught it is **ratification review**, which did not. Codex merely surfaced it. Same logic that
+earned Catch 58 a number despite being caught by a Phase-1 read. **Codification-gate deviation,
+recorded not hidden:** decision-log-close Step 2.3 wants a second instance across two DISTINCT
+PRs; both founding instances are in PR3. Ratified as a bend — two instances of one class inside a
+single PR is a stronger signal than two spread across PRs, not a weaker one.
+
+**NOT a Drift, and the taxonomy line is load-bearing.** Drift is reserved for **Topic-2
+master-dev-CHAT paraphrase-vs-canon** caught at the grounding gate (the Drift 28 / 29 / 30 / 32 /
+37 / 38 lineage; exclusion boundary at decision-log.md 2026-07-11 § "Drift 32 logged"). C3 is
+**design-doc-vs-implementation**, caught at Codex review. Minting Drifts here would blur two
+ledgers and inflate the Topic-2 count with events that never occurred in that chat.
+
+**Drift 39 (Topic 2, master-dev; caught pre-landing).** The PR3 Phase-2 hand-off and its DoD
+attributed CF-74's closure to a `player_saves` real-SQL test ("*CF-73 and CF-74 each have a
+passing real-SQL test*"). CF-74 is a **client** bug (`useRun.ts`); **no SQL test can close it** —
+it closes via the H4 composer fix. The `player_saves` real-Postgres test is its own ratified DoD
+item, not CF-74's vehicle. Caught at the Phase-2 Step-0 gate and **never propagated** — the build
+followed canon over the prompt. Counts on the Drift 28 / 30 / 32 lineage (master-dev claim
+contradicting codified canon, caught pre-landing, counted despite the catch). Drifts 38 → 39.
+
+**Codex cycle — TERMINAL at round 5 (clean).** 5 rounds, 5 raw findings, ceiling BENT at 3 by
+ratification (structural, not a same-surface patch loop), 1 meta-audit cycle:
+- **r1** — 1×P2: `trophies` unbounded against an int4 column ⇒ an out-of-range payload was
+  misreported as a **retryable 503** instead of a 400. Round 1 also **self-caught a CI break via
+  this PR's own non-skippable guard**: turbo filters the task env, so `TEST_DATABASE_URL` never
+  reached vitest. A conventional `skipIf` would have left CI **green with both real-SQL suites
+  silently skipped** — CF-73's exact posture. Fixed together in `c48b909` (`turbo.json` `test.env`
+  = `["TEST_DATABASE_URL","CI"]`; `env` not `passThroughEnv`, so a cached no-database run cannot
+  satisfy a CI run required to execute it).
+- **r2** — 2×P1: streak inflation (**proven 2→3→4→5→6 on ONE server day** — re-persisting a stale
+  date re-armed the "+1 from yesterday" branch; fixed `5d578d0` by refusing to PERSIST a
+  non-today date, since leaving the streak unchanged would NOT have closed it), and the client leg
+  unwired → CF-75.
+- **r3** — CLEAN.
+- **r4** — 1×P2 (`updated_at` test flake: pg→JS `Date` is ms-resolution and CI's localhost
+  container has sub-ms round-trips; it passed locally only because remote Neon's 40–55ms latency
+  masked the collision — fixed `6d0dd04` with a 10ms **clock guard**, NOT a weakened `>=`, and
+  verified the guard does not mask the bug) + 1×P1 → CF-76.
+- **r5** — CLEAN. The CF-76 P1 did **not** recur despite the code being deliberately unchanged —
+  the inline site comment supplied the context. A documented deferral reads as a decision; an
+  undocumented one reads as a defect every round.
+
+**Live schema was ahead of unmerged main.** `player_saves` applied to live Neon 2026-07-15
+(`drizzle-kit migrate`, ledger 0000+0001) while PR \#45 was still open — same sequencing as PR1 +
+PR2. Recorded here rather than left to be inferred from timestamps. Additive-only and verified
+against the live DB, not the migration file: `accounts` untouched at exactly 1 row, `player_saves`
+PK = FK → `accounts(id) ON DELETE CASCADE`, **ZERO CHECK constraints** on `trophies` (the
+deliberate absence — gdd.md § 13's "Lose → -trophies" makes it non-monotonic).
+
+**Verification at merge:** server typecheck + lint clean; 132/132 server tests incl. 13/13
+real-SQL against a real Postgres; client 592 passed / 50 files under a CI-equivalent env; CI green
+on `6d0dd04` with the real-SQL suite verified RUNNING against the service container. The 8 local
+client failures are **CF-71** (`VITE_CLERK_PUBLISHABLE_KEY` leak), proven pre-existing on a clean
+`6da6d99` with this work stashed.
+
+Counter: 59/24/9/38/49 → **60/24/9/39/47** — catches +1 (**Catch 60**, class C3 NEW,
+ratified-claim overstatement; Catch 59 was already counted at its own entry); drifts +1 (**Drift
+39**, CF-74-closure misattribution, Topic 2 / Rule 15); open-CFs **−2** (**CF-73 + CF-74 CLOSED**;
+CF-75 + CF-76 were already counted at their own entries; CF-68, CF-69, CF-71, CF-72 stay open).
+Rules unchanged at 24; patterns unchanged at 9 (Pattern 9 was counted at its own entry). Codex's
+pre-merge CODE findings take no Catch numbers (CF-67 ruling) — Catch 60 is a canon-text defect,
+not a code defect; see above.
+
 ## 2026-07-15 — CF-76 OPENED: daily-attempt trust model (`dailyStreak` is BOUNDED, not cheat-resistant); tech-architecture.md § 7.2's "cheat-resistant" claim corrected — 2nd overstated-canon-claim this PR, deliberately NOT a Drift
 
 Surfaced by Codex round 4 on PR \#45 (review 4709008039, commit 182ebbc), P1. Ordinal walked
