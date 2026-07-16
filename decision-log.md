@@ -4,6 +4,25 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-16 — CF-75 + CF-76 Phase 1 RATIFIED (save-sync wiring design decided; both stay OPEN pending Phase 2)
+
+Read-only Phase 1 investigation this session confirmed the surface + trust model; master-dev then ratified the disposition below. Design only — no code. Builds on decision-log.md 2026-07-15 § "CF-75 OPENED" / § "CF-76 OPENED" and 2026-07-16 § "M2.1 PR3 CLOSED".
+
+### Surface confirmed (read-only, cited)
+
+GET/PUT `/v1/player/save` exist server-side (`routes/playerSave.ts`, both `requireAuth`); **ZERO client callers, production or test** — the `apps/client/src/api/*` layer wires account-link + telemetry only, never player-save (CF-75). `lastDailyAttempted` is **client-supplied** (`validation/playerSave.ts:66`, read at `routes/playerSave.ts:201`); `dailyStreak` is **server-derived**, `.strict()`-rejected in the request body (`validation/playerSave.ts:68`), computed by `deriveDailyStreak` (`routes/playerSave.ts:119-142`); a **server-date gate** 400s any non-null `lastDailyAttempted ≠ serverToday` (`routes/playerSave.ts:219-229`); **no server-side participation evidence exists** (CF-76 → bounded, not cheat-resistant).
+
+### Ratified
+
+1. **CF-75 — SHIP.** Wire a client caller for GET/PUT `/v1/player/save`. Delivers cross-device trophy persistence.
+2. **CF-76 — resolved AS-BOUNDED.** The client PUT always sends `lastDailyAttempted: null` until CF-68 lands: pre-CF-68 the client plays the hardcoded `'neutral'` contract (`useRun.ts:278`, `RunController.ts:89`), so it has no honest daily attempt to report, and `deriveDailyStreak` returns 0 for null — nothing to cheat yet. The **server-date gate stays the SOLE authority**; the posture remains bounded-not-cheat-resistant and is documented at the call site in code. **CF-68 is necessary-but-INSUFFICIENT:** true cheat-resistance requires CF-68 landed *together with* a NEW server-side participation-evidence mechanism (a verified daily-completion event — sibling to CF-72's trophy trust-model). A future implementer MUST NOT treat CF-68 alone as closing CF-76; wiring the daily without the evidence mechanism activates the gap rather than discovering it.
+3. **Sync-trigger design (scopes Phase 2).** GET fires **once per session** for signed-in (accountId-linked) users, server-wins hydration per `tech-architecture.md § 7.2`. PUT fires on the **existing local quiescent-save trigger** (round advance / terminal — `useRun.ts` save-on-quiescent) — same cadence as local persistence, **no new trigger** introduced.
+4. **Credentials re-confirmed live (values NOT printed).** `DATABASE_URL` (Neon pooled host), `CLERK_SECRET_KEY` (`sk_`), `VITE_CLERK_PUBLISHABLE_KEY` (`pk_`) all populated with real values; `.env` gitignored + never committed. **No live-DB blocker for the CF-75/76 PR** — it adds no schema change (`player_saves` already live from PR3), so PR3's GitHub-Actions Postgres service-container harness is sufficient for tests; a live DB is needed only for optional manual end-to-end verification.
+
+CF-75 + CF-76 stay OPEN pending Phase 2 implementation — this entry ratifies design only; closure lands at that PR's merge per standing convention (closing entries held until a real merge SHA exists). Per Rule 20, the Phase 2 wiring prompt is gated on this entry's commit SHA.
+
+Counter: 62/25/9/42/46 → **62/25/9/42/46** — unchanged. No catch / rule / pattern / drift this Phase 1 (a design ratification is not itself a catch); CF-75 + CF-76 stay open (no open-CF delta); CF-68 referenced, not modified.
+
 ## 2026-07-16 — CF-72 CLOSED (trophy award schedule shipped); CF-38 AMENDED (narrowed to gold axis, remains open)
 
 ### Framing
