@@ -4,6 +4,26 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-72 Phase 2 Step 1 reviewed; Catch 61/62; Rule 25 codified; Drift 42 (master-dev premature-closing claim, self-caught)
+
+### Step 1 sign-off (commit 333d3b3, branch m2.1-cf72-trophy-schedule, not yet pushed)
+
+1. **RoundResolution.tsx required a change** the DoD said it wouldn't — hardcoded `+` prefix broke on the now-signed trophy value; fixed (sign derived). **Catch 61 (Class A — change-site contradiction).**
+2. **Two LOCKED scenario fixtures hand-edited** — `happy-path-run` 54→36, `boss-fight-victory` 198→220, both matching the ratified formula's arithmetic exactly. RATIFIED (locked-fixture discipline: investigate + hand-edit, don't regenerate). **Catch 62 (Class C1 — content-side evidence gap):** the ratified entry's "no corpus churn expected" sampled only `trophyAtRecord` across the 224-file `.jsonl` corpus; didn't check the 6 `.json` scenario fixtures' `expectedFinalState`. The `.jsonl` claim holds (231/231 green); the generalization was the gap.
+3. **Draws now cost 5 trophy** — RATIFIED, consistent with M1.3.4a's existing "draw treated as loss for hearts," extended to trophy now that loss is nonzero. Addendum to CF-72's ratification, not a catch.
+
+### Rule 25 (NEW) — closure-sweep discipline
+
+2nd instance of the HELD candidate logged at commit 4e3b0e2 (`RunContext.test.tsx`'s stale "trophy client-authoritative accumulation" claim, orphaned by CF-34 the same way `state.ts:363-366` was). Codified: mechanism-retirement closures must sweep the tree for all artifacts describing the retired mechanism — code comments, test descriptions, prior CF citations — not just functional call sites.
+
+### Drift 42 — master-dev premature-closing claim (self-caught)
+
+Master-dev stated the CF-72/CF-38 closing entry would be written directly off the Step 1 report, skipping Phase 2.5 (push/PR/Codex) and Phase 3 (merge). Contradicts "closing entries held until real merge SHA exists" directly. Caught before anything was written. No closing entry follows this one — CF-72 stays OPEN; CF-38's AMEND-to-gold-axis disposition (flagged correctly by Claude Code) is deferred to the actual merge closing entry.
+
+### Counters
+
+Baseline (4e3b0e2) 60/24/9/41/47 → **62/25/9/42/47**. Delta: catches +2 (61, 62), rules +1 (25), patterns unchanged, drifts +1 (42), open-CFs unchanged (CF-72/CF-38 disposition deferred).
+
 ## 2026-07-15 — CF-72 Phase 2 Step 0 halt: trophy-delta mechanism corrected (Drift 41); CF-38 antidote ratified
 
 Framing: the Phase 2 hand-off following 9744f87 instructed mirroring `goldDelta`'s before/after capture for the trophy display sync. Step 0 halted: that pattern was retired by CF-34 (285e7c3, M1.5e PR 1, 2026-07-05) — sim is sole trophy/gold writer (`useRun.ts:962-964` documents the retirement explicitly); no before/after capture exists to mirror. Root citation was `state.ts:363-366`, a comment describing the pre-CF-34 mechanism, orphaned by CF-34's closure and never updated.
