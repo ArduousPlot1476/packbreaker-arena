@@ -64,6 +64,7 @@ import { createRng, type Rng } from '../rng';
 import {
   composeRuleset,
   baseIncomeForRound,
+  trophyDeltaFor,
   type DerivedModifiers,
 } from './ruleset';
 import {
@@ -360,16 +361,21 @@ class RunControllerImpl implements RunController {
       // Restored phase derives directly from outcome.
       this.phase = restoreFrom.outcome === 'in_progress' ? 'arranging' : 'ended';
 
-      // Client-owned fields restored onto sim as non-authoritative mirrors
-      // per Phase 1 ("match live invariant"): sim's gold is consumed only as
-      // a delta source by onCombatDone's before/after observation, so the
-      // absolute value need not match the client's authoritative gold.
-      // Storing serialized.gold keeps the values aligned at the moment of
-      // restore; subsequent buys/sells live client-side per Q2 Amendment A
-      // and sim's gold drifts as usual. Sim's bag stays empty (client owns
-      // bag per Q2 Amendment A); sim's placeItem is never called by client
-      // code in M1.5a/b. CF 34 closure would re-evaluate (and amend B-F3 /
-      // E-F9 per Phase 2.5h meta-audit carry-forwards).
+      // Gold restore (CF 34 / M1.5e PR 1 closure): sim is the sole gold writer,
+      // so the restored value is AUTHORITATIVE — it seeds the authority rather
+      // than mirroring a client-owned field.
+      //
+      // Corrected as a drive-by per decision-log.md 2026-07-15 § "CF-72 Phase 2
+      // Step 0 halt". The prior text here described the pre-CF-34 world: gold as
+      // a "non-authoritative mirror" consumed "only as a delta source by
+      // onCombatDone's before/after observation" (the β disposition), with the
+      // client owning bag and buys/sells. CF 34 retired all of that — see
+      // useRun.ts's onCombatDone, which states the retirement and syncs sim's
+      // authoritative gold/trophy directly, and B-F3 below, which made sim the
+      // bag authority. The stale text outlived its closure and was the root
+      // citation behind Drift 41; it is the 1st instance of the HELD candidate
+      // "closure entries don't sweep other canon describing the mechanism they
+      // retire."
       this.gold = restoreFrom.gold;
       // Trophy restore-mirror (parallel to gold above): sim owns trophy
       // (CF 34 / M1.5e PR 1), seeded from the client-authored snapshot.
@@ -1027,15 +1033,20 @@ class RunControllerImpl implements RunController {
     // invocation.
     const roundOutcome: RoundOutcome = input.outcome === 'player_win' ? 'win' : 'loss';
     let goldEarnedThisRound = 0;
+    // Trophy accumulation (CF 34 / M1.5e PR 1): sim is the authoritative writer
+    // of run-cumulative trophy. CF-72 retires the M0 +18/win placeholder for the
+    // ratified schedule; trophyDeltaFor is the SOLE award derivation and handles
+    // both outcomes (win → schedule, loss → post-clamp penalty), which is why
+    // this write sits above the branch rather than inside it. CombatOverlay's
+    // pre-commit resolution panel calls the same function with the same
+    // (round, trophy), so display and sim agree by construction, not by twin
+    // literals (CF-38). currentRound is the round that just resolved —
+    // advancePhase increments it afterward, so no off-by-one here.
+    this.trophy += trophyDeltaFor(roundOutcome, this.currentRound, this.trophy);
     if (roundOutcome === 'win') {
       goldEarnedThisRound =
         this.effectiveRuleset.winBonusGold + this.derived.bonusGoldOnWin;
       this.gold += goldEarnedThisRound;
-      // Trophy accumulation (CF 34 / M1.5e PR 1): sim is now the authoritative
-      // writer of run-cumulative trophy. +18/win is the M0 placeholder
-      // (decision-log 2026-05-02 § M1.3.4a ratification 5); the M2 trophy-curve
-      // owns the real schedule. Replaces the client accumulator this PR retires.
-      this.trophy += 18;
     } else {
       this.hearts = Math.max(0, this.hearts - 1);
     }

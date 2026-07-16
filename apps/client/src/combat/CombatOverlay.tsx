@@ -35,6 +35,7 @@ import {
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
 import { clientBagToSimBag } from '../run/sim-bridge';
+import { trophyDeltaFor } from '@packbreaker/sim';
 import { runCombat } from './sim-bridge.combat';
 import {
   CombatScene,
@@ -276,7 +277,23 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   const isWin = result?.outcome === 'player_win';
   const ruleset = ctx.state.state.ruleset;
   const goldEarned = isWin ? ruleset.winBonusGold : 0;
-  const trophyEarned = isWin ? 18 : 0;
+  // CF-38 antidote (trophy axis): call the sim's canonical award derivation
+  // instead of re-stating its arithmetic as a literal here. The old
+  // `isWin ? 18 : 0` agreed with the sim only because both were the same M0
+  // placeholder — a coincidence CF-72's schedule would have broken.
+  //
+  // Load-bearing render-order invariant: this reads at phase === 'resolved',
+  // which paints strictly BEFORE handleNext → onDone → onCombatDone →
+  // applyCombatOutcome commits. So ctx.state.state.trophy is still the
+  // PRE-combat value — the same input the sim will read when it applies the
+  // delta — and the panel's number matches the mutation exactly, including the
+  // loss floor-clamp edge. Asserted directly in CombatOverlay.test.tsx rather
+  // than left to render-order coincidence.
+  const trophyEarned = trophyDeltaFor(
+    isWin ? 'win' : 'loss',
+    ctx.state.state.round,
+    ctx.state.state.trophy,
+  );
 
   function handleSkip() {
     const scene = gameRef.current?.scene.getScene(CombatScene.KEY) as

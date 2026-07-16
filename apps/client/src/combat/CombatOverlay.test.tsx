@@ -22,7 +22,7 @@
 
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { RefObject } from 'react';
 import type {
   ClassId,
@@ -31,8 +31,9 @@ import type {
   PlacementId,
   RelicId,
 } from '@packbreaker/content';
+import { trophyDeltaFor } from '@packbreaker/sim';
 import { CombatOverlay } from './CombatOverlay';
-import { RunProvider } from '../run/RunContext';
+import { RunProvider, useRunContext } from '../run/RunContext';
 
 // M1.5b PR 1: stub ClassSelectScreen so RunProvider transitions through
 // the gate to RunContext.Provider directly. Same pattern as
@@ -326,5 +327,100 @@ describe('CombatOverlay — buildCombatInput propagation (Phase 2.5 Codex P1)', 
     const input = firstCall[0] as CombatInput;
     expect(input.player.classId).toBe('tinker');
     expect(input.player.relics.starter).toBe('apprentices-loop');
+  });
+});
+
+// CF-72 Phase 2 — the render-order invariant the shared-derivation mechanism
+// rests on (decision-log.md 2026-07-15 § "CF-72 Phase 2 Step 0 halt").
+//
+// CombatOverlay computes the panel's trophy number by calling the sim's
+// trophyDeltaFor with (round, ctx.state.state.trophy). That is only correct
+// because RoundResolution paints at phase === 'resolved', STRICTLY BEFORE
+// handleNext → onDone → onCombatDone → applyCombatOutcome commits the mutation.
+// So the trophy the panel reads is the same pre-combat value the sim will read.
+//
+// If a future refactor ever commits the outcome before the panel renders, the
+// overlay would read a POST-win trophy and derive from the wrong inputs — the
+// display would silently disagree with the sim again, which is exactly the CF-38
+// co-drift this mechanism exists to prevent. Nothing else in the suite pins that
+// ordering, so it is asserted here directly rather than left to coincidence.
+describe('CombatOverlay — pre-commit trophy read (CF-72 / CF-38 load-bearing invariant)', () => {
+  const WIN_RESULT: CombatResult = {
+    events: [
+      { tick: 0, type: 'combat_start', playerHp: 30, ghostHp: 30 },
+      {
+        tick: 50,
+        type: 'damage',
+        source: { side: 'player', placementId: 'p0' as PlacementId },
+        target: 'ghost',
+        amount: 30,
+        remainingHp: 0,
+      },
+      {
+        tick: 60,
+        type: 'combat_end',
+        outcome: 'player_win',
+        finalHp: { player: 30, ghost: 0 },
+      },
+    ],
+    outcome: 'player_win',
+    finalHp: { player: 30, ghost: 0 },
+    endedAtTick: 60,
+  };
+
+  it('panel derives from the PRE-combat trophy at phase === resolved, and the sim has not yet committed', async () => {
+    mocks.runCombat.mockReturnValue(WIN_RESULT);
+    const onDone = vi.fn();
+    const reads: Array<{ trophy: number; round: number }> = [];
+
+    function TrophyProbe() {
+      const ctx = useRunContext();
+      reads.push({ trophy: ctx.state.state.trophy, round: ctx.state.state.round });
+      return null;
+    }
+
+    render(
+      <RunProvider>
+        <TrophyProbe />
+        <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+
+    // A win carries meaningful events, so the zero-content bypass does NOT
+    // fire (it is draw-gated) — Phaser mounts and the overlay waits for the
+    // scene's onCombatEnd to move to 'resolved'.
+    await waitFor(() => {
+      expect(mocks.createCombatGame).toHaveBeenCalled();
+    });
+    const sceneOpts = mocks.createCombatGame.mock.calls[0]![1] as {
+      onCombatEnd: () => void;
+    };
+    act(() => {
+      sceneOpts.onCombatEnd();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/VICTORY/)).toBeInTheDocument();
+    });
+
+    // THE INVARIANT: with the resolution panel on screen, the run state still
+    // holds the pre-combat trophy. onDone is a spy here, so nothing has
+    // committed — this is the real ordering, not an artifact of the stub.
+    const atResolution = reads[reads.length - 1]!;
+    expect(atResolution.trophy).toBe(0);
+    expect(atResolution.round).toBe(1);
+    expect(onDone).not.toHaveBeenCalled();
+
+    // And the number rendered is the sim's own derivation over those exact
+    // inputs — round 1 from trophy 0 → +10. Asserting against trophyDeltaFor
+    // rather than the literal 10 is the point: if the ratified schedule ever
+    // changes, this test follows the sim instead of pinning a stale twin.
+    const expected = trophyDeltaFor('win', atResolution.round, atResolution.trophy);
+    expect(expected).toBe(10);
+    expect(screen.getByText(`+${expected}`)).toBeInTheDocument();
+
+    // The commit is what the NEXT click triggers — strictly after the read.
+    fireEvent.click(screen.getByRole('button', { name: /NEXT ROUND/i }));
+    expect(onDone).toHaveBeenCalledTimes(1);
   });
 });
