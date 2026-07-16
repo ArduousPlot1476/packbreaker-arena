@@ -229,7 +229,7 @@ Local saves use `localStorage`, namespaced under `pba.v1.*`.
 - Auth (TBD provider).
 - `POST /v1/ghost` — submit bag snapshot.
 - `GET /v1/ghost?round=X&trophy_band=Y` — fetch matchable ghost.
-- `GET/POST /v1/run/save` — cloud save.
+- `GET/PUT /v1/player/save` — cloud save of meta-progression. **Renamed 2026-07-15 / M2.1 PR3** (was `GET/POST /v1/run/save`): the old name was actively wrong for this surface. `inProgressRun` is device-local by ratification, so nothing "run"-shaped is stored server-side — the route carries meta-progression (trophies, daily streak, last daily attempted) only. `POST`→`PUT` because the write is an idempotent whole-resource replace (`ON CONFLICT (account_id) DO UPDATE`), not a create.
 - `GET /v1/leaderboard/daily?date=Y` — daily contract leaderboard.
 - `POST /v1/replay/validate` — server-side combat re-run for ranked integrity.
 
@@ -280,7 +280,21 @@ type LocalSave = LocalSaveV1
 Versioned from day one. Migrations live in `apps/client/src/persistence/migrations/`. M1.5b PR 3 / 5b.3a authored `SerializedRunState` after Step 0 surfaced that the pre-existing tech-arch reference to `SerializedRunState` was a phantom type (never authored) and that sim's `RunState` (§ 10) is rehydration-incomplete — the run controller carries internal-only mutable state (Rng cursor + 5 others) outside `getState()`. The quiescent-save invariant (fire only at arranging-entry + terminal outcome) keeps the rehydration surface minimal: `phase`, `pendingItems`, `bornFromRecipe`, and `nextPlacementCounter` are implicit / re-derivable / decoupled per Phase 1 ratification; only `rngState` + the two client-owned fields land on the wire.
 
 ### 7.2 Server save format (M2)
-Server stores authoritative trophy and daily streak; client save becomes a cache. Conflict resolution: server wins, client toasts "synced."
+Server stores authoritative trophy, daily streak, and **last daily attempted**; client save becomes a cache. Conflict resolution: server wins, client toasts "synced."
+
+**Amended 2026-07-15 / M2.1 PR3 (write direction + `lastDailyAttempted`).** Two gaps closed:
+
+1. **`lastDailyAttempted` added to the authoritative list** above. It was omitted, yet it is the field the streak is derived from — leaving it client-authoritative while the streak it feeds is server-authoritative is incoherent.
+
+2. **The PULL/PUSH split.** The original sentence only ever described the READ direction. Read as a write rule, "server wins" makes every push a no-op — the client could never persist anything. So:
+   - **PULL** (server → client; on sign-in after account-link 2xx, and on signed-in boot): **unchanged — server wins, client toasts "synced."**
+   - **PUSH** (client → server): body is `{ trophies, lastDailyAttempted }` **ONLY**. **`dailyStreak` is NEVER client-settable** — it is always server-derived from the stored `lastDailyAttempted` plus the current *server* date (yesterday → +1; today → unchanged; else → reset to 1; no recorded attempt → 0). A body carrying `dailyStreak` is a 400, not a silent drop, and a `lastDailyAttempted` that is not the current server date is likewise a 400.
+
+     **Amended 2026-07-15 / M2.1 PR3 (accuracy correction — CF-76).** This clause previously claimed the derivation was "authoritative and **cheat-resistant**". That was **overstated**, and is corrected here: `lastDailyAttempted` is **client-supplied**, so a streak derived from it is one indirection away from client-settable. An authenticated caller can assert "I attempted today" without having attempted anything, and mint an increment. The accurate claim is **bounded, not cheat-resistant**: the server-date gate caps the exposure at **one increment per server day** (pre-gate it was unbounded — alternating stale/today writes drove a streak 2→3→4→5→6 within a single day). Genuine cheat-resistance needs **server-side evidence** of participation — a verified daily-completion event — which does not exist yet (the client does not fetch `/v1/contract/daily` at all; CF-68). Deferred → **CF-76**, sibling to CF-72's trophy trust-model. Dormant meanwhile: no client calls these routes at all (CF-75).
+
+The trophy **trust-model** (absolute value vs delta+schedule vs `/v1/replay/validate` re-simulation) is **explicitly DEFERRED** → CF-72, and does not bind PR3, which only ever pushes zero. Storage shape: table `player_saves`, `account_id` uuid PK **and** FK → `accounts(id) ON DELETE CASCADE` (the PK *is* the 1:1 constraint), `trophies` integer signed with **no** CHECK (gdd.md § 13's "Lose → -trophies" makes it non-monotonic), `daily_streak` integer, `last_daily_attempted` pg `date` (`mode:'string'`, matching the `IsoDate` brand — not a timestamp), `updated_at` timestamptz. No `schemaVersion` column: the table is drizzle-migrated and the DTO is route-versioned; `LocalSaveV1.schemaVersion` stays a client-envelope concern.
+
+Scope as shipped in PR3 (Option A, plumbing-only): the pipe is live but **no producers are wired**, so all three fields sync their stubbed values (0 / null). See decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED".
 
 ---
 

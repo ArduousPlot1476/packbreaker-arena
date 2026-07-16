@@ -4,6 +4,161 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-15 — CF-76 OPENED: daily-attempt trust model (`dailyStreak` is BOUNDED, not cheat-resistant); tech-architecture.md § 7.2's "cheat-resistant" claim corrected — 2nd overstated-canon-claim this PR, deliberately NOT a Drift
+
+Surfaced by Codex round 4 on PR \#45 (review 4709008039, commit 182ebbc), P1. Ordinal walked
+live from canon at write time (highest existing = CF-75).
+
+**CF-76 — daily-attempt trust model.** `lastDailyAttempted` is **client-supplied** (it is in the
+PUT body by ratification), so a `dailyStreak` derived from it is **one indirection away from
+client-settable**. An authenticated caller can assert "I attempted today" without having
+attempted anything and mint an increment. This is a flaw in the RATIFIED DESIGN, not in the
+implementation — routes/playerSave.ts implements the ratified contract faithfully.
+
+**Bounded, not unbounded — the round-2 fix already did real work.** The server-date gate
+(decision-log.md 2026-07-15 § "CF-75 OPENED", commit 5d578d0) caps exposure at **one increment
+per server day**. Pre-gate it was **unbounded**: alternating stale/today writes drove a streak
+2→3→4→5→6 within a single server day, because re-persisting a stale date re-armed the "+1 from
+yesterday" branch. A cap is not immunity, but the difference is not cosmetic.
+
+**Why it is deferred, not fixed.** Genuine cheat-resistance needs **server-side evidence** of
+participation — a verified daily-completion event. None exists: the client does not fetch
+`/v1/contract/daily` at all (**CF-68**, open). Building that inside PR3 would pull CF-68's
+client leg into a plumbing-only PR — the exact scope explosion Option A was ratified to avoid.
+Sibling to **CF-72** (trophy trust-model: absolute vs delta+schedule vs `/v1/replay/validate`
+re-simulation), same shape one field over — a client-asserted value the server cannot presently
+verify.
+
+**DORMANT — and that is precisely the trap.** Nothing calls these routes at all (**CF-75**), so
+today there is no exposure. **Whoever wires CF-75's client caller MUST resolve CF-76 in the same
+PR.** A naive "PUT today's date on quiescent save" caller does not discover this gap — it
+ACTIVATES a known one. Recorded here, at § 7.2, and inline at the derivation site so a future
+reader (or Codex round) meets it in context rather than rediscovering it cold.
+
+**§ 7.2 AMENDED (accuracy correction).** The clause claimed the derivation was "*authoritative
+and cheat-resistant*". Corrected in place to **bounded, not cheat-resistant**, citing CF-76.
+The route's status map is also corrected: a `lastDailyAttempted` that is not the current server
+date is a 400 (previously documented as future-dates-only).
+
+**TAXONOMY — this is NOT a Drift, and the distinction is load-bearing.** This is the SECOND
+overstated-canon claim this PR (after "*PR3 knowingly syncs zeros*", corrected at
+decision-log.md 2026-07-15 § "CF-75 OPENED"). Both are **design-doc/ratification claims that
+overstate what the code does, caught by Codex at PR review**. That is a DIFFERENT shape from
+the Drift ledger, which is reserved for **Topic-2 master-dev-chat paraphrase-vs-canon** drift
+caught at the grounding gate (the Drift 28 / 29 / 30 / 32 / 37 / 38 lineage; see
+decision-log.md 2026-07-11 § "Drift 32 logged" for the exclusion boundary). Minting a Drift ordinal here would blur two
+distinct failure ledgers and inflate the Topic-2 count with events that never happened in the
+master-dev chat. **Drifts stay at 38.** Recorded as a labelled observation; if the recurrence
+(now 2 instances) deserves its own ledger or ordinal class, that is master-dev's call to make,
+not this entry's.
+
+Counter: 59/24/9/38/48 → 59/24/9/38/49 — open-CFs +1 (CF-76 opened; none closed — CF-73 + CF-74
+still close on PR \#45's merge, which has not happened). Catches unchanged at 59 (Codex found it
+in-cycle, pre-merge — no post-merge escape; same ruling as CF-67's Codex P2s and CF-75). Rules
+unchanged at 24; patterns unchanged at 9; **drifts unchanged at 38** (see TAXONOMY above).
+
+## 2026-07-15 — Catch 59 (Class C2 — `updated_at`-advancement claim shipped with zero falsifying test; Catch 58's shape INSIDE the PR that exists to close it) + Pattern 9 codified ("server registers, client never calls", 3 instances)
+
+Both surfaced by the PR3 read-only meta-audit (PR \#45; ceiling bent by ratification at raw
+count 3 rather than waiting for finding \#4 — the Rule-17-sibling early-bend, per
+[[feedback_meta_audit_structural]]'s precedent). Ordinals walked live from canon at write time
+(highest existing catch = 58; highest existing pattern = 8).
+
+**Catch 59 (NEW, Class C2 — framework-internal architecture gap; Rule 4 instance, the THIRD).**
+`db/playerSaveStore.ts`'s upsert sets `updatedAt: sql`now()`` in its `DO UPDATE` branch, with a
+comment asserting "*a write always advances updatedAt even when every other column is
+byte-identical*". **Nothing tested it.** The claim is not self-evident: `updated_at`'s
+`DEFAULT now()` fires on **INSERT ONLY**, so removing the explicit set freezes the column at
+insert time — and every other test in the repo still passes, because none read it. Proven, not
+argued: with the line removed the new test fails `expected 1784159079083 to be greater than
+1784159079083` (identical timestamps — frozen), and passes with it restored.
+
+Same anatomy as **Catch 58** (decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"): a
+belief about a real external system's behaviour at a DB boundary, asserted in a comment,
+unfalsifiable because no test exercises it. The sharp part: this shipped **inside PR3 — the PR
+whose entire purpose was closing that class** (CF-73 / Rule 4 broadened to external-SYSTEM).
+Writing the antidote does not immunise the author from the disease. Caught by the meta-audit,
+not by Codex (Codex passed the surrounding code in rounds 1–3). Code was already CORRECT — the
+defect was the missing falsifier, which is exactly what Rule 4 legislates. Catches 58 → 59.
+
+**Pattern 9 (NEW — "server registers, client never calls").** A server-side or descriptive
+surface ships with its consumer *assumed* rather than verified, so the feature is inert while
+looking complete. Three instances, two of them Codex catches, none caught by a gate:
+- **CF-57** (decision-log.md 2026-07-06 § "CF 57 CLOSED") — `describeItem` advertised an
+  `add_gold` grant no consumer ever applied. CLOSED.
+- **CF-68** (decision-log.md 2026-07-13 § "M2.1 PR1 CLOSED") — daily-contract route: "*server
+  leg closed, client leg open*". OPEN.
+- **CF-75** (decision-log.md 2026-07-15 § "CF-75 OPENED") — `/v1/player/save`: table + both
+  endpoints, zero client callers. OPEN.
+Second-instance threshold passed at CF-68; the third earns the ordinal. Patterns 8 → 9.
+
+**Pattern 9's METHODOLOGICAL half — the part that generalises.** A consumer-count audit MUST
+exclude test-only references. A raw grep/file-count over `apps/client/src` scores
+`/v1/contract/daily` at **1 consumer** — which is `client.test.ts`. **A test reference is not a
+production consumer.** Excluding tests drops it to **0**, consistent with CF-68 being open. So
+the naive audit reports the gap as CLOSED and the careful one reports it OPEN, on the same
+repo, the same day. The audit that found this pattern would have missed two of its own three
+instances if run by file-count. Corollary to [[feedback_verify_field_has_consumer]]: "grep for
+a real consumer" means grep for a **non-test** consumer, and report the enumeration, not the
+count (Rule 18 lineage).
+
+Verified production-consumer sweep at this commit (tests excluded): `/v1/telemetry/batch` → 2 ·
+`/v1/account/link` → 2 · `/v1/contract/daily` → **0** (CF-68) · `/v1/player/save` → **0**
+(CF-75).
+
+Counter: 58/24/8/38/48 → 59/24/9/38/48 — catches +1 (Catch 59, Class C2, 3rd Rule-4 instance);
+patterns +1 (Pattern 9, "server registers, client never calls", 3 instances). Rules unchanged
+at 24 (Rule 4 already covers Catch 59 — this is an instance of it, not a new rule; Pattern 9's
+methodological corollary is recorded as pattern text, not minted as a rule — master-dev's call
+if it should be one). Drifts unchanged at 38. Open-CFs unchanged at 48 (none opened, none
+closed — CF-73 + CF-74 still close on PR \#45's merge, which has not happened).
+
+## 2026-07-15 — CF-75 OPENED: player-save client sync leg unwired (server registers, client never calls — 3rd instance of the class); PR3's "syncs zeros" framing corrected
+
+Surfaced by Codex round 2 on PR \#45 (review 4708847690, commit c48b909), P1, and confirmed
+by repo-wide grep: **zero callers of either `/v1/player/save` endpoint exist in
+apps/client** (`useApiFetch` is still consumed only by `AccountLinkOnSignIn`; the M2.1 PR3
+composer writes `localStorage` only). PR3 ships the table and both routes; nothing invokes
+them.
+
+**CF-75 — player-save client sync leg.** The ratified sync contract
+(decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED") specifies a PULL (server → client,
+on sign-in after account-link 2xx + on signed-in boot) and a PUSH (`{trophies,
+lastDailyAttempted}` on quiescent save). Neither is built. Ordinal walked live from canon
+(highest existing = CF-74).
+
+**NOT a PR3 defect — correctly out of scope, ratified.** Two independent confirmations: the
+ratification's own language — "*it lands the pipe so a later PR wires the taps*" — and its
+four-item scope enumeration ("*PR3 ships the table, the two routes, the H4 composer fix, and
+the real-SQL test*"), which names no client caller. The PR3 Phase 2 hand-off's task list was
+likewise all server-side + docs + H4, with no client-wiring step. CF-75 tracks the gap; it
+does not reopen PR3.
+
+**Framing corrected (the part that WAS wrong).** PR3's stated framing — "**PR3 knowingly syncs
+zeros**" — is inaccurate and is superseded here: with zero callers, PR3 syncs **nothing**, in
+either direction. The zeros are what a client *would* push once CF-75 wires it, because no
+producers exist for the three fields (H3). Those are **two distinct deferrals** — no caller
+(CF-75) and no producers (H3) — and collapsing them into one sentence is what hid the first.
+Corrected in the PR body and in routes/playerSave.ts's header. No prior entry is edited; this
+supersedes the framing.
+
+**PATTERN — "server registers, client never calls", now the THIRD instance.** Sibling to:
+CF-57's `add_gold` (decision-log.md 2026-07-06 § "CF 57 CLOSED") — `describeItem` advertised a
+grant no consumer applied; and CF-68 (decision-log.md 2026-07-13 § "M2.1 PR1 CLOSED") — the
+daily-contract route, "*server leg closed, client leg open*", the same split one milestone
+earlier and **still open**. Each shipped a server-side or descriptive surface whose consumer
+was assumed rather than verified, and each was caught by review rather than by a gate. Two of
+the three were Codex catches. Recorded as an observation for master-dev's disposition — no
+rule is minted here (a codification would be master-dev's call, and the natural antidote,
+"grep for a real consumer before reporting a surface wired", is already
+[[feedback_verify_field_has_consumer]]'s subject and Rule 18's neighbourhood).
+
+Counter: 58/24/8/38/47 → 58/24/8/38/48 — open-CFs +1 (CF-75 opened; none closed this entry —
+CF-73 + CF-74 remain scheduled to close on PR \#45's merge, which has not happened). Catches
+unchanged at 58 (Codex found it in-cycle, pre-merge — no post-merge escape; the shipped/
+committed-defect ruling applies, same as CF-67's Codex P2s). Rules unchanged at 24; patterns
+unchanged at 8; drifts unchanged at 38.
+
 ## 2026-07-14 — Drift 38 logged: Rule 4's boundary term paraphrased as "external-verifier" in master-dev chat; no retroactive edit to any prior entry
 
 Across two consecutive master-dev turns, Rule 4's boundary term was paraphrased as

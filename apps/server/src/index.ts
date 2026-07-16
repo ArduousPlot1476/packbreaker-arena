@@ -15,6 +15,7 @@ import { createApp } from './app.js'
 import { createClerkVerifier } from './clerk/verifier.js'
 import { createAccountStore } from './db/accountStore.js'
 import { createDbClient } from './db/client.js'
+import { createPlayerSaveStore } from './db/playerSaveStore.js'
 import { readEnv } from './env.js'
 import { createPosthogSink } from './posthog/client.js'
 
@@ -33,12 +34,16 @@ async function main(): Promise<void> {
   // Account store for /v1/account/link — derived from the DB handle
   // (null when no DATABASE_URL → the route returns 503).
   const accountStore = db === null ? null : createAccountStore(db.db)
+  // Player-save store for GET/PUT /v1/player/save — same null-or-real
+  // derivation (null when no DATABASE_URL → the routes return 503).
+  const playerSaveStore = db === null ? null : createPlayerSaveStore(db.db)
 
   const app = createApp({
     posthog,
     db,
     clerk,
     accountStore,
+    playerSaveStore,
     logLevel: env.logLevel,
   })
 

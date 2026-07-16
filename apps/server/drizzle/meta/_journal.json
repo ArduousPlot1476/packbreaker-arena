@@ -8,6 +8,13 @@
       "when": 1783972040406,
       "tag": "0000_real_the_captain",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784145884239,
+      "tag": "0001_player_saves",
+      "breakpoints": true
     }
   ]
 }

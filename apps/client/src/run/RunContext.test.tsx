@@ -2708,3 +2708,78 @@ describe('useRun telemetry wiring (M1.5c PR 1 / CF 35 closure)', () => {
     }
   });
 });
+
+// ────────────────────────────────────────────────────────────────────
+// CF-74 (M2.1 PR3) — quiescent-save composer must READ CROSS-SESSION
+// FIELDS THROUGH, never hardcode them.
+//
+// The bug: useRun's save composer wrote literal `trophies: 0,
+// dailyStreak: 0, lastDailyAttempted: null, tutorialCompleted: false`
+// into every quiescent save, destroying whatever the envelope already
+// held. The 2026-05-23 Phase-2.5g meta-audit fixed the CLEAR half
+// (clearLocal preserves these) but not this COMPOSER half. Latent while
+// nothing ever set them non-zero; live the instant PR3 hydrates a
+// server value.
+//
+// This test stages a save whose cross-session fields are all non-default
+// and whose inProgressRun is null (so the resurrection guard bails and a
+// FRESH run starts — exactly the path that re-fires the composer). It
+// then asserts the composer preserved them.
+//
+// Fails on the pre-fix composer: every field comes back zeroed.
+// Covers all FOUR fields — CF-74's ratified three plus tutorialCompleted,
+// a fourth instance of the identical defect (bundled deviation, CF-66
+// precedent).
+// ────────────────────────────────────────────────────────────────────
+
+describe('RunProvider — CF-74 quiescent-save preserves cross-session fields', () => {
+  it('does not zero trophies/dailyStreak/lastDailyAttempted/tutorialCompleted on a quiescent save', async () => {
+    localStorage.clear();
+
+    // inProgressRun: null ⇒ no restore; a fresh run mounts and the
+    // composer fires on the round-1 arranging-entry transition.
+    const staged = {
+      schemaVersion: 1,
+      trophies: 137,
+      dailyStreak: 5,
+      lastDailyAttempted: '2026-07-14',
+      tutorialCompleted: true,
+      telemetryAnonId: '11111111-1111-4111-8111-111111111111',
+      inProgressRun: null,
+    };
+    localStorage.setItem('pba.v1.save', JSON.stringify(staged));
+
+    // Sanity: the staged envelope is valid — loadLocal type-guards and
+    // returns null on a schema miss, which would make the assertions
+    // below vacuous.
+    expect(loadLocal()).not.toBeNull();
+
+    const { queryByTestId } = render(
+      <RunProvider>
+        <GoldDisplay testId="cf74" />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(queryByTestId('cf74')).toBeInTheDocument();
+    });
+
+    // Wait for the composer to actually write a run (proves it fired —
+    // otherwise the fields would trivially survive because nothing wrote).
+    await waitFor(() => {
+      const raw = localStorage.getItem('pba.v1.save');
+      expect(raw).not.toBeNull();
+      const p = JSON.parse(raw!) as { inProgressRun: unknown };
+      expect(p.inProgressRun).not.toBeNull();
+    });
+
+    const after = loadLocal();
+    expect(after).not.toBeNull();
+    // The four cross-session fields survive the composer's write.
+    expect(after!.trophies).toBe(137);
+    expect(after!.dailyStreak).toBe(5);
+    expect(after!.lastDailyAttempted).toBe('2026-07-14');
+    expect(after!.tutorialCompleted).toBe(true);
+    // And the anonId is still the staged one (not regenerated).
+    expect(after!.telemetryAnonId).toBe('11111111-1111-4111-8111-111111111111');
+  });
+});

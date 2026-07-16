@@ -841,12 +841,40 @@ export function useRun() {
       // internal Set) so recipeBonusPct survives save→restore.
       bornFromRecipe: simRun.getRecipeBornPlacementIds(),
     };
+    // CF-74 (M2.1 PR3): READ CROSS-SESSION FIELDS THROUGH — never hardcode.
+    // Pre-fix this composer wrote literal `trophies: 0, dailyStreak: 0,
+    // lastDailyAttempted: null, tutorialCompleted: false` on EVERY quiescent
+    // save, silently destroying any value the envelope already held. The
+    // 2026-05-23 Phase-2.5g meta-audit hardened `clearLocal` to preserve
+    // exactly these fields (persistence/index.ts names the risk outright:
+    // "cumulative trophies resetting on every abandon") — but only the CLEAR
+    // half was fixed; this COMPOSER half kept zeroing them. Latent while
+    // every value was always 0; live the instant PR3 hydrates a non-zero
+    // server value into the envelope.
+    //
+    // Scope note: CF-74 as ratified (decision-log.md 2026-07-14 § "M2.1 PR3
+    // PHASE 1 RATIFIED") names three fields — trophies, dailyStreak,
+    // lastDailyAttempted. `tutorialCompleted` is a FOURTH instance of the
+    // identical defect (persistence/index.ts names "tutorial re-firing" in
+    // the same breath). Reading it through costs nothing — excluding it
+    // would take extra code to keep zeroing it — so the fix covers all four.
+    // Bundled ratified deviation beyond CF-74's named three; CF-66 precedent.
+    //
+    // `?? default` materializes each default AT THE CONSUMPTION POINT, per
+    // the CF-43 rule: the load boundary is a Zod type-GUARD returning the
+    // raw object, so `.default()` output is discarded and a field absent
+    // from an older envelope arrives undefined, not defaulted.
+    const persisted = loadLocal();
     const payload: LocalSaveV1 = {
       schemaVersion: 1,
-      trophies: 0,
-      dailyStreak: 0,
-      lastDailyAttempted: null,
-      tutorialCompleted: false,
+      trophies: persisted?.trophies ?? 0,
+      dailyStreak: persisted?.dailyStreak ?? 0,
+      lastDailyAttempted: persisted?.lastDailyAttempted ?? null,
+      tutorialCompleted: persisted?.tutorialCompleted ?? false,
+      // NOT read through: `anonId` is the stateful value resolved at mount
+      // (lazy initializer reads the persisted id, else mints one). It is
+      // already authoritative here — re-reading storage could only regress
+      // it to a stale value.
       telemetryAnonId: anonId,
       inProgressRun: serialized,
     };

@@ -17,9 +17,11 @@ import { registerClerkAuth } from './clerk/middleware.js'
 import type { ClerkVerifier } from './clerk/verifier.js'
 import type { AccountStore } from './db/accountStore.js'
 import type { DbClient } from './db/client.js'
+import type { PlayerSaveStore } from './db/playerSaveStore.js'
 import type { TelemetrySink } from './posthog/client.js'
 import { registerAccountLinkRoute } from './routes/account.js'
 import { registerDailyContractRoute } from './routes/contract.js'
+import { registerPlayerSaveRoutes } from './routes/playerSave.js'
 import { registerTelemetryRoute } from './routes/telemetry.js'
 
 /** Body cap for incoming batches. Comfortably exceeds the client's
@@ -41,6 +43,13 @@ export interface AppOptions {
    *  (route returns 503). Injected directly so tests fake it without a
    *  live drizzle handle. Derived from `db` in index.ts. */
   readonly accountStore?: AccountStore | null
+  /** Player-save persistence for GET/PUT /v1/player/save. `null`/omitted =
+   *  no DB (routes return 503). Injected directly so tests fake it without
+   *  a live drizzle handle. Derived from `db` in index.ts. */
+  readonly playerSaveStore?: PlayerSaveStore | null
+  /** Injectable clock for date-derived route logic (player-save's daily
+   *  streak). Default: real time. */
+  readonly now?: () => Date
   /** Pino level passed to Fastify's logger. Default: 'info'. */
   readonly logLevel?: string
   /** Override the incoming body cap (bytes). Default: 256 KiB. */
@@ -60,6 +69,11 @@ export function createApp(opts: AppOptions): FastifyInstance {
   registerDailyContractRoute(app)
   registerTelemetryRoute(app, opts.posthog)
   registerAccountLinkRoute(app, opts.accountStore ?? null)
+  registerPlayerSaveRoutes(app, {
+    accounts: opts.accountStore ?? null,
+    saves: opts.playerSaveStore ?? null,
+    now: opts.now,
+  })
 
   // Drain per-dependency buffers/pools on graceful shutdown. Without the
   // posthog drain, events queued inside posthog-node (per flushAt/
