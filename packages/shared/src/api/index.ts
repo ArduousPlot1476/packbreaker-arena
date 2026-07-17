@@ -6,3 +6,4 @@
 // (per tech-architecture.md § 6.1).
 
 export type { DailyContractResponse, TelemetryBatchRequest } from '@packbreaker/content';
+export type { PlayerSaveResponse, PlayerSaveWriteRequest } from '@packbreaker/content';

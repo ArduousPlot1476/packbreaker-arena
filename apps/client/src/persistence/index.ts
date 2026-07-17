@@ -18,7 +18,7 @@
 // types-only since apps/server imports it. See ./storage for the full
 // Catch 19 / 5b.3a pre-push gate-clearance context.
 
-import type { LocalSaveV1 } from '@packbreaker/shared';
+import type { LocalSaveV1, PlayerSaveResponse } from '@packbreaker/shared';
 import type { SaveStorageAdapter } from './storage';
 import { loadRaw, save as storageSave } from './storage';
 import { migrate } from './migrations';
@@ -89,4 +89,34 @@ export function clearLocal(storage?: SaveStorageAdapter): void {
   const loaded = loadLocal(storage);
   if (loaded === null) return;
   saveLocal({ ...loaded, inProgressRun: null }, storage);
+}
+
+/** § 7.2 server-wins hydration (M2.1 CF-75): overwrite the three
+ *  server-authoritative cross-session fields (`trophies`, `dailyStreak`,
+ *  `lastDailyAttempted`) with the values a GET /v1/player/save returned,
+ *  PRESERVING every other envelope field (`telemetryAnonId`, `inProgressRun`,
+ *  `tutorialCompleted`, `schemaVersion`) — the same read → mutate → save
+ *  discipline as `clearLocal`, and the mirror of the composer's read-through
+ *  (useRun.ts, CF-74). No merge logic: the server is authoritative.
+ *
+ *  No-op when no local envelope exists (`loadLocal` null): a signed-in user
+ *  has an eagerly-persisted `telemetryAnonId` (ensureAnonIdPersisted at
+ *  startup), so this is normally non-null; writing a phantom envelope with no
+ *  anonId would be worse than skipping. The next quiescent save composes a
+ *  full envelope from scratch. */
+export function hydratePlayerSave(
+  response: PlayerSaveResponse,
+  storage?: SaveStorageAdapter,
+): void {
+  const loaded = loadLocal(storage);
+  if (loaded === null) return;
+  saveLocal(
+    {
+      ...loaded,
+      trophies: response.trophies,
+      dailyStreak: response.dailyStreak,
+      lastDailyAttempted: response.lastDailyAttempted,
+    },
+    storage,
+  );
 }

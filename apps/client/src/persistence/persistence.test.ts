@@ -31,7 +31,7 @@ import type {
   SimSeed,
 } from '@packbreaker/content';
 import { DEFAULT_RULESET } from '@packbreaker/content';
-import { clearLocal, loadLocal, saveLocal } from './index';
+import { clearLocal, hydratePlayerSave, loadLocal, saveLocal } from './index';
 import { migrate } from './migrations';
 import { migrateV1Identity } from './migrations/v1';
 
@@ -1108,5 +1108,50 @@ describe('persistence — throw-safe globalThis.localStorage access (Phase 2.5 P
         delete (globalThis as { localStorage?: unknown }).localStorage;
       }
     }
+  });
+});
+
+describe('hydratePlayerSave — § 7.2 server-wins (M2.1 CF-75)', () => {
+  it('overwrites the three server-authoritative fields, preserving the rest', () => {
+    const adapter = makeAdapter();
+    saveLocal(
+      makeSave({
+        trophies: 5,
+        dailyStreak: 2,
+        lastDailyAttempted: '2026-07-10' as IsoDate,
+        telemetryAnonId: 'anon-keepme',
+        tutorialCompleted: true,
+      }),
+      adapter,
+    );
+
+    hydratePlayerSave(
+      { trophies: 42, dailyStreak: 7, lastDailyAttempted: '2026-07-16' as IsoDate },
+      adapter,
+    );
+
+    const after = loadLocal(adapter)!;
+    // Server-wins on the three fields...
+    expect(after.trophies).toBe(42);
+    expect(after.dailyStreak).toBe(7);
+    expect(after.lastDailyAttempted).toBe('2026-07-16');
+    // ...everything else preserved (no merge, no clobber).
+    expect(after.telemetryAnonId).toBe('anon-keepme');
+    expect(after.tutorialCompleted).toBe(true);
+    expect(after.inProgressRun).not.toBeNull();
+  });
+
+  it('applies a null lastDailyAttempted (the PR3 zero-state) over a non-null local value', () => {
+    const adapter = makeAdapter();
+    saveLocal(makeSave({ lastDailyAttempted: '2026-07-10' as IsoDate }), adapter);
+    hydratePlayerSave({ trophies: 0, dailyStreak: 0, lastDailyAttempted: null }, adapter);
+    expect(loadLocal(adapter)!.lastDailyAttempted).toBeNull();
+  });
+
+  it('is a no-op when no local envelope exists (never writes a phantom save)', () => {
+    const adapter = makeAdapter();
+    hydratePlayerSave({ trophies: 9, dailyStreak: 1, lastDailyAttempted: null }, adapter);
+    expect(loadLocal(adapter)).toBeNull();
+    expect(adapter.store.size).toBe(0);
   });
 });
