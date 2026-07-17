@@ -4,6 +4,16 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-16 — Rule 26 codified (grep-safe ordinal references)
+
+**Rule 26.** An entry that references a REJECTED or SUPERSEDED ordinal — a catch / rule / CF / drift number that was proposed, discussed, and NOT assigned — must convey it WITHOUT emitting the literal spaced "`<Type> <N>`" token (write "the rejected catch ordinal", "a would-be rule number", or a hyphenated form — never the `Type<space>digits` shape). Rationale: the counter's integrity rests on `grep -oE '<Type> [0-9]+'` highest-ordinal walks; a discussed-but-unassigned number written in the spaced form is silently counted as minted, seeding a phantom ordinal — the exact defect class already on the integrity watch list.
+
+**First instance:** decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED (player-save client caller shipped …)" (commit `239296f`) — its Drift-44 line deliberately withheld the rejected catch token and flagged why, inline. Pattern recognized there; codified here.
+
+**Bend on first instance (recorded, not hidden):** the codification gate normally wants a second instance across two distinct PRs. Bent per the standing criteria — structurally GENERIC (all four ordinal types, any discussed-then-rejected number), LOW-BURDEN (a phrasing discipline, one clause), PREDICTABLE upcoming surface (closes routinely propose-then-reject ordinals; the phantom-ordinal hazard is live, not hypothetical). This entry and the first-instance line both already comply — dogfooded.
+
+Counter: 62/25/9/44/46 → **62/26/9/44/46**. Delta: rules **+1** (Rule 26); catches / patterns / drifts / open-CFs unchanged.
+
 ## 2026-07-16 — CF-75 + CF-76 CLOSED (player-save client caller shipped, plumbing-only / bounded); CF-77 + CF-78 OPENED; CF-68 AMENDED; Drift 43 + 44
 
 ### Merge
