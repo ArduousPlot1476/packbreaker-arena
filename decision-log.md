@@ -4,6 +4,28 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-17 — CF-71 CLOSED (client test-suite hermeticity; VITE_CLERK_PUBLISHABLE_KEY)
+
+### Merge
+
+PR \#48 (`m2.1-cf71-test-hermeticity`) merged into `main` via `--no-ff` at merge commit `140f136b51d8f4711d0e82dbbfabd1dc9cdf83a4` on 2026-07-17. Two parents (`7c17e76` + `cb76619`), no squash/rebase; branch deleted local + remote. Rule 13: 3× cold-cache `turbo run lint typecheck test build --force`, 25/25 tasks green with `apps/client/.env` present — the fix is precisely what lets the gate pass without moving `.env` aside. CI green on `cb76619`; `mergeable_state: clean` pre-merge.
+
+### CF-71 CLOSED — root cause + fix
+
+**Root cause:** client test outcomes depended on ambient env-var state, not a fixed test value. `src/auth/config.ts` reads `import.meta.env.VITE_CLERK_PUBLISHABLE_KEY` into `clerkEnabled` (true iff a non-empty key); the vitest `test` block in `apps/client/vite.config.ts` pinned no env and `test/setup.ts` never touched it, so the key came straight from the ambient environment. Every client test assumes the anonymous path (`clerkEnabled=false` — the CI condition, where no `.env` is committed), and NO test requires clerk enabled, but nothing ENFORCED it. A local `apps/client/.env` with a real key leaked into `import.meta.env` → `clerkEnabled=true` → **8 tests failed** (`AuthProvider` "unconfigured" ×1, `ClassSelectFlow` ×2, `ClassSelectScreen` desktop+mobile ×5) while CI (`ci.yml` Test step sets only `TEST_DATABASE_URL`, no Clerk key) stayed green — proven pre-existing/environmental this session via a stash-test.
+
+**Fix (test-harness only):** pin `VITE_CLERK_PUBLISHABLE_KEY: ''` in the vitest `test.env` (`apps/client/vite.config.ts` `test` block). Empty string → `config.ts` materializes it as `undefined` → `clerkEnabled=false`, deterministically, independent of shell/`.env`. A non-empty dummy would flip `clerkEnabled=true` and re-break the same 8, so empty is the correct fixed value; it matches CI's existing state, so `ci.yml` is unchanged. Scoped to the vitest `test:` block — no build/dev or production Clerk-init change; no new dependency.
+
+**Verified hermetic both directions:** `.env` PRESENT (real key) → 620 pass / 0 fail; `.env` ABSENT (key unset) → 620 pass / 0 fail — identical.
+
+### Codex — 1 round, clean, NO catch (CF-67 applies)
+
+Round 1 (`cb76619`): clean pass, 0 findings ("Didn't find any major issues. Swish!"), landed as the top-level issue-comment clean shape; reviewed SHA matched tip. **No catch number** — the same disposition class as PR \#47's rounds (decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED …"), except here there was nothing to fix or defer: a clean Codex pass is the review working and takes no catch (the CF-67 ruling; decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED").
+
+### Counter
+
+Baseline (tip `7c17e76`) 62/26/9/44/46 → **62/26/9/44/45**. Delta: open-CFs **−1** (CF-71 closed; nothing opened); catches / rules / patterns / drifts unchanged (a clean Codex pass takes no catch per CF-67).
+
 ## 2026-07-16 — Rule 26 codified (grep-safe ordinal references)
 
 **Rule 26.** An entry that references a REJECTED or SUPERSEDED ordinal — a catch / rule / CF / drift number that was proposed, discussed, and NOT assigned — must convey it WITHOUT emitting the literal spaced "`<Type> <N>`" token (write "the rejected catch ordinal", "a would-be rule number", or a hyphenated form — never the `Type<space>digits` shape). Rationale: the counter's integrity rests on `grep -oE '<Type> [0-9]+'` highest-ordinal walks; a discussed-but-unassigned number written in the spaced form is silently counted as minted, seeding a phantom ordinal — the exact defect class already on the integrity watch list.
