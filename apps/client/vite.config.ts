@@ -64,5 +64,20 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: false,
     setupFiles: ['./test/setup.ts'],
+    // CF-71 — hermeticity: pin Clerk's publishable key to empty for the test
+    // run so outcomes never depend on ambient shell / apps/client/.env state.
+    // Every client test assumes the anonymous path (clerkEnabled=false — the
+    // CI condition, where no .env exists), per AuthProvider.test.tsx's header
+    // and the ClassSelect/AuthProvider "unconfigured" suites; NO test requires
+    // clerk enabled. But nothing ENFORCED it: a local .env with a real
+    // VITE_CLERK_PUBLISHABLE_KEY leaked into import.meta.env (src/auth/config.ts)
+    // and flipped clerkEnabled=true, failing 8 tests locally while CI stayed
+    // green. Empty string → config.ts materializes it as `undefined` →
+    // clerkEnabled=false, deterministically. Fixed value, not sourced from .env;
+    // CI (which sets no key) already ran clerkEnabled=false, so it is unchanged.
+    // Test-harness only — no production Clerk-init behavior change.
+    env: {
+      VITE_CLERK_PUBLISHABLE_KEY: '',
+    },
   },
 });
