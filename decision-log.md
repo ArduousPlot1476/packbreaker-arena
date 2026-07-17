@@ -4,6 +4,51 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-16 — CF-75 + CF-76 CLOSED (player-save client caller shipped, plumbing-only / bounded); CF-77 + CF-78 OPENED; CF-68 AMENDED; Drift 43 + 44
+
+### Merge
+
+PR \#47 (`m2.1-cf75-76-player-save-sync`) merged into `main` via `--no-ff` at merge commit `7e8bdb1153c067f340a325482d642755adb2262f`, `merged_at` 2026-07-17T01:04:40Z (UTC commit-day; decision-day 2026-07-16). Two parents (`9d5ab01` + `0ee8181`), no squash/rebase; branch deleted local + remote. Implements decision-log.md 2026-07-16 § "CF-75 + CF-76 Phase 1 RATIFIED" (`9d5ab01`) as ratified. Rule 13: 3× cold-cache `turbo run lint typecheck test build --force`, 25/25 tasks green; CI green on `0ee8181`, `mergeable_state: clean` pre-merge.
+
+### CF-75 CLOSED — player-save client caller wired (plumbing-only)
+
+`getPlayerSave` / `putPlayerSave` (`api/playerSave.ts`, typed against new §14 DTOs `PlayerSaveResponse` / `PlayerSaveWriteRequest`, re-exported via `@packbreaker/shared`). GET fires once per linked session (`PlayerSaveSyncOnSignIn`; § 7.2 server-wins hydration, SILENT — see CF-78); PUT rides the existing quiescent-save trigger (`useRun` `onQuiescentSave` → `usePlayerSavePush`), gated on signed-in + linked. **Plumbing-only:** the PUT body sends the REAL local `trophies` field — a genuine pass-through, currently always 0 because it has no producer, deliberately NOT a hardcoded literal — plus a hardcoded `lastDailyAttempted: null`. Server surface unchanged; no DB/schema change.
+
+### CF-76 CLOSED — resolved as-bounded
+
+Per the Phase 1 ratification (decision-log.md 2026-07-16 § "CF-75 + CF-76 Phase 1 RATIFIED"). The client always sends `lastDailyAttempted: null`, so `dailyStreak` stays 0 until CF-68 wires a real daily attempt. Bounded-not-cheat-resistant posture documented inline at the PUT call site; **CF-68 alone is insufficient** to close the gap (see CF-68 AMENDED below).
+
+### CF-77 OPENED — trophy producer + push-trust-model + write-versioning (one CF, three facets)
+
+Highest existing CF was 76. **One CF, one design question, three facets, deferred together:** (1) trophy-**producer** wiring (in-run `trophy` → account `LocalSaveV1.trophies` at run-end — today `trophies` has no producer, so the pipe syncs 0); (2) **push-trust-model** (absolute value vs. delta+schedule vs. `/v1/replay/validate` re-simulation — how far to trust a client-supplied trophy write); (3) **server-side write versioning / conflict-protection** — Codex round 2's P2, folded in: the unconditional `ON CONFLICT DO UPDATE` upsert has no revision guard, so concurrent PUTs can clobber out of order. Deferred together because the value only matters once a producer emits varying trophies, and whoever resolves the trust model is the same person who must add the version guard — trusting and serializing/versioning a real write are one problem.
+
+### CF-78 OPENED — "synced" notification primitive
+
+`tech-architecture.md § 7.2` specs a "synced" toast on PULL; no toast/notification infrastructure exists in the client. Per the ratified Step-0 decision (③), GET hydration ships SILENT this PR; the toast primitive is deferred here.
+
+### CF-68 AMENDED
+
+CF-68 (daily-contract client-fetch leg) closure MUST land a **server-side participation-evidence mechanism** (a verified daily-completion event) alongside the client-fetch wiring. Wiring CF-68 alone — making the client honestly assert today's date without the server able to verify a real attempt — ACTIVATES CF-76's bounded gap rather than closing it. The two must land together.
+
+### Codex — 2 rounds, NO catch (CF-67 applies)
+
+- **Round 1** (`1d66085`): 1×P1 — pull-vs-push race (`PlayerSaveSyncOnSignIn`'s GET vs. `usePlayerSavePush`'s PUT unsynchronized; an in-flight GET could hydrate a stale value over a just-pushed one). **Fixed pre-merge** via a `hydrated` gate on `AccountLinkContext` serializing GET-before-PUT (set on both settle paths).
+- **Round 2** (`07889b1`): 1×P2 — push-vs-push race (concurrent fire-and-forget PUTs + unconditional server upsert, no version guard). Same root as round 1, second axis. **Ratified-deferred** into CF-77's versioning facet; documented inline at both the PUT site and the server upsert.
+- **NO catch number.** Both are Codex **pre-merge code findings** — one fixed, one deliberately ratified-deferred, both disposed of before merge. That is the review working, not something that escaped it (the CF-67 ruling; decision-log.md 2026-07-14 § "M2.1 PR2 CLOSED" and 2026-07-16 § "M2.1 PR3 CLOSED").
+
+### Telemetry gap (not a CF)
+
+No save/sync event exists in `telemetry-plan.md` or the event schema. Not invented; flagged as a `telemetry-plan.md` amendment candidate only.
+
+### Drifts
+
+- **Drift 43** — a stale "PR2 Codex round 5" reference floated across two turns earlier this session; self-caught, no file touched.
+- **Drift 44** — the Phase 3 hand-off instructed minting a catch for the two Codex findings, contradicting the already-ratified CF-67 disposition (Codex pre-merge code findings take no catch); caught by the Step-0 walk before any write, corrected to Option A pre-commit. (The would-be ordinal is deliberately not written here as a `Catch <n>` token, so a future highest-ordinal grep can't mistake it for a minted catch — the phantom-ordinal hazard already on the watch list.)
+
+### Counter
+
+Baseline (tip `9d5ab01`) 62/25/9/42/46 → **62/25/9/44/46**. Delta: drifts **+2** (Drift 43, Drift 44); catches / rules / patterns unchanged (Codex pre-merge code findings take no catch per CF-67); open-CFs **net 0** (−2 closed: CF-75, CF-76; +2 opened: CF-77, CF-78).
+
 ## 2026-07-16 — CF-75 + CF-76 Phase 1 RATIFIED (save-sync wiring design decided; both stay OPEN pending Phase 2)
 
 Read-only Phase 1 investigation this session confirmed the surface + trust model; master-dev then ratified the disposition below. Design only — no code. Builds on decision-log.md 2026-07-15 § "CF-75 OPENED" / § "CF-76 OPENED" and 2026-07-16 § "M2.1 PR3 CLOSED".
