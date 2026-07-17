@@ -4,6 +4,45 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-17 — CF-77 Phase 1 RATIFIED (trophy trust-model = DELTA; write-versioning = round-ordering guard; terminal-branch fix folded in, mandatory); CF-79 + CF-80 OPENED
+
+Read-only Phase 1 investigation this session traced the trophy pipeline end-to-end (in-run `trophy` accumulator → account `LocalSaveV1.trophies`), enumerated the three trust-model shapes, and confirmed the real `player_saves` schema — zero halts. Master-dev then ruled the disposition below. Design only — no code, no schema, no migration. Builds on decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED (player-save client caller shipped, plumbing-only / bounded); CF-77 + CF-78 OPENED; CF-68 AMENDED; Drift 43 + 44" (CF-77 OPENED).
+
+### Investigation confirmed (read-only, cited)
+
+- **In-run trophy is a within-run accumulator:** `RunControllerImpl.trophy` inits to 0 (`state.ts:289`), written once per resolved round via `this.trophy += trophyDeltaFor(roundOutcome, this.currentRound, this.trophy)` (`state.ts:1045`), exposed as `getState().trophy` (`state.ts:519`); `endRun` never touches it (`state.ts:1285-1307`). Client mirrors to `state.state.trophy` (`RunController.ts:189`).
+- **Producer gap (precise):** the top-level `LocalSaveV1.trophies` — the field actually PUT (`usePlayerSavePush.ts:69`) — is composed as a pure read-through `persisted?.trophies ?? 0` (`useRun.ts:880`), NEVER sourced from run trophy, so it stays 0. Run trophy lands only in `inProgressRun.trophy` (`useRun.ts:849`).
+- **`trophiesAtStart` stub** (`state.ts:520`, `// M2 concern`) is the reserved-but-unpopulated account→run seed slot — the read direction, split out below as CF-80.
+- **Schema (real):** `player_saves(account_id uuid PK→accounts ON DELETE cascade, trophies int NOT NULL DEFAULT 0, daily_streak int NOT NULL DEFAULT 0, last_daily_attempted date, updated_at timestamptz NOT NULL DEFAULT now())` — `drizzle/0001_player_saves.sql`, `db/schema.ts:50-73`. **No version/revision column** (schema header states so). Upsert is unconditional last-write-wins (`playerSaveStore.ts:79-98`).
+- `@packbreaker/sim` is ALREADY a declared server dep (`apps/server/package.json:21`), exporting both `trophyDeltaFor` and `simulateCombat` (`packages/sim/src/index.ts:65,85`) — **no new workspace edge** for Delta or Replay-validate.
+
+### Ratified
+
+1. **Trust model = DELTA.** Server computes the per-round delta itself via the existing `trophyDeltaFor(outcome, round, currentTrophy)` (already server-importable), applied as an ATOMIC increment (SQL `trophies = trophies + <delta>`), NOT a read-modify-write. **Rejected — Absolute:** zero server-side check on a value that feeds ranked ghost-matching (`gdd.md § 13`). **Rejected — Replay-validate:** disproportionate build for current cosmetic-only stakes — no combat input crosses to the server today, so it is a new subsystem, not a field change (deferred as CF-79 below). **Residual trust gap ACCEPTED + NAMED, not hidden:** the server still trusts the client-reported `outcome` / `round`, so a client can claim a win it never played — the same bounded-not-cheat-resistant posture as CF-76's daily leg, acceptable while stakes are cosmetic and closable later by CF-79.
+2. **Write-versioning = purpose-built ROUND-ORDERING guard.** A per-account "last round applied" column (exact name/type deferred to Phase 2) gates the atomic increment: apply only if the incoming round is next-in-sequence, else no-op. Closes BOTH the concurrent-PUT clobber (CF-77 facet 3, ex-CF-75 Codex round 2 P2) AND same-round double-apply on retry. **Rejected — generic `revision` + CAS:** more machinery than the shape needs, plus a conflict round-trip the client must handle. **Rejected — `updated_at`-reuse CAS:** does NOT stop same-round double-apply on retry (a retried identical PUT carries the same round). **Phase-2 gate:** confirm Drizzle's exact conditional-update capability (`WHERE` on `onConflictDoUpdate`, or equivalent) EMPIRICALLY in Phase 2 — do NOT assume it from this ruling.
+3. **Terminal-branch fix — folded into CF-77, MANDATORY.** `useRun.ts:831-834`'s early return (`if (outcome !== 'in_progress') { clearLocal(); return }`) discards the final round's result before any push fires — the terminal transition currently never calls `onQuiescentSave`. Phase 2 MUST push the last round's delta BEFORE `clearLocal()`, not after. Without this the run-deciding round never reaches the server.
+4. **Effort / structure: ~3–4 days, two-PR split** (same Codex-surface-size rationale as the 5b.2 / 5b.3 two-PR precedent). PR1 = server (DTO + validator change, delta compute, migration for the ordering column, atomic increment, server tests); PR2 = client (producer wiring, terminal-branch fix, client tests).
+
+### CF-77 status: Phase 1 RULED → Phase 2 PENDING
+
+CF-77 stays OPEN; closure lands at the PR2 merge per standing convention (closing entries held until a real merge SHA exists). Per Rule 20, the Phase 2 server-PR prompt is gated on THIS entry's commit SHA.
+
+### CF-79 OPENED — Replay-validate deferral
+
+Highest existing CF was 78 (walked live from canon; source decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED …" opened CF-78). Server-side combat re-simulation for ranked integrity — `POST /v1/replay/validate` (`tech-architecture.md § 6.2`; `simulateCombat` reserved for server validation at § 4.2). The heaviest trust-model shape and the one that closes CF-77's residual trust gap (ruling ①). DEFERRED until ranked-ladder stakes materialize (M3, or an explicit ranked-launch gate). Blocker is structural: no combat input crosses to the server today, so this is a new subsystem (client must ship a reconstructable `CombatInput` per validated round + a new route/DTO/validator + ghost sourcing), not a field change.
+
+### CF-80 OPENED — account→run trophy seed direction
+
+Whether a run SEEDS from the persistent account trophy (populating the `trophiesAtStart` stub, `state.ts:520`) or ALWAYS starts at zero — touches `gdd.md § 13` (ranked semantics). SPLIT from CF-77, which is write-back only (run→account); this is the READ direction (account→run) and a distinct design question. Today the run always starts at 0 and `trophiesAtStart` is a dead stub.
+
+### Deferred housekeeping (flagged, NOT actioned this entry)
+
+Stale CF-72→CF-77 citation drift in `validation/playerSave.ts:16-19` ("The trophy TRUST-model … is CF-72") and `routes/playerSave.ts:99` ("sibling to CF-72's trophy trust-model") — CF-72 shipped the award schedule and is closed; the trust-model is CF-77. Flagged for reconciliation at CF-77 close (Rule 25 closure-sweep). Not touched here — this is a docs-only ratification entry.
+
+### Counter
+
+62/26/9/44/45 → **62/26/9/44/47**. Delta: open-CFs **+2** (CF-79 + CF-80 opened; CF-77 stays open — a Phase 1 design ruling is not a closure); catches / rules / patterns / drifts unchanged (a design ratification is not itself a catch — precedent decision-log.md 2026-07-16 § "CF-75 + CF-76 Phase 1 RATIFIED").
+
 ## 2026-07-17 — CF-71 CLOSED (client test-suite hermeticity; VITE_CLERK_PUBLISHABLE_KEY)
 
 ### Merge
