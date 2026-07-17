@@ -51,6 +51,20 @@ export function usePlayerSavePush(): (save: LocalSaveV1) => void {
       // mechanism (a verified daily-completion event). Wiring CF-68 alone,
       // without that evidence mechanism, ACTIVATES the gap rather than closing
       // it. See decision-log.md 2026-07-16 § "CF-75 + CF-76 Phase 1 RATIFIED".
+      //
+      // ── WRITE-ORDERING / VERSIONING (Codex round 2 P2 — DEFERRED, not fixed here) ──
+      // This is a fire-and-forget PUT with NO in-flight serialization, and the
+      // server upsert is unconditional (playerSaveStore.ts `onConflictDoUpdate`,
+      // no revision guard). Two concurrent PUTs — this device on rapid quiescent
+      // saves, or across devices — can arrive out of order and let an OLDER
+      // payload overwrite a newer one. DORMANT today (every body is identical
+      // zeros: trophies 0 / lastDailyAttempted null), live the moment a trophy
+      // producer emits varying values. The robust fix is SERVER-SIDE versioning
+      // (optimistic concurrency), out of this plumbing PR's scope — folded into
+      // the producer + push-trust-model spin-off CF, because how far to trust a
+      // client trophy write and how to serialize/version it are one design
+      // question. NOT a same-axis sibling of the round-1 pull-before-push fix
+      // (that one was fully fixable client-side; this needs the server).
       void putPlayerSave(apiFetch, {
         trophies: save.trophies,
         lastDailyAttempted: null,

@@ -67,6 +67,15 @@ export function createPlayerSaveStore(
       return row === undefined ? null : toRecord(row)
     },
     async upsert(input) {
+      // NOTE (CF-75, Codex round 2 P2 — DEFERRED): this upsert is
+      // UNCONDITIONAL — last-write-wins with NO revision/version guard, so
+      // concurrent client PUTs can land out of order (an older trophy value
+      // clobbering a newer one). Harmless while the client only ever pushes
+      // zeros (plumbing-only, no producer). The fix — optimistic-concurrency
+      // versioning — is folded into the trophy producer + push-trust-model
+      // spin-off CF, since trusting and serializing/versioning a real trophy
+      // write are one design question. See decision-log.md 2026-07-16 §
+      // "CF-75 + CF-76 Phase 1 RATIFIED".
       const rows = await db
         .insert(schema.playerSaves)
         .values({
