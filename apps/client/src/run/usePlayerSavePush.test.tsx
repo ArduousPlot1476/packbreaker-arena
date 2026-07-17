@@ -5,12 +5,14 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LocalSaveV1 } from '@packbreaker/shared';
 
-const { useAccountLinkedMock, fetchSpy } = vi.hoisted(() => ({
+const { useAccountLinkedMock, useSyncHydratedMock, fetchSpy } = vi.hoisted(() => ({
   useAccountLinkedMock: vi.fn(),
+  useSyncHydratedMock: vi.fn(),
   fetchSpy: vi.fn(),
 }));
 vi.mock('../auth/AccountLinkContext', () => ({
   useAccountLinked: () => useAccountLinkedMock(),
+  useSyncHydrated: () => useSyncHydratedMock(),
 }));
 vi.mock('../api/useApiFetch', () => ({ useApiFetch: () => fetchSpy }));
 
@@ -32,10 +34,12 @@ beforeEach(() => {
   fetchSpy.mockReset();
   fetchSpy.mockResolvedValue(new Response('{}', { status: 200 }));
   useAccountLinkedMock.mockReset();
+  useSyncHydratedMock.mockReset();
+  useSyncHydratedMock.mockReturnValue(true); // pull already settled by default
 });
 
 describe('usePlayerSavePush', () => {
-  it('PUTs pass-through trophies + hardcoded lastDailyAttempted:null when linked', async () => {
+  it('PUTs pass-through trophies + hardcoded lastDailyAttempted:null when linked + hydrated', async () => {
     useAccountLinkedMock.mockReturnValue(true);
     const { result } = renderHook(() => usePlayerSavePush());
 
@@ -60,6 +64,17 @@ describe('usePlayerSavePush', () => {
     result.current(save(15));
 
     // Give any stray async a tick; assert nothing fired.
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT PUT when linked but the initial pull has not settled (hydrated=false)', async () => {
+    useAccountLinkedMock.mockReturnValue(true);
+    useSyncHydratedMock.mockReturnValue(false); // pull-before-push serialization
+    const { result } = renderHook(() => usePlayerSavePush());
+
+    result.current(save(15));
+
     await new Promise((r) => setTimeout(r, 10));
     expect(fetchSpy).not.toHaveBeenCalled();
   });

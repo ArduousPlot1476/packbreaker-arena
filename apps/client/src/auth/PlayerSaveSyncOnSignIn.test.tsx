@@ -4,15 +4,22 @@
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { useAccountLinkedMock, getPlayerSaveMock, hydrateMock, stableFetch } =
-  vi.hoisted(() => ({
-    useAccountLinkedMock: vi.fn(),
-    getPlayerSaveMock: vi.fn(),
-    hydrateMock: vi.fn(),
-    stableFetch: vi.fn(),
-  }));
+const {
+  useAccountLinkedMock,
+  setHydratedMock,
+  getPlayerSaveMock,
+  hydrateMock,
+  stableFetch,
+} = vi.hoisted(() => ({
+  useAccountLinkedMock: vi.fn(),
+  setHydratedMock: vi.fn(),
+  getPlayerSaveMock: vi.fn(),
+  hydrateMock: vi.fn(),
+  stableFetch: vi.fn(),
+}));
 vi.mock('./AccountLinkContext', () => ({
   useAccountLinked: () => useAccountLinkedMock(),
+  useSetSyncHydrated: () => setHydratedMock,
 }));
 vi.mock('../api/useApiFetch', () => ({ useApiFetch: () => stableFetch }));
 vi.mock('../api/playerSave', () => ({
@@ -28,6 +35,7 @@ const SERVER_SAVE = { trophies: 3, dailyStreak: 1, lastDailyAttempted: null };
 
 beforeEach(() => {
   useAccountLinkedMock.mockReset();
+  setHydratedMock.mockReset();
   getPlayerSaveMock.mockReset();
   hydrateMock.mockReset();
   getPlayerSaveMock.mockResolvedValue(SERVER_SAVE);
@@ -46,6 +54,26 @@ describe('PlayerSaveSyncOnSignIn', () => {
     render(<PlayerSaveSyncOnSignIn />);
     await waitFor(() => expect(getPlayerSaveMock).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(hydrateMock).toHaveBeenCalledWith(SERVER_SAVE));
+  });
+
+  it('publishes hydrated=true after the pull settles on the SUCCESS path', async () => {
+    useAccountLinkedMock.mockReturnValue(true);
+    render(<PlayerSaveSyncOnSignIn />);
+    await waitFor(() => expect(setHydratedMock).toHaveBeenCalledWith(true));
+  });
+
+  it('publishes hydrated=true even when the pull settles as a FAILURE (null)', async () => {
+    getPlayerSaveMock.mockResolvedValue(null);
+    useAccountLinkedMock.mockReturnValue(true);
+    render(<PlayerSaveSyncOnSignIn />);
+    await waitFor(() => expect(setHydratedMock).toHaveBeenCalledWith(true));
+    expect(hydrateMock).not.toHaveBeenCalled();
+  });
+
+  it('resets hydrated=false while unlinked (re-serializes on re-link)', () => {
+    useAccountLinkedMock.mockReturnValue(false);
+    render(<PlayerSaveSyncOnSignIn />);
+    expect(setHydratedMock).toHaveBeenCalledWith(false);
   });
 
   it('fires the GET only ONCE per linked session (stable across re-render)', async () => {

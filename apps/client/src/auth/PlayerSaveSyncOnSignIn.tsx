@@ -22,17 +22,20 @@ import { useEffect, useRef } from 'react';
 import { useApiFetch } from '../api/useApiFetch';
 import { getPlayerSave } from '../api/playerSave';
 import { hydratePlayerSave } from '../persistence';
-import { useAccountLinked } from './AccountLinkContext';
+import { useAccountLinked, useSetSyncHydrated } from './AccountLinkContext';
 
 export function PlayerSaveSyncOnSignIn() {
   const linked = useAccountLinked();
+  const setHydrated = useSetSyncHydrated();
   const apiFetch = useApiFetch();
   const pulledThisSession = useRef(false);
 
   useEffect(() => {
-    // Reset on unlink (sign-out) so a later sign-in re-pulls.
+    // Reset on unlink (sign-out) so a later sign-in re-pulls AND re-serializes
+    // pull-before-push (hydrated back to false).
     if (!linked) {
       pulledThisSession.current = false;
+      setHydrated(false);
       return;
     }
     if (pulledThisSession.current) return;
@@ -43,16 +46,23 @@ export function PlayerSaveSyncOnSignIn() {
     pulledThisSession.current = true;
 
     let cancelled = false;
-    void getPlayerSave(apiFetch).then((save) => {
-      // null = nothing to hydrate (404/401/503/network/malformed). Only a real
-      // 200 body overwrites local — § 7.2 server-wins, silently (no toast, ③).
-      if (cancelled || save === null) return;
-      hydratePlayerSave(save);
-    });
+    void getPlayerSave(apiFetch)
+      .then((save) => {
+        // null = nothing to hydrate (404/401/503/network/malformed). Only a
+        // real 200 body overwrites local — § 7.2 server-wins, silently (③).
+        if (cancelled || save === null) return;
+        hydratePlayerSave(save);
+      })
+      .finally(() => {
+        // Publish "initial pull settled" on BOTH the success and failure/error
+        // paths, so a failed pull cannot permanently starve pushes this session
+        // (Codex round 1 P1 fix — serialize pull-before-push).
+        if (!cancelled) setHydrated(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [linked, apiFetch]);
+  }, [linked, apiFetch, setHydrated]);
 
   return null;
 }

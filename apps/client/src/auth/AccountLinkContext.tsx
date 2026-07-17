@@ -23,18 +23,25 @@ import {
 interface AccountLinkState {
   readonly linked: boolean;
   readonly setLinked: (linked: boolean) => void;
+  /** True once this linked session's INITIAL pull (GET /v1/player/save) has
+   *  settled — see `hydrated` below. */
+  readonly hydrated: boolean;
+  readonly setHydrated: (hydrated: boolean) => void;
 }
 
 const AccountLinkContext = createContext<AccountLinkState>({
   linked: false,
   setLinked: () => {},
+  hydrated: false,
+  setHydrated: () => {},
 });
 
 export function AccountLinkProvider({ children }: { children: ReactNode }) {
   const [linked, setLinked] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const value = useMemo<AccountLinkState>(
-    () => ({ linked, setLinked }),
-    [linked],
+    () => ({ linked, setLinked, hydrated, setHydrated }),
+    [linked, hydrated],
   );
   return (
     <AccountLinkContext.Provider value={value}>
@@ -52,4 +59,19 @@ export function useAccountLinked(): boolean {
 /** Setter for AccountLinkOnSignIn to publish the linked transition. */
 export function useSetAccountLinked(): (linked: boolean) => void {
   return useContext(AccountLinkContext).setLinked;
+}
+
+/** True once this linked session's INITIAL server pull has settled (success OR
+ *  failure). The PUT push gates on this so a quiescent-save push can never race
+ *  ahead of the initial pull and be clobbered by an in-flight GET's stale read
+ *  (Codex round 1 P1 — currently dormant since all synced values are 0/null,
+ *  but live the moment a trophy producer lands). Set by PlayerSaveSyncOnSignIn;
+ *  reset to false on unlink so a re-link re-serializes pull-before-push. */
+export function useSyncHydrated(): boolean {
+  return useContext(AccountLinkContext).hydrated;
+}
+
+/** Setter for PlayerSaveSyncOnSignIn to publish "the initial pull has settled." */
+export function useSetSyncHydrated(): (hydrated: boolean) => void {
+  return useContext(AccountLinkContext).setHydrated;
 }

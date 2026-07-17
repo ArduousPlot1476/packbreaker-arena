@@ -15,19 +15,23 @@ import { useCallback, useRef } from 'react';
 import type { LocalSaveV1 } from '@packbreaker/shared';
 import { useApiFetch } from '../api/useApiFetch';
 import { putPlayerSave } from '../api/playerSave';
-import { useAccountLinked } from '../auth/AccountLinkContext';
+import { useAccountLinked, useSyncHydrated } from '../auth/AccountLinkContext';
 
 export function usePlayerSavePush(): (save: LocalSaveV1) => void {
   const apiFetch = useApiFetch();
   const linked = useAccountLinked();
-  // Ref so the stable callback reads the live linked value (no stale closure,
+  const hydrated = useSyncHydrated();
+  // Ref so the stable callback reads the live gate values (no stale closure,
   // and no effect re-fire from a changing callback identity).
-  const linkedRef = useRef(linked);
-  linkedRef.current = linked;
+  const gateRef = useRef({ linked, hydrated });
+  gateRef.current = { linked, hydrated };
 
   return useCallback(
     (save: LocalSaveV1) => {
-      if (!linkedRef.current) return; // signed-in + linked gate
+      // signed-in + linked, AND the initial pull has settled — the latter
+      // serializes pull-before-push so a push can't be clobbered by an
+      // in-flight GET's stale hydration (Codex round 1 P1).
+      if (!gateRef.current.linked || !gateRef.current.hydrated) return;
 
       // ── CF-76 BOUNDED POSTURE — read before "hardening" this. ──
       // `trophies` is a GENUINE PASS-THROUGH of the local envelope value. It
