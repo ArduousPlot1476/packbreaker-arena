@@ -69,6 +69,7 @@ import {
   makeRunSeed,
 } from './sim-bridge';
 import type { Recipe } from './types';
+import type { RoundResultReport } from './usePlayerSavePush';
 import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
 import type { RoundNumber } from '@packbreaker/content';
 import { clearLocal, loadLocal, saveLocal } from '../persistence';
@@ -110,16 +111,18 @@ export type OfferCard =
 const BOSS_REWARD_ITEM_ID = 'world-forged-heart' as ItemId;
 
 export interface UseRunOptions {
-  /** CF-75: invoked with the composed LocalSaveV1 immediately after each
-   *  quiescent `saveLocal`, so a server PUT can ride the EXACT same trigger
-   *  (no separate effect, no divergence). Injected by RunProvider — useRun
-   *  stays auth/network-free and unit-testable. Fire-and-forget; must not
-   *  throw. */
-  readonly onQuiescentSave?: (save: LocalSaveV1) => void;
+  /** CF-77 Phase 2 PR2 (R7): invoked by useRun's per-round PRODUCER effect with
+   *  one completed round {runId, round, roundOutcome} as soon as it resolves
+   *  (keyed on history.length), so the server can compute + apply the trophy
+   *  delta. Renamed from CF-75's `onQuiescentSave` (which rode the local-save
+   *  trigger and carried a whole LocalSaveV1) — the Delta model reports a ROUND,
+   *  not a snapshot. Injected by RunProvider, which wraps the push in the
+   *  session-scoped ordered-delivery queue (R5); useRun stays auth/network-free
+   *  and unit-testable. Fire-and-forget; must not throw. */
+  readonly onRoundResult?: (result: RoundResultReport) => void;
 }
 
 export function useRun(options: UseRunOptions = {}) {
-  const { onQuiescentSave } = options;
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   // Sim RunController instance — dynamic-imported when pendingRunInput
@@ -933,13 +936,12 @@ export function useRun(options: UseRunOptions = {}) {
       inProgressRun: serialized,
     };
     saveLocal(payload);
-    // CF-75: mirror the local persist to the server on the SAME quiescent
-    // trigger. RunProvider injects a callback that PUTs when signed-in +
-    // linked; useRun itself stays auth/network-free. Reads `onQuiescentSave`
-    // via closure (stable ref from RunProvider), so it is deliberately absent
-    // from the deps below — same pattern as the state reads. No-op on the
-    // anonymous path (no callback injected).
-    onQuiescentSave?.(payload);
+    // CF-77 Phase 2 PR2 (R1/R2): the server PUSH no longer rides this
+    // quiescent-save effect — it moved to a dedicated per-round PRODUCER effect
+    // keyed on history.length (declared above), which fires once per resolved
+    // round INCLUDING the terminal round (this effect early-returns on the
+    // terminal branch before reaching here, so it could never push it). This
+    // effect is now purely local persistence.
     // Deps intentionally narrow: round + outcome are the only
     // quiescent-transition signals. state.state.gold/bag/rerollCount
     // /trophy ARE read inside the effect (via closure) but are NOT in

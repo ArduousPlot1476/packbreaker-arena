@@ -66,11 +66,12 @@ function RunBootFallback() {
 }
 
 export function RunProvider({ children }: { children: ReactNode }) {
-  // CF-75: mirror each quiescent local save to the server (PUT), gated on
-  // signed-in + linked. useRun invokes this right after saveLocal, so the
-  // push rides the exact same trigger. No-op on the anonymous path.
-  const onQuiescentSave = usePlayerSavePush();
-  const value = useRun({ onQuiescentSave });
+  // CF-77 Phase 2 PR2 (R7): useRun's per-round producer invokes this with one
+  // completed round; the push (usePlayerSavePush) PUTs the Delta body gated on
+  // signed-in + linked + hydrated. No-op on the anonymous path. (R5's
+  // ordered-delivery queue wraps this in commit 5.)
+  const onRoundResult = usePlayerSavePush();
+  const value = useRun({ onRoundResult });
   if (value.simRun === null) {
     if (value.pendingRunInput === null) {
       return (
