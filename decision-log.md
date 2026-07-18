@@ -4,6 +4,48 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-77 Phase 2 PR1 CLOSED (server Delta trust-model + idempotency-record write-versioning for player_saves.trophies); CF-77 stays OPEN (PR2 pending)
+
+### Merge
+
+PR \#49 (`m2.1-cf77-pr1-server`) merged into `main` via `--no-ff` at merge commit `0d008c227b6a2874972db05b5454ac162173a412` on 2026-07-18; branch deleted local + remote. Implements decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED" as ratified, with the write-versioning MECHANISM revised under review (round-ordering guard → idempotency record, round 1 below). CI green on the merged branch tip `2e32368` (`mergeable_state: clean` pre-merge); Rule 13 triple `turbo lint typecheck test --force` green ×3 pre-push, including `//#check-schemas-sync: OK`. Server-only + a minimal client compile/test-compat touch (Option A). CF-77 does NOT close here — PR2 (client producer + terminal-branch fix) remains; closure lands at the PR2 merge per the Phase-1 standing convention.
+
+### What shipped
+
+`PlayerSaveWriteRequest` reshaped `trophies` → `{runId, round, roundOutcome}` (both `content-schemas.ts` mirrors, byte-identical); server computes the per-round delta via `trophyDeltaFor` (SOLE schedule site). Write-versioning = a per-(account, run, round) idempotency record (`applied_round_results`, composite PK; migration `0002`); the delta applies AT MOST ONCE per tuple under a `SELECT … FOR UPDATE` row lock (loss-floor correctness), saturated at int4 max. Canon-derived round cap (`DEFAULT_RULESET.maxRounds × 4` = 44). GET response DTO unchanged. Client push disabled to a no-op until PR2 (Option A).
+
+### Review — 4 Codex rounds + 1 internal adversarial pass + 1 pre-merge meta-audit
+
+Codex, all confirmed, all disposed; per CF-67 none take a catch number:
+- **Round 1 (P1):** the `last_run_id`/`last_round_applied` tracker could not reject a stale retry of an older superseded run → REPLACED by the idempotency record. Revises the Phase-1 "round-ordering guard (last-round-applied column)" write-versioning mechanism.
+- **Round 2 (P2):** cumulative int4 overflow → misleading retryable 503 → JS saturation cap under the lock (one canonical `INT4_MAX`) + a `WarnLogger` clamp-visibility log.
+- **Round 3 (P1):** the idempotency record enforces no ordering → forge-round trophy inflation. Disposed as the Delta model's NAMED accepted residual (server trusts client round; pre-existing, anticipated by the round-1 ruling; Replay-validate/CF-79 is the real fix), DE-AMPLIFIED by tightening `MAX_ROUND` 10000 → 44 (canon-derived).
+- **Round 4 (P1) — ceiling trip:** out-of-order same-run HONEST delivery yields an order-dependent total (loss delta is current-dependent: r2-loss@0→r1-win stores 10 vs real r1-win→r2-loss stores 5). DISTINCT from the round-3 forgery residual — this hits an honest client through network reordering. As the 4th confirmed Codex finding, the reactive-patch ceiling tripped.
+
+**b36d3cc write-form refinement (folded across rounds).** The Phase-1 "atomic increment (SQL `trophies = trophies + <delta>`), NOT a read-modify-write" phrasing shipped as a row-locked, JS-evaluated increment because `trophyDeltaFor`'s loss floor is current-dependent; round 2 further changed it to a JS absolute (min-cap). Cross-references b36d3cc; that entry is unedited (insertion-only holds).
+
+**Catch 63 (Class D co-drift, Pattern 7 lineage) — deliberately NOT CF-67-covered.** The round-2 saturation fix's write-form change (SQL-relative increment → JS absolute) silently invalidated realsql scenario f's ability to falsify a missing `FOR UPDATE` lock (concurrent losses converge to the floor regardless of the lock). It passed the ratified triple-green gate AND CI clean, surfacing ONLY via the internal pre-merge adversarial pass. Classified as a catch on a deliberate walk (NOT no-catch by CF-67 analogy): CF-67 scopes to Codex pre-merge findings; this was a SELF-introduced regression that escaped the green gate. Fixed by scenario i (concurrent DISTINCT-tuple wins on a seeded row), which DOES falsify the lock — proven in CI verbatim on a throwaway branch: with `FOR UPDATE` removed, `i` fails `AssertionError: expected 60 to be 90`; with it, passes (14 realsql / 138 server tests green). Class D = a fix in one dimension silently degraded a guarantee in another; Pattern 7 lineage.
+
+### Ceiling cycle — completed (trip → meta-audit → merge-not-blocked)
+
+PR1's 4-finding ceiling tripped at Codex round 4 (PR1's first and only trip; the ceiling cycle is a recurring process pattern — see [[feedback_meta_audit_structural]] + the prior Phase-X.5g audits in this log — not an ordinal-tracked counter). Per the pre-authorized directive, reactive patching stopped and a comprehensive READ-ONLY pre-merge meta-audit ran (15 agents: 3 independent ordering analyses + a full-surface sweep + adversarial verification). Outcome: (1) merge NOT blocked — UNANIMOUS 3/3 ordering angles, because PR1 is server-only with NO producer, so rounds 3+4 cannot manifest in what PR1 ships; (2) full surface CLEAN — 0 confirmed findings (9 surfaced, all adversarially refuted as review-history / accepted-deferrals (CF-76/CF-68/CF-79) / doc-test nits); (3) round-4 disposition below.
+
+### Round-4 disposition — named bounded honest-client residual; fix earmarked to PR2 Phase 1
+
+Round 4 accepted as a NAMED, bounded (≤~5 per floor-crossing at current<5; ≤~15/run, one-time; client-favorable; never negative/overflow), honest-client CORRECTNESS residual — DISTINCT from the round-3 forgery residual, and NOT reachable in PR1 (no producer). Disposition GATED on PR2 before a producer wires. Fix earmarked to **PR2 Phase 1 = ordered client-side delivery first** (each round's push awaits the prior ack — removes out-of-order at the source, no schedule change, no server machinery), with the **CF-72 order-independent-schedule amendment (global clamp) as the documented fallback**. Three canvassed options REJECTED: (a) defer-to-CF-79 contradicts the M3/ranked-gate ruling made this same session (leaves the honest-player gap live the whole PR2→M3 window); (b) a within-run next-round server guard — its cheap no-op-on-gap variant silently DROPS honest rounds (−10 to prevent a ≤+5 residual), its safe hold-and-drain variant is a hand-rolled mini-CF-79; (c) the CF-72 schedule amendment is a balance-bible-level change, disproportionate as a first resort. **The round-1 drop-ordering ruling is explicitly NOT reversed** (security angle: forgery already dominates, so ordering buys zero integrity; and an ordering guard would REJECT the honest late win — worse for the player).
+
+### Stale-doc cleanup · HELD candidate · non-counter notes
+
+Stale-doc cleanup (comment-only, in-PR per the CF-72-citation-fix precedent): the superseded "round-ordering guard" descriptions in both `PlayerSaveWriteRequest` DTO mirrors + `apps/client/src/api/playerSave.ts`'s header corrected to the idempotency-record mechanism; mirrors verified byte-identical.
+
+HELD candidate (unchanged, still FIRST-instance — NOT codified): "ratification prose under-specifies implementation reality; verify the ratified shape against the code before quoting it as a constraint" — two instances THIS PR (b36d3cc's RMW phrasing; the "server-only / no client changes" scope phrasing). Standing convention wants a SECOND distinct PR before codifying.
+
+Non-counter notes: (i) verification-methodology finding — `turbo … --force` bypasses turbo's cache but NOT `tsc -b`'s `.tsbuildinfo`, so a stale clean result replays as a FALSE GREEN (only `tsc -b --noEmit --force` exposed the client DTO break); flagged as a Rule-2/3 amendment candidate, NOT codified (single instance). (ii) realsql suite verified CI-only (GitHub-Actions Postgres service container); live Neon NOT touched, per the standing ruling.
+
+### Counter
+
+Baseline (tip `b36d3cc`) 62/26/9/44/47 → **63/26/9/44/47**. Delta: catches **+1** (Catch 63 — the scenario-f falsification regression, Class D co-drift / Pattern 7 lineage; NOT CF-67-covered). Rules / patterns / drifts unchanged — the 4 Codex findings take no catch per CF-67; Pattern 7 is LINEAGE not a new pattern; the false-green + the scope-count-2→4 report were a pre-propagation self-catch / incremental discovery respectively, not drifts. Open-CFs unchanged at 47 — CF-77 stays OPEN (PR1 is a sub-PR close; CF-77 closes at the PR2 merge), round-4 folded into CF-77 PR2 (no new CF), nothing else opened or closed.
+
 ## 2026-07-17 — CF-77 Phase 1 RATIFIED (trophy trust-model = DELTA; write-versioning = round-ordering guard; terminal-branch fix folded in, mandatory); CF-79 + CF-80 OPENED
 
 Read-only Phase 1 investigation this session traced the trophy pipeline end-to-end (in-run `trophy` accumulator → account `LocalSaveV1.trophies`), enumerated the three trust-model shapes, and confirmed the real `player_saves` schema — zero halts. Master-dev then ruled the disposition below. Design only — no code, no schema, no migration. Builds on decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED (player-save client caller shipped, plumbing-only / bounded); CF-77 + CF-78 OPENED; CF-68 AMENDED; Drift 43 + 44" (CF-77 OPENED).
