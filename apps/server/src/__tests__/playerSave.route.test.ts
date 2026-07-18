@@ -74,8 +74,6 @@ function fakeSaves(seed: PlayerSaveRecord | null = null): PlayerSaveStore {
         trophies: row?.trophies ?? 0,
         dailyStreak: input.dailyStreak,
         lastDailyAttempted: input.lastDailyAttempted,
-        lastRunId: input.runId,
-        lastRoundApplied: input.round,
         updatedAt: new Date('2026-07-15T00:00:00Z'),
       }
       return row
@@ -175,21 +173,18 @@ describe('GET /v1/player/save', () => {
     })
   })
 
-  it('200 with the stored save (response omits the round-ordering tracker)', async () => {
+  it('200 with the stored save', async () => {
     const res = await build({
       saves: fakeSaves({
         accountId: ACCOUNT_ID,
         trophies: 42,
         dailyStreak: 3,
         lastDailyAttempted: '2026-07-14',
-        lastRunId: 'run-x',
-        lastRoundApplied: 7,
         updatedAt: new Date(),
       }),
     }).inject({ method: 'GET', url: '/v1/player/save', headers: AUTH })
     expect(res.statusCode).toBe(200)
-    // The GET DTO is unchanged by CF-77: trophies/dailyStreak/lastDailyAttempted
-    // only — lastRunId / lastRoundApplied are server-internal and never leak.
+    // The GET DTO is unchanged by CF-77 — trophies/dailyStreak/lastDailyAttempted.
     expect(res.json()).toEqual({
       trophies: 42,
       dailyStreak: 3,
@@ -366,8 +361,6 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         trophies: 0,
         dailyStreak: prev.dailyStreak,
         lastDailyAttempted: prev.lastDailyAttempted,
-        lastRunId: null,
-        lastRoundApplied: null,
         updatedAt: new Date(),
       }),
     })
@@ -439,8 +432,6 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         trophies: 0,
         dailyStreak: 1,
         lastDailyAttempted: YESTERDAY,
-        lastRunId: null,
-        lastRoundApplied: null,
         updatedAt: new Date(),
       }),
     })

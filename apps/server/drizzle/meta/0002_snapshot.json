@@ -1,5 +1,5 @@
 {
-  "id": "4fb4e6e6-3f49-48ba-9246-77f8552daadf",
+  "id": "2876e3ee-d43e-4cb7-9706-32ec380c2704",
   "prevId": "de207f18-3fd5-447e-9afe-d0673b49e5ca",
   "version": "7",
   "dialect": "postgresql",
@@ -51,6 +51,67 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.applied_round_results": {
+      "name": "applied_round_results",
+      "schema": "",
+      "columns": {
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "round": {
+          "name": "round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "applied_at": {
+          "name": "applied_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "applied_round_results_account_id_accounts_id_fk": {
+          "name": "applied_round_results_account_id_accounts_id_fk",
+          "tableFrom": "applied_round_results",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "applied_round_results_account_id_run_id_round_pk": {
+          "name": "applied_round_results_account_id_run_id_round_pk",
+          "columns": [
+            "account_id",
+            "run_id",
+            "round"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.player_saves": {
       "name": "player_saves",
       "schema": "",
@@ -78,18 +139,6 @@
         "last_daily_attempted": {
           "name": "last_daily_attempted",
           "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_run_id": {
-          "name": "last_run_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_round_applied": {
-          "name": "last_round_applied",
-          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },

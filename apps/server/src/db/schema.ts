@@ -14,6 +14,7 @@ import {
   date,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uuid,
@@ -63,17 +64,52 @@ export const playerSaves = pgTable('player_saves', {
    *  break the brand and reintroduce the TZ bugs the brand exists to stop.
    *  Nullable — a player may never have attempted a daily. */
   lastDailyAttempted: date('last_daily_attempted', { mode: 'string' }),
-  /** CF-77 Phase 2 — round-ordering write-versioning tracker (facet 3). The
-   *  per-account "last trophy write applied", used to gate the delta apply so
-   *  concurrent / out-of-order / duplicate pushes can't double-apply or clobber
-   *  (decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"). Together these
-   *  answer "have I already applied this run's round N?". Nullable: a fresh row
-   *  has applied nothing yet. Opaque per-run id (PR2 mints a uuid v4 — the
-   *  server treats it as an opaque key, never parses it). */
-  lastRunId: text('last_run_id'),
-  lastRoundApplied: integer('last_round_applied'),
   /** Last write time (server clock, timezone-aware). */
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),
 })
+
+// CF-77 Phase 2 write-versioning — idempotency record (Codex round 1 P1 fix).
+//
+// One row per (account, run, round) that has ALREADY been applied to
+// player_saves.trophies. This SUPERSEDES the last_run_id/last_round_applied
+// tracker from the first cut of 0002: a per-account "last applied" pair could
+// not distinguish a genuinely-new run from a stale retry of an OLDER, already-
+// superseded run (apply run-A r1 → run-B r1 → a delayed run-A r1 retry looked
+// "unseen" and re-credited). A composite-PK idempotency record rejects that
+// directly — the retry's tuple already exists, so its INSERT no-ops. The old
+// tracker's only real protection was within-run sequencing (its "unseen run"
+// branch accepted ANY round as a fresh run's first submission — it never
+// enforced global ordering), so this is a strict replacement, not an addition.
+// See decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED" (b36d3cc) for the
+// superseded design.
+//
+// GROWTH — KNOWN, NON-BLOCKING future concern (not solved here): this table
+// grows one row per applied round forever. A retention/pruning policy (e.g.
+// drop rows for ended runs, or older than N days) is a follow-up, not part of
+// this PR. Flagged so a future reader plans for it rather than discovering it.
+export const appliedRoundResults = pgTable(
+  'applied_round_results',
+  {
+    /** FK → accounts; cascade so an account delete cleans up its records
+     *  (mirrors player_saves). Part of the composite PK. */
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    /** Opaque per-run id (PR2 mints a uuid v4) — never parsed. */
+    runId: text('run_id').notNull(),
+    round: integer('round').notNull(),
+    /** When this round was first applied (server clock). Observability only —
+     *  the PK is what enforces idempotency. */
+    appliedAt: timestamp('applied_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    /** The idempotency key: a second write of the same (account, run, round)
+     *  conflicts on this PK, so its INSERT ... ON CONFLICT DO NOTHING returns
+     *  no row and the trophy delta is not re-applied. */
+    pk: primaryKey({ columns: [t.accountId, t.runId, t.round] }),
+  }),
+)

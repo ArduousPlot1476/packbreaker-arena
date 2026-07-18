@@ -1,30 +1,30 @@
-// player_saves against REAL Postgres (M2.1 PR3; CF-77 Phase 2 PR1 trophy path).
+// player_saves against REAL Postgres (M2.1 PR3; CF-77 Phase 2 PR1 trophy path,
+// idempotency-record fix from Codex round 1).
 //
 // The ratified requirement: "PR3 MUST include a real-Postgres test for
 // player_saves … a fake-store-only plan is REJECTED" (decision-log.md
-// 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"). CF-77 Phase 2 keeps that bar: the
-// round-ordering gate + the trophyDeltaFor delta apply are SQL/transaction
-// semantics (SELECT … FOR UPDATE serialization, the ON CONFLICT ensure-insert,
-// the atomic increment), so they are asserted HERE against real Postgres, never
-// against the routing fake — the whole point of Form ① is a property a fake
-// cannot exhibit (Catch 58 / Rule 4).
+// 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"). CF-77 keeps that bar: the
+// idempotency gate (the applied_round_results composite-PK ON CONFLICT) + the
+// loss-floor lock (SELECT … FOR UPDATE serialization) are SQL/transaction
+// semantics, so they are asserted HERE against real Postgres, never a fake.
 //
-// The 6 CF-77 scenarios (decision-log.md 2026-07-17 § "CF-77 Phase 2 PR1"):
-//   a. sequential same-run apply — deltas accumulate in order
-//   b. same-round duplicate resend → trophy no-op
-//   c. skip-ahead round → no-op
-//   d. unseen runId after a prior run → accepts, resets the tracker
-//   e. concurrent identical run+round → exactly one applies
+// The CF-77 scenarios (decision-log.md 2026-07-17 § "CF-77 Phase 2 PR1"):
+//   a. sequential same-run apply — deltas accumulate
+//   b. same-round duplicate resend → trophy no-op (PK conflict)
+//   c. skip-ahead round → APPLIES (semantics change vs the superseded tracker —
+//      idempotency enforces no ordering; see the test)
+//   d. unseen runId → applies (new tuple)
+//   e. concurrent identical run+round → exactly one applies (PK conflict blocks
+//      the double)
 //   f. concurrent DIFFERENT-run losses near the floor → never net below zero
-//      (the case Form ① exists to protect: a naive read-then-write nets −5).
+//      (the loss-floor lock; a naive read-then-write nets −5)
+//   g. STALE retry of a superseded run → no-op (the Codex round 1 P1 fix — the
+//      old last_run_id tracker re-credited this; the idempotency record rejects it)
 //
 // Expected trophy values are computed via `trophyDeltaFor` (imported), NOT
-// hand-literals: this asserts "the store threads the SCHEDULE correctly through
-// the gate + accumulation" without pinning numbers that would co-drift if the
-// schedule changed. trophyDeltaFor's own arithmetic is covered by packages/sim.
-//
-// Every test drives createPlayerSaveStore — the same function index.ts wires in
-// production — never a fake.
+// hand-literals — this asserts "the store threads the SCHEDULE correctly" without
+// pinning numbers that would co-drift. trophyDeltaFor's arithmetic is covered by
+// packages/sim. Every test drives createPlayerSaveStore — never a fake.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { trophyDeltaFor } from '@packbreaker/sim'
@@ -40,8 +40,7 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
   let store: PlayerSaveStore
   let accounts: AccountStore
   // Deterministic per-test account ids — each scenario gets a fresh account so
-  // trophy totals + trackers never bleed between tests. A counter (not
-  // Date.now/random) keeps ids stable per run.
+  // trophy totals + applied-round records never bleed between tests.
   let acctSeq = 0
 
   beforeAll(async () => {
@@ -80,14 +79,15 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     })
   }
 
-  // ── Structural (adapted from the PR3 upsert tests to applyRoundResult) ──
+  // ── Structural ──
 
   it('findByAccountId returns null before any write', async () => {
     expect(await store.findByAccountId(await freshAccountId())).toBeNull()
   })
 
-  // The FK IS the 1:1 constraint (PK **is** the FK). A round for a non-existent
-  // account must be rejected BY POSTGRES (the ensure-insert's FK), not app code.
+  // The FK on applied_round_results.account_id (and player_saves) must reject a
+  // round for a non-existent account BY POSTGRES, not app code. The very first
+  // statement (the idempotency insert) trips it.
   it('rejects a round whose account_id has no accounts row (FK violation)', async () => {
     await expect(
       round('00000000-0000-4000-8000-000000000000', 'run-x', 1, 'win'),
@@ -113,28 +113,30 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     expect(typeof found!.lastDailyAttempted).toBe('string')
   })
 
-  // Catch 59, carried forward. applyRoundResult sets `updatedAt: sql`now()`` in
-  // BOTH branches (apply + no-op). Drop it and updated_at silently FREEZES at
-  // insert time — every other test still passes, because none of them read it
-  // (Catch 58's anatomy). A DUPLICATE resend is the isolating case: the trophy
-  // half no-ops, so only the explicit now() in the no-op branch can move
-  // updated_at here.
-  it('updated_at advances on a no-op (duplicate) resend', async () => {
+  // Catch 59, carried forward under the new semantics. applyRoundResult sets
+  // `updatedAt: sql`now()`` in the apply UPDATE; drop it and updated_at silently
+  // FREEZES at the ensure-insert default — every other test still passes because
+  // none read it (Catch 58's anatomy). The isolating case is a DISTINCT applied
+  // round: a duplicate is now a true no-op that never touches the row, so the
+  // apply path is what carries the explicit now(). If it were removed, the second
+  // apply's UPDATE would not advance updated_at past the first.
+  it('updated_at advances on each applied (distinct) round', async () => {
     const acct = await freshAccountId()
     const first = await round(acct, 'run-uat', 1, 'win')
 
     // CLOCK GUARD (Catch 59, Codex round 4 P2). Postgres timestamptz is µs;
     // node-postgres hands back a ms-resolution JS Date, so a sub-ms advance
     // collapses to the same getTime() and the strict assertion flakes. Local
-    // Neon's 40–55ms round-trips masked this by accident; CI's localhost
-    // container lands two writes in the same ms routinely. 10ms clears the 1ms
-    // boundary. Relaxing to >= would pass in the exact scenario this catches.
+    // Neon's 40–55ms round-trips masked this; CI's localhost container lands two
+    // writes in the same ms routinely. 10ms clears the 1ms boundary. Relaxing to
+    // >= would pass in the exact scenario this catches.
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    // Duplicate round-1 resend — a trophy no-op (round 1 ≠ lastRoundApplied+1).
-    const dup = await round(acct, 'run-uat', 1, 'win')
-    expect(dup.trophies).toBe(first.trophies) // trophy half no-op'd
-    expect(dup.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime())
+    const second = await round(acct, 'run-uat', 2, 'win') // distinct round → applies
+    expect(second.trophies).toBeGreaterThan(first.trophies) // it really applied
+    expect(second.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime())
+    const reread = await store.findByAccountId(acct)
+    expect(reread!.updatedAt.getTime()).toBe(second.updatedAt.getTime())
   })
 
   it('ON DELETE CASCADE removes the save when its account is deleted', async () => {
@@ -145,7 +147,7 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     expect(await store.findByAccountId(acct)).toBeNull()
   })
 
-  // ── The 6 CF-77 scenarios ──
+  // ── The CF-77 scenarios ──
 
   it('a. sequential same-run apply — deltas accumulate in order', async () => {
     const acct = await freshAccountId()
@@ -154,54 +156,53 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     await round(acct, run, 2, 'win')
     const after = await round(acct, run, 3, 'loss')
 
-    // Recompute the expected total via the SAME schedule the store uses.
     const t1 = 0 + trophyDeltaFor('win', 1, 0)
     const t2 = t1 + trophyDeltaFor('win', 2, t1)
     const t3 = t2 + trophyDeltaFor('loss', 3, t2)
     expect(after.trophies).toBe(t3)
-    expect(after.lastRunId).toBe(run)
-    expect(after.lastRoundApplied).toBe(3)
   })
 
-  it('b. same-round duplicate resend is a trophy no-op', async () => {
+  it('b. same-round duplicate resend is a trophy no-op (PK conflict)', async () => {
     const acct = await freshAccountId()
     const run = 'run-dup'
     const first = await round(acct, run, 1, 'win')
     const dup = await round(acct, run, 1, 'win')
     expect(first.trophies).toBe(trophyDeltaFor('win', 1, 0))
-    expect(dup.trophies).toBe(first.trophies) // unchanged — applied once
-    expect(dup.lastRoundApplied).toBe(1)
+    expect(dup.trophies).toBe(first.trophies) // the (run,1) tuple already applied
   })
 
-  it('c. skip-ahead round is a no-op (round must be strictly next)', async () => {
+  it('c. a skipped-ahead round now APPLIES (idempotency enforces no ordering)', async () => {
     const acct = await freshAccountId()
     const run = 'run-skip'
     const first = await round(acct, run, 1, 'win')
-    const skip = await round(acct, run, 3, 'win') // skips round 2
-    expect(skip.trophies).toBe(first.trophies) // rejected — needs round 2
-    expect(skip.lastRoundApplied).toBe(1)
+    // SEMANTICS CHANGE vs the superseded last_run_id/last_round_applied tracker:
+    // the tracker no-op'd a skip-ahead (round had to equal lastRoundApplied+1).
+    // The idempotency record rejects ONLY exact (account, run, round) duplicates
+    // and enforces NO ordering, so a never-seen (run, 3) tuple applies. Intended:
+    // global ordering was never actually enforced (the tracker's "unseen run"
+    // branch already accepted any round as a new run's first push), so the
+    // within-run skip-guard was incidental, not load-bearing.
+    const skip = await round(acct, run, 3, 'win') // was a no-op; now applies
+    expect(first.trophies).toBe(trophyDeltaFor('win', 1, 0))
+    expect(skip.trophies).toBe(first.trophies + trophyDeltaFor('win', 3, first.trophies))
   })
 
-  it('d. an unseen runId after a prior run is accepted and resets the tracker', async () => {
+  it('d. an unseen runId is accepted (new tuple)', async () => {
     const acct = await freshAccountId()
     await round(acct, 'run-A', 1, 'win')
     const a2 = await round(acct, 'run-A', 2, 'win')
-    // New run B, round 1 — unseen ⇒ accepted, tracker reset to (B, 1).
     const b1 = await round(acct, 'run-B', 1, 'win')
     expect(b1.trophies).toBe(a2.trophies + trophyDeltaFor('win', 1, a2.trophies))
-    expect(b1.lastRunId).toBe('run-B')
-    expect(b1.lastRoundApplied).toBe(1)
   })
 
   it('e. concurrent identical run+round — exactly one applies', async () => {
     const acct = await freshAccountId()
-    // Two simultaneous round-1 pushes for the SAME run. FOR UPDATE serializes
-    // them; the second sees lastRoundApplied=1 and no-ops. The win delta lands
-    // ONCE, not twice.
+    // Two simultaneous round-1 pushes for the SAME run. The applied_round_results
+    // PK conflict lets exactly one INSERT win; the other returns no row and
+    // no-ops. The win delta lands ONCE, not twice.
     await Promise.all([round(acct, 'run-E', 1, 'win'), round(acct, 'run-E', 1, 'win')])
     const found = await store.findByAccountId(acct)
     expect(found!.trophies).toBe(trophyDeltaFor('win', 1, 0)) // 10, not 20
-    expect(found!.lastRoundApplied).toBe(1)
   })
 
   it('f. concurrent DIFFERENT-run losses near the floor never net below zero', async () => {
@@ -213,13 +214,30 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     const five = 10 + trophyDeltaFor('loss', 2, 10)
     expect(seeded.trophies).toBe(five)
 
-    // Two DIFFERENT runs each report a round-1 loss simultaneously. Both are
-    // unseen, so both pass the gate and BOTH apply. A naive read-then-write
-    // computes both deltas from 5 → 5 + (−5) + (−5) = −5. Form ①'s row lock
-    // makes the second compute its delta from the FLOORED 0, so the floor holds.
+    // Two DIFFERENT runs each report a round-1 loss simultaneously. Both are new
+    // tuples, so both pass the idempotency gate and BOTH apply. A naive read-
+    // then-write computes both deltas from 5 → 5 + (−5) + (−5) = −5. The
+    // SELECT … FOR UPDATE lock makes the second compute its delta from the
+    // FLOORED 0, so the floor holds.
     await Promise.all([round(acct, 'run-B', 1, 'loss'), round(acct, 'run-C', 1, 'loss')])
     const found = await store.findByAccountId(acct)
     expect(found!.trophies).toBe(0) // floored, NOT −5
-    expect(found!.trophies).toBeGreaterThanOrEqual(0) // the invariant Form ① protects
+    expect(found!.trophies).toBeGreaterThanOrEqual(0) // the invariant the lock protects
+  })
+
+  it('g. a stale retry of a SUPERSEDED run is a no-op (Codex round 1 P1 fix)', async () => {
+    const acct = await freshAccountId()
+    // Codex's exact scenario. The superseded last_run_id tracker treated the
+    // stale run-A retry as "unseen" (lastRunId had advanced to run-B) and
+    // re-credited run-A's delta. The idempotency record rejects it: (acct,
+    // run-A, 1) already exists, so the retry's INSERT no-ops.
+    const a1 = await round(acct, 'run-A', 1, 'win') // 0 → 10
+    const b1 = await round(acct, 'run-B', 1, 'win') // 10 → 20 (new tuple)
+    const staleA1 = await round(acct, 'run-A', 1, 'win') // delayed retry → no-op
+
+    expect(a1.trophies).toBe(trophyDeltaFor('win', 1, 0)) // 10
+    expect(b1.trophies).toBe(a1.trophies + trophyDeltaFor('win', 1, a1.trophies)) // 20
+    // run-A round 1 applied exactly ONCE. The bug produced 20 + 10 = 30.
+    expect(staleA1.trophies).toBe(b1.trophies) // still 20
   })
 })
