@@ -1,26 +1,59 @@
-// Player-save store — DI seam over the player_saves table (M2.1 PR3).
-//
-// Mirrors db/accountStore.ts (itself the CF-49 posthog-sink pattern):
-// `PlayerSaveStore` is the narrow interface the routes depend on, NOT
-// drizzle's full surface. Tests inject an in-memory fake for the route's
-// status-map paths.
+// Player-save store — DI seam over player_saves (M2.1 PR3; trophy write-path
+// reworked in CF-77 Phase 2 PR1, idempotency-record fix in Codex round 1).
 //
 // CF-73 / Catch 58 — READ THIS BEFORE ADDING A FAKE-ONLY TEST. PR2's
 // createAccountStore shipped with ZERO tests touching its real SQL: the
 // route test injected a fake that HAND-MIRRORED the author's BELIEF about
 // ON CONFLICT semantics, so the belief was never falsifiable. That is
-// CF-70's exact anatomy (verifier.ts believed verifyToken returned
-// `{data, errors}`; both pass forever if the belief is wrong). Rule 4, as
-// broadened at decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED",
-// now reads: "at least one test per external-SYSTEM boundary must exercise
-// the REAL system's behaviour, not an assumed one" — databases included.
-// The fake below is therefore NOT the coverage story: __tests__/
-// playerSaveStore.realsql.test.ts drives THIS module against a real
-// Postgres, and the same harness closes CF-73 for AccountStore.
+// CF-70's exact anatomy. Rule 4 (broadened, decision-log.md 2026-07-14 §
+// "M2.1 PR3 PHASE 1 RATIFIED"): "at least one test per external-SYSTEM
+// boundary must exercise the REAL system's behaviour" — databases included.
+// The fake is NOT the coverage story: __tests__/realsql/playerSaveStore.
+// realsql.test.ts drives THIS module against real Postgres, and it is the
+// ONLY place the idempotency gate + the loss-floor lock are asserted.
+//
+// TRUST MODEL — DELTA (CF-77 Phase 2). The client never sends a trophy value.
+// `applyRoundResult` takes a completed round and computes the delta ITSELF via
+// `trophyDeltaFor` — the SOLE schedule-derivation site (no SQL re-derivation of
+// the win bonus or loss floor anywhere here; that would fork the derivation and
+// reintroduce the CF-38 co-drift `trophyDeltaFor` exists to prevent).
+//
+// WRITE-VERSIONING — IDEMPOTENCY RECORD (Codex round 1 P1 fix). The first cut of
+// this used a per-account last_run_id/last_round_applied tracker; Codex correctly
+// showed it could not distinguish a genuinely-new run from a STALE retry of an
+// older, already-superseded run (apply run-A r1 → run-B r1 → a delayed run-A r1
+// retry looked "unseen" and re-credited). Replaced by an `applied_round_results`
+// row per (account, run, round): the delta is applied AT MOST ONCE per tuple,
+// because a second write of the same tuple conflicts on the composite PK and its
+// INSERT ... ON CONFLICT DO NOTHING returns no row. This rejects duplicates,
+// stale older-run retries, and concurrent double-fires uniformly. It enforces NO
+// round ordering — a skip-ahead round is a never-seen tuple and applies (the old
+// tracker's within-run skip-guard was incidental: its "unseen run" branch already
+// accepted any round as a new run's first push, so global ordering was never
+// enforced). See schema.ts appliedRoundResults + decision-log.md 2026-07-17
+// § "CF-77 Phase 1 RATIFIED" (b36d3cc, superseded gate design).
+//
+// The SELECT ... FOR UPDATE on player_saves is STILL required, unchanged: on a
+// genuinely-new claim the delta is computed in JS from the LOCKED current value,
+// which is what keeps the loss floor correct under concurrent DIFFERENT-run
+// writes (two round-1 losses near zero must net the floor, not below it — the
+// second writer must see the first's committed, floored trophies).
 
 import { eq, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { trophyDeltaFor } from '@packbreaker/sim'
+import type { RoundOutcome } from '@packbreaker/content'
+import type { WarnLogger } from '../logging.js'
 import * as schema from './schema.js'
+
+/** Postgres int4 ceiling. `player_saves.trophies` is int4, and the cumulative
+ *  total has no upper bound of its own (Codex round 2 P2), so a running sum is
+ *  SATURATED here — an overflow would otherwise throw `integer out of range` and
+ *  the route's catch maps that to a RETRYABLE 503 for a request that can never
+ *  succeed. Only the win path can reach it (loss deltas are non-positive after
+ *  trophyDeltaFor's floor). This is a post-computation clamp, NOT schedule math —
+ *  trophyDeltaFor stays the sole delta derivation; the cap never feeds back in. */
+const INT4_MAX = 2_147_483_647
 
 /** A player_saves row as the routes see it. `updatedAt` is server-owned. */
 export interface PlayerSaveRecord {
@@ -32,11 +65,15 @@ export interface PlayerSaveRecord {
   readonly updatedAt: Date
 }
 
-/** The fields a write supplies. `dailyStreak` is included because the ROUTE
- *  derives it server-side — it is never taken from the request body. */
-export interface PlayerSaveWrite {
+/** A completed-round report — the input to `applyRoundResult`. The trophy
+ *  delta is NOT here: the server derives it from (roundOutcome, round,
+ *  current). `dailyStreak` IS here because the ROUTE derives it server-side. */
+export interface PlayerSaveRoundWrite {
   readonly accountId: string
-  readonly trophies: number
+  /** Opaque per-run id (uuid v4, client-minted) — never parsed here. */
+  readonly runId: string
+  readonly round: number
+  readonly roundOutcome: RoundOutcome
   readonly dailyStreak: number
   readonly lastDailyAttempted: string | null
 }
@@ -45,16 +82,21 @@ export interface PlayerSaveWrite {
 export interface PlayerSaveStore {
   /** The account's save row, or null if it has never been written. */
   findByAccountId(accountId: string): Promise<PlayerSaveRecord | null>
-  /** Inserts the row, or updates it if one already exists
-   *  (`ON CONFLICT (account_id) DO UPDATE`). Returns the persisted row.
-   *  Upsert — not insert-then-update — so a concurrent first-write cannot
-   *  500 on the primary key (R2 precedent: PR2's account create). */
-  upsert(input: PlayerSaveWrite): Promise<PlayerSaveRecord>
+  /** Applies one completed round's trophy delta AT MOST ONCE per
+   *  (account, run, round), via an idempotency record. On a genuinely-new
+   *  tuple it computes the delta from the locked current trophies and writes
+   *  trophies + the server-derived daily fields. On a duplicate / stale /
+   *  concurrent-double tuple it is a no-op and returns the current row. Returns
+   *  the resulting row (absolute trophy total) for the GET-shaped response. */
+  applyRoundResult(input: PlayerSaveRoundWrite): Promise<PlayerSaveRecord>
 }
 
-/** Builds the real store over a drizzle handle (player_saves schema). */
+/** Builds the real store over a drizzle handle (player_saves schema). `log`
+ *  follows the DI-seam logger pattern (posthog/db/clerk seams) — used only for
+ *  the rare int4-saturation warning. */
 export function createPlayerSaveStore(
   db: NodePgDatabase<typeof schema>,
+  log: WarnLogger,
 ): PlayerSaveStore {
   return {
     async findByAccountId(accountId) {
@@ -66,46 +108,100 @@ export function createPlayerSaveStore(
       const row = rows[0]
       return row === undefined ? null : toRecord(row)
     },
-    async upsert(input) {
-      // NOTE (CF-75, Codex round 2 P2 — DEFERRED): this upsert is
-      // UNCONDITIONAL — last-write-wins with NO revision/version guard, so
-      // concurrent client PUTs can land out of order (an older trophy value
-      // clobbering a newer one). Harmless while the client only ever pushes
-      // zeros (plumbing-only, no producer). The fix — optimistic-concurrency
-      // versioning — is folded into the trophy producer + push-trust-model
-      // spin-off CF, since trusting and serializing/versioning a real trophy
-      // write are one design question. See decision-log.md 2026-07-16 §
-      // "CF-75 + CF-76 Phase 1 RATIFIED".
-      const rows = await db
-        .insert(schema.playerSaves)
-        .values({
-          accountId: input.accountId,
-          trophies: input.trophies,
-          dailyStreak: input.dailyStreak,
-          lastDailyAttempted: input.lastDailyAttempted,
-        })
-        .onConflictDoUpdate({
-          target: schema.playerSaves.accountId,
-          set: {
-            trophies: input.trophies,
+
+    async applyRoundResult(input) {
+      return db.transaction(async (tx) => {
+        // Idempotency claim: record (account, run, round) as applied. The
+        // composite PK means a duplicate — a same-run resend, a STALE retry of
+        // an older superseded run (Codex round 1 P1), or a concurrent double-
+        // fire — conflicts and returns no row.
+        const claimed = await tx
+          .insert(schema.appliedRoundResults)
+          .values({
+            accountId: input.accountId,
+            runId: input.runId,
+            round: input.round,
+          })
+          .onConflictDoNothing()
+          .returning()
+
+        if (claimed.length === 0) {
+          // Already applied — trophy no-op. Return the current save unchanged;
+          // no mutation and no updatedAt advance (a true idempotent no-op). The
+          // daily fields on THIS push are dropped, which is correct: they are
+          // orthogonal and idempotent, and were recorded on the round's FIRST
+          // apply. A save row is guaranteed to exist (an applied record implies
+          // a prior apply created it); the ensure-insert is belt-and-suspenders
+          // for the impossible record-without-save state so the response stays
+          // coherent rather than 503-ing.
+          await tx
+            .insert(schema.playerSaves)
+            .values({ accountId: input.accountId })
+            .onConflictDoNothing({ target: schema.playerSaves.accountId })
+          const cur = await tx
+            .select()
+            .from(schema.playerSaves)
+            .where(eq(schema.playerSaves.accountId, input.accountId))
+            .limit(1)
+          return toRecord(requireRow(cur))
+        }
+
+        // Genuinely new (account, run, round). Ensure the player_saves row
+        // exists and LOCK it — required for the loss floor under concurrent
+        // DIFFERENT-run writes (the delta below is computed from the locked
+        // value, so a second concurrent writer sees this write's committed,
+        // floored result before computing its own).
+        await tx
+          .insert(schema.playerSaves)
+          .values({ accountId: input.accountId })
+          .onConflictDoNothing({ target: schema.playerSaves.accountId })
+        const locked = await tx
+          .select()
+          .from(schema.playerSaves)
+          .where(eq(schema.playerSaves.accountId, input.accountId))
+          .for('update')
+        const row = requireRow(locked)
+
+        // trophyDeltaFor is the SOLE schedule derivation, from the LOCKED
+        // current trophy. Under the lock row.trophies is the value the sum
+        // applies to, so writing the computed absolute is equivalent to the
+        // atomic increment. The running total is SATURATED at INT4_MAX (Codex
+        // round 2 P2) — a post-computation clamp, never fed back into the
+        // schedule. The loss floor lives entirely inside trophyDeltaFor.
+        const delta = trophyDeltaFor(input.roundOutcome, input.round, row.trophies)
+        const rawTotal = row.trophies + delta
+        const newTotal = Math.min(rawTotal, INT4_MAX)
+        if (rawTotal > INT4_MAX) {
+          log.warn(
+            `player_saves.trophies clamped at int4 max (${INT4_MAX}) for account ` +
+              `${input.accountId}: cumulative total ${rawTotal} would overflow the column`,
+          )
+        }
+        const updated = await tx
+          .update(schema.playerSaves)
+          .set({
+            trophies: newTotal,
             dailyStreak: input.dailyStreak,
             lastDailyAttempted: input.lastDailyAttempted,
-            // Server clock, not a client value — a write always advances
-            // updatedAt even when every other column is byte-identical.
             updatedAt: sql`now()`,
-          },
-        })
-        .returning()
-      const row = rows[0]
-      if (row === undefined) {
-        // Unreachable: DO UPDATE always returns the row (unlike DO NOTHING,
-        // which returns nothing on conflict). Guard rather than assert —
-        // a silent undefined here would surface as a confusing 500.
-        throw new Error('player_saves upsert returned no row')
-      }
-      return toRecord(row)
+          })
+          .where(eq(schema.playerSaves.accountId, input.accountId))
+          .returning()
+        return toRecord(requireRow(updated))
+      })
     },
   }
+}
+
+function requireRow(
+  rows: ReadonlyArray<typeof schema.playerSaves.$inferSelect>,
+): typeof schema.playerSaves.$inferSelect {
+  const row = rows[0]
+  if (row === undefined) {
+    // Unreachable: every path ensures/locks the row by PK before this.
+    throw new Error('player_saves row missing')
+  }
+  return row
 }
 
 function toRecord(row: typeof schema.playerSaves.$inferSelect): PlayerSaveRecord {

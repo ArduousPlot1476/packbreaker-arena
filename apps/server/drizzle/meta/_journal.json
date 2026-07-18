@@ -15,6 +15,13 @@
       "when": 1784145884239,
       "tag": "0001_player_saves",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784335536356,
+      "tag": "0002_applied_round_results",
+      "breakpoints": true
     }
   ]
 }

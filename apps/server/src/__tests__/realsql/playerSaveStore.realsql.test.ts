@@ -1,214 +1,325 @@
-// player_saves against REAL Postgres (M2.1 PR3).
+// player_saves against REAL Postgres (M2.1 PR3; CF-77 Phase 2 PR1 trophy path,
+// idempotency-record fix from Codex round 1).
 //
 // The ratified requirement: "PR3 MUST include a real-Postgres test for
 // player_saves … a fake-store-only plan is REJECTED" (decision-log.md
-// 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"). This is that test.
+// 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"). CF-77 keeps that bar: the
+// idempotency gate (the applied_round_results composite-PK ON CONFLICT) + the
+// loss-floor lock (SELECT … FOR UPDATE serialization) are SQL/transaction
+// semantics, so they are asserted HERE against real Postgres, never a fake.
 //
-// NOTE ON ATTRIBUTION: this file does NOT close CF-74. CF-74 is the
-// composer hardcoded-zero bug in the CLIENT (useRun.ts) — no SQL test can
-// close it; its closure is the H4 fix + its regression test in
-// RunContext.test.tsx. This file is its own ratified DoD item.
+// The CF-77 scenarios (decision-log.md 2026-07-17 § "CF-77 Phase 2 PR1"):
+//   a. sequential same-run apply — deltas accumulate
+//   b. same-round duplicate resend → trophy no-op (PK conflict)
+//   c. skip-ahead round → APPLIES (semantics change vs the superseded tracker —
+//      idempotency enforces no ordering; see the test)
+//   d. unseen runId → applies (new tuple)
+//   e. concurrent identical run+round → exactly one applies (PK conflict blocks
+//      the double)
+//   f. concurrent DIFFERENT-run losses near the floor → never net below zero
+//      (pins the loss floor; NOTE — since the round-2 absolute-write change this
+//      no longer discriminates on FOR UPDATE; see the test + scenario i)
+//   g. STALE retry of a superseded run → no-op (the Codex round 1 P1 fix — the
+//      old last_run_id tracker re-credited this; the idempotency record rejects it)
+//   h. cumulative trophies saturate at int4 max + clamp warning (Codex round 2 P2)
+//   i. concurrent DISTINCT-tuple wins all apply — the FOR UPDATE lost-update guard
+//      (the test that actually falsifies a missing lock; proven in CI)
 //
-// Every test drives createPlayerSaveStore — the same function index.ts
-// wires in production — never a fake.
+// Expected trophy values are computed via `trophyDeltaFor` (imported), NOT
+// hand-literals — this asserts "the store threads the SCHEDULE correctly" without
+// pinning numbers that would co-drift. trophyDeltaFor's arithmetic is covered by
+// packages/sim. Every test drives createPlayerSaveStore — never a fake.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { createAccountStore } from '../../db/accountStore.js'
+import { trophyDeltaFor } from '@packbreaker/sim'
+import { createAccountStore, type AccountStore } from '../../db/accountStore.js'
 import {
   createPlayerSaveStore,
   type PlayerSaveStore,
 } from '../../db/playerSaveStore.js'
 import { REAL_SQL_AVAILABLE, setupRealDb, type RealDb } from './harness.js'
 
-describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (M2.1 PR3)', () => {
+describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 2)', () => {
   let real: RealDb
   let store: PlayerSaveStore
-  let accountId: string
+  let accounts: AccountStore
+  // Deterministic per-test account ids — each scenario gets a fresh account so
+  // trophy totals + applied-round records never bleed between tests.
+  let acctSeq = 0
 
   beforeAll(async () => {
     real = await setupRealDb()
-    store = createPlayerSaveStore(real.db)
-    const accounts = createAccountStore(real.db)
-    const account = await accounts.createIfAbsent({
-      clerkUserId: 'user_ps_owner',
-      anonIdAtSignup: 'anon-ps',
-    })
-    accountId = account!.id
+    store = createPlayerSaveStore(real.db, { warn: () => {} })
+    accounts = createAccountStore(real.db)
   })
   afterAll(async () => {
     await real?.close()
   })
 
-  it('findByAccountId returns null before any write', async () => {
-    expect(await store.findByAccountId(accountId)).toBeNull()
-  })
-
-  it('upsert inserts, then UPDATES on conflict rather than throwing on the PK', async () => {
-    const first = await store.upsert({
-      accountId,
-      trophies: 10,
-      dailyStreak: 1,
-      lastDailyAttempted: '2026-07-14',
-    })
-    expect(first.trophies).toBe(10)
-
-    // Same PK again — ON CONFLICT (account_id) DO UPDATE. A plain insert
-    // would raise a duplicate-key error here; that is the whole point.
-    const second = await store.upsert({
-      accountId,
-      trophies: 25,
-      dailyStreak: 2,
-      lastDailyAttempted: '2026-07-15',
-    })
-    expect(second.trophies).toBe(25)
-    expect(second.dailyStreak).toBe(2)
-    expect(second.lastDailyAttempted).toBe('2026-07-15')
-
-    // Still exactly ONE row — an upsert, not a second insert.
-    const found = await store.findByAccountId(accountId)
-    expect(found!.trophies).toBe(25)
-  })
-
-  it('concurrent first-write upserts do not 500 on the primary key', async () => {
-    const accounts = createAccountStore(real.db)
+  async function freshAccountId(): Promise<string> {
+    acctSeq += 1
     const acc = await accounts.createIfAbsent({
-      clerkUserId: 'user_ps_race',
-      anonIdAtSignup: 'anon-race',
+      clerkUserId: `user_cf77_${acctSeq}`,
+      anonIdAtSignup: `anon_cf77_${acctSeq}`,
     })
-    // Both callers see "no row" and both write — the R2 race, in real SQL.
-    const [a, b] = await Promise.all([
-      store.upsert({ accountId: acc!.id, trophies: 1, dailyStreak: 1, lastDailyAttempted: null }),
-      store.upsert({ accountId: acc!.id, trophies: 2, dailyStreak: 1, lastDailyAttempted: null }),
-    ])
-    expect([a.trophies, b.trophies].sort()).toEqual([1, 2])
-    // One row survives; last write wins.
-    const found = await store.findByAccountId(acc!.id)
-    expect([1, 2]).toContain(found!.trophies)
-  })
+    return acc!.id
+  }
 
-  // The FK is the 1:1 constraint (PK **is** the FK). A save for a
-  // non-existent account must be rejected BY POSTGRES, not by app code.
-  it('rejects a save whose account_id has no accounts row (FK violation)', async () => {
-    await expect(
-      store.upsert({
-        accountId: '00000000-0000-4000-8000-000000000000',
-        trophies: 0,
-        dailyStreak: 0,
-        lastDailyAttempted: null,
-      }),
-    ).rejects.toThrow()
-  })
-
-  // trophies is SIGNED with NO CHECK — gdd.md § 13 "Lose → -trophies"
-  // makes it non-monotonic. If someone later "helpfully" adds a
-  // non-negative CHECK, this test fails and says why.
-  it('accepts NEGATIVE trophies — the column is deliberately CHECK-free', async () => {
-    const saved = await store.upsert({
+  /** A round report with the daily fields fixed (orthogonal to the trophy
+   *  path — every trophy scenario holds them constant). */
+  function round(
+    accountId: string,
+    runId: string,
+    r: number,
+    roundOutcome: 'win' | 'loss',
+  ) {
+    return store.applyRoundResult({
       accountId,
-      trophies: -7,
+      runId,
+      round: r,
+      roundOutcome,
       dailyStreak: 0,
       lastDailyAttempted: null,
     })
-    expect(saved.trophies).toBe(-7)
+  }
+
+  // ── Structural ──
+
+  it('findByAccountId returns null before any write', async () => {
+    expect(await store.findByAccountId(await freshAccountId())).toBeNull()
   })
 
-  // last_daily_attempted is pg `date` mode:'string' — it must round-trip as
-  // a plain YYYY-MM-DD string, NOT a JS Date (which would break the IsoDate
-  // brand and reintroduce the TZ bugs the brand exists to prevent).
+  // The FK on applied_round_results.account_id (and player_saves) must reject a
+  // round for a non-existent account BY POSTGRES, not app code. The very first
+  // statement (the idempotency insert) trips it.
+  it('rejects a round whose account_id has no accounts row (FK violation)', async () => {
+    await expect(
+      round('00000000-0000-4000-8000-000000000000', 'run-x', 1, 'win'),
+    ).rejects.toThrow()
+  })
+
+  // last_daily_attempted is pg `date` mode:'string' — round-trips as a plain
+  // YYYY-MM-DD string, NOT a JS Date (which would break the IsoDate brand).
   it('lastDailyAttempted round-trips as a YYYY-MM-DD string, not a Date', async () => {
-    const saved = await store.upsert({
-      accountId,
-      trophies: 0,
+    const acct = await freshAccountId()
+    const saved = await store.applyRoundResult({
+      accountId: acct,
+      runId: 'run-date',
+      round: 1,
+      roundOutcome: 'win',
       dailyStreak: 3,
       lastDailyAttempted: '2026-01-02',
     })
     expect(saved.lastDailyAttempted).toBe('2026-01-02')
     expect(typeof saved.lastDailyAttempted).toBe('string')
-    const found = await store.findByAccountId(accountId)
+    const found = await store.findByAccountId(acct)
     expect(found!.lastDailyAttempted).toBe('2026-01-02')
     expect(typeof found!.lastDailyAttempted).toBe('string')
   })
 
-  // Catch 59. playerSaveStore's upsert sets `updatedAt: sql`now()`` in its DO
-  // UPDATE branch, with a comment claiming "a write always advances updatedAt
-  // even when every other column is byte-identical". Nothing tested that.
-  //
-  // The claim is NOT self-evident, and that is the point: `updated_at`'s
-  // DEFAULT now() fires on INSERT ONLY. Drop the explicit set from the DO
-  // UPDATE branch and updated_at silently FREEZES at insert time — every other
-  // test in this repo still passes, because none of them read it. That is
-  // Catch 58's anatomy exactly (an untested belief about a real system's
-  // behaviour at a DB boundary), sitting inside the PR that exists to close
-  // that class.
-  //
-  // The byte-identical payload is load-bearing: a write that changes a column
-  // could plausibly advance updated_at by some other mechanism, so a no-op
-  // write is the only case that isolates the explicit `now()`.
-  it('upsert advances updated_at even when every other column is byte-identical', async () => {
-    const accounts = createAccountStore(real.db)
-    const acc = await accounts.createIfAbsent({
-      clerkUserId: 'user_ps_updated_at',
-      anonIdAtSignup: 'anon-updated-at',
-    })
-    const payload = {
-      accountId: acc!.id,
-      trophies: 11,
-      dailyStreak: 2,
-      lastDailyAttempted: '2026-07-15',
-    }
+  // Catch 59, carried forward under the new semantics. applyRoundResult sets
+  // `updatedAt: sql`now()`` in the apply UPDATE; drop it and updated_at silently
+  // FREEZES at the ensure-insert default — every other test still passes because
+  // none read it (Catch 58's anatomy). The isolating case is a DISTINCT applied
+  // round: a duplicate is now a true no-op that never touches the row, so the
+  // apply path is what carries the explicit now(). If it were removed, the second
+  // apply's UPDATE would not advance updated_at past the first.
+  it('updated_at advances on each applied (distinct) round', async () => {
+    const acct = await freshAccountId()
+    const first = await round(acct, 'run-uat', 1, 'win')
 
-    const first = await store.upsert(payload)
-
-    // CLOCK GUARD (Codex round 4, P2). Postgres stores timestamptz at
-    // MICROsecond precision, but node-postgres hands it back as a JS `Date`,
-    // which is MILLIsecond-resolution — so a real advance of, say, 300µs
-    // collapses to the same `getTime()` and the strict assertion below flakes
-    // even though `now()` fired correctly.
-    //
-    // Not hypothetical, and note WHY it never flaked locally: this suite runs
-    // against remote Neon, whose 40–55ms round-trips mask the collision by
-    // accident. CI runs a LOCALHOST service container with sub-millisecond
-    // round-trips, where two consecutive upserts land in the same millisecond
-    // routinely. The local pass was an artifact of network latency, not a
-    // property of the code.
-    //
-    // The fix is a guard, NOT a weaker assertion. Relaxing to `>=` would make
-    // this test pass when updated_at fails to advance at all — i.e. it would
-    // pass in exactly the scenario it exists to catch (Catch 59), which is
-    // worse than deleting it. 10ms comfortably clears the 1ms boundary on any
-    // machine while costing one tick.
+    // CLOCK GUARD (Catch 59, Codex round 4 P2). Postgres timestamptz is µs;
+    // node-postgres hands back a ms-resolution JS Date, so a sub-ms advance
+    // collapses to the same getTime() and the strict assertion flakes. Local
+    // Neon's 40–55ms round-trips masked this; CI's localhost container lands two
+    // writes in the same ms routinely. 10ms clears the 1ms boundary. Relaxing to
+    // >= would pass in the exact scenario this catches.
     await new Promise((resolve) => setTimeout(resolve, 10))
 
-    // Re-write the SAME values — a semantic no-op. Only the explicit
-    // `now()` in the DO UPDATE branch can move updated_at here.
-    const second = await store.upsert(payload)
-
-    expect(second.trophies).toBe(first.trophies)
-    expect(second.dailyStreak).toBe(first.dailyStreak)
-    expect(second.lastDailyAttempted).toBe(first.lastDailyAttempted)
-    // The assertion the claim was missing.
+    const second = await round(acct, 'run-uat', 2, 'win') // distinct round → applies
+    expect(second.trophies).toBeGreaterThan(first.trophies) // it really applied
     expect(second.updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime())
-
-    // And it is persisted, not merely returned by RETURNING.
-    const reread = await store.findByAccountId(acc!.id)
+    const reread = await store.findByAccountId(acct)
     expect(reread!.updatedAt.getTime()).toBe(second.updatedAt.getTime())
   })
 
   it('ON DELETE CASCADE removes the save when its account is deleted', async () => {
-    const accounts = createAccountStore(real.db)
-    const acc = await accounts.createIfAbsent({
-      clerkUserId: 'user_ps_cascade',
-      anonIdAtSignup: 'anon-cascade',
-    })
-    await store.upsert({
-      accountId: acc!.id,
-      trophies: 99,
+    const acct = await freshAccountId()
+    await round(acct, 'run-cascade', 1, 'win')
+    expect(await store.findByAccountId(acct)).not.toBeNull()
+    await real.pool.query('DELETE FROM accounts WHERE id = $1', [acct])
+    expect(await store.findByAccountId(acct)).toBeNull()
+  })
+
+  // ── The CF-77 scenarios ──
+
+  it('a. sequential same-run apply — deltas accumulate in order', async () => {
+    const acct = await freshAccountId()
+    const run = 'run-seq'
+    await round(acct, run, 1, 'win')
+    await round(acct, run, 2, 'win')
+    const after = await round(acct, run, 3, 'loss')
+
+    const t1 = 0 + trophyDeltaFor('win', 1, 0)
+    const t2 = t1 + trophyDeltaFor('win', 2, t1)
+    const t3 = t2 + trophyDeltaFor('loss', 3, t2)
+    expect(after.trophies).toBe(t3)
+  })
+
+  it('b. same-round duplicate resend is a trophy no-op (PK conflict)', async () => {
+    const acct = await freshAccountId()
+    const run = 'run-dup'
+    const first = await round(acct, run, 1, 'win')
+    const dup = await round(acct, run, 1, 'win')
+    expect(first.trophies).toBe(trophyDeltaFor('win', 1, 0))
+    expect(dup.trophies).toBe(first.trophies) // the (run,1) tuple already applied
+  })
+
+  it('c. a skipped-ahead round now APPLIES (idempotency enforces no ordering)', async () => {
+    const acct = await freshAccountId()
+    const run = 'run-skip'
+    const first = await round(acct, run, 1, 'win')
+    // SEMANTICS CHANGE vs the superseded last_run_id/last_round_applied tracker:
+    // the tracker no-op'd a skip-ahead (round had to equal lastRoundApplied+1).
+    // The idempotency record rejects ONLY exact (account, run, round) duplicates
+    // and enforces NO ordering, so a never-seen (run, 3) tuple applies. Intended:
+    // global ordering was never actually enforced (the tracker's "unseen run"
+    // branch already accepted any round as a new run's first push), so the
+    // within-run skip-guard was incidental, not load-bearing.
+    const skip = await round(acct, run, 3, 'win') // was a no-op; now applies
+    expect(first.trophies).toBe(trophyDeltaFor('win', 1, 0))
+    expect(skip.trophies).toBe(first.trophies + trophyDeltaFor('win', 3, first.trophies))
+  })
+
+  it('d. an unseen runId is accepted (new tuple)', async () => {
+    const acct = await freshAccountId()
+    await round(acct, 'run-A', 1, 'win')
+    const a2 = await round(acct, 'run-A', 2, 'win')
+    const b1 = await round(acct, 'run-B', 1, 'win')
+    expect(b1.trophies).toBe(a2.trophies + trophyDeltaFor('win', 1, a2.trophies))
+  })
+
+  it('e. concurrent identical run+round — exactly one applies', async () => {
+    const acct = await freshAccountId()
+    // Two simultaneous round-1 pushes for the SAME run. The applied_round_results
+    // PK conflict lets exactly one INSERT win; the other returns no row and
+    // no-ops. The win delta lands ONCE, not twice.
+    await Promise.all([round(acct, 'run-E', 1, 'win'), round(acct, 'run-E', 1, 'win')])
+    const found = await store.findByAccountId(acct)
+    expect(found!.trophies).toBe(trophyDeltaFor('win', 1, 0)) // 10, not 20
+  })
+
+  it('f. concurrent DIFFERENT-run losses near the floor never net below zero', async () => {
+    const acct = await freshAccountId()
+    // Arrange a near-floor state through the real API only (deltas can't land an
+    // arbitrary value): win to 10, then a loss floors it toward 5.
+    await round(acct, 'seed', 1, 'win') // 0 → 10
+    const seeded = await round(acct, 'seed', 2, 'loss') // 10 → 5
+    const five = 10 + trophyDeltaFor('loss', 2, 10)
+    expect(seeded.trophies).toBe(five)
+
+    // Two DIFFERENT runs each report a round-1 loss simultaneously; both are new
+    // tuples, so both apply and the floor must hold (result 0, never below).
+    //
+    // ⚠ COVERAGE NOTE (adversarial review, CF-77 round-3 bundle): this scenario
+    // NO LONGER discriminates on the SELECT … FOR UPDATE lock, and must not be
+    // relied on to. Since the round-2 saturation fix, the store writes an
+    // ABSOLUTE value (trophies = Math.min(locked + delta, INT4_MAX)); for a loss
+    // that absolute is max(0, current − 5), which is ≥ 0 for ANY read value. So
+    // both a locked run (5→0→0) and an unlocked run (both read 5, both write 0)
+    // yield 0 — the lock is invisible here, and `>= 0` can never fail for a loss.
+    // The lock IS still load-bearing (it prevents lost updates on the
+    // current-INDEPENDENT win delta) — that is what scenario i falsifies. Kept
+    // because it still correctly pins the loss floor.
+    await Promise.all([round(acct, 'run-B', 1, 'loss'), round(acct, 'run-C', 1, 'loss')])
+    const found = await store.findByAccountId(acct)
+    expect(found!.trophies).toBe(0) // floored — the loss floor holds
+  })
+
+  it('g. a stale retry of a SUPERSEDED run is a no-op (Codex round 1 P1 fix)', async () => {
+    const acct = await freshAccountId()
+    // Codex's exact scenario. The superseded last_run_id tracker treated the
+    // stale run-A retry as "unseen" (lastRunId had advanced to run-B) and
+    // re-credited run-A's delta. The idempotency record rejects it: (acct,
+    // run-A, 1) already exists, so the retry's INSERT no-ops.
+    const a1 = await round(acct, 'run-A', 1, 'win') // 0 → 10
+    const b1 = await round(acct, 'run-B', 1, 'win') // 10 → 20 (new tuple)
+    const staleA1 = await round(acct, 'run-A', 1, 'win') // delayed retry → no-op
+
+    expect(a1.trophies).toBe(trophyDeltaFor('win', 1, 0)) // 10
+    expect(b1.trophies).toBe(a1.trophies + trophyDeltaFor('win', 1, a1.trophies)) // 20
+    // run-A round 1 applied exactly ONCE. The bug produced 20 + 10 = 30.
+    expect(staleA1.trophies).toBe(b1.trophies) // still 20
+  })
+
+  it('h. cumulative trophies saturate at int4 max, with a clamp warning (Codex round 2 P2)', async () => {
+    const acct = await freshAccountId()
+    // 2^31 − 1, the pg int4 ceiling (an immutable DB fact, not a schedule number).
+    const INT4_MAX = 2_147_483_647
+    // A store with a spy logger so the clamp warning is observable (the
+    // established seam-logger test convention — clerk.test.ts / env.test.ts).
+    const warns: string[] = []
+    const spyStore = createPlayerSaveStore(real.db, { warn: (m) => warns.push(m) })
+
+    // Create the row, then raw-set trophies just below the ceiling — deltas
+    // can't legitimately reach int4 max, so arrange it directly.
+    await spyStore.applyRoundResult({
+      accountId: acct,
+      runId: 'run-ovf',
+      round: 1,
+      roundOutcome: 'win',
       dailyStreak: 0,
       lastDailyAttempted: null,
     })
-    expect(await store.findByAccountId(acc!.id)).not.toBeNull()
+    await real.pool.query('UPDATE player_saves SET trophies = $1 WHERE account_id = $2', [
+      INT4_MAX - 5,
+      acct,
+    ])
 
-    await real.pool.query('DELETE FROM accounts WHERE id = $1', [acc!.id])
-    expect(await store.findByAccountId(acc!.id)).toBeNull()
+    // A distinct-round win (delta > 5) makes the raw sum exceed int4 max: it must
+    // SATURATE at the ceiling (not throw `integer out of range`, not wrap) and log.
+    const saturated = await spyStore.applyRoundResult({
+      accountId: acct,
+      runId: 'run-ovf',
+      round: 2,
+      roundOutcome: 'win',
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+    })
+    expect(saturated.trophies).toBe(INT4_MAX)
+    expect(warns.some((w) => w.includes('int4 max'))).toBe(true)
+
+    // Persisted, not just returned.
+    const found = await store.findByAccountId(acct)
+    expect(found!.trophies).toBe(INT4_MAX)
+  })
+
+  it('i. concurrent DISTINCT-tuple wins all apply — the FOR UPDATE lost-update guard', async () => {
+    const acct = await freshAccountId()
+    const base = trophyDeltaFor('win', 1, 0) // round-1 win delta (current-independent)
+
+    // SEED so the player_saves row EXISTS first. This is essential: on a fresh
+    // account the ensure-insert's own ON CONFLICT blocking would serialize the
+    // writers and MASK the lock (which is why scenarios e/f can't guard it). With
+    // the row present the ensure-insert no-ops and ONLY SELECT … FOR UPDATE
+    // serializes.
+    await round(acct, 'seed', 1, 'win') // trophies = base
+
+    // N distinct-tuple round-1 wins fire at once — all are new tuples, so all must
+    // apply: base → base·(N+1). The store writes an ABSOLUTE value
+    // (trophies = Math.min(locked + delta, INT4_MAX)), so WITHOUT the lock the
+    // concurrent readers see the same stale total and clobber one another (lost
+    // updates), landing far below the sum; WITH it, each reads the prior commit
+    // and all N apply. N writers make the lost update near-certain rather than a
+    // rare interleaving. This is the test that FALSIFIES a missing FOR UPDATE
+    // (removing the lock makes this assertion fail — proven in CI, see the PR /
+    // decision-log). N=8 stays under the pg pool's default max (10) so all writers
+    // run truly concurrently.
+    const N = 8
+    await Promise.all(
+      Array.from({ length: N }, (_, k) => round(acct, `run-cc-${k}`, 1, 'win')),
+    )
+    const foundI = await store.findByAccountId(acct)
+    expect(foundI!.trophies).toBe(base * (N + 1)) // seed + N wins, all applied
   })
 })

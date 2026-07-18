@@ -35,8 +35,10 @@ async function main(): Promise<void> {
   // (null when no DATABASE_URL → the route returns 503).
   const accountStore = db === null ? null : createAccountStore(db.db)
   // Player-save store for GET/PUT /v1/player/save — same null-or-real
-  // derivation (null when no DATABASE_URL → the routes return 503).
-  const playerSaveStore = db === null ? null : createPlayerSaveStore(db.db)
+  // derivation (null when no DATABASE_URL → the routes return 503). `bootLog`
+  // is the DI-seam logger (posthog/db/clerk pattern) — used only for the rare
+  // int4 trophy-saturation warning.
+  const playerSaveStore = db === null ? null : createPlayerSaveStore(db.db, bootLog)
 
   const app = createApp({
     posthog,

@@ -6,17 +6,18 @@
 // is device-local by ratification, so nothing "run"-shaped is stored
 // server-side. This route stores meta-progression only.
 //
-// SCOPE (Option A, plumbing-only): PR3 ships the sync plumbing SERVER-SIDE —
-// the table and both endpoints. It does NOT wire a client caller: nothing in
-// apps/client calls either route (repo-wide grep: zero callers). So no sync
-// actually occurs yet, in either direction — the PULL on sign-in/boot and the
-// PUSH on quiescent save are deferred to CF-75.
+// TRUST MODEL — DELTA (CF-77 Phase 2 PR1). The PUT no longer accepts a trophy
+// value. The client reports one completed round (runId / round / roundOutcome)
+// and the SERVER computes the trophy delta via trophyDeltaFor, applied under a
+// round-ordering guard in db/playerSaveStore.ts applyRoundResult. See
+// decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED".
 //
-// This wording is deliberate. PR3's framing was previously "PR3 knowingly
-// syncs zeros", which was inaccurate: with no caller, PR3 syncs NOTHING. The
-// zeros are what a client WOULD push once CF-75 wires it, because no producers
-// exist for the three fields yet. Those are two different deferrals and
-// collapsing them hid the second one (Codex round 2, P1).
+// PR1 is SERVER-ONLY and deliberately breaks the wire contract in the interim:
+// the client caller (usePlayerSavePush) still sends the old {trophies, …} body
+// until CF-77 Phase 2 PR2 wires the producer + mints the per-run uuid, so
+// between this merge and PR2 a client PUT 400s on the new .strict() shape.
+// Same plumbing-ahead-of-caller shape as CF-75/76 (decision-log.md 2026-07-16
+// § "CF-75 + CF-76 Phase 1 RATIFIED").
 //
 // Status map (mirrors routes/account.ts):
 //   200 — GET: the save (defaults for an account that has never written).
@@ -96,10 +97,11 @@ function previousDay(iso: string): string {
  *  Real cheat-resistance needs SERVER-SIDE EVIDENCE of participation (a
  *  verified daily-completion event), which does not exist yet — the client
  *  does not even fetch /v1/contract/daily (CF-68). Deferred to CF-76, sibling
- *  to CF-72's trophy trust-model. Dormant today because nothing calls these
- *  routes at all (CF-75) — which is exactly the trap: **whoever wires CF-75's
- *  client caller must resolve CF-76 in the same PR.** Shipping a naive "PUT
- *  today's date" caller activates a known gap rather than discovering one.
+ *  to CF-77's trophy trust-model. The trophy leg has since been resolved (Delta,
+ *  CF-77 Phase 2); the daily leg's evidence mechanism is still open — whoever
+ *  wires CF-68's client fetch must land the server-side participation evidence
+ *  in the same PR (CF-68 AMENDED). Shipping a naive "PUT today's date" caller
+ *  activates a known gap rather than discovering one.
  *
  *  The null case is not covered by the ratified sentence and is resolved
  *  here: a save with no recorded attempt has no streak (0). Without this,
@@ -198,7 +200,7 @@ export function registerPlayerSaveRoutes(
     }
 
     const serverToday = isoDay(now)
-    const { trophies, lastDailyAttempted } = parsed.data
+    const { runId, round, roundOutcome, lastDailyAttempted } = parsed.data
 
     // A non-null attempt MUST be the current server date. You can only attempt
     // the daily *now*, so "I attempted on date X" is only meaningful for
@@ -242,11 +244,16 @@ export function registerPlayerSaveRoutes(
         serverToday,
       })
 
-      // Upsert, not insert-then-update: a concurrent first write must not
-      // 500 on the PK (R2 precedent).
-      const saved = await saves.upsert({
+      // Delta trust-model (CF-77 Phase 2): hand the completed round to the
+      // store, which computes the trophy delta via trophyDeltaFor and applies
+      // it under the round-ordering guard (row-locked, Form ①). `dailyStreak`
+      // is the server-derived value above; the store writes it unconditionally.
+      // Returns the row with the new ABSOLUTE trophy total for the response.
+      const saved = await saves.applyRoundResult({
         accountId: account.id,
-        trophies,
+        runId,
+        round,
+        roundOutcome,
         dailyStreak,
         lastDailyAttempted,
       })

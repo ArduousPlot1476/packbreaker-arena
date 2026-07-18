@@ -1,75 +1,27 @@
-// Player-save PUSH callback (M2.1 CF-75).
+// Player-save PUSH callback (M2.1 CF-75) — PUSH DISABLED in CF-77 Phase 2 PR1.
 //
-// Returns the `onQuiescentSave` callback RunProvider injects into useRun. The
-// PUT rides useRun's EXACT quiescent-save trigger (fires right after each
-// local saveLocal), so the cloud push cadence matches local persistence with
-// no separate effect and no new trigger surface. Gated on signed-in + linked.
+// PR1 reshaped the server write DTO to the Delta trust-model
+// ({runId, round, roundOutcome} — validation/playerSave.ts + schemas.ts §14).
+// The previous CF-75 body ({trophies, lastDailyAttempted}) no longer type-checks
+// or validates. Forming a real Delta body needs a per-run uuid + a per-round
+// report — the PRODUCER — which lands in CF-77 Phase 2 PR2 together with the
+// terminal-branch fix (useRun.ts:831-834). Until then this hook is a deliberate
+// NO-OP: RunProvider keeps injecting `onQuiescentSave` unchanged (the return
+// type is identical), and PR2 restores the real push here — reinstating the
+// CF-75 gate (linked && hydrated, pull-before-push) alongside the producer.
+// See decision-log.md 2026-07-17 § "CF-77 Phase 2 PR1 …".
 //
-// Stable identity (useCallback over [apiFetch]) + a linked ref means useRun's
-// quiescent effect — which reads this via closure and excludes it from its
-// deps — always calls a current callback without a stale-closure gate. Returns
-// a no-op-when-unlinked function on the anonymous path (useAccountLinked
-// defaults false), so a signed-out session never pushes.
+// SCOPE NOTE: this file + its tests are the minimal client compile/test-compat
+// touch a shared-DTO reshape forces (Halt #2 ruling, Option A). No producer or
+// terminal-branch logic is added here — that is PR2, untouched.
 
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import type { LocalSaveV1 } from '@packbreaker/shared';
-import { useApiFetch } from '../api/useApiFetch';
-import { putPlayerSave } from '../api/playerSave';
-import { useAccountLinked, useSyncHydrated } from '../auth/AccountLinkContext';
 
 export function usePlayerSavePush(): (save: LocalSaveV1) => void {
-  const apiFetch = useApiFetch();
-  const linked = useAccountLinked();
-  const hydrated = useSyncHydrated();
-  // Ref so the stable callback reads the live gate values (no stale closure,
-  // and no effect re-fire from a changing callback identity).
-  const gateRef = useRef({ linked, hydrated });
-  gateRef.current = { linked, hydrated };
-
-  return useCallback(
-    (save: LocalSaveV1) => {
-      // signed-in + linked, AND the initial pull has settled — the latter
-      // serializes pull-before-push so a push can't be clobbered by an
-      // in-flight GET's stale hydration (Codex round 1 P1).
-      if (!gateRef.current.linked || !gateRef.current.hydrated) return;
-
-      // ── CF-76 BOUNDED POSTURE — read before "hardening" this. ──
-      // `trophies` is a GENUINE PASS-THROUGH of the local envelope value. It
-      // is 0 today only because LocalSaveV1.trophies has no producer yet (a
-      // spun-off CF); it is deliberately NOT the literal 0, so this begins
-      // persisting real trophies the moment a producer lands.
-      //
-      // `lastDailyAttempted` is a DELIBERATE hardcoded null. The client has no
-      // honest daily attempt to report until CF-68 (daily-contract client-fetch
-      // leg) wires one, so it must never assert a date. The server derives
-      // dailyStreak from this + the server date and caps exposure at
-      // +1/server-day — BOUNDED, NOT cheat-resistant.
-      //
-      // CF-68 is NECESSARY-BUT-INSUFFICIENT to close this gap: even once the
-      // client plays the real daily and can honestly send today's date, true
-      // cheat-resistance ALSO requires a SERVER-SIDE participation-evidence
-      // mechanism (a verified daily-completion event). Wiring CF-68 alone,
-      // without that evidence mechanism, ACTIVATES the gap rather than closing
-      // it. See decision-log.md 2026-07-16 § "CF-75 + CF-76 Phase 1 RATIFIED".
-      //
-      // ── WRITE-ORDERING / VERSIONING (Codex round 2 P2 — DEFERRED, not fixed here) ──
-      // This is a fire-and-forget PUT with NO in-flight serialization, and the
-      // server upsert is unconditional (playerSaveStore.ts `onConflictDoUpdate`,
-      // no revision guard). Two concurrent PUTs — this device on rapid quiescent
-      // saves, or across devices — can arrive out of order and let an OLDER
-      // payload overwrite a newer one. DORMANT today (every body is identical
-      // zeros: trophies 0 / lastDailyAttempted null), live the moment a trophy
-      // producer emits varying values. The robust fix is SERVER-SIDE versioning
-      // (optimistic concurrency), out of this plumbing PR's scope — folded into
-      // the producer + push-trust-model spin-off CF, because how far to trust a
-      // client trophy write and how to serialize/version it are one design
-      // question. NOT a same-axis sibling of the round-1 pull-before-push fix
-      // (that one was fully fixable client-side; this needs the server).
-      void putPlayerSave(apiFetch, {
-        trophies: save.trophies,
-        lastDailyAttempted: null,
-      });
-    },
-    [apiFetch],
-  );
+  // No-op until CF-77 Phase 2 PR2 wires the Delta-body producer. Kept as a hook
+  // (not deleted) so RunProvider's injection and every call site stay untouched.
+  return useCallback((_save: LocalSaveV1) => {
+    // intentionally empty — see file header
+  }, []);
 }
