@@ -31,7 +31,7 @@ import {
 } from 'react';
 import { useRun } from './useRun';
 import { usePlayerSavePush, type RoundResultReport } from './usePlayerSavePush';
-import { useAccountLinked, useSyncHydrated } from '../auth/AccountLinkContext';
+import { useAccountLinked, useSignedOut, useSyncHydrated } from '../auth/AccountLinkContext';
 
 // Lazy-import the class-select screen so its atoms + Desktop + Mobile
 // components ship in a dedicated chunk rather than the main bundle.
@@ -88,11 +88,12 @@ export function RunProvider({ children }: { children: ReactNode }) {
   const pushRoundResult = usePlayerSavePush();
   const linked = useAccountLinked();
   const hydrated = useSyncHydrated();
+  const signedOut = useSignedOut();
 
   // Live-gate + latest-push refs so the STABLE enqueue/drain callbacks read
   // current values without re-subscribing (mirrors usePlayerSavePush's gateRef).
-  const gateRef = useRef({ linked, hydrated });
-  gateRef.current = { linked, hydrated };
+  const gateRef = useRef({ linked, hydrated, signedOut });
+  gateRef.current = { linked, hydrated, signedOut };
   const pushRef = useRef(pushRoundResult);
   pushRef.current = pushRoundResult;
 
@@ -137,14 +138,32 @@ export function RunProvider({ children }: { children: ReactNode }) {
 
   const enqueueRoundResult = useCallback(
     (result: RoundResultReport) => {
-      // Anonymous / signed-out: never push, and never ENQUEUE — an un-drainable
-      // queue would grow unbounded. Server-wins on a later sign-in reconciles.
-      if (!gateRef.current.linked) return;
+      // CF-77 Phase 2 PR2 (Codex round-1 P2): DROP only on AFFIRMATIVE signed-out
+      // (Clerk loaded + not signed in) — a truly anonymous session whose queue
+      // could never drain. HOLD (enqueue) on every indeterminate state: Clerk-
+      // not-loaded and signed-in-but-link-pending BOTH keep signedOut false, so a
+      // round emitted in those windows (notably the R4 restore refire, which
+      // fires at mount ahead of the /v1/account/link POST) is held, not lost. The
+      // drain gate (!linked || !hydrated) then flushes it once linking + the
+      // initial pull settle. Dropping is irreversible, holding is recoverable —
+      // so unknown identity holds.
+      if (gateRef.current.signedOut) return;
       queueRef.current.push(result);
       void drainQueue();
     },
     [drainQueue],
   );
+
+  // CF-77 Phase 2 PR2 (Codex round-1 P2): on AFFIRMATIVE signed-out, DISCARD the
+  // held queue. Hold-on-unknown admits cross-run accumulation — queueRef lives in
+  // this provider and survives resetRun/replaySameClass — so once Clerk resolves
+  // to truly-anonymous (the queue can never drain), clear it once with the same
+  // signal that would have dropped each entry individually. Declared BEFORE the
+  // re-drain effect so a same-commit flip discards before draining. No other
+  // eviction policy, size cap, or TTL.
+  useEffect(() => {
+    if (signedOut) queueRef.current.length = 0;
+  }, [signedOut]);
 
   // Re-kick the drain when the gate opens (initial pull settles, or sign-in) so
   // rounds enqueued while linked-but-not-yet-hydrated flush without waiting for

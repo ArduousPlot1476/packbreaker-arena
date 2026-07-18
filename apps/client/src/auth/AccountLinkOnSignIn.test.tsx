@@ -12,11 +12,32 @@ vi.mock('../persistence', () => ({
 }));
 
 import { AccountLinkOnSignIn } from './AccountLinkOnSignIn';
+import { AccountLinkProvider, useSignedOut } from './AccountLinkContext';
+
+// CF-77 Phase 2 PR2 (Codex round-1 P2): probe the AFFIRMATIVE-signed-out signal
+// the round-push queue reads. The queue only ever sees the derived `signedOut`,
+// so the tri-state derivation (isLoaded/isSignedIn → signedOut) can only be
+// tested where useAuth lives — here, not at the queue level.
+let observedSignedOut: boolean | null = null;
+function SignedOutProbe() {
+  observedSignedOut = useSignedOut();
+  return null;
+}
+// A FRESH element per call — a constant element would make rerender() a no-op
+// (React bails on an identical element reference, so the effect never re-runs
+// with the new useAuth() value).
+const signalTree = () => (
+  <AccountLinkProvider>
+    <AccountLinkOnSignIn />
+    <SignedOutProbe />
+  </AccountLinkProvider>
+);
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   useAuthMock.mockReset();
+  observedSignedOut = null;
 });
 
 function stubFetch() {
@@ -77,5 +98,25 @@ describe('AccountLinkOnSignIn', () => {
     useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
     rerender(<AccountLinkOnSignIn />);
     await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+  });
+
+  it('(b) publishes signedOut=false while Clerk is NOT loaded (indeterminate → HOLD); true only when loaded + signed out', async () => {
+    stubFetch();
+    // Clerk not loaded yet — isSignedIn is undefined. The queue must HOLD here;
+    // a naive `!isSignedIn` derivation would flip signedOut TRUE (undefined is
+    // falsy) and re-introduce the reported pre-load drop.
+    useAuthMock.mockReturnValue({ isLoaded: false, isSignedIn: undefined });
+    const { rerender } = render(signalTree());
+    await vi.waitFor(() => expect(observedSignedOut).toBe(false));
+
+    // Signed in, link POST in flight → still indeterminate → HOLD.
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    rerender(signalTree());
+    await vi.waitFor(() => expect(observedSignedOut).toBe(false));
+
+    // Loaded AND signed out → AFFIRMATIVE signed-out → the queue DROPs on this.
+    useAuthMock.mockReturnValue({ isLoaded: true, isSignedIn: false });
+    rerender(signalTree());
+    await vi.waitFor(() => expect(observedSignedOut).toBe(true));
   });
 });

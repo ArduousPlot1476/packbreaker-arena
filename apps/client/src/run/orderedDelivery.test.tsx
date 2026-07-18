@@ -34,6 +34,7 @@ vi.mock('../screens/ClassSelectScreen', () => ({
 import {
   AccountLinkProvider,
   useSetAccountLinked,
+  useSetSignedOut,
   useSetSyncHydrated,
 } from '../auth/AccountLinkContext';
 import { RunProvider, useRunContext } from './RunContext';
@@ -52,25 +53,43 @@ function Capture() {
   latest = useRunContext();
   return null;
 }
-function GateOpener() {
-  const setLinked = useSetAccountLinked();
-  const setHydrated = useSetSyncHydrated();
-  useEffect(() => {
-    setLinked(true);
-    setHydrated(true);
-  }, [setLinked, setHydrated]);
+// Captures the three gate setters so a test can set the initial gate state and
+// flip it mid-run (linked / hydrated / signedOut are independent axes here).
+let gate: {
+  setLinked: (v: boolean) => void;
+  setHydrated: (v: boolean) => void;
+  setSignedOut: (v: boolean) => void;
+} | null = null;
+function GateProbe() {
+  gate = {
+    setLinked: useSetAccountLinked(),
+    setHydrated: useSetSyncHydrated(),
+    setSignedOut: useSetSignedOut(),
+  };
   return null;
 }
-async function renderRun() {
+async function renderRun(
+  init: { linked: boolean; hydrated: boolean; signedOut: boolean } = {
+    linked: true,
+    hydrated: true,
+    signedOut: false,
+  },
+) {
   latest = null;
+  gate = null;
   render(
     <AccountLinkProvider>
-      <GateOpener />
+      <GateProbe />
       <RunProvider>
         <Capture />
       </RunProvider>
     </AccountLinkProvider>,
   );
+  act(() => {
+    gate!.setLinked(init.linked);
+    gate!.setHydrated(init.hydrated);
+    gate!.setSignedOut(init.signedOut);
+  });
   await waitFor(() => {
     expect(latest).not.toBeNull();
     expect(latest!.simRun).not.toBeNull();
@@ -160,5 +179,60 @@ describe('RunProvider — ordered delivery queue (R5)', () => {
     });
     await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(2));
     expect(roundsPushed()).toEqual([1, 2]);
+  });
+
+  // ── Codex round-1 P2: hold pre-link, drop only affirmative signed-out ──
+  const tick = (ms = 25) => new Promise((r) => setTimeout(r, ms));
+
+  it('(a) holds a round emitted while signed-in + link pending, then PUTs it once linked+hydrated flip', async () => {
+    putSpy.mockResolvedValue(true);
+    // Signed in (signedOut=false) but the /v1/account/link POST is still in
+    // flight (linked=false) — the exact window the Codex P2 named.
+    await renderRun({ linked: false, hydrated: false, signedOut: false });
+
+    await resolveWin(); // round 1 resolves DURING the pre-link window
+    await tick();
+    // Held, not dropped: the drain gate holds on !linked, so nothing PUT yet.
+    expect(putSpy).not.toHaveBeenCalled();
+
+    // Link + initial pull settle → the held round flushes (this is what the
+    // a7e3c7a `!linked` enqueue gate would have permanently dropped).
+    act(() => {
+      gate!.setLinked(true);
+      gate!.setHydrated(true);
+    });
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    expect(roundsPushed()).toEqual([1]);
+  });
+
+  it('(c) discards held entries when Clerk resolves to affirmatively signed-out', async () => {
+    putSpy.mockResolvedValue(true);
+    await renderRun({ linked: false, hydrated: false, signedOut: false });
+
+    await resolveWin(); // round 1 held (pre-link)
+    await tick();
+    expect(putSpy).not.toHaveBeenCalled();
+
+    // Clerk resolves to affirmatively signed-out → discard the held queue.
+    act(() => gate!.setSignedOut(true));
+    await tick();
+
+    // A later re-link cannot resurrect the discarded round — the queue is empty.
+    act(() => {
+      gate!.setSignedOut(false);
+      gate!.setLinked(true);
+      gate!.setHydrated(true);
+    });
+    await tick(40);
+    expect(putSpy).not.toHaveBeenCalled();
+  });
+
+  it('(d) drops rounds on an affirmatively signed-out (anonymous) session — never PUTs', async () => {
+    putSpy.mockResolvedValue(true);
+    await renderRun({ linked: false, hydrated: false, signedOut: true });
+
+    await resolveWin(); // dropped at enqueue (signedOut) — never enters the queue
+    await tick(40);
+    expect(putSpy).not.toHaveBeenCalled();
   });
 });

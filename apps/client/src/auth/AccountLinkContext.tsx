@@ -27,6 +27,14 @@ interface AccountLinkState {
    *  settled — see `hydrated` below. */
   readonly hydrated: boolean;
   readonly setHydrated: (hydrated: boolean) => void;
+  /** CF-77 Phase 2 PR2 (Codex round-1 P2): AFFIRMATIVE signed-out — Clerk has
+   *  loaded AND the user is not signed in (`isLoaded && !isSignedIn`). A truly
+   *  anonymous session, distinct from the INDETERMINATE states (Clerk not loaded
+   *  yet, or signed-in-but-link-pending) where this stays false. The round-push
+   *  queue drops ONLY on this and holds on every indeterminate state — dropping
+   *  is irreversible, holding is recoverable. Published by AccountLinkOnSignIn. */
+  readonly signedOut: boolean;
+  readonly setSignedOut: (signedOut: boolean) => void;
 }
 
 const AccountLinkContext = createContext<AccountLinkState>({
@@ -34,14 +42,24 @@ const AccountLinkContext = createContext<AccountLinkState>({
   setLinked: () => {},
   hydrated: false,
   setHydrated: () => {},
+  // Anonymous build (no AccountLinkProvider mounted): there is no Clerk at all,
+  // so the session is affirmatively anonymous → true (the queue drops). The
+  // PROVIDER's initial value below is false instead — a mounted-but-unresolved
+  // Clerk session is INDETERMINATE and must hold, not drop.
+  signedOut: true,
+  setSignedOut: () => {},
 });
 
 export function AccountLinkProvider({ children }: { children: ReactNode }) {
   const [linked, setLinked] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  // Starts false = indeterminate (Clerk not yet loaded on this path → HOLD);
+  // AccountLinkOnSignIn publishes the real `isLoaded && !isSignedIn` once Clerk
+  // resolves. NOT the context default (true) — see the default's comment.
+  const [signedOut, setSignedOut] = useState(false);
   const value = useMemo<AccountLinkState>(
-    () => ({ linked, setLinked, hydrated, setHydrated }),
-    [linked, hydrated],
+    () => ({ linked, setLinked, hydrated, setHydrated, signedOut, setSignedOut }),
+    [linked, hydrated, signedOut],
   );
   return (
     <AccountLinkContext.Provider value={value}>
@@ -74,4 +92,16 @@ export function useSyncHydrated(): boolean {
 /** Setter for PlayerSaveSyncOnSignIn to publish "the initial pull has settled." */
 export function useSetSyncHydrated(): (hydrated: boolean) => void {
   return useContext(AccountLinkContext).setHydrated;
+}
+
+/** True iff Clerk has loaded AND the user is affirmatively signed out — a truly
+ *  anonymous session. False for every indeterminate state (Clerk not loaded, or
+ *  signed-in-but-link-pending). The round-push queue drops only on this. */
+export function useSignedOut(): boolean {
+  return useContext(AccountLinkContext).signedOut;
+}
+
+/** Setter for AccountLinkOnSignIn to publish `isLoaded && !isSignedIn`. */
+export function useSetSignedOut(): (signedOut: boolean) => void {
+  return useContext(AccountLinkContext).setSignedOut;
 }
