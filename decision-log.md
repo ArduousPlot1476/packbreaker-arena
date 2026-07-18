@@ -4,6 +4,62 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-77 CLOSED — Phase 2 PR2 (client per-round Delta producer, persisted push runId, ordered delivery)
+
+### Merge
+
+PR \#51 (`m2.1-cf77-pr2-client-producer`) merged into `main` via `--no-ff` at merge commit `2964e62fca0d855523ed8f0b9108ff31ec9bafed` on 2026-07-18; two parents `c225ae1` (main) + `7815340` (feature), no squash/rebase; pushed `c225ae1..2964e62`; `origin/main == local main == 2964e62`; PR \#51 auto-closed server-side (`merged:true`, `merged_at 2026-07-18T20:07:17Z`, `merge_commit_sha 2964e62`). Branch NOT deleted — fine-grained PAT cannot delete refs (manual/local). **CF-77 CLOSED at this merge** — it stayed OPEN through PR1 per the sub-PR convention (closure held until a real merge SHA exists; decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"). Implements decision-log.md 2026-07-18 § "CF-77 Phase 2 PR2 — PHASE 1 RATIFIED (producer signal, runId persistence, ordered delivery)" (`c225ae1`, R1–R10) as ratified, with two R5 refinements below.
+
+### What shipped — nine commits, per R1–R10
+
+(1) `5ec6738` **R3 schema** — `pushRunId?: string` OPTIONAL on `SerializedRunState` (both `content-schemas.ts` mirrors byte-identical, `//#check-schemas-sync: OK`) + Zod field; no `LocalSaveV1.schemaVersion` bump, no migration (bornFromRecipe/bossRewardItemId precedent; Rule 17). (2) `2125816` **R3 runId** — fresh uuid v4 per run via a null-guarded lazy helper (StrictMode-idempotent), read-through from the snapshot on restore, re-minted on reset/replay, persisted by the composer; NOT `RunState.runId` (`run-${seed}`, 32-bit, collision-prone). (3) `fba7d84` **R7/R9 seam** — `onQuiescentSave` → `onRoundResult({runId, round, roundOutcome})`; `usePlayerSavePush` un-no-op'd to a gated (linked && hydrated) Delta PUT, no trophy on the wire, `lastDailyAttempted` null. (4) `c54a101` **R1/R2/R4 producer** — new effect keyed on `state.state.history.length`, DECLARED BEFORE the quiescent-save effect, fires once per resolved round INCLUDING the terminal round; restore refire under the SAME persisted runId; terminal branch UNTOUCHED, `clearLocal()` UNCONDITIONAL. (5) `40a3b11` **R5/R6 ordered delivery** — session-scoped queue in a `RunProvider` ref, each PUT awaits the prior ack, bounded-retry-then-drop (2 attempts total). (6) `f85a967` tests — 3 push suites restored/rewritten + 4 new. (7) `a7e3c7a` serialization test (falsifiability-proven) + the B.4 crash-window invariant comment. (8) `d05daf0` **round-1 fix** — hold pre-link, drop only affirmative signed-out, discard on affirmative signed-out. (9) `7815340` — identity-guard the drain's shift against the discard mutator. Corrected `tsc -b --noEmit --force` (client+server exit 0) + Rule 13 triple-green (`25 successful, 25 total, 0 cached` ×3) green at each gate; final client suite `632 passed / 15 skipped / 647 total`.
+
+### Catch 64 + Drift 45 — fabricated schema path in the PR2 implementation prompt
+
+**Catch 64 (Class A, change-site contradiction).** The PR2 implementation-prompt Inputs block named `packages/sim/src/schemas.ts` — a path that DOES NOT EXIST — by synthesizing an unverified package prefix (`packages/sim/src/`) onto the Phase-1 report's bare `schemas.ts` citation. Canonical is `packages/content/src/schemas.ts` + byte-identical root mirror `content-schemas.ts` (enforced by `tooling/scripts/check-schemas-sync.cjs`). Refuted by Claude Code at Step 0 (`ls` → no such file) and surfaced rather than worked around; both mirrors edited correctly. Going-forward: Inputs blocks quote investigation paths AS RETURNED, or ask for qualification; never infer the package prefix.
+
+**Drift 45 (Topic 2).** The fabrication violated the standing verbatim practice (byte-for-byte from tool output, never retyped/synthesized). NO new rule — the verbatim practice and the shipped-state gate already cover it.
+
+### Catch 65 + Rule 28 (NEW) — non-falsifying ordered-delivery tests
+
+**Catch 65 (Class D co-drift, Pattern 7 lineage; NOT CF-67-covered).** `orderedDelivery.test.tsx`'s original two cases (ordering `[1,2,3]`, retry/drop `[1,2,2,3]`) could NOT falsify a concurrent implementation — immediately-resolving mocks made them pass identically against a queue that fired concurrently and happened to resolve in order. The queue was correct; the TEST was the defect. Second instance of Catch 63's shape (decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED …" — the round-2 saturation fix silently killed scenario f's ability to falsify a missing `FOR UPDATE`). Self-introduced, passed the ratified triple-green gate, surfaced by the Phase-1 read-only pass's C.2 gap (internal directed verification). Explicitly NOT CF-67-covered — CF-67 scopes to Codex pre-merge findings.
+
+**Rule 28.** A test guarding an ORDERING, EXCLUSION, or MUTUAL-EXCLUSION invariant must be EMPIRICALLY PROVEN FALSIFIABLE — demonstrate it FAILS when the guarding mechanism is removed, then restore byte-identical. Codification (second-instance-across-two-distinct-PRs met): scenario i (PR1, decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED …") practiced the discipline (a scenario that falsifies a missing lock) without codifying it; this PR applied it THREE times, each a verbatim break-then-restore — commit 7 serialization (`expected "spy" to be called 1 times, but got 2 times`), commit 8 pre-link-vs-anonymous + derivation (`expected "spy" to be called 1 times, but got 0 times` and `expected true to be false`), commit 9 identity-guard (`expected "spy" to be called 2 times, but got 1 times`). Structurally generic, low-burden (one break-and-revert), predictable surface (every future invariant test).
+
+### R5 refined twice — cross-referenced, NOT edited (insertion-only holds)
+
+R5 lives at decision-log.md 2026-07-18 § "CF-77 Phase 2 PR2 — PHASE 1 RATIFIED …" (`c225ae1`); that entry is UNEDITED. Two refinements:
+(i) **Abandon clause.** "flushed / cancelled" was OVER-SPECIFICATION; the operative requirement is "never fed," which holds BY CONSTRUCTION — the producer keys on `history.length` and `abandon_run` appends nothing, so no round can enqueue on abandon. No abandon-triggered queue action exists or is required (Phase-1 verification C.3; Rule 27 applied).
+(ii) **Anonymous clause.** "no-op on the anonymous path" is refined to: no-op ONLY when Clerk has AFFIRMATIVELY resolved to signed-out (`isLoaded && !isSignedIn`); HOLD while identity is indeterminate (Clerk not loaded) OR the `/v1/account/link` POST is in flight; DISCARD held entries on affirmative signed-out. Default-to-HOLD on unknown identity — dropping is irreversible, holding is recoverable.
+
+### Rule 27 applied twice post-codification (both correct)
+
+Rule 27 (verify the ratified shape against code before quoting/implementing it as a constraint): (a) C.3 — the abandon clause's implementation verified against the ratified prose rather than implemented literally; (b) the round-1 fix — the pre-link window is NOT "anonymous" despite the ratified "anonymous path" wording, so the enqueue gate keys on affirmative signed-out.
+
+### Codex — 2 rounds, 2 genuine P2s, both dispositioned pre-merge, NO catches (CF-67)
+
+Ceiling closed at 2 of 4; no meta-audit.
+- **Round 1 (P2, review `4728977751`, `a7e3c7a`):** the enqueue gate `if (!linked) return` conflated truly-anonymous with signed-in-but-link-pending, permanently dropping a round emitted during the `/v1/account/link` window — defeating R4's restore repair on essentially every signed-in resume-from-save boot (the refire is synchronous at mount; the link POST is a network round-trip). FIXED commits 8–9.
+- **Round 2 (P2, review `4729182297`, `7815340`):** legacy-save backfill — a pre-PR2 in-progress save (no `pushRunId`, N history entries, never pushed by the old no-op stub) restores, mints a fresh id, and the producer reports only `history[len-1]`, so rounds 1..N-1 are permanently under-credited. ACCEPTED as an R6/CF-79-class residual: the affected population needs a pre-PR2 in-progress save + linked account + mid-run upgrade, is exactly ONE in-progress run per user ONCE, and self-extinguishes when that run ends (every subsequent run mints+persists `pushRunId`); R6's ratified rationale (a replay-validating server reconciles the account total without every round having been delivered) covers the mechanism. Backfill REJECTED (amends R4, touches the fenced producer surface, needs its own Phase 1, ~zero population); refire-suppression REJECTED (partial credit beats zero credit, both client-unfavorable). NO catch — CF-67.
+
+### Commit 9 (identity-guarded shift) — NO catch; HELD candidate for taxonomy
+
+Commit 8 introduced `queueRef.current.length = 0` (the signed-out discard) as a NEW mutator on a collection the drain mutates positionally across an await, while the drain's `shift()` was UNCONDITIONAL — a discard landing inside a push's await window followed by a re-enqueue would shift away an entry that was never pushed. Found at the DESIGNED master-dev review gate; NO verification artifact had CLAIMED coverage of the mid-drain discard interaction (test (c) covered discard + non-resurrection only). Fixed by an identity guard (`if (queueRef.current[0] === head) queueRef.current.shift()`), no new state. **NO catch** — HELD candidate (first instance) for future codification: "a verification artifact that fails its STATED job takes a catch; a gap found at the review gate that NO artifact claimed does not."
+
+### Named residuals carried at close
+
+(1) Retry bounded at 2 immediate attempts with NO backoff — two attempts against a 503 will likely both fail; buys a transient-blip save, little more (accepted, not a defect). (2) Session-scoped queue lost on reload (R6 → CF-79). (3) Legacy-save under-credit (this close; R6/CF-79 class, self-extinguishing). (4) Server trusts client-reported outcome/round (Delta model's residual, de-amplified by `MAX_ROUND` → CF-79).
+
+### Non-counter notes
+
+**Rule 2/3 amendment — first live run, nothing incremental.** The `tsc -b --noEmit --force` corrected gate ran across every gate this PR and found NOTHING turbo-only would have missed — turbo-only would have been green too. Recorded honestly: the amendment earned its codification on PR1's masked client DTO break, not on this (client-heavy) PR.
+
+**Process change — PAT PR creation supersedes the browser-link step.** PR \#51 was opened via the fine-grained PAT REST API (`POST /pulls`) → HTTP 201 with a byte-identical body (diff against source empty). This SUPERSEDES the browser-link step in the standing PR workflow. Known PAT limitations unchanged: cannot `resolveReviewThread`, cannot delete refs (branch deletion stays manual/local).
+
+### Counter
+
+Baseline (tip `c225ae1`) 63/27/9/44/47 → **65/28/9/45/46**. Delta: catches **+2** (Catch 64 — fabricated schema path, Class A change-site contradiction; Catch 65 — non-falsifying ordered-delivery tests, Class D co-drift / Pattern 7 lineage, NOT CF-67-covered), rules **+1** (Rule 28 — empirically-proven-falsifiable invariant tests), drifts **+1** (Drift 45 — verbatim-practice violation, Topic 2), open-CFs **−1** (CF-77 CLOSED at the PR \#51 merge). Patterns unchanged (Pattern 7 is LINEAGE, not new). The two R5 refinements, Rule 27's two applications, the round-2 residual acceptance, the commit-9 HELD candidate, and the two Codex findings (no catch per CF-67) consume no ordinals.
+
 ## 2026-07-18 — CF-77 Phase 2 PR2 — PHASE 1 RATIFIED (producer signal, runId persistence, ordered delivery)
 
 Read-only Phase 1 investigation for CF-77 Phase 2 PR2 (client producer + ordered delivery + terminal-branch fix) returned CLEAN at HEAD `376c5e0` — zero HALTs, no premise contradictions; every ratified premise from the prior anchors was verified against code. Master-dev ratified the ten rulings below. DESIGN-ONLY — no code, no schema, no test, no migration. Builds on decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED" (`b36d3cc`) and decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED" (`376c5e0`). Per Rule 20 the PR2 implementation prompt is gated on THIS entry's commit SHA. This is a Phase-1 ratification: there is NO CF closure here (CF-77 closes at the PR2 merge), and the only counter delta is a new rule.
