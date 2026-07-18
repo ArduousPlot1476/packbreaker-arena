@@ -45,7 +45,7 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
 
   beforeAll(async () => {
     real = await setupRealDb()
-    store = createPlayerSaveStore(real.db)
+    store = createPlayerSaveStore(real.db, { warn: () => {} })
     accounts = createAccountStore(real.db)
   })
   afterAll(async () => {
@@ -239,5 +239,47 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     expect(b1.trophies).toBe(a1.trophies + trophyDeltaFor('win', 1, a1.trophies)) // 20
     // run-A round 1 applied exactly ONCE. The bug produced 20 + 10 = 30.
     expect(staleA1.trophies).toBe(b1.trophies) // still 20
+  })
+
+  it('h. cumulative trophies saturate at int4 max, with a clamp warning (Codex round 2 P2)', async () => {
+    const acct = await freshAccountId()
+    // 2^31 − 1, the pg int4 ceiling (an immutable DB fact, not a schedule number).
+    const INT4_MAX = 2_147_483_647
+    // A store with a spy logger so the clamp warning is observable (the
+    // established seam-logger test convention — clerk.test.ts / env.test.ts).
+    const warns: string[] = []
+    const spyStore = createPlayerSaveStore(real.db, { warn: (m) => warns.push(m) })
+
+    // Create the row, then raw-set trophies just below the ceiling — deltas
+    // can't legitimately reach int4 max, so arrange it directly.
+    await spyStore.applyRoundResult({
+      accountId: acct,
+      runId: 'run-ovf',
+      round: 1,
+      roundOutcome: 'win',
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+    })
+    await real.pool.query('UPDATE player_saves SET trophies = $1 WHERE account_id = $2', [
+      INT4_MAX - 5,
+      acct,
+    ])
+
+    // A distinct-round win (delta > 5) makes the raw sum exceed int4 max: it must
+    // SATURATE at the ceiling (not throw `integer out of range`, not wrap) and log.
+    const saturated = await spyStore.applyRoundResult({
+      accountId: acct,
+      runId: 'run-ovf',
+      round: 2,
+      roundOutcome: 'win',
+      dailyStreak: 0,
+      lastDailyAttempted: null,
+    })
+    expect(saturated.trophies).toBe(INT4_MAX)
+    expect(warns.some((w) => w.includes('int4 max'))).toBe(true)
+
+    // Persisted, not just returned.
+    const found = await store.findByAccountId(acct)
+    expect(found!.trophies).toBe(INT4_MAX)
   })
 })

@@ -43,7 +43,17 @@ import { eq, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { trophyDeltaFor } from '@packbreaker/sim'
 import type { RoundOutcome } from '@packbreaker/content'
+import type { WarnLogger } from '../logging.js'
 import * as schema from './schema.js'
+
+/** Postgres int4 ceiling. `player_saves.trophies` is int4, and the cumulative
+ *  total has no upper bound of its own (Codex round 2 P2), so a running sum is
+ *  SATURATED here — an overflow would otherwise throw `integer out of range` and
+ *  the route's catch maps that to a RETRYABLE 503 for a request that can never
+ *  succeed. Only the win path can reach it (loss deltas are non-positive after
+ *  trophyDeltaFor's floor). This is a post-computation clamp, NOT schedule math —
+ *  trophyDeltaFor stays the sole delta derivation; the cap never feeds back in. */
+const INT4_MAX = 2_147_483_647
 
 /** A player_saves row as the routes see it. `updatedAt` is server-owned. */
 export interface PlayerSaveRecord {
@@ -81,9 +91,12 @@ export interface PlayerSaveStore {
   applyRoundResult(input: PlayerSaveRoundWrite): Promise<PlayerSaveRecord>
 }
 
-/** Builds the real store over a drizzle handle (player_saves schema). */
+/** Builds the real store over a drizzle handle (player_saves schema). `log`
+ *  follows the DI-seam logger pattern (posthog/db/clerk seams) — used only for
+ *  the rare int4-saturation warning. */
 export function createPlayerSaveStore(
   db: NodePgDatabase<typeof schema>,
+  log: WarnLogger,
 ): PlayerSaveStore {
   return {
     async findByAccountId(accountId) {
@@ -150,13 +163,24 @@ export function createPlayerSaveStore(
         const row = requireRow(locked)
 
         // trophyDeltaFor is the SOLE schedule derivation, from the LOCKED
-        // current trophy. `trophies + :delta` is an atomic increment of that
-        // same locked value; the loss floor lives entirely inside trophyDeltaFor.
+        // current trophy. Under the lock row.trophies is the value the sum
+        // applies to, so writing the computed absolute is equivalent to the
+        // atomic increment. The running total is SATURATED at INT4_MAX (Codex
+        // round 2 P2) — a post-computation clamp, never fed back into the
+        // schedule. The loss floor lives entirely inside trophyDeltaFor.
         const delta = trophyDeltaFor(input.roundOutcome, input.round, row.trophies)
+        const rawTotal = row.trophies + delta
+        const newTotal = Math.min(rawTotal, INT4_MAX)
+        if (rawTotal > INT4_MAX) {
+          log.warn(
+            `player_saves.trophies clamped at int4 max (${INT4_MAX}) for account ` +
+              `${input.accountId}: cumulative total ${rawTotal} would overflow the column`,
+          )
+        }
         const updated = await tx
           .update(schema.playerSaves)
           .set({
-            trophies: sql`${schema.playerSaves.trophies} + ${delta}`,
+            trophies: newTotal,
             dailyStreak: input.dailyStreak,
             lastDailyAttempted: input.lastDailyAttempted,
             updatedAt: sql`now()`,
