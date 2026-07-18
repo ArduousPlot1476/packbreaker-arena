@@ -159,7 +159,6 @@ export function createPlayerSaveStore(
           .select()
           .from(schema.playerSaves)
           .where(eq(schema.playerSaves.accountId, input.accountId))
-          .for('update')
         const row = requireRow(locked)
 
         // trophyDeltaFor is the SOLE schedule derivation, from the LOCKED
