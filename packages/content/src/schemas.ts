@@ -826,11 +826,13 @@ export interface TelemetryBatchRequest {
 // PUT request (Delta trust-model, CF-77 Phase 2): the client NEVER sends a
 // trophy value. It reports one completed round — `runId` (opaque per-run id, a
 // uuid v4 minted client-side), `round`, and `roundOutcome` — and the SERVER
-// computes the trophy delta via `trophyDeltaFor`, applied under a round-ordering
-// guard (decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"). `dailyStreak`
-// stays absent (server-derived; `.strict()` 400s a body carrying it). Per
-// CF-76's bounded posture the client still sends `lastDailyAttempted: null`
-// until CF-68 wires a real attempt date.
+// computes the trophy delta via `trophyDeltaFor`, applied AT MOST ONCE per
+// (account, run, round) via an idempotency record (decision-log.md 2026-07-17
+// § "CF-77 Phase 1 RATIFIED"; the Phase-1 round-ordering guard was superseded by
+// the idempotency record in Phase 2 PR1 — Codex round 1). `dailyStreak` stays
+// absent (server-derived; `.strict()` 400s a body carrying it). Per CF-76's
+// bounded posture the client still sends `lastDailyAttempted: null` until CF-68
+// wires a real attempt date.
 export interface PlayerSaveResponse {
   readonly trophies: number
   readonly dailyStreak: number
@@ -839,10 +841,11 @@ export interface PlayerSaveResponse {
 
 export interface PlayerSaveWriteRequest {
   /** Opaque per-run id (uuid v4, client-minted). The server treats it as an
-   *  opaque key for the round-ordering guard — it never parses it. */
+   *  opaque idempotency key (applied_round_results) — it never parses it. */
   readonly runId: string
-  /** The completed round being reported (1-based). Drives BOTH the server-side
-   *  `trophyDeltaFor` delta and the round-ordering sequence check. */
+  /** The completed round being reported (1-based). Part of the (account, run,
+   *  round) idempotency key AND the argument to the server-side `trophyDeltaFor`
+   *  delta. */
   readonly round: number
   /** Outcome of that round. The server derives the trophy delta from it — the
    *  client never sends a trophy value (Delta trust-model). */

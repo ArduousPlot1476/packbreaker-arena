@@ -7,10 +7,13 @@
 // returns a small typed result the caller can branch on. Types come from the
 // canonical §14 DTOs in @packbreaker/content — no hand-rolled duplicates.
 //
-// Scope (CF-75, plumbing-only): this is the pipe. `dailyStreak` is READ-only
-// (GET response), never written (the server .strict()-400s a body carrying
-// it). Per CF-76's bounded posture the PUT body always sends
-// lastDailyAttempted: null — see the call site for the trust-model note.
+// Scope: GET/PUT mechanics only (URL, method, JSON body, never-throws). The PUT
+// body is the Delta-model shape as of CF-77 Phase 2 (`PlayerSaveWriteRequest`:
+// runId / round / roundOutcome / lastDailyAttempted); the server derives the
+// trophy delta. `dailyStreak` stays READ-only (GET response), never written
+// (the server .strict()-400s a body carrying it). NOTE: the client PUSH itself
+// is disabled to a no-op until CF-77 Phase 2 PR2 wires the producer — see
+// usePlayerSavePush.ts.
 
 import type {
   PlayerSaveResponse,
