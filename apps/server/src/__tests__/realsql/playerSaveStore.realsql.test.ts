@@ -17,9 +17,13 @@
 //   e. concurrent identical run+round → exactly one applies (PK conflict blocks
 //      the double)
 //   f. concurrent DIFFERENT-run losses near the floor → never net below zero
-//      (the loss-floor lock; a naive read-then-write nets −5)
+//      (pins the loss floor; NOTE — since the round-2 absolute-write change this
+//      no longer discriminates on FOR UPDATE; see the test + scenario i)
 //   g. STALE retry of a superseded run → no-op (the Codex round 1 P1 fix — the
 //      old last_run_id tracker re-credited this; the idempotency record rejects it)
+//   h. cumulative trophies saturate at int4 max + clamp warning (Codex round 2 P2)
+//   i. concurrent DISTINCT-tuple wins all apply — the FOR UPDATE lost-update guard
+//      (the test that actually falsifies a missing lock; proven in CI)
 //
 // Expected trophy values are computed via `trophyDeltaFor` (imported), NOT
 // hand-literals — this asserts "the store threads the SCHEDULE correctly" without
@@ -214,15 +218,22 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     const five = 10 + trophyDeltaFor('loss', 2, 10)
     expect(seeded.trophies).toBe(five)
 
-    // Two DIFFERENT runs each report a round-1 loss simultaneously. Both are new
-    // tuples, so both pass the idempotency gate and BOTH apply. A naive read-
-    // then-write computes both deltas from 5 → 5 + (−5) + (−5) = −5. The
-    // SELECT … FOR UPDATE lock makes the second compute its delta from the
-    // FLOORED 0, so the floor holds.
+    // Two DIFFERENT runs each report a round-1 loss simultaneously; both are new
+    // tuples, so both apply and the floor must hold (result 0, never below).
+    //
+    // ⚠ COVERAGE NOTE (adversarial review, CF-77 round-3 bundle): this scenario
+    // NO LONGER discriminates on the SELECT … FOR UPDATE lock, and must not be
+    // relied on to. Since the round-2 saturation fix, the store writes an
+    // ABSOLUTE value (trophies = Math.min(locked + delta, INT4_MAX)); for a loss
+    // that absolute is max(0, current − 5), which is ≥ 0 for ANY read value. So
+    // both a locked run (5→0→0) and an unlocked run (both read 5, both write 0)
+    // yield 0 — the lock is invisible here, and `>= 0` can never fail for a loss.
+    // The lock IS still load-bearing (it prevents lost updates on the
+    // current-INDEPENDENT win delta) — that is what scenario i falsifies. Kept
+    // because it still correctly pins the loss floor.
     await Promise.all([round(acct, 'run-B', 1, 'loss'), round(acct, 'run-C', 1, 'loss')])
     const found = await store.findByAccountId(acct)
-    expect(found!.trophies).toBe(0) // floored, NOT −5
-    expect(found!.trophies).toBeGreaterThanOrEqual(0) // the invariant the lock protects
+    expect(found!.trophies).toBe(0) // floored — the loss floor holds
   })
 
   it('g. a stale retry of a SUPERSEDED run is a no-op (Codex round 1 P1 fix)', async () => {
@@ -281,5 +292,34 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     // Persisted, not just returned.
     const found = await store.findByAccountId(acct)
     expect(found!.trophies).toBe(INT4_MAX)
+  })
+
+  it('i. concurrent DISTINCT-tuple wins all apply — the FOR UPDATE lost-update guard', async () => {
+    const acct = await freshAccountId()
+    const base = trophyDeltaFor('win', 1, 0) // round-1 win delta (current-independent)
+
+    // SEED so the player_saves row EXISTS first. This is essential: on a fresh
+    // account the ensure-insert's own ON CONFLICT blocking would serialize the
+    // writers and MASK the lock (which is why scenarios e/f can't guard it). With
+    // the row present the ensure-insert no-ops and ONLY SELECT … FOR UPDATE
+    // serializes.
+    await round(acct, 'seed', 1, 'win') // trophies = base
+
+    // N distinct-tuple round-1 wins fire at once — all are new tuples, so all must
+    // apply: base → base·(N+1). The store writes an ABSOLUTE value
+    // (trophies = Math.min(locked + delta, INT4_MAX)), so WITHOUT the lock the
+    // concurrent readers see the same stale total and clobber one another (lost
+    // updates), landing far below the sum; WITH it, each reads the prior commit
+    // and all N apply. N writers make the lost update near-certain rather than a
+    // rare interleaving. This is the test that FALSIFIES a missing FOR UPDATE
+    // (removing the lock makes this assertion fail — proven in CI, see the PR /
+    // decision-log). N=8 stays under the pg pool's default max (10) so all writers
+    // run truly concurrently.
+    const N = 8
+    await Promise.all(
+      Array.from({ length: N }, (_, k) => round(acct, `run-cc-${k}`, 1, 'win')),
+    )
+    const foundI = await store.findByAccountId(acct)
+    expect(foundI!.trophies).toBe(base * (N + 1)) // seed + N wins, all applied
   })
 })

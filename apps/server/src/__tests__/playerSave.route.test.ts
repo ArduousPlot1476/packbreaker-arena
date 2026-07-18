@@ -276,12 +276,23 @@ describe('PUT /v1/player/save — routing + body validation', () => {
     }
   })
 
-  it('400 on a round above the anti-abuse ceiling', async () => {
+  // A real boss round (11 — the canon max) is accepted; a round far above the
+  // canon-derived run-length cap is rejected. round: 1000 was ACCEPTED under the
+  // old 10000 ceiling and is now a 400 — this pins the CF-77 round-3 tightening.
+  it('accepts the canon max round (11, boss) but 400s a round far above the run-length cap', async () => {
+    const boss = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { ...VALID_BODY, round: 11 },
+    })
+    expect(boss.statusCode, 'boss round 11 must be accepted').toBe(200)
+
     const res = await build({}).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { ...VALID_BODY, round: 10_001 },
+      payload: { ...VALID_BODY, round: 1000 },
     })
     expect(res.statusCode).toBe(400)
   })

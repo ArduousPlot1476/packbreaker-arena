@@ -9,7 +9,8 @@
 // Phase 1 RATIFIED"). The client NEVER sends a trophy value: it reports one
 // completed round (`runId`, `round`, `roundOutcome`) and the SERVER computes
 // the trophy delta via `trophyDeltaFor` (db/playerSaveStore.ts applyRoundResult),
-// applied under a round-ordering guard. So there is no client-supplied trophy
+// applied at most once per (account, run, round) via an idempotency record. So
+// there is no client-supplied trophy
 // to bound here at all — the old int4 `trophies` bound (Codex round 1 P2) is
 // gone with the field. `round` gets a bound instead (see MAX_ROUND).
 //
@@ -26,22 +27,26 @@
 // pg `date` insert as a 500 instead of an honest 400.
 
 import { z } from 'zod'
-import type { RoundOutcome } from '@packbreaker/content'
+import { DEFAULT_RULESET, type RoundOutcome } from '@packbreaker/content'
 
 /** Opaque per-run id (PR2 mints a uuid v4). The server never parses it — it is
- *  a key for the round-ordering guard only. uuid v4 is 36 chars; the cap is
- *  generous headroom while still bounding what lands in the `last_run_id` text
+ *  the idempotency key for applied_round_results only. uuid v4 is 36 chars; the
+ *  cap is generous headroom while still bounding what lands in the `run_id` text
  *  column. */
 const RUN_ID_MAX = 128
 
-/** Anti-abuse ceiling for `round` — NOT a game rule. Real contracts top out
- *  near a dozen rounds (boss at 11); this sits far above any of them, so it
- *  never rejects a legitimate round. Its job is to bound the win delta
- *  (trophyDeltaFor = 2·round+8) so a FORGED first-push round on an unseen run
- *  can't drive trophies toward int4 overflow: the round-ordering gate blocks
- *  sequential skip-ahead, but an unseen run resets the tracker to the incoming
- *  round, and that one entry point still needs a ceiling. Comfortably int4. */
-const MAX_ROUND = 10_000
+/** Round cap — DERIVED FROM CANON, not a magic ceiling. A legitimate run reaches
+ *  at most `DEFAULT_RULESET.maxRounds` (= 11; gdd § run length: 10 standard + 1
+ *  boss round). The ×4 headroom absorbs future contract mutators / alt bag-shapes
+ *  that might lengthen a run, without letting a FORGED round inflate the
+ *  per-request win delta (trophyDeltaFor = 2·round+8) far past a real run's
+ *  magnitude. This DE-AMPLIFIES the Delta model's accepted client-round-trust
+ *  residual (Codex round 3 P1); it does NOT close it — Replay-validate (CF-79)
+ *  does, by re-deriving the authoritative round server-side. Was 10000 (an
+ *  effectively-unbounded anti-abuse ceiling), tightened per the round-3
+ *  disposition. An extended-maxRounds contract (an M2/M3 concern) would revisit
+ *  this bound. Comfortably int4. */
+const MAX_ROUND = DEFAULT_RULESET.maxRounds * 4
 
 /** The round outcomes the trophy schedule can score. Must stay EXACTLY in step
  *  with content's `RoundOutcome` union — a divergence would let the validator
@@ -73,7 +78,7 @@ export const IsoDateSchema = z
 
 export const PlayerSaveWriteRequestSchema = z
   .object({
-    /** Opaque per-run id for the round-ordering guard (see RUN_ID_MAX). */
+    /** Opaque per-run id — the idempotency key (see RUN_ID_MAX). */
     runId: z.string().min(1).max(RUN_ID_MAX),
     /** The completed round being reported. Bounded (see MAX_ROUND) so a forged
      *  round can't overflow the int4 trophies column via the win delta. */
