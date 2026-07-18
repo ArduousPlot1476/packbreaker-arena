@@ -33,12 +33,8 @@ export const accounts = pgTable('accounts', {
     .defaultNow(),
 })
 
-// Meta-progression save — one row per account (M2.1 PR3).
-//
-// Scope note (Option A, plumbing-only per decision-log.md 2026-07-14
-// § "M2.1 PR3 PHASE 1 RATIFIED"): PR3 lands the pipe, not the taps. No
-// producers are wired, so every field syncs its stubbed value (0 / null)
-// until a later PR wires the real sources. That is deliberate.
+// Meta-progression save — one row per account (M2.1 PR3; trophy write-path
+// reworked in CF-77 Phase 2 PR1).
 //
 // `inProgressRun` is NOT here: it stays device-local by ratification, which
 // is why § 6.2's original `/v1/run/save` name was renamed `/v1/player/save`
@@ -55,8 +51,9 @@ export const playerSaves = pgTable('player_saves', {
     .references(() => accounts.id, { onDelete: 'cascade' }),
   /** SIGNED, and deliberately CHECK-free. gdd.md § 13 ("Lose → -trophies")
    *  makes trophies non-monotonic, so a non-negative CHECK would be wrong
-   *  and `max()`-style merges are ruled out. The loss-penalty schedule and
-   *  floor-at-zero question are CF-72, still open — hence no constraint. */
+   *  and `max()`-style merges are ruled out. Server-owned as of CF-77 Phase 2:
+   *  never client-set — the write path applies a per-round delta from
+   *  `trophyDeltaFor` (see db/playerSaveStore.ts applyRoundResult). */
   trophies: integer('trophies').notNull().default(0),
   /** NEVER client-settable — always server-derived (see routes/playerSave.ts
    *  deriveDailyStreak). Present in the row, absent from the PUT body. */
@@ -66,6 +63,15 @@ export const playerSaves = pgTable('player_saves', {
    *  break the brand and reintroduce the TZ bugs the brand exists to stop.
    *  Nullable — a player may never have attempted a daily. */
   lastDailyAttempted: date('last_daily_attempted', { mode: 'string' }),
+  /** CF-77 Phase 2 — round-ordering write-versioning tracker (facet 3). The
+   *  per-account "last trophy write applied", used to gate the delta apply so
+   *  concurrent / out-of-order / duplicate pushes can't double-apply or clobber
+   *  (decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"). Together these
+   *  answer "have I already applied this run's round N?". Nullable: a fresh row
+   *  has applied nothing yet. Opaque per-run id (PR2 mints a uuid v4 — the
+   *  server treats it as an opaque key, never parses it). */
+  lastRunId: text('last_run_id'),
+  lastRoundApplied: integer('last_round_applied'),
   /** Last write time (server clock, timezone-aware). */
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()

@@ -1,21 +1,14 @@
-// usePlayerSavePush (M2.1 CF-75) — the PUT callback: linked-gated, sends the
-// pass-through trophies + hardcoded lastDailyAttempted: null (CF-76 bounded).
+// usePlayerSavePush — PUSH DISABLED in CF-77 Phase 2 PR1.
+//
+// The CF-75 suite here asserted the linked/hydrated-gated PUT of pass-through
+// trophies. PR1 disabled the push (the server DTO moved to the Delta model; the
+// body-forming producer lands in PR2), so the hook is now a deliberate no-op.
+// This pins THAT contract; PR2 restores the producer and re-instates the full
+// linked/hydrated + PUT suite (recover it from this file's CF-75 git history).
 
-import { renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { renderHook } from '@testing-library/react';
+import { describe, expect, it } from 'vitest';
 import type { LocalSaveV1 } from '@packbreaker/shared';
-
-const { useAccountLinkedMock, useSyncHydratedMock, fetchSpy } = vi.hoisted(() => ({
-  useAccountLinkedMock: vi.fn(),
-  useSyncHydratedMock: vi.fn(),
-  fetchSpy: vi.fn(),
-}));
-vi.mock('../auth/AccountLinkContext', () => ({
-  useAccountLinked: () => useAccountLinkedMock(),
-  useSyncHydrated: () => useSyncHydratedMock(),
-}));
-vi.mock('../api/useApiFetch', () => ({ useApiFetch: () => fetchSpy }));
-
 import { usePlayerSavePush } from './usePlayerSavePush';
 
 function save(trophies: number): LocalSaveV1 {
@@ -30,52 +23,14 @@ function save(trophies: number): LocalSaveV1 {
   };
 }
 
-beforeEach(() => {
-  fetchSpy.mockReset();
-  fetchSpy.mockResolvedValue(new Response('{}', { status: 200 }));
-  useAccountLinkedMock.mockReset();
-  useSyncHydratedMock.mockReset();
-  useSyncHydratedMock.mockReturnValue(true); // pull already settled by default
-});
-
-describe('usePlayerSavePush', () => {
-  it('PUTs pass-through trophies + hardcoded lastDailyAttempted:null when linked + hydrated', async () => {
-    useAccountLinkedMock.mockReturnValue(true);
-    const { result } = renderHook(() => usePlayerSavePush());
-
-    result.current(save(15));
-
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('/v1/player/save');
-    expect(init.method).toBe('PUT');
-    // trophies is the real envelope value (15), NOT a hardcoded 0;
-    // lastDailyAttempted is the deliberate CF-76 null.
-    expect(JSON.parse(init.body as string)).toEqual({
-      trophies: 15,
-      lastDailyAttempted: null,
-    });
-  });
-
-  it('does NOT PUT when unlinked (signed-out / anonymous)', async () => {
-    useAccountLinkedMock.mockReturnValue(false);
-    const { result } = renderHook(() => usePlayerSavePush());
-
-    result.current(save(15));
-
-    // Give any stray async a tick; assert nothing fired.
-    await new Promise((r) => setTimeout(r, 10));
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('does NOT PUT when linked but the initial pull has not settled (hydrated=false)', async () => {
-    useAccountLinkedMock.mockReturnValue(true);
-    useSyncHydratedMock.mockReturnValue(false); // pull-before-push serialization
-    const { result } = renderHook(() => usePlayerSavePush());
-
-    result.current(save(15));
-
-    await new Promise((r) => setTimeout(r, 10));
-    expect(fetchSpy).not.toHaveBeenCalled();
+describe('usePlayerSavePush (push disabled until CF-77 Phase 2 PR2)', () => {
+  it('returns a stable callback that is a no-op (performs no side effect / never throws)', () => {
+    const { result, rerender } = renderHook(() => usePlayerSavePush());
+    const first = result.current;
+    // No network/auth dependencies remain, so invoking it must be inert.
+    expect(() => result.current(save(15))).not.toThrow();
+    // Stable identity across renders (useCallback []), as RunProvider relies on.
+    rerender();
+    expect(result.current).toBe(first);
   });
 });

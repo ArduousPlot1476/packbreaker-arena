@@ -1,4 +1,5 @@
-// GET/PUT /v1/player/save — status map + streak derivation (M2.1 PR3).
+// GET/PUT /v1/player/save — status map + streak derivation (M2.1 PR3; PUT
+// body reshaped to the Delta trust-model in CF-77 Phase 2 PR1).
 //
 // SCOPE OF THE FAKES BELOW — read this before extending. Catch 58 named
 // exactly this file's shape as the CF-70 anatomy: a fake that hand-mirrors
@@ -7,10 +8,10 @@
 //   - THIS file fakes the stores to exercise ROUTING: status codes, the
 //     auth gate, body validation, and the server-derived streak. Those are
 //     properties of the route, not of Postgres, so a fake is the right tool.
-//   - The SQL semantics the routes depend on (ON CONFLICT DO UPDATE, the FK,
-//     signed trophies, date round-trip) are asserted against a REAL Postgres
-//     in __tests__/realsql/playerSaveStore.realsql.test.ts. The fakes here
-//     deliberately assert NOTHING about SQL behaviour.
+//   - The SQL semantics the route depends on (the round-ordering gate, the
+//     trophyDeltaFor delta apply, the FK, the date round-trip) are asserted
+//     against a REAL Postgres in __tests__/realsql/playerSaveStore.realsql.
+//     test.ts. The fake here deliberately claims NOTHING about trophy math.
 // If you find yourself writing "mirror the real SQL" in a comment here,
 // that belongs in the realsql suite instead.
 
@@ -33,6 +34,15 @@ const verifier: ClerkVerifier = {
   },
 }
 
+/** A valid PUT body under the Delta model. The trophy fields are a round
+ *  report; the server derives the delta. `lastDailyAttempted` is orthogonal. */
+const VALID_BODY = {
+  runId: 'run-fixture',
+  round: 1,
+  roundOutcome: 'win',
+  lastDailyAttempted: null,
+}
+
 /** An account store holding exactly the seeded rows. */
 function fakeAccounts(seed: AccountRecord[]): AccountStore {
   return {
@@ -48,15 +58,26 @@ function fakeAccounts(seed: AccountRecord[]): AccountStore {
   }
 }
 
-/** In-memory save store. Routing-only: no SQL semantics are claimed. */
+/** In-memory save store. Routing-only: NO round-ordering / delta semantics are
+ *  claimed (that is the realsql suite's job — Catch 58). It records the
+ *  server-derived daily fields the route computed and echoes a trophy total, so
+ *  the status map + streak derivation can be asserted without Postgres. */
 function fakeSaves(seed: PlayerSaveRecord | null = null): PlayerSaveStore {
   let row: PlayerSaveRecord | null = seed
   return {
     async findByAccountId(accountId) {
       return row && row.accountId === accountId ? row : null
     },
-    async upsert(input) {
-      row = { ...input, updatedAt: new Date('2026-07-15T00:00:00Z') }
+    async applyRoundResult(input) {
+      row = {
+        accountId: input.accountId,
+        trophies: row?.trophies ?? 0,
+        dailyStreak: input.dailyStreak,
+        lastDailyAttempted: input.lastDailyAttempted,
+        lastRunId: input.runId,
+        lastRoundApplied: input.round,
+        updatedAt: new Date('2026-07-15T00:00:00Z'),
+      }
       return row
     },
   }
@@ -67,7 +88,7 @@ const throwingSaves: PlayerSaveStore = {
   async findByAccountId() {
     throw new Error('connect ECONNREFUSED')
   },
-  async upsert() {
+  async applyRoundResult() {
     throw new Error('connect ECONNREFUSED')
   },
 }
@@ -154,17 +175,21 @@ describe('GET /v1/player/save', () => {
     })
   })
 
-  it('200 with the stored save', async () => {
+  it('200 with the stored save (response omits the round-ordering tracker)', async () => {
     const res = await build({
       saves: fakeSaves({
         accountId: ACCOUNT_ID,
         trophies: 42,
         dailyStreak: 3,
         lastDailyAttempted: '2026-07-14',
+        lastRunId: 'run-x',
+        lastRoundApplied: 7,
         updatedAt: new Date(),
       }),
     }).inject({ method: 'GET', url: '/v1/player/save', headers: AUTH })
     expect(res.statusCode).toBe(200)
+    // The GET DTO is unchanged by CF-77: trophies/dailyStreak/lastDailyAttempted
+    // only — lastRunId / lastRoundApplied are server-internal and never leak.
     expect(res.json()).toEqual({
       trophies: 42,
       dailyStreak: 3,
@@ -173,11 +198,13 @@ describe('GET /v1/player/save', () => {
   })
 })
 
-describe('PUT /v1/player/save', () => {
-  const body = { trophies: 0, lastDailyAttempted: null }
-
+describe('PUT /v1/player/save — routing + body validation', () => {
   it('401 without a valid token', async () => {
-    const res = await build({}).inject({ method: 'PUT', url: '/v1/player/save', payload: body })
+    const res = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      payload: VALID_BODY,
+    })
     expect(res.statusCode).toBe(401)
   })
 
@@ -186,7 +213,7 @@ describe('PUT /v1/player/save', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: body,
+      payload: VALID_BODY,
     })
     expect(res.statusCode).toBe(404)
     expect(res.json()).toEqual({ error: 'account_not_linked' })
@@ -197,7 +224,7 @@ describe('PUT /v1/player/save', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: body,
+      payload: VALID_BODY,
     })
     expect(res.statusCode).toBe(503)
   })
@@ -210,10 +237,70 @@ describe('PUT /v1/player/save', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 5, lastDailyAttempted: null, dailyStreak: 99 },
+      payload: { ...VALID_BODY, dailyStreak: 99 },
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toBe('invalid_body')
+  })
+
+  // .strict() also rejects the RETIRED `trophies` field — the client can no
+  // longer send a trophy value at all (Delta model). A stale client still
+  // sending it gets an honest 400, not a silent accept.
+  it('400 when the body carries a (retired) trophies field', async () => {
+    const res = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { ...VALID_BODY, trophies: 500 },
+    })
+    expect(res.statusCode).toBe(400)
+    expect(res.json().error).toBe('invalid_body')
+  })
+
+  it('400 on a missing / empty runId', async () => {
+    for (const runId of [undefined, '']) {
+      const res = await build({}).inject({
+        method: 'PUT',
+        url: '/v1/player/save',
+        headers: AUTH,
+        payload: { ...VALID_BODY, runId },
+      })
+      expect(res.statusCode, `expected 400 for runId=${String(runId)}`).toBe(400)
+    }
+  })
+
+  it('400 on a non-integer, zero, or negative round', async () => {
+    for (const round of [1.5, 0, -3]) {
+      const res = await build({}).inject({
+        method: 'PUT',
+        url: '/v1/player/save',
+        headers: AUTH,
+        payload: { ...VALID_BODY, round },
+      })
+      expect(res.statusCode, `expected 400 for round=${round}`).toBe(400)
+    }
+  })
+
+  it('400 on a round above the anti-abuse ceiling', async () => {
+    const res = await build({}).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: { ...VALID_BODY, round: 10_001 },
+    })
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('400 on an unrecognized roundOutcome', async () => {
+    for (const roundOutcome of ['draw', 'WIN', 'player_win', 42]) {
+      const res = await build({}).inject({
+        method: 'PUT',
+        url: '/v1/player/save',
+        headers: AUTH,
+        payload: { ...VALID_BODY, roundOutcome },
+      })
+      expect(res.statusCode, `expected 400 for ${String(roundOutcome)}`).toBe(400)
+    }
   })
 
   it('400 on a malformed or unreal date', async () => {
@@ -222,20 +309,10 @@ describe('PUT /v1/player/save', () => {
         method: 'PUT',
         url: '/v1/player/save',
         headers: AUTH,
-        payload: { trophies: 0, lastDailyAttempted: bad },
+        payload: { ...VALID_BODY, lastDailyAttempted: bad },
       })
       expect(res.statusCode, `expected 400 for ${bad}`).toBe(400)
     }
-  })
-
-  it('400 on a non-integer trophies', async () => {
-    const res = await build({}).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { trophies: 1.5, lastDailyAttempted: null },
-    })
-    expect(res.statusCode).toBe(400)
   })
 
   it('400 on a future lastDailyAttempted', async () => {
@@ -243,7 +320,7 @@ describe('PUT /v1/player/save', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-16' },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-16' },
     })
     expect(res.statusCode).toBe(400)
   })
@@ -256,77 +333,25 @@ describe('PUT /v1/player/save', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-14' },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-14' },
     })
     expect(res.statusCode).toBe(400)
     expect(res.json().error).toBe('invalid_body')
   })
 
-  // Codex round 1, P2. player_saves.trophies is int4. Unbounded, an
-  // out-of-range value passed validation, hit the INSERT, Postgres rejected
-  // it, and the route's catch-all mapped that to a RETRYABLE 503 — telling
-  // the client to retry a request that can never succeed. The assertion that
-  // matters is `not 503`: a 400 that regressed to 503 would still be an
-  // error status, so asserting only "not 200" would not catch the bug.
-  it('400 (NOT 503) on trophies above the int4 max', async () => {
+  it('200 on a well-formed round report (Delta model)', async () => {
     const res = await build({}).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 2147483648, lastDailyAttempted: null },
-    })
-    expect(res.statusCode).toBe(400)
-    expect(res.statusCode).not.toBe(503)
-    expect(res.json().error).toBe('invalid_body')
-  })
-
-  it('400 (NOT 503) on trophies below the int4 min', async () => {
-    const res = await build({}).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { trophies: -2147483649, lastDailyAttempted: null },
-    })
-    expect(res.statusCode).toBe(400)
-    expect(res.statusCode).not.toBe(503)
-  })
-
-  // The bound must not become a non-negativity floor by accident — the int4
-  // limits are exactly representable, so both edges must still be accepted.
-  it('accepts the exact int4 boundary values', async () => {
-    for (const trophies of [-2147483648, 2147483647]) {
-      const res = await build({}).inject({
-        method: 'PUT',
-        url: '/v1/player/save',
-        headers: AUTH,
-        payload: { trophies, lastDailyAttempted: null },
-      })
-      expect(res.statusCode, `expected 200 for ${trophies}`).toBe(200)
-      expect(res.json().trophies).toBe(trophies)
-    }
-  })
-
-  it('accepts NEGATIVE trophies — non-monotonic by gdd § 13', async () => {
-    const res = await build({}).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { trophies: -12, lastDailyAttempted: null },
+      payload: VALID_BODY,
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().trophies).toBe(-12)
-  })
-
-  // PR3's ONLY live path: the client pushes zeros, and null ⇒ streak 0.
-  it('200 and syncs zeros (the Option A plumbing-only path)', async () => {
-    const res = await build({}).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: null },
-    })
-    expect(res.statusCode).toBe(200)
-    expect(res.json()).toEqual({ trophies: 0, dailyStreak: 0, lastDailyAttempted: null })
+    // Response SHAPE is a routing concern; the trophy VALUE is the realsql
+    // suite's (the fake claims no delta math). null attempt ⇒ streak 0.
+    expect(res.json().dailyStreak).toBe(0)
+    expect(res.json().lastDailyAttempted).toBeNull()
+    expect(typeof res.json().trophies).toBe('number')
   })
 })
 
@@ -341,6 +366,8 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         trophies: 0,
         dailyStreak: prev.dailyStreak,
         lastDailyAttempted: prev.lastDailyAttempted,
+        lastRunId: null,
+        lastRoundApplied: null,
         updatedAt: new Date(),
       }),
     })
@@ -351,7 +378,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-15' },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
     })
     expect(res.json().dailyStreak).toBe(5)
   })
@@ -361,7 +388,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-15' },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
     })
     expect(res.json().dailyStreak).toBe(4)
   })
@@ -371,7 +398,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-15' },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
     })
     expect(res.json().dailyStreak).toBe(1)
   })
@@ -381,7 +408,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: null },
+      payload: { ...VALID_BODY, lastDailyAttempted: null },
     })
     expect(res.json().dailyStreak).toBe(0)
   })
@@ -397,7 +424,8 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
   // Drives the REAL route through the REAL store fake with a FROZEN clock, so
   // the whole server day is a single instant. Asserts the ceiling: one
   // legitimate yesterday→today transition, and no more, however many times the
-  // pair is replayed.
+  // pair is replayed. Orthogonal to CF-77's trophy path — the trophy fields are
+  // fixed across every PUT here.
   it('EXPLOIT REGRESSION: alternating stale/today PUTs cannot inflate the streak', async () => {
     const NOW = () => new Date('2026-07-15T12:00:00Z')
     const YESTERDAY = '2026-07-14'
@@ -411,6 +439,8 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         trophies: 0,
         dailyStreak: 1,
         lastDailyAttempted: YESTERDAY,
+        lastRunId: null,
+        lastRoundApplied: null,
         updatedAt: new Date(),
       }),
     })
@@ -420,7 +450,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         method: 'PUT',
         url: '/v1/player/save',
         headers: AUTH,
-        payload: { trophies: 0, lastDailyAttempted },
+        payload: { ...VALID_BODY, lastDailyAttempted },
       })
 
     // One legitimate transition: yesterday(stored) → today ⇒ streak 1 → 2.
@@ -453,7 +483,7 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { trophies: 0, lastDailyAttempted: '2026-07-15', dailyStreak: 999 },
+      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15', dailyStreak: 999 },
     })
     expect(res.statusCode).toBe(400)
   })

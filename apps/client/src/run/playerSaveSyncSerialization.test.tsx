@@ -71,7 +71,13 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('player-save sync — pull-before-push serialization', () => {
+// SKIPPED in CF-77 Phase 2 PR1: this suite's subject is pull-before-PUSH
+// serialization, but PR1 disabled the push (server DTO moved to the Delta model;
+// the body-forming producer lands in PR2). With no push there is nothing to
+// serialize against the pull, so the premise is moot until PR2 restores the
+// push — which re-enables this suite. The PULL half (PlayerSaveSyncOnSignIn's
+// GET → hydrate) remains covered independently by PlayerSaveSyncOnSignIn.test.tsx.
+describe.skip('player-save sync — pull-before-push serialization', () => {
   it('does not PUT while the initial GET is in flight, then PUTs after it settles (success)', async () => {
     let resolveGet!: (v: unknown) => void;
     getPlayerSaveMock.mockReturnValue(

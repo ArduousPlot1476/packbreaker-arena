@@ -815,13 +815,22 @@ export interface TelemetryBatchRequest {
   readonly events: ReadonlyArray<TelemetryEvent>
 }
 
-// GET/PUT /v1/player/save wire DTOs (M2.1 CF-75). Mirror the server surface
-// (apps/server/src/routes/playerSave.ts + validation/playerSave.ts). The GET
-// response carries `dailyStreak` (server-derived, READ-only to the client);
-// the PUT request deliberately OMITS it — `dailyStreak` is never client-
-// settable (the server's `.strict()` 400s a body carrying it). Per CF-76's
-// bounded posture the client always sends `lastDailyAttempted: null` until
-// CF-68 wires a real attempt date.
+// GET/PUT /v1/player/save wire DTOs (M2.1 CF-75; PUT request reshaped in CF-77
+// Phase 2). Mirror the server surface (apps/server/src/routes/playerSave.ts +
+// validation/playerSave.ts).
+//
+// GET response: the absolute save for client display. `dailyStreak` is
+// server-derived and READ-only. UNCHANGED by CF-77 — the client still reads
+// the absolute trophy total.
+//
+// PUT request (Delta trust-model, CF-77 Phase 2): the client NEVER sends a
+// trophy value. It reports one completed round — `runId` (opaque per-run id, a
+// uuid v4 minted client-side), `round`, and `roundOutcome` — and the SERVER
+// computes the trophy delta via `trophyDeltaFor`, applied under a round-ordering
+// guard (decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"). `dailyStreak`
+// stays absent (server-derived; `.strict()` 400s a body carrying it). Per
+// CF-76's bounded posture the client still sends `lastDailyAttempted: null`
+// until CF-68 wires a real attempt date.
 export interface PlayerSaveResponse {
   readonly trophies: number
   readonly dailyStreak: number
@@ -829,7 +838,17 @@ export interface PlayerSaveResponse {
 }
 
 export interface PlayerSaveWriteRequest {
-  readonly trophies: number
+  /** Opaque per-run id (uuid v4, client-minted). The server treats it as an
+   *  opaque key for the round-ordering guard — it never parses it. */
+  readonly runId: string
+  /** The completed round being reported (1-based). Drives BOTH the server-side
+   *  `trophyDeltaFor` delta and the round-ordering sequence check. */
+  readonly round: number
+  /** Outcome of that round. The server derives the trophy delta from it — the
+   *  client never sends a trophy value (Delta trust-model). */
+  readonly roundOutcome: RoundOutcome
+  /** Unchanged from CF-75 — orthogonal to the trophy path. Always null until
+   *  CF-68 lands (CF-76 bounded posture). */
   readonly lastDailyAttempted: IsoDate | null
 }
 
