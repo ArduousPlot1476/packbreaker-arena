@@ -4,6 +4,52 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-77 Phase 2 PR2 — PHASE 1 RATIFIED (producer signal, runId persistence, ordered delivery)
+
+Read-only Phase 1 investigation for CF-77 Phase 2 PR2 (client producer + ordered delivery + terminal-branch fix) returned CLEAN at HEAD `376c5e0` — zero HALTs, no premise contradictions; every ratified premise from the prior anchors was verified against code. Master-dev ratified the ten rulings below. DESIGN-ONLY — no code, no schema, no test, no migration. Builds on decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED" (`b36d3cc`) and decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED" (`376c5e0`). Per Rule 20 the PR2 implementation prompt is gated on THIS entry's commit SHA. This is a Phase-1 ratification: there is NO CF closure here (CF-77 closes at the PR2 merge), and the only counter delta is a new rule.
+
+### Ratified — R1 through R10
+
+**R1 — Producer signal.** The per-round producer keys on `state.state.history.length`, in its OWN effect — NOT bolted onto the quiescent-save effect (`useRun.ts:808-906`). The `[simRun, round, outcome]` deps fire on mount with no resolved round (false positive), fire on the arranging-entry of round N+1 rather than the resolution of round N, and are dead on the terminal transition. `history` is append-only and its length changes only on `applyCombatOutcome`; in-file precedent is the `pendingRelicOffer` memo (comment at `useRun.ts:604-611`, dep at `useRun.ts:665`). The just-resolved round is `history[history.length - 1]`.
+
+**R2 — Terminal branch.** `useRun.ts:831-834` stays UNTOUCHED and its `clearLocal()` stays UNCONDITIONAL. b36d3cc ruling ③ ("push the last round's delta BEFORE clearLocal()") is REFINED, NOT REVERSED: with the producer relocated per R1 the terminal branch is no longer in the push path, so "push before clear" is satisfied STRUCTURALLY by relocation rather than by reordering within that effect. Conditional-clear is REJECTED on three code-grounded counts — the push body composes in-memory and never re-reads storage; `clearLocal` preserves every cross-session field (`persistence/index.ts:88-92`); and the load-on-mount guard (`useRun.ts:226-227`) rejects any surviving terminal save, so it is neither restorable nor a push-retry vehicle. REQUIREMENT: the producer effect is DECLARED BEFORE the quiescent-save effect, so source/commit order matches the ratified "push before clear" wording at zero cost.
+
+**R3 — runId persistence.** A fresh uuid v4 is minted client-side per run and PERSISTED as an OPTIONAL field on `SerializedRunState` (`pushRunId?: string`) plus the corresponding Zod schema field. No `LocalSaveV1.schemaVersion` bump, no migration — precedent is `bornFromRecipe` (CF-43, `schemas.ts:781-784`) and `bossRewardItemId` (CF-67, `validate.ts:267-277`). RULE 17 BINDS: the load boundary is safeParse-as-boolean returning the RAW object (`validate.ts:349-351`; `migrate` returns the payload unchanged), so `.default()`/`.transform()` are inert — the default materializes at the consumption point. One ref, two set-sites: fresh-mint on the create path, read-through from the snapshot on `restore_from_save` (`useRun.ts:264-268`, reducer arm `RunController.ts:135-151`) — structurally the `entryMode` divergent-set / convergent-read pattern. The ref MUST be stably initialized (useRef / lazy init), NEVER minted in a bare effect body, so StrictMode's dev double-mount (`main.tsx:14`) PUTs an IDENTICAL runId and the `applied_round_results` composite PK (`drizzle/0002_applied_round_results.sql:6`) absorbs it. A legacy / undefined `pushRunId` mints fresh and is SAFE — no pre-producer save has anything in `applied_round_results` to double-credit. `resetRun` / `replaySameClass` mint fresh (new run = new uuid). `RunState.runId` (`state.ts:324`, `run-${seed}`, 32-bit via `makeRunSeed` at `sim-bridge.ts:61-65`) remains REJECTED as the idempotency key; the investigation corroborated the collision characterization against code (`((Date.now() ^ Math.floor(Math.random()*0xffffffff)) >>> 0)`).
+
+**R4 — Restore refire is ALLOWED.** On restore, `history.length` jumps 0→N and the producer fires for the last restored round. Under R3's read-through that push carries the SAME runId, so the composite PK absorbs it as a no-op. NO client-side suppression guard is added: the refire doubles as REPAIR for a pre-crash push that never landed. Correctness is deliberately delegated to the server idempotency record. Explicit test REQUIRED.
+
+**R5 — Ordered delivery: ADOPTED, session-scoped.** Per decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED" (Round-4 disposition), the first-choice fix. The queue lives in a REF inside `RunProvider` (`RunContext.tsx`), NOT a module singleton — lifetime tied to the run, no global reset needed in tests, and the provider stays mounted across the Desktop/Mobile dispatcher swap. StrictMode dev-remount dropping the queue is DEV-ONLY — to be documented in a comment and NOT engineered around. Failure policy: BOUNDED-RETRY-THEN-DROP, max 2 attempts per round, then drop and advance the queue — this bounds the backlog by construction and makes a stalled queue unreachable. On abandon (`useRun.ts:758-772`) the queue is flushed / cancelled, never fed. The CF-72 order-independent-schedule fallback is therefore NOT invoked and stays unopened.
+
+**R6 — Reload-durability OUT OF SCOPE, accepted residual, routed to CF-79.** No new CF is minted. An in-memory queue is empty after reload, so un-drained pushes are lost; a durable localStorage outbox would pre-commit to a client-side mechanism that CF-79 (replay-validate) may obviate — a server able to validate a replay can reconcile the account total without every round having been delivered. This is an honest-client LOSS residual, DISTINCT from Codex round-3's forgery residual and round-4's ordering residual, and it is client-UNFAVORABLE (under-credits), not exploitable.
+
+**R7 — Seam rename.** `onQuiescentSave` becomes `onRoundResult({runId, round, roundOutcome})`, wired from R1's producer effect. `usePlayerSavePush` returns the new callback; `RunContext.tsx:72-73` rewires. No vestigial seam is left behind. `useRunQuiescentPush.test.tsx` is IN SCOPE for PR2 — renamed and rewritten, not merely flagged; its premise ("fires on the initial quiescent save") is invalidated by R1.
+
+**R8 — `useRun.ts:880` UNTOUCHED.** `trophies: persisted?.trophies ?? 0` is CF-74 preservation and stays exactly as written. The investigation confirmed ZERO display consumers of `LocalSaveV1.trophies` — every trophy the player sees reads the in-run sim accumulator `state.state.trophy` (`TopBar.tsx:55`, `RunEndScreen.tsx:441-442`, `CombatOverlay.tsx:292-295` → `RoundResolution.tsx:83-84`), a DIFFERENT quantity. The producer is merely what makes the hydrated value non-zero; there is nothing to desync.
+
+**R9 — `lastDailyAttempted` stays hardcoded `null`**, CF-76-bounded, NOT expanded in PR2.
+
+**R10 — The terminal round's history append must be PROVEN BY TEST**, not assumed. The whole terminal fix rests on the terminal round appending to `history` before / with the outcome flip; if it does not, the fix fails silently.
+
+### CF-80 adjacency (flag only, unchanged)
+
+The in-run accumulator always starts at 0 because `trophiesAtStart` is a dead stub (`state.ts:520`, typed `schemas.ts:577`). The seed direction (account→run) stays CF-80's question; PR2 is write-back only (run→account).
+
+### Rule 2/3 AMENDMENT (codified here — the 376c5e0 non-counter candidate now lands)
+
+Load-bearing verification gates use `tsc -b --noEmit --force` (or clear `.tsbuildinfo` first). `turbo run … --force` busts turbo's cache but NOT `tsc -b`'s `.tsbuildinfo`, producing a FALSE GREEN — it masked PR1's entire client DTO break (only `tsc -b --noEmit --force` exposed it). Recorded as a non-counter candidate at decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED" (Non-counter notes); codified here at first instance under the bend criteria — the failure shape is structurally generic (any `tsc -b` project), the discipline is low-burden (one flag), and the surface is predictable (every future load-bearing verification run). This is an AMENDMENT to the existing Rules 2/3, NOT a new ordinal — it consumes no counter slot.
+
+### Rule 27 (NEW)
+
+Ratification prose under-specifies implementation reality; verify the ratified shape against code BEFORE quoting it as a constraint. Third instance overall, SECOND in a distinct PR: b36d3cc ruling ③'s "push before clearLocal()" presumed the push lived in an effect that R1 relocates it out of. The prior two instances were both internal to PR1 (the "atomic increment, NOT read-modify-write" phrasing and the "server-only / no client changes" scope phrasing), recorded as the HELD candidate at decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED" (Stale-doc cleanup · HELD candidate). The second-instance-across-two-distinct-PRs codification gate is now met. NO drift is taken — consistent with the PR1 RMW-phrasing disposition (cross-referenced, not edited); the under-specification is a property of forward-looking ratification prose, not a this-chat process error.
+
+### CF-77 status: PR2 Phase 1 RULED → PR2 implementation PENDING
+
+CF-77 stays OPEN; closure lands at the PR2 merge per the sub-PR convention (closing entries held until a real merge SHA exists).
+
+### Counter
+
+Baseline (tip `376c5e0`) 63/26/9/44/47 → **63/27/9/44/47**. Delta: rules **+1** (Rule 27). Catches / patterns / drifts / open-CFs unchanged — R1–R10 are a design ratification (not catches; precedent decision-log.md 2026-07-17 § "CF-77 Phase 1 RATIFIED"), the Rule 2/3 amendment consumes no ordinal, and no CF is opened or closed (CF-77 stays OPEN, closing at the PR2 merge).
+
 ## 2026-07-18 — CF-77 Phase 2 PR1 CLOSED (server Delta trust-model + idempotency-record write-versioning for player_saves.trophies); CF-77 stays OPEN (PR2 pending)
 
 ### Merge
