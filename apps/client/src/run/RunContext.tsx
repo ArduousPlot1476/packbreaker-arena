@@ -128,8 +128,15 @@ export function RunProvider({ children }: { children: ReactNode }) {
           delivered = await pushRef.current(head);
         }
         // Drop the head whether delivered or exhausted — never re-queue, so the
-        // queue always drains to empty (no head-of-line stall).
-        queueRef.current.shift();
+        // queue always drains to empty (no head-of-line stall). IDENTITY-GUARDED:
+        // the discard mutator (signedOut → queueRef.current.length = 0) can empty
+        // the queue during this round's await window, and a later enqueue can push
+        // a NEW head; an unconditional shift would then remove that never-pushed
+        // entry. Shift only if the head is still the one we just processed — the
+        // `while (length > 0)` loop re-reads the head next iteration, so both the
+        // refilled and emptied cases are handled without any epoch/generation
+        // state (cf. the heavier restoreEpochRef precedent, useRun.ts:262/315).
+        if (queueRef.current[0] === head) queueRef.current.shift();
       }
     } finally {
       drainingRef.current = false;

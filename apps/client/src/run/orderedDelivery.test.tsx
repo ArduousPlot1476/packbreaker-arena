@@ -235,4 +235,42 @@ describe('RunProvider — ordered delivery queue (R5)', () => {
     await tick(40);
     expect(putSpy).not.toHaveBeenCalled();
   });
+
+  it('identity-guards the shift: a round re-enqueued after a MID-DRAIN discard is not silently dropped', async () => {
+    // Round 1's push is held PENDING, so the drain is suspended inside its await
+    // with `head` still pointing at round 1. A signed-out event then DISCARDS the
+    // queue (queueRef.current.length = 0) mid-await, the user re-signs-in, and a
+    // NEW round 2 is enqueued as the fresh head. When round 1 finally resolves,
+    // an UNCONDITIONAL shift would remove round 2 (a never-pushed head). The
+    // identity-guarded shift removes nothing (head !== queueRef.current[0]), so
+    // the loop then delivers round 2.
+    let resolveRound1!: (delivered: boolean) => void;
+    putSpy.mockImplementation((_apiFetch: unknown, body: { round: number }) => {
+      if (body.round === 1) {
+        return new Promise<boolean>((resolve) => {
+          resolveRound1 = resolve;
+        });
+      }
+      return Promise.resolve(true);
+    });
+    // Signed in + linked so the queue drains.
+    await renderRun({ linked: true, hydrated: true, signedOut: false });
+
+    await resolveWin(); // round 1 → PUT fires and HANGS; drain suspended on the await
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+
+    // Mid-drain discard: Clerk resolves to signed-out while round 1 is pending.
+    act(() => gate!.setSignedOut(true));
+    await tick();
+    // Re-sign-in, then a NEW round resolves and enqueues as the fresh head.
+    act(() => gate!.setSignedOut(false));
+    await resolveWin(); // round 2 enqueued behind the still-pending round 1
+
+    // Resolve round 1: its shift must NOT remove round 2 (a different head).
+    await act(async () => {
+      resolveRound1(true);
+    });
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(2));
+    expect(roundsPushed()).toEqual([1, 2]);
+  });
 });
