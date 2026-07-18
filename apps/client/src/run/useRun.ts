@@ -949,6 +949,16 @@ export function useRun(options: UseRunOptions = {}) {
       // Non-null whenever a run is active (create mints / restore reads it through
       // before setSimRun); `?? undefined` keeps the field absent in the impossible
       // null case, matching the legacy-save shape.
+      //
+      // B.4 CRASH-WINDOW INVARIANT — do NOT let a refactor silently remove this
+      // ordering: this persist is SYNCHRONOUS (saveLocal below, same effect-flush),
+      // while a per-round PUSH reaches the wire only AFTER at least one await — the
+      // producer effect (declared above) enqueues synchronously, then RunProvider's
+      // drain awaits before the network PUT. So pushRunId is in localStorage BEFORE
+      // any server-apply under it: a crash cannot land after server-apply yet before
+      // persist, which would otherwise re-mint on restore and double-credit past the
+      // applied_round_results composite PK. (For a fresh run it is already persisted
+      // at the round-1 arranging-entry, before any round resolves.)
       pushRunId: pushRunIdRef.current ?? undefined,
     };
     // CF-74 (M2.1 PR3): READ CROSS-SESSION FIELDS THROUGH — never hardcode.

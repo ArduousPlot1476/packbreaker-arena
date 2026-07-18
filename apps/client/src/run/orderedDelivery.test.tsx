@@ -125,4 +125,40 @@ describe('RunProvider — ordered delivery queue (R5)', () => {
     await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(4));
     expect(roundsPushed()).toEqual([1, 2, 2, 3]);
   });
+
+  it("SERIALIZES: round N+1's PUT does not BEGIN until round N settles", async () => {
+    // Falsifiability (Rule 28): the [1,2,3] / [1,2,2,3] cases above assert the
+    // resulting ORDER, but an implementation that fired all pushes concurrently
+    // and merely resolved them in order would satisfy them too. This case
+    // isolates the actual R5 requirement — each round's PUT awaits the prior
+    // ack — by holding round 1's push PENDING and proving round 2's PUT has NOT
+    // begun. A concurrent drain fails HERE (round 2 fires immediately), which is
+    // what makes this test worth having; proven by the break-and-revert at
+    // commit 7 (decision-log CF-77 PR2 close).
+    let resolveRound1!: (delivered: boolean) => void;
+    putSpy.mockImplementation((_apiFetch: unknown, body: { round: number }) => {
+      if (body.round === 1) {
+        return new Promise<boolean>((resolve) => {
+          resolveRound1 = resolve;
+        });
+      }
+      return Promise.resolve(true);
+    });
+    await renderRun();
+
+    await resolveWin(); // round 1 → its PUT fires and HANGS (pending)
+    await resolveWin(); // round 2 → enqueued BEHIND the unresolved round 1
+
+    // Round 1's PUT is in flight; round 2's PUT must not have begun — the queue
+    // is blocked on round 1's ack, not firing round 2 concurrently.
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(1));
+    expect(roundsPushed()).toEqual([1]);
+
+    // Settle round 1 → the queue advances and round 2's PUT fires, in order.
+    await act(async () => {
+      resolveRound1(true);
+    });
+    await waitFor(() => expect(putSpy).toHaveBeenCalledTimes(2));
+    expect(roundsPushed()).toEqual([1, 2]);
+  });
 });
