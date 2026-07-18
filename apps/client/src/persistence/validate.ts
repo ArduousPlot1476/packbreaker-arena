@@ -291,6 +291,13 @@ const SerializedRunStateSchema = z
     // `restoreFrom.bornFromRecipe ?? []`. Optional (not required) keeps the type
     // guard honest: the field can genuinely be absent on a legacy load.
     bornFromRecipe: z.array(PlacementIdSchema).readonly().optional(),
+    // CF-77 Phase 2 PR2: opaque per-run PUSH id (uuid v4). OPTIONAL — a legacy
+    // save omits it and the client mints fresh on restore (safe: nothing was
+    // pushed under it yet). This boundary VALIDATES but does not transform
+    // (Rule 17), so NO `.default()`; the client owns the mint-vs-read-through
+    // decision. `.optional()` (not required) keeps the dual-satisfies bracket
+    // honest against the OPTIONAL canonical SerializedRunState.pushRunId.
+    pushRunId: z.string().optional(),
   })
   .readonly();
 

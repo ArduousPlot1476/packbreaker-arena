@@ -1,15 +1,16 @@
-// Pull-before-push serialization (M2.1 CF-75, Codex round 1 P1).
+// Pull-before-push serialization (M2.1 CF-77 Phase 2 PR2).
 //
 // Integration across the two racing sites through the REAL AccountLinkContext:
-// PlayerSaveSyncOnSignIn (GET → hydrated) and usePlayerSavePush (PUT, gated on
-// linked && hydrated). Proves a quiescent-save PUT cannot fire while the
+// PlayerSaveSyncOnSignIn (GET → hydrated) and usePlayerSavePush (the per-round
+// Delta PUT, gated on linked && hydrated). Proves a push cannot fire while the
 // initial GET is in flight, and DOES fire once the GET settles — on both the
-// success and failure/error paths.
+// success and failure/error paths. (Un-skipped now the push is live again;
+// decision-log.md 2026-07-18 § "CF-77 Phase 2 PR2 — PHASE 1 RATIFIED".)
 
 import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { LocalSaveV1 } from '@packbreaker/shared';
+import type { RoundResultReport } from './usePlayerSavePush';
 
 const { getPlayerSaveMock, putPlayerSaveMock, hydrateMock } = vi.hoisted(() => ({
   getPlayerSaveMock: vi.fn(),
@@ -28,7 +29,7 @@ import { AccountLinkProvider, useSetAccountLinked } from '../auth/AccountLinkCon
 import { PlayerSaveSyncOnSignIn } from '../auth/PlayerSaveSyncOnSignIn';
 import { usePlayerSavePush } from './usePlayerSavePush';
 
-let pushFn: ((save: LocalSaveV1) => void) | undefined;
+let pushFn: ((result: RoundResultReport) => Promise<boolean>) | undefined;
 
 function Linker() {
   const setLinked = useSetAccountLinked();
@@ -50,16 +51,8 @@ function harness() {
     </AccountLinkProvider>,
   );
 }
-function save(trophies: number): LocalSaveV1 {
-  return {
-    schemaVersion: 1,
-    trophies,
-    dailyStreak: 0,
-    lastDailyAttempted: null,
-    tutorialCompleted: false,
-    telemetryAnonId: 'x',
-    inProgressRun: null,
-  };
+function report(round: number): RoundResultReport {
+  return { runId: 'run-uuid-serialize', round, roundOutcome: 'win' };
 }
 
 beforeEach(() => {
@@ -71,13 +64,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-// SKIPPED in CF-77 Phase 2 PR1: this suite's subject is pull-before-PUSH
-// serialization, but PR1 disabled the push (server DTO moved to the Delta model;
-// the body-forming producer lands in PR2). With no push there is nothing to
-// serialize against the pull, so the premise is moot until PR2 restores the
-// push — which re-enables this suite. The PULL half (PlayerSaveSyncOnSignIn's
-// GET → hydrate) remains covered independently by PlayerSaveSyncOnSignIn.test.tsx.
-describe.skip('player-save sync — pull-before-push serialization', () => {
+describe('player-save sync — pull-before-push serialization', () => {
   it('does not PUT while the initial GET is in flight, then PUTs after it settles (success)', async () => {
     let resolveGet!: (v: unknown) => void;
     getPlayerSaveMock.mockReturnValue(
@@ -89,8 +76,10 @@ describe.skip('player-save sync — pull-before-push serialization', () => {
     harness();
     await waitFor(() => expect(getPlayerSaveMock).toHaveBeenCalledTimes(1));
 
-    // GET in flight (hydrated=false) → a quiescent push must NOT fire.
-    act(() => pushFn!(save(5)));
+    // GET in flight (hydrated=false) → a per-round push must NOT fire.
+    await act(async () => {
+      await pushFn!(report(2));
+    });
     expect(putPlayerSaveMock).not.toHaveBeenCalled();
 
     // Settle the pull (success) → hydrated flips true.
@@ -98,11 +87,15 @@ describe.skip('player-save sync — pull-before-push serialization', () => {
       resolveGet({ trophies: 9, dailyStreak: 0, lastDailyAttempted: null });
     });
 
-    // Now the push is allowed.
-    act(() => pushFn!(save(5)));
+    // Now the push is allowed — and sends the Delta body.
+    await act(async () => {
+      await pushFn!(report(2));
+    });
     await waitFor(() => expect(putPlayerSaveMock).toHaveBeenCalledTimes(1));
     expect(putPlayerSaveMock).toHaveBeenLastCalledWith(expect.anything(), {
-      trophies: 5,
+      runId: 'run-uuid-serialize',
+      round: 2,
+      roundOutcome: 'win',
       lastDailyAttempted: null,
     });
   });
@@ -118,7 +111,9 @@ describe.skip('player-save sync — pull-before-push serialization', () => {
     harness();
     await waitFor(() => expect(getPlayerSaveMock).toHaveBeenCalledTimes(1));
 
-    act(() => pushFn!(save(5)));
+    await act(async () => {
+      await pushFn!(report(2));
+    });
     expect(putPlayerSaveMock).not.toHaveBeenCalled();
 
     // Failure/error path: getPlayerSave returns null (404/401/503/network).
@@ -126,7 +121,9 @@ describe.skip('player-save sync — pull-before-push serialization', () => {
       resolveGet(null);
     });
 
-    act(() => pushFn!(save(5)));
+    await act(async () => {
+      await pushFn!(report(2));
+    });
     await waitFor(() => expect(putPlayerSaveMock).toHaveBeenCalledTimes(1));
     expect(hydrateMock).not.toHaveBeenCalled();
   });

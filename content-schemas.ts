@@ -782,6 +782,22 @@ export interface SerializedRunState extends RunState {
   // the load boundary validates (does NOT transform), so it is simply absent
   // on legacy loads; restoreRun treats a missing value as an empty set (?? []).
   readonly bornFromRecipe?: readonly PlacementId[]
+  // CF-77 Phase 2 PR2: opaque per-run PUSH id (uuid v4, client-minted) — the
+  // idempotency key the client sends on each per-round delta PUT
+  // (PlayerSaveWriteRequest.runId, § 14). PERSISTED so a restore-from-save
+  // reuses the SAME id: the server's applied_round_results composite PK
+  // (account, run, round) then absorbs a post-restore refire as a no-op instead
+  // of re-crediting already-applied rounds under a fresh id. OPTIONAL — a
+  // pre-PR2 (legacy) save omits it and is SAFE: no round was ever pushed for
+  // such a save, so nothing exists in applied_round_results to double-credit,
+  // and the client mints a fresh id on restore. The load boundary VALIDATES but
+  // does not transform (Rule 17), so a default here would be discarded — the
+  // client owns the mint-vs-read-through decision at the consumption point
+  // (useRun), NOT via a Zod .default(). DISTINCT from RunState.runId
+  // (`run-${seed}`, 32-bit-derived, collision-prone), which is rejected as the
+  // idempotency key (decision-log.md 2026-07-18 § "CF-77 Phase 2 PR2 — PHASE 1
+  // RATIFIED").
+  readonly pushRunId?: string
 }
 
 /** Versioned. Migrations live in apps/client/src/persistence/migrations/. */

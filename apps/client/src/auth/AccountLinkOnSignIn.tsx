@@ -13,7 +13,7 @@ import { useAuth } from '@clerk/react';
 import { useEffect, useRef } from 'react';
 import { useApiFetch } from '../api/useApiFetch';
 import { loadLocal } from '../persistence';
-import { useSetAccountLinked } from './AccountLinkContext';
+import { useSetAccountLinked, useSetSignedOut } from './AccountLinkContext';
 import { postAccountLink } from './postAccountLink';
 
 export function AccountLinkOnSignIn() {
@@ -22,6 +22,10 @@ export function AccountLinkOnSignIn() {
   // CF-75: publish the linked transition so the player-save sync (GET pull +
   // PUT push) can gate on it. Kept in step with linkedThisSession below.
   const setLinked = useSetAccountLinked();
+  // CF-77 Phase 2 PR2 (Codex round-1 P2): publish AFFIRMATIVE signed-out so the
+  // round-push queue can distinguish a truly anonymous session from the
+  // indeterminate pre-load / pre-link windows.
+  const setSignedOut = useSetSignedOut();
   // Single-session assumption: one account per signed-in session. Clerk
   // multi-session handling is opt-in and off by default, and this app never
   // enables it. If it is ever turned on in the Clerk Dashboard, this must
@@ -31,6 +35,12 @@ export function AccountLinkOnSignIn() {
   const linkedThisSession = useRef(false);
 
   useEffect(() => {
+    // CF-77 Phase 2 PR2 (Codex round-1 P2): publish AFFIRMATIVE signed-out —
+    // `isLoaded && !isSignedIn` — BEFORE the early returns, so every Clerk state
+    // resolves it. The `&&` short-circuits to false while `!isLoaded`
+    // (isSignedIn is `undefined` then), which is exactly the pre-load HOLD; a
+    // naive `!isSignedIn` would flip it true and re-introduce the reported drop.
+    setSignedOut(isLoaded && !isSignedIn);
     // Reset on sign-out so a later sign-in re-links (server is idempotent).
     if (!isSignedIn) {
       linkedThisSession.current = false;
@@ -60,7 +70,7 @@ export function AccountLinkOnSignIn() {
     return () => {
       cancelled = true;
     };
-  }, [isLoaded, isSignedIn, apiFetch, setLinked]);
+  }, [isLoaded, isSignedIn, apiFetch, setLinked, setSignedOut]);
 
   return null;
 }

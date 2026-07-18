@@ -69,6 +69,7 @@ import {
   makeRunSeed,
 } from './sim-bridge';
 import type { Recipe } from './types';
+import type { RoundResultReport } from './usePlayerSavePush';
 import type { LocalSaveV1, SerializedRunState } from '@packbreaker/shared';
 import type { RoundNumber } from '@packbreaker/content';
 import { clearLocal, loadLocal, saveLocal } from '../persistence';
@@ -77,7 +78,7 @@ import {
   defaultFetchTransport,
   initTelemetry,
 } from '../telemetry/emit';
-import { getOrCreateSessionId, resolveAnonId } from '../telemetry/identifiers';
+import { getOrCreateSessionId, mintPushRunId, resolveAnonId } from '../telemetry/identifiers';
 
 /** Input the player commits at class-select. useRun gates createRun on
  *  this being non-null — until ClassSelectScreen calls beginRun, sim is
@@ -110,16 +111,19 @@ export type OfferCard =
 const BOSS_REWARD_ITEM_ID = 'world-forged-heart' as ItemId;
 
 export interface UseRunOptions {
-  /** CF-75: invoked with the composed LocalSaveV1 immediately after each
-   *  quiescent `saveLocal`, so a server PUT can ride the EXACT same trigger
-   *  (no separate effect, no divergence). Injected by RunProvider — useRun
-   *  stays auth/network-free and unit-testable. Fire-and-forget; must not
-   *  throw. */
-  readonly onQuiescentSave?: (save: LocalSaveV1) => void;
+  /** CF-77 Phase 2 PR2 (R7): invoked by useRun's per-round PRODUCER effect with
+   *  one completed round {runId, round, roundOutcome} as soon as it resolves
+   *  (keyed on history.length), so the server can compute + apply the trophy
+   *  delta. Renamed from CF-75's `onQuiescentSave` (which rode the local-save
+   *  trigger and carried a whole LocalSaveV1) — the Delta model reports a ROUND,
+   *  not a snapshot. Injected by RunProvider, which wraps the push in the
+   *  session-scoped ordered-delivery queue (R5); useRun stays auth/network-free
+   *  and unit-testable. Fire-and-forget; must not throw. */
+  readonly onRoundResult?: (result: RoundResultReport) => void;
 }
 
 export function useRun(options: UseRunOptions = {}) {
-  const { onQuiescentSave } = options;
+  const { onRoundResult } = options;
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   // Sim RunController instance — dynamic-imported when pendingRunInput
@@ -189,6 +193,29 @@ export function useRun(options: UseRunOptions = {}) {
   // mirrors the React idiom for "out-of-render mutable handles."
   const restoreEpochRef = useRef(0);
 
+  // CF-77 Phase 2 PR2 (R3): the run's opaque PUSH id — a fresh uuid v4 minted
+  // once per run and PERSISTED into SerializedRunState.pushRunId, so a
+  // restore-from-save reuses the SAME id and the server's applied_round_results
+  // composite PK absorbs a post-restore producer refire as a no-op. NOT
+  // RunState.runId (`run-${seed}`, 32-bit, collision-prone). One ref, two
+  // set-sites — the create effect mints via ensureFreshPushRunId; the restore
+  // effect reads it through from the snapshot — mirroring the entryMode
+  // divergent-set / convergent-read pattern.
+  //
+  // useRef (not useState) so mutating it never re-renders, and the mint is
+  // lazy-guarded (only when null) so StrictMode's dev double-mount (main.tsx)
+  // cannot mint two ids for one run — both mounts read the same value and PUT an
+  // identical runId, which the server PK collapses. resetRun / replaySameClass
+  // null it so a genuinely new run re-mints. Deliberately NOT an unconditional
+  // mint in a bare effect body — the null-guard is what makes it idempotent.
+  const pushRunIdRef = useRef<string | null>(null);
+  const ensureFreshPushRunId = useCallback((): string => {
+    if (pushRunIdRef.current === null) {
+      pushRunIdRef.current = mintPushRunId();
+    }
+    return pushRunIdRef.current;
+  }, []);
+
   // CF 55 (M1.5d PR 2): the fresh class-select path. beginRun accepts the
   // class-select payload (no entryMode — it is the sole caller, via
   // ClassSelectScreen.onConfirm) and stamps entryMode:'class_select'. Keeping
@@ -251,6 +278,13 @@ export function useRun(options: UseRunOptions = {}) {
         }
         return;
       }
+      // CF-77 Phase 2 PR2 (R3): READ THROUGH the persisted push id — a restored
+      // run must reuse its original id so already-applied rounds are absorbed by
+      // the server PK on the producer's refire rather than re-credited under a
+      // fresh id. A legacy save lacking the field (undefined) mints fresh, which
+      // is SAFE: nothing was ever pushed under it. Set BEFORE setSimRun so the
+      // quiescent-save effect (fired by the simRun transition) persists this id.
+      pushRunIdRef.current = snapshot.pushRunId ?? mintPushRunId();
       setSimRun(controller);
       // Phase 2.5j-fix (Catch 26): pass the post-restoreRun controller
       // snapshot alongside the persisted snapshot. The reducer reads
@@ -328,6 +362,10 @@ export function useRun(options: UseRunOptions = {}) {
           ).map((s) => s.itemId!),
         );
       }
+      // CF-77 Phase 2 PR2 (R3): mint the run's PUSH id on the create path.
+      // Idempotent under StrictMode's dev double-mount (the guard reuses the
+      // first mint). Set BEFORE setSimRun so the first quiescent save persists it.
+      ensureFreshPushRunId();
       setSimRun(controller);
       dispatch({ type: 'init_from_sim', snapshot: controller.getState() });
     });
@@ -695,6 +733,9 @@ export function useRun(options: UseRunOptions = {}) {
     // a stale save from briefly being load-on-mount-eligible if the user
     // reloads between resetRun and a fresh beginRun.
     clearLocal();
+    // CF-77 Phase 2 PR2 (R3): a genuinely new run re-mints — null the ref so the
+    // createRun effect's ensureFreshPushRunId mints a fresh push id.
+    pushRunIdRef.current = null;
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     setPendingRunInput(null);
@@ -725,6 +766,8 @@ export function useRun(options: UseRunOptions = {}) {
       return;
     }
     clearLocal();
+    // CF-77 Phase 2 PR2 (R3): Play Again is a NEW run — re-mint the push id.
+    pushRunIdRef.current = null;
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     // CF 55 (M1.5d PR 2): the Play-Again path stamps entryMode:'replay_same_class'.
@@ -770,6 +813,58 @@ export function useRun(options: UseRunOptions = {}) {
     clearLocal();
     dispatch({ type: 'abandon_run' });
   }, []);
+
+  // CF-77 Phase 2 PR2 (R1/R2/R4): per-round PUSH producer. DECLARED BEFORE the
+  // quiescent-save effect below (R2) so the server push is wired ahead of the
+  // local-save path in source order.
+  //
+  // Keyed on state.state.history.length — history is append-only, so its length
+  // ticks EXACTLY ONCE per resolved round (applyCombatOutcome), INCLUDING the
+  // terminal round (which appends to history before the outcome flip). This is
+  // the correct trigger and a SEPARATE effect from the quiescent-save effect
+  // (whose [round, outcome] deps false-fire on mount, lag a round, and are dead
+  // on the terminal branch — R1). It reports history[last] = the just-resolved
+  // round; onRoundResult / pushRunIdRef / the history entry are read via closure
+  // (deliberately absent from the deps, mirroring the quiescent-save effect) so
+  // only a real length change fires it. onRoundResult is a stable callback
+  // (RunProvider's useCallback), so its identity never churns the effect.
+  //
+  // prevHistoryLenRef + the len<=prev guard make the push fire once per INCREASE
+  // only: a re-fire at the same length (e.g. StrictMode's dev double-mount, or a
+  // simRun-dep fire with unchanged history) does not re-push. Even if it did,
+  // the SAME pushRunId (commit 2) means the server's applied_round_results
+  // composite PK would absorb the duplicate.
+  //
+  // RESTORE REFIRE IS ALLOWED AND INTENDED (R4): on restore, history.length
+  // jumps 0 -> N and this fires for the LAST restored round under the SAME
+  // persisted pushRunId (read through in the restore effect). The server PK
+  // absorbs it as a no-op if that round was already applied, and it doubles as
+  // REPAIR if the pre-crash push never landed. NO client-side suppression guard
+  // — correctness is delegated to the server idempotency record.
+  const prevHistoryLenRef = useRef(0);
+  useEffect(() => {
+    const len = state.state.history.length;
+    const prev = prevHistoryLenRef.current;
+    prevHistoryLenRef.current = len;
+    if (simRun === null) return;
+    if (len === 0) return;
+    // Fire on a length INCREASE only (a new resolved round or the restore jump).
+    // reset_run drops length to 0 (and nulls simRun), so it never pushes.
+    if (len <= prev) return;
+    const last = state.state.history[len - 1];
+    if (last === undefined) return;
+    const runId = pushRunIdRef.current;
+    // runId is non-null whenever a run is active (minted on create / read
+    // through on restore, both BEFORE setSimRun). Guard defensively: a null id
+    // means nothing was persisted to push against, so skip rather than send an
+    // invalid (empty) idempotency key the server would 400.
+    if (runId === null) return;
+    onRoundResult?.({
+      runId,
+      round: last.round,
+      roundOutcome: last.outcome,
+    });
+  }, [simRun, state.state.history.length]);
 
   // M1.5b PR 3 / 5b.3a Commit 5: save-on-quiescent. Persist a
   // LocalSaveV1 whenever simRun is non-null AND (round or outcome)
@@ -850,6 +945,21 @@ export function useRun(options: UseRunOptions = {}) {
       // CF 43: persist recipe-born membership from the sim (sole owner of the
       // internal Set) so recipeBonusPct survives save→restore.
       bornFromRecipe: simRun.getRecipeBornPlacementIds(),
+      // CF-77 Phase 2 PR2 (R3): persist the run's push id so a restore reuses it.
+      // Non-null whenever a run is active (create mints / restore reads it through
+      // before setSimRun); `?? undefined` keeps the field absent in the impossible
+      // null case, matching the legacy-save shape.
+      //
+      // B.4 CRASH-WINDOW INVARIANT — do NOT let a refactor silently remove this
+      // ordering: this persist is SYNCHRONOUS (saveLocal below, same effect-flush),
+      // while a per-round PUSH reaches the wire only AFTER at least one await — the
+      // producer effect (declared above) enqueues synchronously, then RunProvider's
+      // drain awaits before the network PUT. So pushRunId is in localStorage BEFORE
+      // any server-apply under it: a crash cannot land after server-apply yet before
+      // persist, which would otherwise re-mint on restore and double-credit past the
+      // applied_round_results composite PK. (For a fresh run it is already persisted
+      // at the round-1 arranging-entry, before any round resolves.)
+      pushRunId: pushRunIdRef.current ?? undefined,
     };
     // CF-74 (M2.1 PR3): READ CROSS-SESSION FIELDS THROUGH — never hardcode.
     // Pre-fix this composer wrote literal `trophies: 0, dailyStreak: 0,
@@ -889,13 +999,12 @@ export function useRun(options: UseRunOptions = {}) {
       inProgressRun: serialized,
     };
     saveLocal(payload);
-    // CF-75: mirror the local persist to the server on the SAME quiescent
-    // trigger. RunProvider injects a callback that PUTs when signed-in +
-    // linked; useRun itself stays auth/network-free. Reads `onQuiescentSave`
-    // via closure (stable ref from RunProvider), so it is deliberately absent
-    // from the deps below — same pattern as the state reads. No-op on the
-    // anonymous path (no callback injected).
-    onQuiescentSave?.(payload);
+    // CF-77 Phase 2 PR2 (R1/R2): the server PUSH no longer rides this
+    // quiescent-save effect — it moved to a dedicated per-round PRODUCER effect
+    // keyed on history.length (declared above), which fires once per resolved
+    // round INCLUDING the terminal round (this effect early-returns on the
+    // terminal branch before reaching here, so it could never push it). This
+    // effect is now purely local persistence.
     // Deps intentionally narrow: round + outcome are the only
     // quiescent-transition signals. state.state.gold/bag/rerollCount
     // /trophy ARE read inside the effect (via closure) but are NOT in

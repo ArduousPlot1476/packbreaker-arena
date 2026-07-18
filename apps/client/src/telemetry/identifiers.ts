@@ -91,6 +91,15 @@ export function resolveAnonId(persisted: string | null | undefined): string {
   return generateUuid();
 }
 
+/** Mints a fresh opaque per-run PUSH id (uuid v4) for CF-77 Phase 2 PR2's
+ *  Delta-model player-save PUT. Reuses the same crypto.randomUUID primitive as
+ *  the telemetry ids (test-env-safe), under a run-scoped name because the value
+ *  is persisted into SerializedRunState.pushRunId and used as the SERVER
+ *  idempotency key (applied_round_results) — NOT a telemetry identifier. */
+export function mintPushRunId(): string {
+  return generateUuid();
+}
+
 function generateUuid(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();

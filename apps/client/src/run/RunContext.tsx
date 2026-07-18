@@ -19,9 +19,19 @@
 // the dispatch boundary. State below the dispatcher's swap point is
 // destroyed on every swap.
 
-import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react';
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useRun } from './useRun';
-import { usePlayerSavePush } from './usePlayerSavePush';
+import { usePlayerSavePush, type RoundResultReport } from './usePlayerSavePush';
+import { useAccountLinked, useSignedOut, useSyncHydrated } from '../auth/AccountLinkContext';
 
 // Lazy-import the class-select screen so its atoms + Desktop + Mobile
 // components ship in a dedicated chunk rather than the main bundle.
@@ -65,12 +75,111 @@ function RunBootFallback() {
   );
 }
 
+/** R5: bounded-retry-then-drop — the max network attempts per round before the
+ *  queue drops the head and advances. Keeps the backlog bounded by construction. */
+const MAX_PUSH_ATTEMPTS = 2;
+
 export function RunProvider({ children }: { children: ReactNode }) {
-  // CF-75: mirror each quiescent local save to the server (PUT), gated on
-  // signed-in + linked. useRun invokes this right after saveLocal, so the
-  // push rides the exact same trigger. No-op on the anonymous path.
-  const onQuiescentSave = usePlayerSavePush();
-  const value = useRun({ onQuiescentSave });
+  // CF-77 Phase 2 PR2 (R5/R7): useRun's per-round producer invokes onRoundResult
+  // with one completed round; RunProvider wraps the raw push (usePlayerSavePush,
+  // gated linked && hydrated) in a SESSION-SCOPED ORDERED-DELIVERY QUEUE so each
+  // round's PUT awaits the prior one's ack — removing out-of-order delivery at
+  // the source (the round-4 honest-client residual). No-op on the anonymous path.
+  const pushRoundResult = usePlayerSavePush();
+  const linked = useAccountLinked();
+  const hydrated = useSyncHydrated();
+  const signedOut = useSignedOut();
+
+  // Live-gate + latest-push refs so the STABLE enqueue/drain callbacks read
+  // current values without re-subscribing (mirrors usePlayerSavePush's gateRef).
+  const gateRef = useRef({ linked, hydrated, signedOut });
+  gateRef.current = { linked, hydrated, signedOut };
+  const pushRef = useRef(pushRoundResult);
+  pushRef.current = pushRoundResult;
+
+  // The queue lives in a REF here (NOT a module singleton, R5): its lifetime is
+  // tied to this RunProvider instance/run, it needs no global reset in tests, and
+  // it survives the Desktop/Mobile dispatcher child swaps (RunProvider stays
+  // mounted across them). IN-MEMORY ONLY — a page reload empties it and
+  // un-drained pushes are lost (R6 accepted residual → CF-79). StrictMode's dev
+  // double-mount can drop the queue on the throwaway first mount: DEV-ONLY,
+  // documented here, deliberately NOT engineered around.
+  const queueRef = useRef<RoundResultReport[]>([]);
+  const drainingRef = useRef(false);
+
+  const drainQueue = useCallback(async () => {
+    if (drainingRef.current) return;
+    // HOLD (do not drop) while signed out or the initial pull is in flight
+    // (pull-before-push) — the [linked, hydrated] effect re-kicks the drain when
+    // the gate opens, so a round enqueued before hydration is never lost.
+    if (!gateRef.current.linked || !gateRef.current.hydrated) return;
+    drainingRef.current = true;
+    try {
+      while (queueRef.current.length > 0) {
+        const head = queueRef.current[0]!;
+        // BOUNDED-RETRY-THEN-DROP (R5): at most MAX_PUSH_ATTEMPTS network attempts
+        // per round, awaiting each ack IN ORDER, then drop the head and advance.
+        // This bounds the backlog by construction — a stalled or unbounded queue
+        // is unreachable. A dropped round is the R6 residual (server-wins
+        // reconciles; CF-79 is the real fix). Retrying an already-applied round
+        // is a safe no-op via the server idempotency record.
+        let delivered = false;
+        for (let attempt = 0; attempt < MAX_PUSH_ATTEMPTS && !delivered; attempt++) {
+          delivered = await pushRef.current(head);
+        }
+        // Drop the head whether delivered or exhausted — never re-queue, so the
+        // queue always drains to empty (no head-of-line stall). IDENTITY-GUARDED:
+        // the discard mutator (signedOut → queueRef.current.length = 0) can empty
+        // the queue during this round's await window, and a later enqueue can push
+        // a NEW head; an unconditional shift would then remove that never-pushed
+        // entry. Shift only if the head is still the one we just processed — the
+        // `while (length > 0)` loop re-reads the head next iteration, so both the
+        // refilled and emptied cases are handled without any epoch/generation
+        // state (cf. the heavier restoreEpochRef precedent, useRun.ts:262/315).
+        if (queueRef.current[0] === head) queueRef.current.shift();
+      }
+    } finally {
+      drainingRef.current = false;
+    }
+  }, []);
+
+  const enqueueRoundResult = useCallback(
+    (result: RoundResultReport) => {
+      // CF-77 Phase 2 PR2 (Codex round-1 P2): DROP only on AFFIRMATIVE signed-out
+      // (Clerk loaded + not signed in) — a truly anonymous session whose queue
+      // could never drain. HOLD (enqueue) on every indeterminate state: Clerk-
+      // not-loaded and signed-in-but-link-pending BOTH keep signedOut false, so a
+      // round emitted in those windows (notably the R4 restore refire, which
+      // fires at mount ahead of the /v1/account/link POST) is held, not lost. The
+      // drain gate (!linked || !hydrated) then flushes it once linking + the
+      // initial pull settle. Dropping is irreversible, holding is recoverable —
+      // so unknown identity holds.
+      if (gateRef.current.signedOut) return;
+      queueRef.current.push(result);
+      void drainQueue();
+    },
+    [drainQueue],
+  );
+
+  // CF-77 Phase 2 PR2 (Codex round-1 P2): on AFFIRMATIVE signed-out, DISCARD the
+  // held queue. Hold-on-unknown admits cross-run accumulation — queueRef lives in
+  // this provider and survives resetRun/replaySameClass — so once Clerk resolves
+  // to truly-anonymous (the queue can never drain), clear it once with the same
+  // signal that would have dropped each entry individually. Declared BEFORE the
+  // re-drain effect so a same-commit flip discards before draining. No other
+  // eviction policy, size cap, or TTL.
+  useEffect(() => {
+    if (signedOut) queueRef.current.length = 0;
+  }, [signedOut]);
+
+  // Re-kick the drain when the gate opens (initial pull settles, or sign-in) so
+  // rounds enqueued while linked-but-not-yet-hydrated flush without waiting for
+  // the next round to arrive.
+  useEffect(() => {
+    if (linked && hydrated) void drainQueue();
+  }, [linked, hydrated, drainQueue]);
+
+  const value = useRun({ onRoundResult: enqueueRoundResult });
   if (value.simRun === null) {
     if (value.pendingRunInput === null) {
       return (
