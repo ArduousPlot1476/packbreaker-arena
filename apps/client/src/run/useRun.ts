@@ -123,6 +123,7 @@ export interface UseRunOptions {
 }
 
 export function useRun(options: UseRunOptions = {}) {
+  const { onRoundResult } = options;
   const [state, dispatch] = useReducer(clientRunReducer, INITIAL_CLIENT_STATE);
 
   // Sim RunController instance — dynamic-imported when pendingRunInput
@@ -812,6 +813,58 @@ export function useRun(options: UseRunOptions = {}) {
     clearLocal();
     dispatch({ type: 'abandon_run' });
   }, []);
+
+  // CF-77 Phase 2 PR2 (R1/R2/R4): per-round PUSH producer. DECLARED BEFORE the
+  // quiescent-save effect below (R2) so the server push is wired ahead of the
+  // local-save path in source order.
+  //
+  // Keyed on state.state.history.length — history is append-only, so its length
+  // ticks EXACTLY ONCE per resolved round (applyCombatOutcome), INCLUDING the
+  // terminal round (which appends to history before the outcome flip). This is
+  // the correct trigger and a SEPARATE effect from the quiescent-save effect
+  // (whose [round, outcome] deps false-fire on mount, lag a round, and are dead
+  // on the terminal branch — R1). It reports history[last] = the just-resolved
+  // round; onRoundResult / pushRunIdRef / the history entry are read via closure
+  // (deliberately absent from the deps, mirroring the quiescent-save effect) so
+  // only a real length change fires it. onRoundResult is a stable callback
+  // (RunProvider's useCallback), so its identity never churns the effect.
+  //
+  // prevHistoryLenRef + the len<=prev guard make the push fire once per INCREASE
+  // only: a re-fire at the same length (e.g. StrictMode's dev double-mount, or a
+  // simRun-dep fire with unchanged history) does not re-push. Even if it did,
+  // the SAME pushRunId (commit 2) means the server's applied_round_results
+  // composite PK would absorb the duplicate.
+  //
+  // RESTORE REFIRE IS ALLOWED AND INTENDED (R4): on restore, history.length
+  // jumps 0 -> N and this fires for the LAST restored round under the SAME
+  // persisted pushRunId (read through in the restore effect). The server PK
+  // absorbs it as a no-op if that round was already applied, and it doubles as
+  // REPAIR if the pre-crash push never landed. NO client-side suppression guard
+  // — correctness is delegated to the server idempotency record.
+  const prevHistoryLenRef = useRef(0);
+  useEffect(() => {
+    const len = state.state.history.length;
+    const prev = prevHistoryLenRef.current;
+    prevHistoryLenRef.current = len;
+    if (simRun === null) return;
+    if (len === 0) return;
+    // Fire on a length INCREASE only (a new resolved round or the restore jump).
+    // reset_run drops length to 0 (and nulls simRun), so it never pushes.
+    if (len <= prev) return;
+    const last = state.state.history[len - 1];
+    if (last === undefined) return;
+    const runId = pushRunIdRef.current;
+    // runId is non-null whenever a run is active (minted on create / read
+    // through on restore, both BEFORE setSimRun). Guard defensively: a null id
+    // means nothing was persisted to push against, so skip rather than send an
+    // invalid (empty) idempotency key the server would 400.
+    if (runId === null) return;
+    onRoundResult?.({
+      runId,
+      round: last.round,
+      roundOutcome: last.outcome,
+    });
+  }, [simRun, state.state.history.length]);
 
   // M1.5b PR 3 / 5b.3a Commit 5: save-on-quiescent. Persist a
   // LocalSaveV1 whenever simRun is non-null AND (round or outcome)
