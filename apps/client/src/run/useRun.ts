@@ -77,7 +77,7 @@ import {
   defaultFetchTransport,
   initTelemetry,
 } from '../telemetry/emit';
-import { getOrCreateSessionId, resolveAnonId } from '../telemetry/identifiers';
+import { getOrCreateSessionId, mintPushRunId, resolveAnonId } from '../telemetry/identifiers';
 
 /** Input the player commits at class-select. useRun gates createRun on
  *  this being non-null — until ClassSelectScreen calls beginRun, sim is
@@ -189,6 +189,29 @@ export function useRun(options: UseRunOptions = {}) {
   // mirrors the React idiom for "out-of-render mutable handles."
   const restoreEpochRef = useRef(0);
 
+  // CF-77 Phase 2 PR2 (R3): the run's opaque PUSH id — a fresh uuid v4 minted
+  // once per run and PERSISTED into SerializedRunState.pushRunId, so a
+  // restore-from-save reuses the SAME id and the server's applied_round_results
+  // composite PK absorbs a post-restore producer refire as a no-op. NOT
+  // RunState.runId (`run-${seed}`, 32-bit, collision-prone). One ref, two
+  // set-sites — the create effect mints via ensureFreshPushRunId; the restore
+  // effect reads it through from the snapshot — mirroring the entryMode
+  // divergent-set / convergent-read pattern.
+  //
+  // useRef (not useState) so mutating it never re-renders, and the mint is
+  // lazy-guarded (only when null) so StrictMode's dev double-mount (main.tsx)
+  // cannot mint two ids for one run — both mounts read the same value and PUT an
+  // identical runId, which the server PK collapses. resetRun / replaySameClass
+  // null it so a genuinely new run re-mints. Deliberately NOT an unconditional
+  // mint in a bare effect body — the null-guard is what makes it idempotent.
+  const pushRunIdRef = useRef<string | null>(null);
+  const ensureFreshPushRunId = useCallback((): string => {
+    if (pushRunIdRef.current === null) {
+      pushRunIdRef.current = mintPushRunId();
+    }
+    return pushRunIdRef.current;
+  }, []);
+
   // CF 55 (M1.5d PR 2): the fresh class-select path. beginRun accepts the
   // class-select payload (no entryMode — it is the sole caller, via
   // ClassSelectScreen.onConfirm) and stamps entryMode:'class_select'. Keeping
@@ -251,6 +274,13 @@ export function useRun(options: UseRunOptions = {}) {
         }
         return;
       }
+      // CF-77 Phase 2 PR2 (R3): READ THROUGH the persisted push id — a restored
+      // run must reuse its original id so already-applied rounds are absorbed by
+      // the server PK on the producer's refire rather than re-credited under a
+      // fresh id. A legacy save lacking the field (undefined) mints fresh, which
+      // is SAFE: nothing was ever pushed under it. Set BEFORE setSimRun so the
+      // quiescent-save effect (fired by the simRun transition) persists this id.
+      pushRunIdRef.current = snapshot.pushRunId ?? mintPushRunId();
       setSimRun(controller);
       // Phase 2.5j-fix (Catch 26): pass the post-restoreRun controller
       // snapshot alongside the persisted snapshot. The reducer reads
@@ -328,6 +358,10 @@ export function useRun(options: UseRunOptions = {}) {
           ).map((s) => s.itemId!),
         );
       }
+      // CF-77 Phase 2 PR2 (R3): mint the run's PUSH id on the create path.
+      // Idempotent under StrictMode's dev double-mount (the guard reuses the
+      // first mint). Set BEFORE setSimRun so the first quiescent save persists it.
+      ensureFreshPushRunId();
       setSimRun(controller);
       dispatch({ type: 'init_from_sim', snapshot: controller.getState() });
     });
@@ -695,6 +729,9 @@ export function useRun(options: UseRunOptions = {}) {
     // a stale save from briefly being load-on-mount-eligible if the user
     // reloads between resetRun and a fresh beginRun.
     clearLocal();
+    // CF-77 Phase 2 PR2 (R3): a genuinely new run re-mints — null the ref so the
+    // createRun effect's ensureFreshPushRunId mints a fresh push id.
+    pushRunIdRef.current = null;
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     setPendingRunInput(null);
@@ -725,6 +762,8 @@ export function useRun(options: UseRunOptions = {}) {
       return;
     }
     clearLocal();
+    // CF-77 Phase 2 PR2 (R3): Play Again is a NEW run — re-mint the push id.
+    pushRunIdRef.current = null;
     dispatch({ type: 'reset_run' });
     setSimRun(null);
     // CF 55 (M1.5d PR 2): the Play-Again path stamps entryMode:'replay_same_class'.
@@ -850,6 +889,11 @@ export function useRun(options: UseRunOptions = {}) {
       // CF 43: persist recipe-born membership from the sim (sole owner of the
       // internal Set) so recipeBonusPct survives save→restore.
       bornFromRecipe: simRun.getRecipeBornPlacementIds(),
+      // CF-77 Phase 2 PR2 (R3): persist the run's push id so a restore reuses it.
+      // Non-null whenever a run is active (create mints / restore reads it through
+      // before setSimRun); `?? undefined` keeps the field absent in the impossible
+      // null case, matching the legacy-save shape.
+      pushRunId: pushRunIdRef.current ?? undefined,
     };
     // CF-74 (M2.1 PR3): READ CROSS-SESSION FIELDS THROUGH — never hardcode.
     // Pre-fix this composer wrote literal `trophies: 0, dailyStreak: 0,
