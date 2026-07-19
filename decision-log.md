@@ -4,6 +4,63 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-68 PR-A test-topology dispositions RATIFIED (TT1–TT4; TT1 AMENDS PA7, TT3 AMENDS PA9); Catch 67; Rule 30 AMENDED; Pattern 10 (NEW); Drift 48; PA3 clarification recorded
+
+Docs-only ratification of the resolution to this session's CF-68 PR-A Step 0 HALT: two refuted premises (PA7's "existing unit tests," PA9's under-scoped test inversion) surfaced before any mutation. Rule 20 gate for RESUMING Steps 1–5 — the halt was correct; implementation stays paused until this entry has a SHA. No code, test, schema, or migration; NOTHING opens or closes (no CF delta). AMENDS decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …" (PA7, via TT1) and § "CF-68 PR-A dispositions AMENDED …" (PA9, via TT3); the rest of PA1–PA11 stands.
+
+### PA3 clarification — RECORDED (verified, not assumed)
+
+The streak derivation runs whenever a push is daily-bearing AND the daily identity matches, REGARDLESS of whether the participation insert returned a row — `ON CONFLICT DO NOTHING` empties `.returning()` on rounds 2+ of the same `(account_id, daily_date)`. Step 0(g) of this session's PR-A surface verification PROVED the two readings leave IDENTICAL persisted state: on round 2+, derive-only-if-returned skips the streak write, while derive-unconditionally hits `deriveDailyStreak`'s same-day guard (`prevLastDailyAttempted === serverToday → return prevDailyStreak`, routes/playerSave.ts) and rewrites the same value; `last_daily_attempted` is `today` either way, and the trophy `UPDATE` + `updatedAt` run on every new tuple regardless. **Change of plan recorded:** master-dev had planned to carry this in PR-A's closing entry; it lands here instead now that it is VERIFIED against the branch logic rather than assumed.
+
+### TT1 — AMENDS PA7: extract, don't "keep byte-unchanged"
+
+PA7 ratified "keep [`deriveDailyStreak`'s] existing unit tests byte-unchanged." REFUTED: `deriveDailyStreak` is referenced only at its definition (routes/playerSave.ts) and its route call site, plus one comment in db/schema.ts (grep, this session) — it has NO dedicated unit tests. Its sole coverage is ROUTE-INTEGRATION tests that drive it through the HTTP layer via the client-supplied `lastDailyAttempted`, the exact read Step 2 removes. **Ruling:** the function BODY still moves byte-unchanged into playerSaveStore.ts (PA7's move-not-rewrite holds); its coverage is EXTRACTED into a NEW pure unit test beside the relocated function, asserting the branch logic directly. **Retained-dead branches:** under PA3 the store always supplies `serverToday` as `nextLastDailyAttempted` (identity-match requires `dailyDate === serverToday`), so branch 1 (`nextLastDailyAttempted === null → 0`) and branch 2 (`nextLastDailyAttempted !== serverToday → prevDailyStreak`) become PRODUCTION-UNREACHABLE. They remain in the function (byte-unchanged body) and are covered, but the unit test MUST LABEL them retained-dead so no future reader treats branch 1 as a live "no attempt" path. CF-82 may revisit their removal.
+
+### TT2 — the EXPLOIT REGRESSION test is DELETED AND SUCCEEDED
+
+The `'EXPLOIT REGRESSION: alternating stale/today PUTs cannot inflate the streak'` test (playerSave.route.test.ts) is BUILT on the server-date gate — its mechanism is `expect(stale PUT).statusCode === 400`. The threat it guards — streak inflation via client-supplied `lastDailyAttempted` — CEASES TO EXIST once the field is unread and the streak derives from server daily-identity (the CF-76 shape again: the exploit is gone by construction, not merely bounded). But "dead by construction with NO CI guard" is one refactor from silent resurrection. It is DELETED-AND-SUCCEEDED, with TWO ratified successors:
+- **(a) Hostile-payload successor** — a NON-daily-bearing PUT carrying `lastDailyAttempted` set to today moves NEITHER `dailyStreak` NOR `last_daily_attempted`; replayed with alternating values across rounds, still unmoved. Direct threat-lineage descendant. Rule 28 falsifiable: wire the client field back into the derivation and it must fail.
+- **(b) Route-level pass-through successor** — the deleted `server-derived dailyStreak` describe block was the ONLY HTTP-layer streak coverage; store tests cannot catch the route failing to FORWARD `dailyContractId` / `dailyDate`. One thin route test: a daily-bearing PUT advances the streak, a non-daily PUT does not.
+
+The `server-derived dailyStreak` describe block (`yesterday → +1`, `today → unchanged`, `gap → reset to 1`, `null attempt → 0`, `ignores any client-supplied streak`) is DELETED — it drives the removed client-field path — superseded by TT1's unit test + the realsql suite + successor (b).
+
+### TT3 — AMENDS PA9, extended
+
+PA9's "invert the gate's existing tests" is under-scoped. Ruling:
+- The two gate tests (`'400 on a future lastDailyAttempted'`, `'400 on a STALE (past) lastDailyAttempted'`) INVERT (future / stale date → 200) AND are RENAMED to state the tolerance contract — an inverted test carrying its old 400-asserting name is a trap for the next reader.
+- NEW case PA8 created and nothing covers: **field ABSENT entirely → 200** (`.optional()` had no test because `lastDailyAttempted` was required-nullable; every existing PUT body sends it, verified this session).
+- Confirm an unknown-key rejection test still exists and passes (`.strict()` stays): `'400 when the body carries dailyStreak'` and `'400 when the body carries a (retired) trophies field'` (playerSave.route.test.ts) both assert `.strict()` rejection and are RETAINED. No new one needed.
+
+### TT4 — coverage topology (so future daily tests land in the right layer)
+
+- Derivation BRANCH LOGIC → pure unit test at the store (the `playerSaveStore` neighborhood).
+- PERSISTED daily behavior (participation insert, `ON CONFLICT` no-op, refire non-write, neutral-run non-write) → realsql suite (playerSaveStore.realsql.test.ts).
+- HTTP TOLERANCE + route PASS-THROUGH (`.optional()` acceptance, `.strict()` rejection, daily-vs-non-daily forwarding) → route tests (playerSave.route.test.ts).
+
+### Catch 67 (NEW, Class A — change-site contradiction)
+
+Master-dev asserted, in a ratified disposition (PA7) bound for canon, that `deriveDailyStreak` had existing unit tests. Never verified; refuted at the change site by grep this session — only the definition, the route call, and one db/schema.ts comment; no test. Same shape as Catch 66's unverified `accounts.` table qualifier (decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …"). **Rule 29 disposition — this IS a catch:** not a gap no artifact claimed, but a POSITIVE CLAIM about shipped state made in an artifact headed for canon, whose stated job (accurately describing the surface it dispositions) it failed. Fifth application of Rule 29 since codification; SECOND catch-side outcome in the CF-68 arc lineage (Catch 66 was the first).
+
+### Rule 30 AMENDED (extends the rule — no new ordinal)
+
+New text: "Never emit an UNVERIFIED FACTUAL CLAIM ABOUT SHIPPED STATE — a qualified citation, a claim about what tests exist, a claim about what a file contains or imports — in any artifact headed for canon or for a hand-off. Verify from ground truth or ask." WHY: Rule 30's prior wording ("qualified code-site citation") was scoped too NARROWLY to catch an assertion about TEST TOPOLOGY — exactly as Catch 64's original "never infer a package prefix" was too narrow to catch a table prefix (the under-generalization finding at Rule 30's codification, decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …"). Extends Rule 30; does NOT increment the counter.
+
+### Pattern 10 (NEW) — codification-to-surface-feature
+
+A rule codified from an instance tends to be scoped to that instance's SURFACE FEATURE rather than its GENERATIVE MECHANISM, so the next instance escapes it. Two instances, both already in canon:
+- (i) Catch 64 → "never infer a PACKAGE PREFIX" → Catch 66 (a TABLE prefix) escaped it — recorded as the under-generalization finding at Rule 30's codification (decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …").
+- (ii) Rule 30 → "qualified CODE-SITE CITATION" → Catch 67 (a TEST-TOPOLOGY claim) escapes it (this entry).
+
+**Remedy, ratified as standing practice at every future codification:** state the GENERATIVE MECHANISM explicitly, then test the draft wording against a hypothetical variant that shares the mechanism but not the surface. Pattern ordinal 10 verified UNMINTED before assigning (patterns stood at 9 through this milestone).
+
+### Drift 48 (NEW, Topic 2)
+
+Master-dev asserted unverified shipped state (`deriveDailyStreak` has unit tests) in a ratified disposition ONE ARC after codifying the rule against exactly that (Rule 30, decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …"). Pairs to Catch 67 as Drift 46 paired to Catch 66 — the change-site contradiction is the catch, the assert-unverified-state process failure is the drift.
+
+### Counter
+
+Baseline (tip `e8a9537`, decision-log.md 2026-07-18 § "CF-68 PR-A dispositions AMENDED …") 66/31/9/47/48 → **67/31/10/48/48** (catches 67 / rules 31 / patterns 10 / drifts 48 / open-CFs 48). Delta: catches **+1** (Catch 67 — Class A change-site contradiction, the unverified "existing unit tests" claim); patterns **+1** (Pattern 10 — codification-to-surface-feature); drifts **+1** (Drift 48 — Topic 2, assert-unverified-shipped-state, pairs to Catch 67). Rules **+0** (Rule 30 AMENDED — extends the rule, no ordinal). Open-CFs **+0** (nothing opened or closed). LABELLED to prevent transposition — **drifts = 48, open-CFs = 48** — the two fields coincide numerically this entry; TT1–TT4 and the PA3 clarification are dispositions minting no ordinal.
+
 ## 2026-07-18 — CF-68 PR-A dispositions AMENDED (PA8–PA11; PA8 AMENDS PA1); CF-82 scope amended; Drift 47
 
 Docs-only amendment to the CF-68 PR-A Phase 1 dispositions, found while drafting PR-A's Phase 2 implementation prompt: PA1 was incomplete in the exact dimension Rule 31 governs — and Rule 31 was codified in that same entry. This closes it before any implementation prompt cites PA1. Rule 20 gate for the CF-68 PR-A Phase 2 prompt; no code, schema, or migration; NOTHING closes (CF-68 stays OPEN; CF-82 stays OPEN, scope amended). AMENDS decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …" — PA1 specifically; PA2–PA7 stand unchanged.
