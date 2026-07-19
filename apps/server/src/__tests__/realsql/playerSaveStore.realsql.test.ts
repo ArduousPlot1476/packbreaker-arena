@@ -65,8 +65,16 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     return acc!.id
   }
 
-  /** A round report with the daily fields fixed (orthogonal to the trophy
-   *  path — every trophy scenario holds them constant). */
+  // CF-68 PR-A daily-identity constants. The store verifies a push's claimed
+  // (dailyContractId, dailyDate) against these server-truth values; a `dailyRound`
+  // whose claim equals them MATCHES and records participation, one whose claim
+  // differs is a silent skip (PA6). SERVER_TODAY is a fixed instant so the whole
+  // suite shares one "today".
+  const SERVER_TODAY = '2026-07-15'
+  const DAILY_ID = 'daily-placeholder'
+
+  /** A NEUTRAL (non-daily) round report — the trophy scenarios' default. No daily
+   *  identity is claimed, so the store writes trophies ONLY (PA3 invariant). */
   function round(
     accountId: string,
     runId: string,
@@ -78,9 +86,43 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
       runId,
       round: r,
       roundOutcome,
-      dailyStreak: 0,
-      lastDailyAttempted: null,
+      dailyContractId: null,
+      dailyDate: null,
+      serverToday: SERVER_TODAY,
+      serverDailyContractId: DAILY_ID,
     })
+  }
+
+  /** A DAILY-BEARING round report. Defaults MATCH the server truth (dailyDate =
+   *  SERVER_TODAY, contract id = DAILY_ID) so a plain call is a valid daily
+   *  attempt; override `opts` to construct an identity MISMATCH. */
+  function dailyRound(
+    accountId: string,
+    runId: string,
+    r: number,
+    roundOutcome: 'win' | 'loss',
+    opts: { dailyContractId?: string; dailyDate?: string } = {},
+  ) {
+    return store.applyRoundResult({
+      accountId,
+      runId,
+      round: r,
+      roundOutcome,
+      dailyContractId: opts.dailyContractId ?? DAILY_ID,
+      dailyDate: opts.dailyDate ?? SERVER_TODAY,
+      serverToday: SERVER_TODAY,
+      serverDailyContractId: DAILY_ID,
+    })
+  }
+
+  /** Count of participation rows for an account (raw SQL — the store exposes no
+   *  daily_participation reader; the harness schema is search_path-pinned). */
+  async function participationCount(accountId: string): Promise<number> {
+    const res = await real.pool.query(
+      'SELECT count(*)::int AS n FROM daily_participation WHERE account_id = $1',
+      [accountId],
+    )
+    return (res.rows[0] as { n: number }).n
   }
 
   // ── Structural ──
@@ -98,22 +140,19 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     ).rejects.toThrow()
   })
 
-  // last_daily_attempted is pg `date` mode:'string' — round-trips as a plain
-  // YYYY-MM-DD string, NOT a JS Date (which would break the IsoDate brand).
-  it('lastDailyAttempted round-trips as a YYYY-MM-DD string, not a Date', async () => {
+  // player_saves.last_daily_attempted is pg `date` mode:'string' — it round-trips
+  // through the STORE (drizzle) as a plain YYYY-MM-DD string, NOT a JS Date (which
+  // would break the IsoDate brand). A daily round writes it (= the verified date).
+  // (daily_participation.daily_date shares the mode but is never read through
+  // drizzle in production; a raw pool.query would return a Date, so it is not
+  // asserted here — scenario j pins its stored value via a date-string WHERE.)
+  it('last_daily_attempted round-trips as a YYYY-MM-DD string, not a Date', async () => {
     const acct = await freshAccountId()
-    const saved = await store.applyRoundResult({
-      accountId: acct,
-      runId: 'run-date',
-      round: 1,
-      roundOutcome: 'win',
-      dailyStreak: 3,
-      lastDailyAttempted: '2026-01-02',
-    })
-    expect(saved.lastDailyAttempted).toBe('2026-01-02')
+    const saved = await dailyRound(acct, 'run-date', 1, 'win')
+    expect(saved.lastDailyAttempted).toBe(SERVER_TODAY)
     expect(typeof saved.lastDailyAttempted).toBe('string')
     const found = await store.findByAccountId(acct)
-    expect(found!.lastDailyAttempted).toBe('2026-01-02')
+    expect(found!.lastDailyAttempted).toBe(SERVER_TODAY)
     expect(typeof found!.lastDailyAttempted).toBe('string')
   })
 
@@ -268,8 +307,10 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
       runId: 'run-ovf',
       round: 1,
       roundOutcome: 'win',
-      dailyStreak: 0,
-      lastDailyAttempted: null,
+      dailyContractId: null,
+      dailyDate: null,
+      serverToday: SERVER_TODAY,
+      serverDailyContractId: DAILY_ID,
     })
     await real.pool.query('UPDATE player_saves SET trophies = $1 WHERE account_id = $2', [
       INT4_MAX - 5,
@@ -283,8 +324,10 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
       runId: 'run-ovf',
       round: 2,
       roundOutcome: 'win',
-      dailyStreak: 0,
-      lastDailyAttempted: null,
+      dailyContractId: null,
+      dailyDate: null,
+      serverToday: SERVER_TODAY,
+      serverDailyContractId: DAILY_ID,
     })
     expect(saturated.trophies).toBe(INT4_MAX)
     expect(warns.some((w) => w.includes('int4 max'))).toBe(true)
@@ -321,5 +364,70 @@ describe.skipIf(!REAL_SQL_AVAILABLE)('PlayerSaveStore — real SQL (CF-77 Phase 
     )
     const foundI = await store.findByAccountId(acct)
     expect(foundI!.trophies).toBe(base * (N + 1)) // seed + N wins, all applied
+  })
+
+  // ── CF-68 PR-A — daily participation (PA3–PA6) ──
+
+  it('j. first daily round records participation and advances the streak', async () => {
+    const acct = await freshAccountId()
+    const saved = await dailyRound(acct, 'run-d', 1, 'win')
+    expect(await participationCount(acct)).toBe(1)
+    const row = await real.pool.query(
+      'SELECT run_id, contract_id FROM daily_participation WHERE account_id = $1 AND daily_date = $2',
+      [acct, SERVER_TODAY],
+    )
+    expect(row.rows[0]).toEqual({ run_id: 'run-d', contract_id: DAILY_ID })
+    expect(saved.dailyStreak).toBe(1) // never-attempted ⇒ 1
+    expect(saved.lastDailyAttempted).toBe(SERVER_TODAY)
+  })
+
+  it('k. a second same-day round no-ops participation and holds the streak flat', async () => {
+    const acct = await freshAccountId()
+    await dailyRound(acct, 'run-d', 1, 'win') // streak → 1, participation written
+    const second = await dailyRound(acct, 'run-d', 2, 'win') // new round tuple, same day
+    expect(await participationCount(acct)).toBe(1) // ON CONFLICT no-op on round 2
+    expect(second.dailyStreak).toBe(1) // same-day guard holds it flat
+    expect(second.lastDailyAttempted).toBe(SERVER_TODAY)
+  })
+
+  it('l. a refire (duplicate round tuple) touches neither participation nor the streak', async () => {
+    const acct = await freshAccountId()
+    const first = await dailyRound(acct, 'run-d', 1, 'win')
+    const refire = await dailyRound(acct, 'run-d', 1, 'win') // SAME (acct, run, round)
+    expect(await participationCount(acct)).toBe(1)
+    expect(refire.dailyStreak).toBe(first.dailyStreak)
+    expect(refire.trophies).toBe(first.trophies) // idempotent no-op, no re-credit
+  })
+
+  // PA3 HARD INVARIANT (Rule 28 falsification target #1): a neutral round must
+  // move NO streak field. Establish a streak with a daily round, then a neutral
+  // round must leave dailyStreak + last_daily_attempted untouched while trophies
+  // move. Remove the daily-match guard around the streak write and this fails.
+  it('m. a neutral (non-daily) round records no participation and moves no streak field', async () => {
+    const acct = await freshAccountId()
+    const d = await dailyRound(acct, 'run-daily', 1, 'win') // streak 1, last = today
+    const n = await round(acct, 'run-neutral', 1, 'win') // neutral: trophies only
+    expect(await participationCount(acct)).toBe(1) // only the daily run's row
+    expect(n.dailyStreak).toBe(d.dailyStreak) // streak UNTOUCHED by the neutral round
+    expect(n.lastDailyAttempted).toBe(d.lastDailyAttempted) // last_daily_attempted UNTOUCHED
+    expect(n.trophies).toBeGreaterThan(d.trophies) // ...but trophies DID move
+  })
+
+  // PA6: an identity MISMATCH (stale date, or wrong contract id) is a SILENT skip
+  // — no participation, no streak move, and the round push still SUCCEEDS.
+  it('n. an identity-mismatched daily push succeeds with no participation', async () => {
+    const staleAcct = await freshAccountId()
+    const stale = await dailyRound(staleAcct, 'run-stale', 1, 'win', { dailyDate: '2026-07-14' })
+    expect(stale.trophies).toBe(trophyDeltaFor('win', 1, 0)) // push succeeded
+    expect(stale.dailyStreak).toBe(0) // untouched
+    expect(await participationCount(staleAcct)).toBe(0)
+
+    const wrongIdAcct = await freshAccountId()
+    const wrongId = await dailyRound(wrongIdAcct, 'run-wrongid', 1, 'win', {
+      dailyContractId: 'not-the-daily',
+    })
+    expect(wrongId.trophies).toBe(trophyDeltaFor('win', 1, 0))
+    expect(wrongId.dailyStreak).toBe(0)
+    expect(await participationCount(wrongIdAcct)).toBe(0)
   })
 })

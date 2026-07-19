@@ -866,9 +866,16 @@ export interface PlayerSaveWriteRequest {
   /** Outcome of that round. The server derives the trophy delta from it — the
    *  client never sends a trophy value (Delta trust-model). */
   readonly roundOutcome: RoundOutcome
-  /** Unchanged from CF-75 — orthogonal to the trophy path. Always null until
-   *  CF-68 lands (CF-76 bounded posture). */
-  readonly lastDailyAttempted: IsoDate | null
+  /** CF-68 PR-A (PA8): ACCEPTED, NEVER READ. Optional so a client may send a
+   *  date, send null, or omit it during the PR-A→PR-B window; the server derives
+   *  participation and never trusts this field. Removal is CF-82. */
+  readonly lastDailyAttempted?: IsoDate | null
+  /** CF-68 PR-A daily-identity (PA2 / PA10): the daily contract id + UTC date the
+   *  run was played against. Both optional (a non-daily push omits them). The
+   *  server VERIFIES them against its own daily contract for today and derives
+   *  the streak from rows it writes — the client is never trusted for it. */
+  readonly dailyContractId?: ContractId
+  readonly dailyDate?: IsoDate
 }
 
 
