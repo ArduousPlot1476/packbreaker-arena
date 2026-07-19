@@ -4,6 +4,58 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-19 — CF-64 CLOSED (frozen-corpus regeneration drift isolated on UNCHANGED code; the CRLF-blob premise REFUTED mid-flight by git cat-file); Stage 0 line-ending guard + Stage 1 regeneration; two-stage disposition AMENDED to three stages, ratified HERE
+
+CF-64 (frozen-corpus regeneration-reproducibility drift; opened decision-log.md 2026-07-11 § "CF 58 CLOSED …") CLOSED at merge `5b840d7` (PR \#53 `m2-cf64-stage1-regen`, `--no-ff`, parents `2125b82`+`aa37e08`; `merged:true`, `merge_commit_sha 5b840d7`; two commits — `8a25714` `.gitattributes`, `aa37e08` 41 fixtures; branch deleted). Ratified per the two-stage disposition (decision-log.md 2026-07-19 § "COMBAT NON-RESOLUTION + LEGIBILITY diagnosed …", landed `2125b82`) and its ordering "CF-64 Stage 1 PRECEDES CF-83."
+
+### Stage 0 — three-stage AMENDMENT, ratified in THIS entry (Rule 20 seam named)
+The two-stage disposition (`2125b82`) is AMENDED to THREE stages: a Stage 0 line-ending normalization is inserted ahead of Stage 1. The amendment is ratified HERE, in this closing entry — NOT in a prior docs commit — because Stage 0 changes nothing about what Stage 1 outputs; it only makes the disposition's stated requirement (an attributable Stage-1 diff) achievable. Seam recorded explicitly rather than folded silently.
+
+### The CRLF-blob premise was REFUTED mid-flight
+Stage 0 was first specified on the premise that the frozen fixture blobs are committed CRLF while `writeAllFixtures()` emits LF. `git cat-file -p HEAD:<fixture>` (applies NO filters) reports `0` CR bytes: the blobs are LF, and always were. The "CRLF blobs" reading came from `git show`, which applies the autocrlf smudge and is not filter-free. The "224 modified on every regeneration since the freeze" was a WORKING-TREE artifact: with `core.autocrlf=true` and no `.gitattributes`, checkout smudges the LF blobs to CRLF in the working tree, and comparison against the generator's LF output yields 183 phantom line-ending diffs on top of 41 real content diffs. CF-64 never characterized this; recorded so a future reader does not re-derive it. Stage 0 = `packages/sim/test/fixtures/runs/*.jsonl text eol=lf` (preventive guard pinning the working tree to LF); with it, a regeneration reports exactly the 41 real content diffs (verified: fixtures `git status --porcelain` = 41, `--ignore-cr-at-eol` = 41).
+
+### Stage 1 — 41 files, content-only (count-match, NOT set identity)
+`pnpm generate-fixtures` on UNCHANGED sim/content code → 41 of 224 fixtures drift, content-only. Count-matches CF-64's recorded "~41" as CORROBORATION, NOT set identity (CF-64 recorded a count, not a file list). Nothing outside `packages/sim/test/fixtures/runs/` changed beyond the one `.gitattributes` line (merge diff: 42 files, 519 insertions / 360 deletions).
+
+### Trajectory finding — INDEPENDENT corroboration of combat non-resolution
+The 41 diffs are trajectory-wide, not terminal-only: changed hunks span the action stream (`buy_item`, `advance_phase`) AND the `perRoundCombatEvents` result line — the whole replay diverged. Aggregate byte delta +205663 (28 larger / 13 smaller) — net larger = regenerated combats emit MORE events, i.e. run LONGER. Corroborates the combat-non-resolution finding (decision-log.md 2026-07-19 § "COMBAT NON-RESOLUTION + LEGIBILITY diagnosed …") via a SEPARATE measurement path: the drift itself trends toward longer combats.
+
+### Stage 2 directional expectation (free sanity check on CF-83)
+If CF-83's fix works, Stage 2's regeneration diff should run the OTHER way — fewer events, NET NEGATIVE byte delta. A cheap check independent of any diff review.
+
+### Determinism — proven EMPIRICALLY by hash compare
+SHA-256 of all 224 `.jsonl` is IDENTICAL across two consecutive `pnpm generate-fixtures` writes (verbatim result: "224/224 IDENTICAL"; regenerating on the committed corpus leaves `git status --porcelain` = 0 lines, so committed == regen output). Replay harness `test/determinism/harness.test.ts` = "231 passed (231)" (224-fixture replay + meta), 224/224. Phase 1b (§ C2) established determinism by grep-inference; this establishes it by EXECUTION. `git status --porcelain` cannot discharge this — it compares against a stored blob, not a prior write, and a line-ending filter confounds it (see Methodology).
+
+### Gates
+`tsc -b --noEmit --force` exit 0; Rule 13 triple-green — `turbo run lint typecheck test build --force` ×3 cold-cache, verbatim "25 successful, 25 total / 0 cached" each run (sim 537 pass / 1 skip, server 122 pass / 24 skip, client 632 pass / 15 skip, content 31, ui-kit 34). PR \#53 via PAT REST (HTTP 201); handoff-verify all categories PASS; codex-cycle round 1 CLEAN (verbatim "Codex Review: Didn't find any major issues", reviewed `aa37e08069` = tip; no catch, CF-67).
+
+### Catch 75 + Drift 54 (master-dev, Class A, Rule 30)
+Master-dev asserted CRLF blobs in the object store — unconditionally — from a filter-applying command (`git show`), and specified a Stage 0 mechanism (`sed` / `git add --renormalize` to "convert" them) on that basis. REFUTED by `git cat-file` (0 CR bytes; blobs LF). Class A, Rule 30 (a factual claim checkable against a repository artifact, emitted without the filter-free check). Drift 54 pairs it (Topic 2, master-dev deviation, per the Catch 66 / Drift 46 precedent). NO catch for Claude Code (Rule 29): it ran the specified command, reported faithfully, AND surfaced the contradicting `git ls-files --eol` `i/lf` reading in the SAME message — the contradiction was surfaced, not buried; the resolving diagnostic (`git cat-file`) was master-dev's directed next step.
+
+### Rule 28 WIDENED (extends; NO ordinal; mechanism-first per Pattern 10's remedy)
+"Any verification step — test, gate, OR diagnostic command — must be able to produce a different result under the negation of what it claims to establish. A check that returns the same output whether the hypothesis is true or false is not verification. Applies to invariant tests and one-off diagnostics equally." Basis: Rule 28's prior wording scoped to ordering / exclusion / mutual-exclusion invariant TESTS; a diagnostic command with the identical defect (`git show`, which reports the smudged view regardless of the raw blob) escaped it. Pattern 10, FOURTH instance (codification-to-surface-feature; remedy = scope to the generative mechanism, here "any verification step," not the surface "invariant tests"). No new ordinal (amendment).
+
+### Methodology — absorbed (no ordinal)
+`git status --porcelain` cannot prove regeneration determinism: it compares the working tree against a stored blob, not against a prior write, and a line-ending filter confounds it. The test is SHA-256 hash-compare across two consecutive writes. Master-dev specified the broken `git status` check AND caught it pre-execution, replacing it with hash-compare BEFORE it ran; absorbed on the Gate-0 PLAR/PLAN precedent. Seam recorded: a broken verification step that EXECUTES and fails its job takes a catch; specified-and-caught-before-running does not.
+
+### CF-83 SUCCESS CRITERION (ruled; uncommitted until this entry lands) — TWO clauses, BOTH required
+- Clause 1 — resolution: tick-cap draw rate below balance-bible.md § 2's <1% guardrail; round-1 combats resolve within the cap. Instrument: the Stage-2 regenerated corpus.
+- Clause 2 — consequence: the absolute count of `ghost_win` RISES; target band 15–25% on non-boss rounds. Instrument: REAL PLAY post-fix via PostHog `combat_end`, NOT the corpus — the corpus is scripted strategies including deliberately incoherent builds and cannot measure competent play. Boss keeps balance-bible.md § 15's separate ~30% player-win target. Rationale: gdd.md § 1 gives 3 hearts over 11 rounds, so expected losses = 11 × ghost_win rate; 15–25% yields 1.65–2.75 expected losses — tense and completable. Current real-play 2.7% yields 0.3 — the player cannot lose.
+- WHY BOTH: Clause 1 alone is passable by converting timeouts into player_wins, taking the win rate from 83.8% to ~97% — passing the guardrail while making the game worse.
+
+### POPULATION CAVEAT (three lines)
+- (i) "342 reliable" = player-side item composition reconstructible for 342 of 391 caps; cumulative reconstruction becomes unreliable after the first `sell_item` or `combine_recipe` in a run. Ghost side exact for all 1096.
+- (ii) The 224-fixture corpus is scripted-strategy-generated, not real play, and over-represents incoherent builds by construction. Corpus rates are an UPPER BOUND; real-play 13.5% is the player-facing number.
+- (iii) The structural round-1 argument is POPULATION-INDEPENDENT — 4g buys one 3g common regardless of who plays. That leg holds for both populations and is load-bearing.
+
+### project_m2_position.md re-read (Rule 32 full pass)
+Full top-to-bottom re-read vs canon at `2125b82`: substantially consistent. One internal inconsistency (frontmatter "this close: Catch 68 … Drift 49" lags its own `74/32/10/53/51` counter — the current-tip close is Catches 69–74 / Drifts 50–53) + currency gaps (remote-heads list, CF-64 "two-stage" wording, absent CF-83 success criterion). No canon contradiction; to be resynced post-merge.
+
+### Counter
+Baseline (tip `2125b82`, decision-log.md 2026-07-19 § "COMBAT NON-RESOLUTION + LEGIBILITY diagnosed …") 74/32/10/53/51 → **75/32/10/54/50** — catches **75** / rules **32** / patterns **10** / drifts **54** / open-CFs **50**. Delta: catches **+1** (Catch 75 — master-dev CRLF-blobs-from-a-filter-applying-command); rules **+0** (Rule 28 WIDENED = amendment, no ordinal); patterns **+0** (Pattern 10 fourth instance, referenced); drifts **+1** (Drift 54 — pairs Catch 75); open-CFs **−1** (CF-64 CLOSED; none opened). Claude Code took no catch (Rule 29). Two-commit fixtures-only PR; regeneration only, no source/code change.
+
+---
+
 ## 2026-07-19 — COMBAT NON-RESOLUTION + LEGIBILITY diagnosed (Phase 1 read-only investigation; Rule 20 gate for all dependent implementation — no code/schema/migration here); CF-83 / CF-84 / CF-85 OPENED; CF-64 two-stage-regeneration disposition (stays OPEN, Stage 1 precedes CF-83); combat-resolution SEQUENCED ahead of CF-68 PR-B (supersedes the uncommitted self-cert-first inversion); session process — Rule 32 NEW, Rule 30 RE-AMENDED, Catches 69–74, Drifts 50–53, DoD migration-applied amendment
 
 Two read-only Phase 1 passes (1a: tick distribution + client-surface enumeration; 1b: stall segmentation + CF-64 regeneration cost) plus PostHog outcome data diagnosed a combat non-resolution fault. This entry is the Rule 20 gate; nothing ships here.
