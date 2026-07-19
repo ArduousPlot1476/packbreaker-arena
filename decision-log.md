@@ -4,6 +4,48 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-68 PR-A dispositions AMENDED (PA8–PA11; PA8 AMENDS PA1); CF-82 scope amended; Drift 47
+
+Docs-only amendment to the CF-68 PR-A Phase 1 dispositions, found while drafting PR-A's Phase 2 implementation prompt: PA1 was incomplete in the exact dimension Rule 31 governs — and Rule 31 was codified in that same entry. This closes it before any implementation prompt cites PA1. Rule 20 gate for the CF-68 PR-A Phase 2 prompt; no code, schema, or migration; NOTHING closes (CF-68 stays OPEN; CF-82 stays OPEN, scope amended). AMENDS decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …" — PA1 specifically; PA2–PA7 stand unchanged.
+
+### PA8 — AMENDS PA1: lastDailyAttempted becomes `.nullable().optional()`
+
+PA1 ratified that PR-A KEEPS `lastDailyAttempted` "as an accepted value the server never reads." The SHIPPED shape is REQUIRED-nullable — `lastDailyAttempted: IsoDateSchema.nullable()` inside a `.strict()` object (`PlayerSaveWriteRequestSchema`, validation/playerSave.ts; verified verbatim this session: `.nullable()` with NO `.optional()`, comment "null = the player has never attempted a daily"). Required-nullable tolerates the CURRENT client (it sends `lastDailyAttempted: null`, `usePlayerSavePush`, usePlayerSavePush.ts) but 400s any client that STOPS sending the field: `.strict()` fails a MISSING required key. That is the SAME 400 → retry×2 → drop failure as the PR-A window (PA1), in the OPPOSITE direction — a client that has moved on from the field. **Ruling: `lastDailyAttempted` becomes `.nullable().optional()`** — accepted present-null, present-date, OR absent; read in none. `.optional()` closes the window BY CONSTRUCTION rather than by the PA1 send-side sequencing.
+
+**Corollary (ratified).** PR-B does NOT modify the client's `lastDailyAttempted` line: sending `null` and omitting the field both validate. PR-B's scope stays the daily-fetch wiring — it need not touch `usePlayerSavePush`'s payload.
+
+### CF-82 AMENDED — scope covers both sides of the removal
+
+CF-82 (decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …") now covers BOTH sides of the eventual removal: the client SEND (`usePlayerSavePush`'s `lastDailyAttempted: null`) and the SCHEMA field (the `.nullable().optional()` slot), removed TOGETHER once stale clients carrying the legacy payload have aged out. Removing either alone reopens a 400 window (PA1 for the schema side, PA8 for the send side). CF-82 stays OPEN — no open-CF delta.
+
+### PA9 — the server-date gate is REMOVED in PR-A
+
+`registerPlayerSaveRoutes` (routes/playerSave.ts) 400s any `lastDailyAttempted` that is neither `null` nor `serverToday` (the guard emitting "lastDailyAttempted must be the current server date … or null"). Its purpose was BOUNDING the CF-76 exploit on a TRUSTED field (one increment per server-day). Once the field is UNREAD (D3 / PA1 / PA8 — the server never reads `lastDailyAttempted`; participation is derived server-side), the gate protects NOTHING and can only 400 an honest client carrying a stale date (a tab left open past midnight). **Removal is strictly MORE tolerant** and lands in PR-A. Its existing tests INVERT — a request that previously 400'd (a non-today `lastDailyAttempted`) now SUCCEEDS. Recorded as RATIFIED, not a regression: a future reader must NOT restore the gate; the field it guarded is no longer trusted.
+
+### PA10 — keep BOTH dailyContractId and dailyDate
+
+Master-dev's prior open question had the redundancy BACKWARDS. `daily_date` is HALF the participation PK (PA11) and is structurally load-bearing. The daily contract id is — verified against contracts.ts this session — a SINGLE CONSTANT: the sole `isDaily: true` entry is `DAILY_PLACEHOLDER` (`id: ContractId('daily-placeholder')`), the only daily member of `CONTRACTS`, reused every day and carrying NO day information. `dailyContractId` is RETAINED anyway: it future-proofs a rotating daily pool, makes the payload self-describing, and adding it LATER would itself be a wire-contract change with its own transition window — which Rule 31 now argues against. Both fields ship in PR-A.
+
+### PA11 — daily_participation table shape (verified against 0002 + schema.ts)
+
+Mirroring `applied_round_results` (drizzle/0002_applied_round_results.sql) and db/schema.ts conventions:
+- `account_id` uuid NOT NULL, FK → `accounts.id` ON DELETE cascade (0002's `account_id` FK is `REFERENCES "public"."accounts"("id") ON DELETE cascade`; also `player_saves`' 1:1 cascade).
+- `daily_date` date — `date('…', { mode: 'string' })` matching `player_saves.last_daily_attempted` (db/schema.ts `playerSaves`), so it round-trips as `YYYY-MM-DD`, not a JS Date.
+- `run_id` text NOT NULL (mirrors `applied_round_results.run_id`, `text`).
+- `contract_id` text (the id-column convention — `run_id` and `clerk_user_id` are `text`).
+- `recorded_at` timestamptz DEFAULT now() NOT NULL (mirrors `applied_round_results.applied_at`).
+- PK `(account_id, daily_date)` — composite, mirroring `applied_round_results`'s composite PK.
+
+No divergence from 0002's conventions surfaced; the FK-cascade, NOT NULL constraints, `DEFAULT now()`, and the `date` mode:'string' typing are the shipped-convention details the bare field list implies. New migration `0003`; the real-SQL harness applies it automatically (its globber sorts `drizzle/*.sql`).
+
+### Drift 47 (NEW, Topic 2) — an incomplete transition clause in the entry that codified Rule 31
+
+PA1 — a ratified wire-contract disposition — omitted its transition-window clause for the PR-B boundary (the client-stops-sending direction), in the SAME entry that codified Rule 31 (which requires exactly that clause). **Rule 29 disposition, BOTH directions: NO catch.** PA1's STATED job was the PR-A window (client still sends → server tolerates), and it discharged that correctly; the PR-B-boundary direction (client omits the field) is a gap NO artifact claimed. Fourth correct application of Rule 29 (no-artifact-claimed gaps take no catch) since its codification at decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …". It IS recorded as a Topic-2 DRIFT because the ratified disposition was incomplete in the dimension its own entry's new rule governs — a process gap, self-caught while drafting the implementation prompt, distinct from the catch ledger. **Also a THIRD instance of Rule 31's shape** (a wire-contract disposition incomplete in its transition handling — here PA1 itself) — reinforcing evidence for a rule that codified on two.
+
+### Counter
+
+Baseline (tip `acbea74`, decision-log.md 2026-07-18 § "CF-68 PR-A Phase 1 dispositions RATIFIED …") 66/31/9/46/48 → **66/31/9/47/48**. Delta: drifts **+1** (Drift 47 — Topic 2, PA1's incomplete transition clause in the Rule-31 entry). Catches / rules / patterns / open-CFs **+0** — PA8–PA11 are dispositions minting no ordinal (PA8 amends PA1; PA9 / PA10 / PA11 are ratifications), CF-82's scope is amended but it stays OPEN, and Drift 47 takes NO catch (Rule 29, fourth application). PA8's underlying gap is a drift, not a catch, per the both-directions Rule 29 reasoning above.
+
 ## 2026-07-18 — CF-68 PR-A Phase 1 dispositions RATIFIED (PA1–PA7; PA1 AMENDS D3's literal wording); Rule 31 (NEW); CF-82 OPENED; PR-A effort revised
 
 Docs-only ratification following this session's read-only CF-68 PR-A Phase 1 delta (accepted; Gate 0 PASS — `.gitignore` is `PLAN-*.md`, not a no-op; Step 0 PASS/AGREE at 66/30/9/46/47, tip `b475a00`). This entry is the Rule 20 gate for the CF-68 PR-A Phase 2 implementation prompt — no code, schema, or migration lands here, and NOTHING closes (CF-68 stays OPEN, closing at PR-B's merge). Builds on and AMENDS decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …" (D1–D4): the PR split (D4) and the evidence mechanism (D3) stand except where PA1 amends D3's literal wording below.
