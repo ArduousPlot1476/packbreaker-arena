@@ -9,3 +9,4 @@ coverage
 .DS_Store
 .claude/settings.local.json
 .env
+PLAN-*.md
