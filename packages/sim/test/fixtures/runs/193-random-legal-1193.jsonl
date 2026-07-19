@@ -47,10 +47,10 @@
 {"type":"buy_item","slotIndex":4}
 {"type":"place_item","itemId":"copper-coin","anchor":{"col":1,"row":3},"rotation":90}
 {"type":"rotate_item","placementId":"p-9","rotation":90}
-{"type":"sell_item","placementId":"p-10"}
-{"type":"rotate_item","placementId":"p-5","rotation":90}
-{"type":"rotate_item","placementId":"p-5","rotation":270}
 {"type":"sell_item","placementId":"p-9"}
+{"type":"rotate_item","placementId":"p-5","rotation":270}
+{"type":"rotate_item","placementId":"p-5","rotation":270}
+{"type":"sell_item","placementId":"p-10"}
 {"type":"sell_item","placementId":"p-2"}
 {"type":"start_combat_from_ghost_build","ghost":{"id":"proc-r6-33667441","classId":"marauder","bag":{"dimensions":{"width":6,"height":4},"placements":[{"placementId":"g0","itemId":"throwing-knife","anchor":{"col":0,"row":0},"rotation":270},{"placementId":"g1","itemId":"healing-salve","anchor":{"col":1,"row":0},"rotation":0},{"placementId":"g2","itemId":"buckler","anchor":{"col":2,"row":0},"rotation":270},{"placementId":"g3","itemId":"mana-potion","anchor":{"col":3,"row":0},"rotation":0}]},"relics":{"starter":null,"mid":null,"boss":null},"recordedRound":6,"trophyAtRecord":0,"seed":862352449,"submittedAt":"2025-01-01T00:00:00.000Z","source":"bot"}}
 {"type":"advance_phase"}

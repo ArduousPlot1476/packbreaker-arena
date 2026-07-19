@@ -54,6 +54,7 @@
 {"type":"reroll_shop"}
 {"type":"reroll_shop"}
 {"type":"reroll_shop"}
+{"type":"reroll_shop"}
 {"type":"start_combat_from_ghost_build","ghost":{"id":"proc-r8-51f3d920","classId":"tinker","bag":{"dimensions":{"width":6,"height":4},"placements":[{"placementId":"g0","itemId":"tower-shield","anchor":{"col":0,"row":0},"rotation":90},{"placementId":"g1","itemId":"war-axe","anchor":{"col":2,"row":0},"rotation":180},{"placementId":"g2","itemId":"steel-sword","anchor":{"col":3,"row":0},"rotation":270},{"placementId":"g3","itemId":"spark-stone","anchor":{"col":5,"row":0},"rotation":180},{"placementId":"g4","itemId":"copper-coin","anchor":{"col":2,"row":1},"rotation":0}]},"relics":{"starter":null,"mid":null,"boss":null},"recordedRound":8,"trophyAtRecord":0,"seed":1374935328,"submittedAt":"2025-01-01T00:00:00.000Z","source":"bot"}}
 {"type":"advance_phase"}
 {"type":"reroll_shop"}
