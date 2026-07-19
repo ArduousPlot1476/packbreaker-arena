@@ -22,10 +22,12 @@
 // Status map (mirrors routes/account.ts):
 //   200 — GET: the save (defaults for an account that has never written).
 //         PUT: the persisted row.
-//   400 — invalid_body. Includes a body carrying `dailyStreak` (.strict()
-//         rejects it — the field is server-derived, never client-settable)
-//         and any `lastDailyAttempted` that is not the current server date
-//         (see the streak-inflation note below).
+//   400 — invalid_body. Includes a body carrying `dailyStreak` or the retired
+//         `trophies` field (.strict() rejects unknown keys — both are
+//         server-owned, never client-settable). NOTE (CF-68 PR-A, PA9): the old
+//         "`lastDailyAttempted` must be server-today" 400 is REMOVED — that
+//         field is accepted-and-unread (PA1 / PA8), so a stale daily identity
+//         fails the match in the store and the push SUCCEEDS (PA6), never 400s.
 //   401 — no authenticated user (requireAuth preHandler).
 //   404 — account_not_linked: authenticated, but no accounts row. The
 //         client re-fires PR2's link flow. RATIFIED OVER AUTO-CREATE — it
@@ -41,6 +43,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../clerk/requireAuth.js'
+import { buildDailyContract } from '../contract/daily.js'
 import type { AccountStore } from '../db/accountStore.js'
 import type { PlayerSaveStore } from '../db/playerSaveStore.js'
 import { parsePlayerSaveWrite } from '../validation/playerSave.js'
@@ -70,78 +73,12 @@ function isoDay(now: () => Date): string {
   return now().toISOString().slice(0, 10)
 }
 
-/** The calendar day before `iso` (UTC). */
-function previousDay(iso: string): string {
-  const d = new Date(`${iso}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() - 1)
-  return d.toISOString().slice(0, 10)
-}
-
-/** Server-derived daily streak — NEVER read from the request body.
- *
- *  Ratified rule (decision-log.md 2026-07-14 § "M2.1 PR3 PHASE 1 RATIFIED"):
- *  "always server-derived from lastDailyAttempted + the current server date
- *  (yesterday → +1; today → unchanged; else → reset to 1)". Anchored on what
- *  the server ALREADY knew (`prevLastDailyAttempted`) relative to its OWN
- *  today.
- *
- *  ⚠ CF-76 — THIS IS BOUNDED, **NOT** CHEAT-RESISTANT. Read before "hardening"
- *  it. The ratification (and § 7.2, since corrected) called this
- *  cheat-resistant; that was overstated, and Codex round 4 (PR \#45) showed
- *  why: `nextLastDailyAttempted` is CLIENT-SUPPLIED, so a caller can assert
- *  "I attempted today" without attempting anything and mint one increment per
- *  server day. The route's server-date gate CAPS that exposure at +1/day
- *  (pre-gate it was unbounded — alternating stale/today writes ran a streak
- *  2→3→4→5→6 within one day), but a cap is not immunity.
- *
- *  Real cheat-resistance needs SERVER-SIDE EVIDENCE of participation (a
- *  verified daily-completion event), which does not exist yet — the client
- *  does not even fetch /v1/contract/daily (CF-68). Deferred to CF-76, sibling
- *  to CF-77's trophy trust-model. The trophy leg has since been resolved (Delta,
- *  CF-77 Phase 2); the daily leg's evidence mechanism is still open — whoever
- *  wires CF-68's client fetch must land the server-side participation evidence
- *  in the same PR (CF-68 AMENDED). Shipping a naive "PUT today's date" caller
- *  activates a known gap rather than discovering one.
- *
- *  The null case is not covered by the ratified sentence and is resolved
- *  here: a save with no recorded attempt has no streak (0). Without this,
- *  PR3's own zero-push (`lastDailyAttempted: null`) would write a streak of
- *  1 while storing null — an incoherent row. This is the ONLY path PR3
- *  actually exercises; the +1/unchanged branches are dormant until a
- *  producer is wired.
- *
- *  The stale-date case IS now resolved (Codex round 2, P1): the route rejects
- *  any non-null value that is not `serverToday` with a 400, so a stale date is
- *  never persisted and the "+1 from yesterday" branch cannot be re-armed. The
- *  guard below is defence in depth for a caller that skips the route gate —
- *  the exploit's damage came from PERSISTING the stale date, so the route is
- *  the load-bearing half, but a derivation that silently trusts a stale claim
- *  is exactly the assumption class Rule 4 exists for.
- */
-export function deriveDailyStreak(input: {
-  prevLastDailyAttempted: string | null
-  prevDailyStreak: number
-  nextLastDailyAttempted: string | null
-  serverToday: string
-}): number {
-  // No attempt recorded ⇒ no streak. PR3's live path.
-  if (input.nextLastDailyAttempted === null) return 0
-  // Defence in depth: an attempt that is not TODAY is not a real attempt.
-  // Unreachable through the route (400), so never advance a streak on it.
-  if (input.nextLastDailyAttempted !== input.serverToday) {
-    return input.prevDailyStreak
-  }
-  // Already counted today — a same-day re-PUT must not double-count.
-  if (input.prevLastDailyAttempted === input.serverToday) {
-    return input.prevDailyStreak
-  }
-  // Continued from yesterday.
-  if (input.prevLastDailyAttempted === previousDay(input.serverToday)) {
-    return input.prevDailyStreak + 1
-  }
-  // Never attempted, or a gap ⇒ restart at 1.
-  return 1
-}
+// CF-68 PR-A (PA7 / TT1): `deriveDailyStreak` + `previousDay` RELOCATED into
+// db/playerSaveStore.ts — the streak is now derived INSIDE the store's
+// transaction from server-verified daily participation, not in the route. The
+// route no longer computes the streak, reads a prior save row for it, or reads
+// the client's daily-attempt claim. See decision-log.md 2026-07-18 § "CF-68 PR-A
+// test-topology dispositions RATIFIED" (TT1).
 
 export interface PlayerSaveRouteDeps {
   readonly accounts: AccountStore | null
@@ -200,35 +137,21 @@ export function registerPlayerSaveRoutes(
     }
 
     const serverToday = isoDay(now)
-    const { runId, round, roundOutcome, lastDailyAttempted } = parsed.data
+    // CF-68 PR-A: re-derive the server's daily identity for today (PA4 / PA10) and
+    // FORWARD the request's daily-identity claim + this ground truth to the store,
+    // which does the equality check inside the transaction. `lastDailyAttempted` is
+    // DELIBERATELY not destructured — the schema accepts it (PA1 / PA8) but it is
+    // READ NOWHERE; the streak is server-derived from participation.
+    const serverDaily = buildDailyContract(now)
+    const { runId, round, roundOutcome, dailyContractId, dailyDate } = parsed.data
 
-    // A non-null attempt MUST be the current server date. You can only attempt
-    // the daily *now*, so "I attempted on date X" is only meaningful for
-    // X = today; a future date is not a real attempt and a past date is a
-    // claim about a day that has already closed.
-    //
-    // THIS IS THE FIX FOR THE STREAK-INFLATION EXPLOIT (Codex round 2, P1).
-    // Previously only FUTURE dates were rejected, so a client could persist a
-    // STALE date and re-arm the "+1 from yesterday" branch on demand:
-    //   PUT 07-14 (stored: 07-14) → PUT 07-15 (prev=07-14=yesterday ⇒ +1)
-    //   PUT 07-14 (prev=07-15=today ⇒ streak kept, but 07-14 is RE-STORED)
-    //   PUT 07-15 (prev=07-14=yesterday ⇒ +1 again) …
-    // Proven to run 2→3→4→5→6 on a single server day. The regression of the
-    // STORED date is what re-arms the branch, so the fix is to refuse to
-    // persist a stale date at all — not merely to leave the streak unchanged.
-    // With this gate the stored date can only ever be a date that WAS today
-    // when it was written, so it can never regress within a server day.
-    if (lastDailyAttempted !== null && lastDailyAttempted !== serverToday) {
-      return reply.status(400).send({
-        error: 'invalid_body',
-        issues: [
-          {
-            path: ['lastDailyAttempted'],
-            message: `lastDailyAttempted must be the current server date (${serverToday}) or null`,
-          },
-        ],
-      })
-    }
+    // PA9 (ratified — do NOT restore): the old server-date gate that 400'd a
+    // `lastDailyAttempted !== serverToday` is GONE. It bounded a TRUSTED field;
+    // that field is no longer read, so the gate could only 400 an honest client
+    // carrying a stale date (a tab left open past midnight). A stale daily identity
+    // now simply fails the match in the store and the round push SUCCEEDS (PA6).
+    // See decision-log.md 2026-07-18 § "CF-68 PR-A dispositions AMENDED …" (PA9)
+    // and § "CF-68 PR-A test-topology dispositions RATIFIED" (TT3).
 
     try {
       const account = await accounts.findByClerkUserId(userId)
@@ -236,26 +159,19 @@ export function registerPlayerSaveRoutes(
         return reply.status(404).send({ error: 'account_not_linked' })
       }
 
-      const prev = await saves.findByAccountId(account.id)
-      const dailyStreak = deriveDailyStreak({
-        prevLastDailyAttempted: prev?.lastDailyAttempted ?? null,
-        prevDailyStreak: prev?.dailyStreak ?? 0,
-        nextLastDailyAttempted: lastDailyAttempted,
-        serverToday,
-      })
-
-      // Delta trust-model (CF-77 Phase 2): hand the completed round to the
-      // store, which computes the trophy delta via trophyDeltaFor and applies
-      // it under the round-ordering guard (row-locked, Form ①). `dailyStreak`
-      // is the server-derived value above; the store writes it unconditionally.
-      // Returns the row with the new ABSOLUTE trophy total for the response.
+      // Delta trust-model (CF-77) + daily participation (CF-68 PR-A). The store
+      // computes the trophy delta AND — on a verified daily-identity match — writes
+      // participation and DERIVES the streak, all under one row lock (PA3–PA7). The
+      // route no longer derives the streak or reads a prior row for it.
       const saved = await saves.applyRoundResult({
         accountId: account.id,
         runId,
         round,
         roundOutcome,
-        dailyStreak,
-        lastDailyAttempted,
+        dailyContractId: dailyContractId ?? null,
+        dailyDate: dailyDate ?? null,
+        serverToday,
+        serverDailyContractId: serverDaily.contractId,
       })
       return reply.status(200).send(toResponse(saved))
     } catch (err) {

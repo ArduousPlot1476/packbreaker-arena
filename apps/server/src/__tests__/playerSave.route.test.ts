@@ -68,12 +68,24 @@ function fakeSaves(seed: PlayerSaveRecord | null = null): PlayerSaveStore {
     async findByAccountId(accountId) {
       return row && row.accountId === accountId ? row : null
     },
+    // ROUTING stand-in ONLY (Catch 58): reflects the streak from the daily
+    // identity the ROUTE forwarded, so a route that DROPS or FABRICATES
+    // dailyContractId / dailyDate is observable at this layer. Makes NO claim
+    // about deriveDailyStreak's branch math or Postgres semantics — those are the
+    // unit test's (db/deriveDailyStreak.test.ts) and the realsql suite's jobs.
     async applyRoundResult(input) {
+      const prevStreak = row?.dailyStreak ?? 0
+      const prevLast = row?.lastDailyAttempted ?? null
+      const dailyMatch =
+        input.dailyContractId !== null &&
+        input.dailyDate !== null &&
+        input.dailyDate === input.serverToday &&
+        input.dailyContractId === input.serverDailyContractId
       row = {
         accountId: input.accountId,
-        trophies: row?.trophies ?? 0,
-        dailyStreak: input.dailyStreak,
-        lastDailyAttempted: input.lastDailyAttempted,
+        trophies: (row?.trophies ?? 0) + 1, // stand-in delta (> 0) so trophies move
+        dailyStreak: dailyMatch ? prevStreak + 1 : prevStreak,
+        lastDailyAttempted: dailyMatch ? input.dailyDate : prevLast,
         updatedAt: new Date('2026-07-15T00:00:00Z'),
       }
       return row
@@ -321,28 +333,30 @@ describe('PUT /v1/player/save — routing + body validation', () => {
     }
   })
 
-  it('400 on a future lastDailyAttempted', async () => {
+  // PA9 / TT3 (ratified — do NOT restore the gate): the server-date gate that
+  // 400'd a non-today lastDailyAttempted is GONE. The field is accepted-and-unread
+  // (PA1 / PA8), so a future OR stale date is now TOLERATED (200). These two carry
+  // the old gate's scenarios under RENAMED names so a future reader sees the
+  // contract flipped deliberately, not by accident (decision-log.md 2026-07-18
+  // § "CF-68 PR-A test-topology dispositions RATIFIED", TT3).
+  it('200 (was 400 pre-PA9): a FUTURE lastDailyAttempted is tolerated, accepted-and-unread', async () => {
     const res = await build({ now: () => new Date('2026-07-15T12:00:00Z') }).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
       payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-16' },
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.statusCode).toBe(200)
   })
 
-  // Codex round 2, P1 — the stale half of the same gate. A PAST date is a
-  // claim about a day that has already closed; persisting it is what re-armed
-  // the streak-inflation exploit (see the sequence test below).
-  it('400 on a STALE (past) lastDailyAttempted', async () => {
+  it('200 (was 400 pre-PA9): a STALE (past) lastDailyAttempted is tolerated, accepted-and-unread', async () => {
     const res = await build({ now: () => new Date('2026-07-15T12:00:00Z') }).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
       payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-14' },
     })
-    expect(res.statusCode).toBe(400)
-    expect(res.json().error).toBe('invalid_body')
+    expect(res.statusCode).toBe(200)
   })
 
   it('200 on a well-formed round report (Delta model)', async () => {
@@ -354,15 +368,31 @@ describe('PUT /v1/player/save — routing + body validation', () => {
     })
     expect(res.statusCode).toBe(200)
     // Response SHAPE is a routing concern; the trophy VALUE is the realsql
-    // suite's (the fake claims no delta math). null attempt ⇒ streak 0.
+    // suite's (the fake claims no delta math). A non-daily push (no daily
+    // identity) moves no streak field, so a fresh account stays at streak 0.
     expect(res.json().dailyStreak).toBe(0)
     expect(res.json().lastDailyAttempted).toBeNull()
     expect(typeof res.json().trophies).toBe('number')
   })
 })
 
-describe('PUT /v1/player/save — server-derived dailyStreak', () => {
+// CF-68 PR-A (TT2 / TT3): the old `PUT /v1/player/save — server-derived
+// dailyStreak` describe block (yesterday→+1 / today→unchanged / gap→reset /
+// null→0 / EXPLOIT REGRESSION / ignores-client-streak) was DELETED — it drove the
+// removed client-lastDailyAttempted derivation path, and its threat model is
+// defunct once the field is unread. deriveDailyStreak's branch logic now lives in
+// db/deriveDailyStreak.test.ts (Layer A); the persisted daily behavior lives in
+// the realsql suite (Layer B). The `.strict()` dailyStreak rejection is preserved
+// by '400 when the body carries dailyStreak' above. These route tests are the
+// HTTP-tolerance + route-pass-through layer (TT4).
+describe('PUT /v1/player/save — CF-68 daily participation (route layer)', () => {
   const NOW = () => new Date('2026-07-15T12:00:00Z')
+  const TODAY = '2026-07-15'
+  // The sole isDaily contract id (contracts.ts). buildDailyContract(NOW) returns
+  // this id + TODAY, so a daily-bearing PUT must echo both to be forwarded as a
+  // match by the route.
+  const DAILY_ID = 'daily-placeholder'
+  const DAILY_BODY = { ...VALID_BODY, dailyContractId: DAILY_ID, dailyDate: TODAY }
 
   function withPrev(prev: { dailyStreak: number; lastDailyAttempted: string | null }) {
     return build({
@@ -377,76 +407,32 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
     })
   }
 
-  it('yesterday → +1', async () => {
-    const res = await withPrev({ dailyStreak: 4, lastDailyAttempted: '2026-07-14' }).inject({
+  // TT3: PA8 made lastDailyAttempted `.optional()`, and dailyContractId / dailyDate
+  // are `.optional()` too — so a body OMITTING all three must validate (200). This
+  // case had no test because the field was previously required-nullable.
+  it('200 when lastDailyAttempted (and the daily fields) are ABSENT entirely', async () => {
+    const noDaily = {
+      runId: VALID_BODY.runId,
+      round: VALID_BODY.round,
+      roundOutcome: VALID_BODY.roundOutcome,
+    }
+    const res = await build({}).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
+      payload: noDaily,
     })
-    expect(res.json().dailyStreak).toBe(5)
+    expect(res.statusCode).toBe(200)
   })
 
-  it('today → unchanged (a same-day re-PUT must not double-count)', async () => {
-    const res = await withPrev({ dailyStreak: 4, lastDailyAttempted: '2026-07-15' }).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
-    })
-    expect(res.json().dailyStreak).toBe(4)
-  })
-
-  it('gap → reset to 1', async () => {
-    const res = await withPrev({ dailyStreak: 9, lastDailyAttempted: '2026-07-01' }).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15' },
-    })
-    expect(res.json().dailyStreak).toBe(1)
-  })
-
-  it('null attempt → 0, regardless of the stored streak', async () => {
-    const res = await withPrev({ dailyStreak: 9, lastDailyAttempted: '2026-07-14' }).inject({
-      method: 'PUT',
-      url: '/v1/player/save',
-      headers: AUTH,
-      payload: { ...VALID_BODY, lastDailyAttempted: null },
-    })
-    expect(res.json().dailyStreak).toBe(0)
-  })
-
-  // ── Codex round 2, P1: STREAK-INFLATION EXPLOIT, end-to-end regression ──
-  //
-  // The proven pre-fix sequence: alternating (yesterday, today) PUTs drove the
-  // streak 2→3→4→5→6 on ONE server day, because each stale PUT re-persisted
-  // yesterday and re-armed the "+1 from yesterday" branch. dailyStreak being
-  // absent from the body did NOT prevent it — the client steered the streak
-  // via lastDailyAttempted instead.
-  //
-  // Drives the REAL route through the REAL store fake with a FROZEN clock, so
-  // the whole server day is a single instant. Asserts the ceiling: one
-  // legitimate yesterday→today transition, and no more, however many times the
-  // pair is replayed. Orthogonal to CF-77's trophy path — the trophy fields are
-  // fixed across every PUT here.
-  it('EXPLOIT REGRESSION: alternating stale/today PUTs cannot inflate the streak', async () => {
-    const NOW = () => new Date('2026-07-15T12:00:00Z')
-    const YESTERDAY = '2026-07-14'
-    const TODAY = '2026-07-15'
-
-    // Seed the row as if yesterday's legitimate attempt already landed.
-    const app0 = build({
-      now: NOW,
-      saves: fakeSaves({
-        accountId: ACCOUNT_ID,
-        trophies: 0,
-        dailyStreak: 1,
-        lastDailyAttempted: YESTERDAY,
-        updatedAt: new Date(),
-      }),
-    })
-
+  // TT2a — HOSTILE-PAYLOAD successor (threat-lineage descendant of the deleted
+  // EXPLOIT REGRESSION test). The client's lastDailyAttempted must NOT move the
+  // streak: a non-daily-bearing PUT carrying lastDailyAttempted = today moves
+  // neither dailyStreak nor last_daily_attempted, however many times it is
+  // replayed with alternating values. Rule 28 falsifiable: wire the client field
+  // back into the forwarded daily identity at the route and this fails.
+  it('HOSTILE PAYLOAD: client lastDailyAttempted cannot move the streak (no daily identity)', async () => {
+    const app0 = withPrev({ dailyStreak: 3, lastDailyAttempted: '2026-07-14' })
     const put = (lastDailyAttempted: string) =>
       app0.inject({
         method: 'PUT',
@@ -454,39 +440,36 @@ describe('PUT /v1/player/save — server-derived dailyStreak', () => {
         headers: AUTH,
         payload: { ...VALID_BODY, lastDailyAttempted },
       })
-
-    // One legitimate transition: yesterday(stored) → today ⇒ streak 1 → 2.
-    const first = await put(TODAY)
-    expect(first.statusCode).toBe(200)
-    expect(first.json().dailyStreak).toBe(2)
-
-    // Now replay the exploit pair. Each stale PUT must be REFUSED (400) so the
-    // stored date can never regress to yesterday and re-arm the +1 branch.
-    for (let i = 0; i < 5; i++) {
-      const stale = await put(YESTERDAY)
-      expect(stale.statusCode, 'stale PUT must be rejected').toBe(400)
-      const again = await put(TODAY)
-      expect(again.statusCode).toBe(200)
-      // The ceiling: still 2. Pre-fix this read 3, 4, 5, 6, 7…
-      expect(again.json().dailyStreak, `inflated on iteration ${i}`).toBe(2)
+    for (const d of [TODAY, '2026-07-14', TODAY, '2026-07-13', TODAY]) {
+      const res = await put(d)
+      expect(res.statusCode).toBe(200)
+      // No daily identity was sent, so nothing daily may move.
+      expect(res.json().dailyStreak, `moved on lastDailyAttempted=${d}`).toBe(3)
+      expect(res.json().lastDailyAttempted).toBe('2026-07-14')
     }
-
-    // Final read: the day's streak is exactly one increment, not six.
-    const final = await app0.inject({ method: 'GET', url: '/v1/player/save', headers: AUTH })
-    expect(final.json().dailyStreak).toBe(2)
-    expect(final.json().lastDailyAttempted).toBe(TODAY)
   })
 
-  // The rule exists to be cheat-resistant: a client cannot inflate the
-  // streak by sending one, because the body cannot carry it at all (400)
-  // and the value is computed from stored state + the SERVER's clock.
-  it('ignores any client-supplied streak — derivation is server-side only', async () => {
-    const res = await withPrev({ dailyStreak: 1, lastDailyAttempted: '2026-07-14' }).inject({
+  // TT2b — PASS-THROUGH successor. The ONLY coverage that catches the route
+  // failing to FORWARD dailyContractId / dailyDate (store tests start after the
+  // route). A daily-bearing PUT advances the streak; a non-daily PUT does not.
+  it('PASS-THROUGH: a daily-bearing PUT advances the streak; a non-daily PUT does not', async () => {
+    const daily = await withPrev({ dailyStreak: 4, lastDailyAttempted: '2026-07-14' }).inject({
       method: 'PUT',
       url: '/v1/player/save',
       headers: AUTH,
-      payload: { ...VALID_BODY, lastDailyAttempted: '2026-07-15', dailyStreak: 999 },
+      payload: DAILY_BODY,
     })
-    expect(res.statusCode).toBe(400)
+    expect(daily.statusCode).toBe(200)
+    expect(daily.json().dailyStreak).toBe(5) // forwarded identity matched ⇒ advanced
+    expect(daily.json().lastDailyAttempted).toBe(TODAY)
+
+    const nonDaily = await withPrev({ dailyStreak: 4, lastDailyAttempted: '2026-07-14' }).inject({
+      method: 'PUT',
+      url: '/v1/player/save',
+      headers: AUTH,
+      payload: VALID_BODY,
+    })
+    expect(nonDaily.statusCode).toBe(200)
+    expect(nonDaily.json().dailyStreak).toBe(4) // no daily identity ⇒ unchanged
   })
 })

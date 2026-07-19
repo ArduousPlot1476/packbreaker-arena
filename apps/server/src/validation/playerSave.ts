@@ -76,6 +76,10 @@ export const IsoDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'must be an ISO date (YYYY-MM-DD)')
   .refine(isRealCalendarDate, 'not a real calendar date')
 
+/** Daily contract id bound — generous headroom over a real id ('daily-placeholder'
+ *  is 16 chars) while still bounding what lands in the text column. */
+const CONTRACT_ID_MAX = 64
+
 export const PlayerSaveWriteRequestSchema = z
   .object({
     /** Opaque per-run id — the idempotency key (see RUN_ID_MAX). */
@@ -85,8 +89,21 @@ export const PlayerSaveWriteRequestSchema = z
     round: z.number().int().min(1).max(MAX_ROUND),
     /** Server derives the trophy delta from this; the client sends no trophy. */
     roundOutcome: z.enum(ROUND_OUTCOMES),
-    /** null = the player has never attempted a daily. */
-    lastDailyAttempted: IsoDateSchema.nullable(),
+    /** CF-68 PR-A (PA1 / PA8): ACCEPTED, NEVER READ. `.nullable().optional()` so a
+     *  client that sends null, sends a date, or omits it entirely all validate —
+     *  the field is unread (participation is server-derived), and its removal is
+     *  CF-82. Present only so `.strict()` does not 400 a client still sending it
+     *  during the PR-A→PR-B window (decision-log.md 2026-07-18 § "CF-68 PR-A
+     *  dispositions AMENDED …", PA8). */
+    lastDailyAttempted: IsoDateSchema.nullable().optional(),
+    /** CF-68 PR-A daily-identity (PA2 / PA10). Both `.optional()`: a non-daily push
+     *  (and the shipped client) omit them, and a required field would 400 a
+     *  missing key under `.strict()`. `dailyDate` is validated as a well-formed ISO
+     *  date ONLY — NOT equals-server-today; that equality is checked in the store
+     *  transaction, because PA6 skips a mismatch SILENTLY and a Zod 400 here would
+     *  reintroduce exactly what PA9 removed. */
+    dailyContractId: z.string().min(1).max(CONTRACT_ID_MAX).optional(),
+    dailyDate: IsoDateSchema.optional(),
   })
   .strict()
 

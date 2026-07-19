@@ -39,7 +39,7 @@
 // writes (two round-1 losses near zero must net the floor, not below it — the
 // second writer must see the first's committed, floored trophies).
 
-import { eq, sql } from 'drizzle-orm'
+import { eq, sql, type SQL } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { trophyDeltaFor } from '@packbreaker/sim'
 import type { RoundOutcome } from '@packbreaker/content'
@@ -55,6 +55,54 @@ import * as schema from './schema.js'
  *  trophyDeltaFor stays the sole delta derivation; the cap never feeds back in. */
 const INT4_MAX = 2_147_483_647
 
+/** Server-derived daily streak (CF-68 PR-A — relocated from routes/playerSave.ts;
+ *  PA7 / TT1: the BODY below is byte-unchanged, only its home moved). Pure — no
+ *  DB, no clock. Driven by the SERVER-VERIFIED daily identity: the caller passes
+ *  `nextLastDailyAttempted` = the matched daily date = `serverToday`, never a
+ *  client claim.
+ *
+ *  RETAINED-DEAD BRANCHES (PA3 / TT1, decision-log.md 2026-07-18 § "CF-68 PR-A
+ *  test-topology dispositions RATIFIED"): the store calls this ONLY on a
+ *  daily-identity MATCH, which requires `dailyDate === serverToday`, so
+ *  `nextLastDailyAttempted` is always a non-null value equal to `serverToday`.
+ *  Branch 1 (`=== null → 0`) and branch 2 (`!== serverToday → prev`) are therefore
+ *  PRODUCTION-UNREACHABLE. They are retained (byte-unchanged) and covered by the
+ *  unit test, LABELLED retained-dead there so no future reader treats branch 1 as
+ *  a live "no attempt" path; CF-82 may revisit their removal. The old inline
+ *  comments below (their "through the route (400)" references) are HISTORICAL —
+ *  the route-layer date gate was removed in this PR (PA9). */
+export function deriveDailyStreak(input: {
+  prevLastDailyAttempted: string | null
+  prevDailyStreak: number
+  nextLastDailyAttempted: string | null
+  serverToday: string
+}): number {
+  // No attempt recorded ⇒ no streak. PR3's live path.
+  if (input.nextLastDailyAttempted === null) return 0
+  // Defence in depth: an attempt that is not TODAY is not a real attempt.
+  // Unreachable through the route (400), so never advance a streak on it.
+  if (input.nextLastDailyAttempted !== input.serverToday) {
+    return input.prevDailyStreak
+  }
+  // Already counted today — a same-day re-PUT must not double-count.
+  if (input.prevLastDailyAttempted === input.serverToday) {
+    return input.prevDailyStreak
+  }
+  // Continued from yesterday.
+  if (input.prevLastDailyAttempted === previousDay(input.serverToday)) {
+    return input.prevDailyStreak + 1
+  }
+  // Never attempted, or a gap ⇒ restart at 1.
+  return 1
+}
+
+/** The calendar day before `iso` (UTC). Relocated with deriveDailyStreak (PA7). */
+function previousDay(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
 /** A player_saves row as the routes see it. `updatedAt` is server-owned. */
 export interface PlayerSaveRecord {
   readonly accountId: string
@@ -65,17 +113,29 @@ export interface PlayerSaveRecord {
   readonly updatedAt: Date
 }
 
-/** A completed-round report — the input to `applyRoundResult`. The trophy
- *  delta is NOT here: the server derives it from (roundOutcome, round,
- *  current). `dailyStreak` IS here because the ROUTE derives it server-side. */
+/** A completed-round report — the input to `applyRoundResult`. The trophy delta
+ *  is NOT here (the server derives it from roundOutcome/round/current). Neither is
+ *  `dailyStreak` any longer (CF-68 PR-A / PA7): the streak is DERIVED here, in the
+ *  transaction, from server-verified participation — the route no longer computes
+ *  it. */
 export interface PlayerSaveRoundWrite {
   readonly accountId: string
   /** Opaque per-run id (uuid v4, client-minted) — never parsed here. */
   readonly runId: string
   readonly round: number
   readonly roundOutcome: RoundOutcome
-  readonly dailyStreak: number
-  readonly lastDailyAttempted: string | null
+  /** CF-68 PR-A daily-identity (PA2–PA6), as forwarded verbatim by the route from
+   *  the request body. Both null on a non-daily push. NEVER trusted as-is: the
+   *  store verifies them against the server ground truth below and writes
+   *  participation + the derived streak ONLY on a match. */
+  readonly dailyContractId: string | null
+  readonly dailyDate: string | null
+  /** Server ground truth for the daily-identity check, route-derived from the same
+   *  clock as contract/daily.ts: today's UTC date and the server's daily contract
+   *  id for today. The equality check lives HERE in the transaction — PA9 removed
+   *  the route-layer date gate, and PA6 skips a mismatch SILENTLY (no 400). */
+  readonly serverToday: string
+  readonly serverDailyContractId: string
 }
 
 /** Narrow player-save persistence surface the routes depend on. */
@@ -177,14 +237,62 @@ export function createPlayerSaveStore(
               `${input.accountId}: cumulative total ${rawTotal} would overflow the column`,
           )
         }
+        // The UPDATE always writes trophies + updatedAt. The daily streak fields
+        // are added ONLY on a verified daily match — PA3 hard invariant: a neutral
+        // or identity-mismatched round moves NEITHER dailyStreak NOR
+        // last_daily_attempted.
+        const set: {
+          trophies: number
+          updatedAt: SQL
+          dailyStreak?: number
+          lastDailyAttempted?: string
+        } = { trophies: newTotal, updatedAt: sql`now()` }
+
+        // CF-68 PR-A daily participation (PA3–PA6). DAILY-BEARING iff both identity
+        // fields are present; MATCHES iff the claimed date is server-today AND the
+        // claimed contract id is the server's daily contract id for today (both
+        // re-derived server-side and forwarded by the route). The equality check
+        // lives HERE, under the same row lock that serializes the trophy delta
+        // (PA4). PA6: a non-daily or MISMATCHED push skips silently — no error, the
+        // round push still succeeds. The `!== null` guards narrow both fields to
+        // string for the participation insert.
+        if (
+          input.dailyContractId !== null &&
+          input.dailyDate !== null &&
+          input.dailyDate === input.serverToday &&
+          input.dailyContractId === input.serverDailyContractId
+        ) {
+          // Per-DAY participation, ON CONFLICT DO NOTHING on (account_id,
+          // daily_date): round 2+ of the same daily run collides by construction
+          // and no-ops (PA5). applied_round_results stays fenced.
+          await tx
+            .insert(schema.dailyParticipation)
+            .values({
+              accountId: input.accountId,
+              dailyDate: input.dailyDate,
+              runId: input.runId,
+              contractId: input.dailyContractId,
+            })
+            .onConflictDoNothing()
+          // Derive UNCONDITIONALLY when matched, regardless of whether the insert
+          // above returned a row (PA3 clarification, decision-log.md 2026-07-18
+          // § "CF-68 PR-A test-topology dispositions RATIFIED"): on rounds 2+ the
+          // insert ON CONFLICT no-ops and deriveDailyStreak's same-day guard
+          // returns the already-persisted streak, so the write is a no-op-
+          // equivalent — identical persisted state either way. nextLastDailyAttempted
+          // is the verified daily date (= serverToday), never a client claim.
+          set.dailyStreak = deriveDailyStreak({
+            prevLastDailyAttempted: row.lastDailyAttempted,
+            prevDailyStreak: row.dailyStreak,
+            nextLastDailyAttempted: input.dailyDate,
+            serverToday: input.serverToday,
+          })
+          set.lastDailyAttempted = input.dailyDate
+        }
+
         const updated = await tx
           .update(schema.playerSaves)
-          .set({
-            trophies: newTotal,
-            dailyStreak: input.dailyStreak,
-            lastDailyAttempted: input.lastDailyAttempted,
-            updatedAt: sql`now()`,
-          })
+          .set(set)
           .where(eq(schema.playerSaves.accountId, input.accountId))
           .returning()
         return toRecord(requireRow(updated))
