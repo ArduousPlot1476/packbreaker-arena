@@ -4,6 +4,66 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-18 — CF-68 PR-A Phase 1 dispositions RATIFIED (PA1–PA7; PA1 AMENDS D3's literal wording); Rule 31 (NEW); CF-82 OPENED; PR-A effort revised
+
+Docs-only ratification following this session's read-only CF-68 PR-A Phase 1 delta (accepted; Gate 0 PASS — `.gitignore` is `PLAN-*.md`, not a no-op; Step 0 PASS/AGREE at 66/30/9/46/47, tip `b475a00`). This entry is the Rule 20 gate for the CF-68 PR-A Phase 2 implementation prompt — no code, schema, or migration lands here, and NOTHING closes (CF-68 stays OPEN, closing at PR-B's merge). Builds on and AMENDS decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …" (D1–D4): the PR split (D4) and the evidence mechanism (D3) stand except where PA1 amends D3's literal wording below.
+
+### PA1 — accept-and-ignore; strict removal DEFERRED. AMENDS D3.
+
+D3 ratified that `lastDailyAttempted` is REMOVED from the PUT write-request DTO. That is the END STATE. Applied literally in PR-A it breaks the service in the transition window: the write schema `PlayerSaveWriteRequestSchema` (validation/playerSave.ts) ends in `.strict()` with all four fields required (`runId`, `round`, `roundOutcome`, `lastDailyAttempted`), the shipped client sends `lastDailyAttempted: null` on every round push (`usePlayerSavePush`, usePlayerSavePush.ts), and PR-A merges BEFORE PR-B — so with the field removed, `.strict()` rejects it as an unknown key and every trophy push in the window 400s. The client treats the 400 as a failed attempt (`putPlayerSave` returns `res.ok` = false, api/playerSave.ts; the drain retries `MAX_PUSH_ATTEMPTS` = 2 then drops, `drainQueue`, RunContext.tsx), so every windowed round is dropped with no reconciliation. Confirmed against real code this session.
+
+**Ruling.** PR-A KEEPS `lastDailyAttempted` on the write schema as an ACCEPTED value the server never reads, never writes from, and never derives from. `.strict()` stays. Accept-and-ignore satisfies D3's SUBSTANCE from PR-A's first commit — the server never trusts a client daily assertion (the derived model owns participation) — while AMENDING D3's literal "removed from the DTO" wording: the field's REMOVAL is deferred to CF-82 (below), after PR-B has shipped and legacy-payload clients have aged out. D3's evidence mechanism is otherwise unchanged.
+
+### PA2 — dailyContractId + dailyDate are `.optional()`
+
+The two new daily-identity fields are `.optional()` on the write schema. Absence = a non-daily push = no participation write. This is REQUIRED for `.strict()` compatibility: a required field that the shipped client and every neutral run omit would 400 on a missing-required-key. No optional-field precedent exists on `PlayerSaveWriteRequest` (content-schemas.ts) — all four current fields are required (`lastDailyAttempted` is required-nullable, not optional) — and that absence is recorded as a fact, NOT an objection: `.optional()` is the correct shape and this DTO simply has not needed one before.
+
+### PA3 — non-daily pushes must not touch the streak fields (the arc's sharpest hazard)
+
+`deriveDailyStreak` (routes/playerSave.ts) opens `if (input.nextLastDailyAttempted === null) return 0`. That branch encodes a CLIENT-ASSERTION semantic — "the player has never attempted a daily" — with NO analogue in the derived model. Feeding a derived `null` into it on a neutral-run push would RETURN 0 and, written back, ZERO the user's daily streak on every ordinary (non-daily) round. **Ruling: guard at the CALL SITE, not in the function.** Invoke the derivation ONLY when the push is daily-bearing (PA2 fields present) AND today's participation row is present after the insert attempt. On a non-daily push the `UPDATE` writes trophies only; `dailyStreak` and `last_daily_attempted` are not written. `deriveDailyStreak`'s branch logic and its tests stay UNTOUCHED (minimal churn on proven code, per D3) — only its module home moves (PA7), an import-path relocation, not a logic change. If the `null` branch becomes production-unreachable, keep it with an inline note; CF-82 may revisit its disposition.
+
+### PA4 — transaction ordering inside applyRoundResult (new-tuple path)
+
+`applyRoundResult` (playerSaveStore.ts) wraps everything in one `db.transaction`. On the new-tuple path the order is: applied-round idempotency claim (`INSERT appliedRoundResults … onConflictDoNothing().returning()`) → ensure the `player_saves` row + `SELECT … .for('update')` row lock → participation insert → derive streak → single `UPDATE player_saves`. Rationale recorded: every daily decision then happens UNDER THE SAME account row lock that already serializes the trophy delta (the CF-77 shape one field over), and a single acquisition order across one code path leaves no deadlock surface.
+
+### PA5 — participation insert is ON CONFLICT DO NOTHING on (account_id, daily_date)
+
+The load-bearing reason is NOT refire: every round of a daily run shares ONE `(account_id, daily_date)`, so round 2+ takes the new-tuple path (a fresh `applied_round_results` tuple by `(account_id, run_id, round)`; `appliedRoundResults`, db/schema.ts) and collides on the participation key BY CONSTRUCTION. Without `ON CONFLICT DO NOTHING` that PK violation rolls the transaction back → a 500 on a TROPHY push. **Rule 29 disposition: NO catch.** The storage ratification (D3) specified the participation KEY, not the insert SEMANTICS, and no verification artifact claimed to cover them; the collision was found at the PR-A Phase 1 halt gate. Third correct application of Rule 29 (no-artifact-claimed gaps take no catch) since its codification at decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …".
+
+### PA6 — daily-identity mismatch: skip participation, no error, push succeeds
+
+If a push carries a daily identity that no longer matches the server (client `dailyDate` ≠ server today, or a contract-identity mismatch for that date), the server SKIPS the participation write, raises NO error, and lets the round push succeed. A trophy push must NEVER fail because a daily identity went stale. Accepted residual, recorded: a run spanning midnight credits the day its rounds landed on; post-midnight rounds carrying yesterday's identity credit nothing toward participation.
+
+### PA7 — the streak derivation MOVES INTO the store's transaction
+
+Today `deriveDailyStreak` runs in the ROUTE (`registerPlayerSaveRoutes`, routes/playerSave.ts) from a `findByAccountId` read taken OUTSIDE the transaction, and the result is passed into `applyRoundResult` as an input — benign while the value is client-supplied and idempotent, load-bearing once the streak depends on rows the SAME transaction just wrote. It must therefore be derived INSIDE the store's `db.transaction`. Module-graph resolution (verified against the actual imports this session): `playerSaveStore.ts` imports `drizzle-orm`, `@packbreaker/sim`, `@packbreaker/content`, `../logging.js`, `./schema.js` — NOT the route; `routes/playerSave.ts` imports `../db/playerSaveStore.js` (route → store). Leaving `deriveDailyStreak` in the route and importing it from the store would create store → route → store, a cycle. **Destination: `playerSaveStore.ts` itself** — co-locate the pure `deriveDailyStreak` (with its `previousDay` helper) in the store module, so the store uses it directly with no cross-module import (no cycle), and the route drops its now-unused call. Its branch logic and test assertions stay byte-identical (PA3); only the import specifier relocates.
+
+### Rule 31 (NEW) — transition-window clause on wire-contract dispositions
+
+**Rule 31.** In a merge-ordered multi-PR arc, a ratified disposition that changes a wire contract — DTO, schema, route, or payload shape — must state its transition-window behavior explicitly: what the not-yet-updated peer sends or expects during the window, and whether the intermediate state tolerates it. An end-state disposition without a transition clause is incomplete, not merely terse.
+
+**Codification — SECOND INSTANCE (log-supported).** Same shape — a wire-contract change breaks the not-yet-updated peer in a merge-ordered arc — differing only in mechanism:
+- **Instance 1 (compile-time false-green).** The CF-77 arc's PR1 reshaped the server write DTO (`trophies` → `{runId, round, roundOutcome}`); the not-yet-updated client DTO broke at compile time and a turbo `--force` FALSE GREEN masked it, exposed only by `tsc -b --noEmit --force` (decision-log.md 2026-07-18 § "CF-77 Phase 2 PR1 CLOSED …", non-counter notes; and § "CF-77 CLOSED — Phase 2 PR2 …", Rule 2/3 amendment note). That arc mitigated the RUNTIME with Option A (client push no-op'd), so the compile-time break is the "not accounted for" manifestation the log records.
+- **Instance 2 (deployed-runtime 400).** CF-68 PR-A: D3's end-state "remove `lastDailyAttempted` from the DTO" carried no transition clause; applied literally it 400s every shipped-client push in the PR-A→PR-B window (PA1). Caught at this Phase 1 halt gate; PA1's accept-and-ignore is the transition clause.
+
+Both instances recorded; the second-instance gate is met (same shape per the gate definition — a contract changed without accounting for the peer's current state — across two distinct arcs, distinct mechanisms). Rule 31 makes the transition clause a required part of any wire-contract disposition.
+
+### CF-82 OPENED (NEW) — strict removal of lastDailyAttempted + null-branch disposition
+
+The eventual strict removal of `lastDailyAttempted` from the write DTO (the D3 end-state PA1 defers), plus disposition of the possibly-production-unreachable `null` branch in `deriveDailyStreak` if PA3 renders it so. Sequenced AFTER PR-B has shipped and stale-tab clients carrying the legacy `lastDailyAttempted: null` payload have aged out — removing it earlier reintroduces the PA1 window. UNSCOPED; own future pass. CF number walked from canon: highest existing = CF-81 (decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …", opened at `42c9d90`) → CF-82 (zero prior occurrences confirmed this session).
+
+### PR-A effort revised
+
+PR-A ≈ 3–4 days (was 2.5–3.5) — PA7's derivation relocation and PA3's call-site guard are the delta; the real-SQL extension (≈ 0.5–1 d, no harness change — a new migration is picked up automatically by the harness's migration globber) folds inside it. PR-B unchanged at ≈ 1.5–2 d.
+
+### Gate 0 disposition — absorbed
+
+The prior PR-A Phase 1 report wrote `PLAR-*.md` once in a prose flag paragraph while the SAME report stated `PLAN-*.md` correctly in its commit-2 description, and the shipped `.gitignore` line is `PLAN-*.md` (verified this session). ABSORBED — no catch, no drift, zero canon impact, caught at the Gate-0 check built for exactly this. Recorded so the ledger shows it was adjudicated, not missed.
+
+### Counter
+
+Baseline (tip `b475a00`, decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …") 66/30/9/46/47 → **66/31/9/46/48**. Delta: rules **+1** (Rule 31 — transition-window clause on wire-contract dispositions); open-CFs **+1** (CF-82 OPENED; zero closures). Catches / patterns / drifts **+0** — PA5 (participation insert-semantics gap) and the PA1 transition-window gap are BOTH Rule 29 no-catch (gaps found at the Phase 1 halt gate that no artifact claimed), and the Gate-0 `PLAR`/`PLAN` slip is absorbed (no catch, no drift). PA1–PA7 are a design ratification (not catches; precedent decision-log.md 2026-07-18 § "CF-68 next-target selection + Phase 1 dispositions RATIFIED …").
+
 ## 2026-07-18 — CF-68 next-target selection + Phase 1 dispositions RATIFIED; Rule 29 + Rule 30 (NEW); Catch 66; Drift 46; citation-discipline AMENDMENT; CF-81 OPENED; CF-79 AMENDED; two counter-integrity riders
 
 Docs-only ratification following this session's read-only CF-68 Phase 1 investigation (accepted; Step 0 PASS/AGREE at 65/28/9/45/46, tip `e7c3a34`). This entry is the Rule 20 gate for the CF-68 PR-A implementation prompt — no code, schema, or migration lands here, and NOTHING closes (CF-68 stays OPEN, closing at PR-B's merge per the sub-PR convention). Builds on decision-log.md 2026-07-16 § "CF-75 + CF-76 CLOSED (player-save client caller shipped, plumbing-only / bounded); CF-77 + CF-78 OPENED; CF-68 AMENDED; Drift 43 + 44", 2026-07-15 § "CF-76 OPENED: daily-attempt trust model …", 2026-07-13 § "M2.1 PR1 CLOSED: server scaffolding …", and 2026-07-17 § "CF-77 Phase 1 RATIFIED …".
