@@ -204,10 +204,11 @@
       "name": "combat_end",
       "runId": "run-11",
       "round": 1,
-      "outcome": "draw",
-      "endedAtTick": 600,
+      "outcome": "ghost_win",
+      "endedAtTick": 509,
       "damageDealt": 0,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ramp_ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",
@@ -243,10 +244,11 @@
       "name": "combat_end",
       "runId": "run-11",
       "round": 2,
-      "outcome": "draw",
-      "endedAtTick": 600,
+      "outcome": "ghost_win",
+      "endedAtTick": 509,
       "damageDealt": 0,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ramp_ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",
@@ -282,10 +284,11 @@
       "name": "combat_end",
       "runId": "run-11",
       "round": 3,
-      "outcome": "draw",
-      "endedAtTick": 600,
+      "outcome": "ghost_win",
+      "endedAtTick": 509,
       "damageDealt": 0,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ramp_ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

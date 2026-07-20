@@ -289,7 +289,8 @@
       "outcome": "player_win",
       "endedAtTick": 50,
       "damageDealt": 1,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",
@@ -328,7 +329,8 @@
       "outcome": "player_win",
       "endedAtTick": 50,
       "damageDealt": 1,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",
@@ -367,7 +369,8 @@
       "outcome": "player_win",
       "endedAtTick": 50,
       "damageDealt": 1,
-      "damageTaken": 0
+      "damageTaken": 0,
+      "endReason": "ko"
     },
     {
       "tsClient": "2025-01-01T00:00:00.000Z",

@@ -345,59 +345,33 @@
       "newHp": 2
     },
     {
-      "tick": 560,
-      "type": "item_trigger",
-      "source": {
-        "side": "ghost",
-        "placementId": "g1"
-      },
-      "trigger": "on_cooldown"
-    },
-    {
-      "tick": 560,
-      "type": "damage",
-      "source": {
-        "side": "ghost",
-        "placementId": "g1"
-      },
+      "tick": 500,
+      "type": "ramp_tick",
       "target": "player",
       "amount": 2,
       "remainingHp": 0
     },
     {
-      "tick": 560,
-      "type": "item_trigger",
-      "source": {
-        "side": "player",
-        "placementId": "p1"
-      },
-      "trigger": "on_taken_damage"
+      "tick": 500,
+      "type": "ramp_tick",
+      "target": "ghost",
+      "amount": 3,
+      "remainingHp": 27
     },
     {
-      "tick": 560,
-      "type": "heal",
-      "source": {
-        "side": "player",
-        "placementId": "p1"
-      },
-      "target": "player",
-      "amount": 2,
-      "newHp": 2
-    },
-    {
-      "tick": 600,
+      "tick": 500,
       "type": "combat_end",
-      "outcome": "draw",
+      "outcome": "ghost_win",
       "finalHp": {
-        "player": 2,
-        "ghost": 30
+        "player": 0,
+        "ghost": 27
       }
     }
   ],
-  "expectedOutcome": "draw",
+  "expectedOutcome": "ghost_win",
   "expectedFinalHp": {
-    "player": 2,
-    "ghost": 30
+    "player": 0,
+    "ghost": 27
   },
-  "expectedEndedAtTick": 600
+  "expectedEndedAtTick": 500
 }
