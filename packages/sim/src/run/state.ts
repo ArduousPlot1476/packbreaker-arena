@@ -1391,9 +1391,13 @@ function computeItemGoldIncome(
 }
 
 /** Computes per-side damage totals from a CombatResult.events stream. Used
- *  for round_end telemetry and the RunHistoryEntry damage fields. status_tick
- *  damage counts toward the side that took it, even though it has no source. */
-function computeDamageStats(
+ *  for round_end telemetry and the RunHistoryEntry damage fields, and (CF-83
+ *  Fix A) by the client's DEALT/TAKEN display — one gross-item-damage
+ *  definition for both. Sums only `damage` / `status_tick`, so the CF-83
+ *  ramp drain (a source-less `ramp_tick`, not a damage event) is excluded:
+ *  a ramp-resolved draw honestly reports 0 / 0. status_tick damage counts
+ *  toward the side that took it, even though it has no source. */
+export function computeDamageStats(
   events: ReadonlyArray<CombatEvent>,
 ): { damageDealt: number; damageTaken: number } {
   let damageDealt = 0;

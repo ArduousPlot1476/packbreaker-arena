@@ -4,7 +4,8 @@
 //   - HP arithmetic remains sim-authoritative (event payloads' remainingHp /
 //     newHp / finalHp).
 //   - CombatDonePayload (damageDealt / damageTaken / opponentGhostId)
-//     pre-computed against initialPlayerHp / initialGhostHp − finalHp,
+//     computed via the sim's shared computeDamageStats (gross item damage,
+//     CF-83 ramp-excluded — the same definition round_end telemetry uses),
 //     then forwarded to the reducer's combat_done.
 //
 // What changed at M1.3.4b: the DOM Portrait + HP-bar tree (and its 3
@@ -35,7 +36,7 @@ import {
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
 import { clientBagToSimBag } from '../run/sim-bridge';
-import { trophyDeltaFor } from '@packbreaker/sim';
+import { computeDamageStats, trophyDeltaFor } from '@packbreaker/sim';
 import { runCombat } from './sim-bridge.combat';
 import {
   CombatScene,
@@ -182,12 +183,16 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       };
     }, [active, ctx.simRun, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
 
-  // Damage attributable to player / ghost. result.finalHp is HP at the
-  // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
-  // status-tick lethal hits don't underflow if HP went negative inside
-  // sim before being clamped at the event boundary.
-  const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
-  const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
+  // Damage attributable to player / ghost. CF-83 Fix A: use the sim's
+  // shared computeDamageStats — gross item + status damage summed from the
+  // event stream — the SAME definition round_end telemetry uses, so display
+  // and telemetry can't disagree. This excludes the source-less CF-83 ramp
+  // drain (a `ramp_tick`, not a damage event), so a ramp-resolved draw
+  // honestly reports 0 / 0; it also reports gross (pre-heal) damage rather
+  // than the old net-of-heal `finalHp` delta.
+  const { damageDealt, damageTaken } = result
+    ? computeDamageStats(result.events)
+    : { damageDealt: 0, damageTaken: 0 };
 
   // Zero-content fast-skip — see decision-log 2026-05-04 + the Codex P1
   // amendment block in the same entry. Predicate checks event CONTENT,

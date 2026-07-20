@@ -78,6 +78,7 @@ export type {
 export {
   createRun,
   restoreRun,
+  computeDamageStats,
   replayCombat,
   detectRecipes,
   composeRuleset,

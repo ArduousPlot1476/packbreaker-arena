@@ -26,6 +26,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { RefObject } from 'react';
 import type {
   ClassId,
+  CombatEvent,
   CombatInput,
   CombatResult,
   PlacementId,
@@ -427,5 +428,121 @@ describe('CombatOverlay — pre-commit trophy read (CF-72 / CF-38 load-bearing i
     // The commit is what the NEXT click triggers — strictly after the read.
     fireEvent.click(screen.getByRole('button', { name: /NEXT ROUND/i }));
     expect(onDone).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// CF-83 Fix A — the DEALT/TAKEN payload is computed by the sim's shared
+// computeDamageStats (gross item + status damage, ramp-excluded), the same
+// definition round_end telemetry uses — NOT the deleted client-side
+// `Math.max(0, initialHp - finalHp)` delta. Two Rule-28 falsifiable tests:
+// each FAILS against the old finalHp delta and PASSES with computeDamageStats
+// (break/restore proven in the PR-A round-2 report).
+// ────────────────────────────────────────────────────────────────────
+describe('CombatOverlay — DEALT/TAKEN via computeDamageStats (CF-83 Fix A)', () => {
+  // Faithful empty-bag ramp draw — mirrors applyResolutionRamp: from tick 500
+  // drain 3/tick per side (floored at 0), NO damage/status_tick event, mutual
+  // KO. ramp_tick is a MEANINGFUL_EVENT_TYPE so this MOUNTS (not a zero-content
+  // bypass), exactly like a real ramp draw.
+  function buildEmptyBagRampDraw(startHp: number): CombatResult {
+    const events: CombatEvent[] = [
+      { tick: 0, type: 'combat_start', playerHp: startHp, ghostHp: startHp },
+    ];
+    let php = startHp;
+    let ghp = startHp;
+    let tick = 500;
+    while (php > 0 || ghp > 0) {
+      if (php > 0) {
+        const amount = Math.min(3, php);
+        php -= amount;
+        events.push({ tick, type: 'ramp_tick', target: 'player', amount, remainingHp: php });
+      }
+      if (ghp > 0) {
+        const amount = Math.min(3, ghp);
+        ghp -= amount;
+        events.push({ tick, type: 'ramp_tick', target: 'ghost', amount, remainingHp: ghp });
+      }
+      tick += 1;
+    }
+    events.push({ tick, type: 'combat_end', outcome: 'draw', finalHp: { player: 0, ghost: 0 } });
+    return {
+      events,
+      outcome: 'draw',
+      finalHp: { player: 0, ghost: 0 },
+      endedAtTick: tick,
+      endReason: 'ramp_ko',
+    };
+  }
+
+  // Real combat damage recovered by a heal: player takes 12 (gross), heals 8
+  // (net 4), deals 30 to kill the ghost. computeDamageStats.damageTaken = gross
+  // 12; the deleted finalHp delta reported net 4 (initialHp - finalHp 26).
+  const DAMAGE_HEAL_RESULT: CombatResult = {
+    events: [
+      { tick: 0, type: 'combat_start', playerHp: 30, ghostHp: 30 },
+      { tick: 20, type: 'damage', source: { side: 'ghost', placementId: 'g0' as PlacementId }, target: 'player', amount: 12, remainingHp: 18 },
+      { tick: 25, type: 'heal', source: { side: 'player', placementId: 'p1' as PlacementId }, target: 'player', amount: 8, newHp: 26 },
+      { tick: 30, type: 'damage', source: { side: 'player', placementId: 'p0' as PlacementId }, target: 'ghost', amount: 30, remainingHp: 0 },
+      { tick: 30, type: 'combat_end', outcome: 'player_win', finalHp: { player: 26, ghost: 0 } },
+    ],
+    outcome: 'player_win',
+    finalHp: { player: 26, ghost: 0 },
+    endedAtTick: 30,
+    endReason: 'ko',
+  };
+
+  it('empty-bag ramp-resolved draw reports DEALT 0 / TAKEN 0 (not the ramp drain)', async () => {
+    mocks.runCombat.mockReturnValue(buildEmptyBagRampDraw(30));
+    const onDone = vi.fn();
+    render(
+      <RunProvider>
+        <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+    // ramp_tick is meaningful → Phaser mounts; wait for the scene, then drive
+    // its onCombatEnd to reach the resolution panel.
+    await waitFor(() => {
+      expect(mocks.createCombatGame).toHaveBeenCalled();
+    });
+    const sceneOpts = mocks.createCombatGame.mock.calls[0]![1] as { onCombatEnd: () => void };
+    act(() => {
+      sceneOpts.onCombatEnd();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/DRAW/)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /NEXT ROUND/i }));
+    const payload = onDone.mock.calls[0]![0] as { damageDealt: number; damageTaken: number };
+    // Gross item damage is 0 — the bag did nothing, the ramp ended it. The
+    // deleted finalHp delta reported the full drain (initialHp - 0) as damage.
+    expect(payload.damageDealt).toBe(0);
+    expect(payload.damageTaken).toBe(0);
+  });
+
+  it('damage + self-heal reports GROSS item damage, not net-of-heal', async () => {
+    mocks.runCombat.mockReturnValue(DAMAGE_HEAL_RESULT);
+    const onDone = vi.fn();
+    render(
+      <RunProvider>
+        <CombatOverlay active={true} onDone={onDone} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(mocks.createCombatGame).toHaveBeenCalled();
+    });
+    const sceneOpts = mocks.createCombatGame.mock.calls[0]![1] as { onCombatEnd: () => void };
+    act(() => {
+      sceneOpts.onCombatEnd();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/VICTORY/)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /NEXT ROUND/i }));
+    const payload = onDone.mock.calls[0]![0] as { damageDealt: number; damageTaken: number };
+    // Player took 12 gross, recovered 8 (net 4). TAKEN is the gross 12 — the
+    // deleted finalHp delta reported net 4.
+    expect(payload.damageTaken).toBe(12);
+    // 30 dealt to the ghost (no ghost heal → gross == net); locks the dealt side.
+    expect(payload.damageDealt).toBe(30);
   });
 });

@@ -2,7 +2,7 @@
 // M1.2.5 determinism action-stream API.
 
 export type { ApplyCombatOutcomeInput, CreateRunInput, RestoreRunOptions, RunController, RunPhase } from './state';
-export { createRun, restoreRun } from './state';
+export { createRun, restoreRun, computeDamageStats } from './state';
 
 export type { RecipeMatch } from './recipes';
 export { detectRecipes } from './recipes';
