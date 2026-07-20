@@ -440,6 +440,10 @@ export class CombatScene extends Phaser.Scene {
     } else if (ev.type === 'status_tick') {
       if (ev.target === 'player') this.playerHp = ev.remainingHp;
       else this.ghostHp = ev.remainingHp;
+    } else if (ev.type === 'ramp_tick') {
+      // CF-83 resolution ramp: authoritative remainingHp drives the HP bar.
+      if (ev.target === 'player') this.playerHp = ev.remainingHp;
+      else this.ghostHp = ev.remainingHp;
     } else if (ev.type === 'status_apply') {
       if (ev.status === 'burn') {
         this.burnStacks[ev.target] = ev.stacks;
@@ -505,6 +509,16 @@ export class CombatScene extends Phaser.Scene {
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
+        this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
+      }
+    } else if (ev.type === 'ramp_tick') {
+      // CF-83 resolution ramp: a source-less side drain (decision-log.md
+      // 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED"). Renders like
+      // status_tick — a red floater + burst at the affected side's portrait — so
+      // the ramp's "sudden death" drain reads on-screen (item 6).
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
     } else if (ev.type === 'item_trigger') {

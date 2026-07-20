@@ -34,6 +34,7 @@ import {
   type CombatInput,
   type CombatOutcome,
   type CombatResult,
+  type EndReason,
   type Combatant,
   type Contract,
   type ContractId,
@@ -106,6 +107,8 @@ export interface ApplyCombatOutcomeInput {
   readonly damageDealt: number;
   readonly damageTaken: number;
   readonly endedAtTick: number;
+  /** CF-84 termination cause; emitted additively on combat_end telemetry. */
+  readonly endReason: EndReason;
   readonly opponentGhostId: GhostId | null;
   readonly opponentClassId: ClassId | null;
 }
@@ -1072,6 +1075,7 @@ class RunControllerImpl implements RunController {
       endedAtTick: input.endedAtTick,
       damageDealt: input.damageDealt,
       damageTaken: input.damageTaken,
+      endReason: input.endReason,
     });
     this.emit({
       tsClient: this.startedAt,
@@ -1168,6 +1172,7 @@ class RunControllerImpl implements RunController {
       damageDealt,
       damageTaken,
       endedAtTick: result.endedAtTick,
+      endReason: result.endReason,
       opponentGhostId: null,
       opponentClassId: ghost.classId,
     });

@@ -59,6 +59,7 @@ import {
   type CombatInput,
   type CombatOutcome,
   type CombatResult,
+  type EndReason,
   type ContractMutator,
   type Effect,
   type EntityRef,
@@ -152,6 +153,30 @@ interface PendingDamage {
  *  the prime-disjointness rationale at relicOffer.ts:8-11. */
 const CHANCE_RNG_OFFSET = 32749;
 
+// ─── CF-83 resolution ramp ───────────────────────────────────────────
+// decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED"
+// (Phase 2 gate). A ceiling-decrement ramp that guarantees every combat
+// terminates before MAX_COMBAT_TICKS, replacing the 12.7% real-play / 35.3%
+// corpus tick-cap-draw stall.
+export const RAMP_START_TICK = 500; // tunable per telemetry
+export const RAMP_RATE = 3; // tunable per telemetry
+// BOTH decrements are load-bearing; neither is redundant:
+//  - The CEILING decrement (effective max HP = CombatantRuntime.startingHp, the
+//    cap heals clamp against) is the TERMINATION GUARANTEE. Current HP is clamped
+//    to a ceiling reaching 0 at RAMP_START_TICK + ceil(HP_max / RAMP_RATE) = t577
+//    for HP_max = 229, so healing cannot outrun it. The proof contains NO heal
+//    term — that is what makes it composition-independent (ratification item 1).
+//    Drop it and the heal term returns: max sustained heal is 0.9/tick, so net
+//    2.1/tick against 229 HP needs 109 ticks and overruns the cap.
+//  - The CURRENT-HP decrement PRESERVES THE LEADER: both sides fall at the same
+//    rate, so the side with less current HP dies first. Without it only ceilings
+//    fall and the LOWER-CEILING side dies first — at round 11 the 30-HP player
+//    would die before the 40-HP ghost regardless of who was ahead.
+// TRIGGER BYPASS is load-bearing (item 5): this is a direct HP mutation and MUST
+// NOT route through applyDamage / the trigger path. Routed there it would fire
+// on_taken_damage — Healing Salve heals exactly 3 on taken damage, net-zeroing a
+// 3/tick ramp into an infinite stall. See combat-ramp.test.ts for the regression.
+
 interface CombatState {
   tick: number;
   events: CombatEvent[];
@@ -229,6 +254,14 @@ export function simulateCombat(
   for (state.tick = 0; state.tick < MAX_COMBAT_TICKS; state.tick++) {
     runTick(state);
 
+    // CF-83 resolution ramp: from RAMP_START_TICK, drain both sides so no combat
+    // reaches the cap alive. Runs AFTER runTick (items act first) and BEFORE the
+    // death check (which then catches the ramp KO → correct win/loss/draw). The
+    // first decrement applies at tick === RAMP_START_TICK (500), not 501.
+    if (state.tick >= RAMP_START_TICK) {
+      applyResolutionRamp(state);
+    }
+
     if (player.hp <= 0 || ghost.hp <= 0) {
       const outcome: CombatOutcome =
         player.hp <= 0 && ghost.hp <= 0
@@ -236,6 +269,9 @@ export function simulateCombat(
           : player.hp <= 0
             ? 'ghost_win'
             : 'player_win';
+      // item 7: a death at or after RAMP_START_TICK is ramp-driven ('ramp_ko'),
+      // regardless of KO shape; earlier deaths are item-driven ('ko').
+      const endReason: EndReason = state.tick >= RAMP_START_TICK ? 'ramp_ko' : 'ko';
       state.events.push({
         tick: state.tick,
         type: 'combat_end',
@@ -247,11 +283,15 @@ export function simulateCombat(
         outcome,
         finalHp: { player: player.hp, ghost: ghost.hp },
         endedAtTick: state.tick,
+        endReason,
       };
     }
   }
 
   // Tick cap reached without a death. Draw at MAX_COMBAT_TICKS (synthetic tick).
+  // UNREACHABLE while the ramp holds HP_max <= RAMP_RATE * (MAX_COMBAT_TICKS -
+  // RAMP_START_TICK) — see the invariant in combat-ramp.test.ts — but retained
+  // defensively and for replaying pre-ramp fixtures. endReason 'timeout'.
   state.events.push({
     tick: MAX_COMBAT_TICKS,
     type: 'combat_end',
@@ -263,7 +303,41 @@ export function simulateCombat(
     outcome: 'draw',
     finalHp: { player: player.hp, ghost: ghost.hp },
     endedAtTick: MAX_COMBAT_TICKS,
+    endReason: 'timeout',
   };
+}
+
+// ─── CF-83 resolution ramp ───────────────────────────────────────────
+
+/** Ceiling-decrement resolution ramp. From RAMP_START_TICK, on every tick, for
+ *  BOTH sides: decrement effective max HP (the heal ceiling — CombatantRuntime
+ *  .startingHp, what heals clamp against) and current HP by RAMP_RATE (floored at
+ *  0), then clamp current HP to the ceiling. Direct state mutation — does NOT
+ *  enter trigger resolution (no applyDamage, no on_taken_damage; see the constant
+ *  block). Emits one `ramp_tick` CombatEvent per side that actually lost HP, so a
+ *  ramp-only mutual-KO draw carries a MEANINGFUL_EVENT_TYPES event and does not
+ *  hit CombatOverlay's zero-content fast-skip (item 6). Integer math throughout. */
+function applyResolutionRamp(state: CombatState): void {
+  for (const side of ['player', 'ghost'] as const) {
+    const c = side === 'player' ? state.player : state.ghost;
+    const beforeHp = c.hp;
+    // Ceiling decrement — the composition-independent termination guarantee.
+    c.startingHp = Math.max(0, c.startingHp - RAMP_RATE);
+    // Current-HP decrement — preserves the leader (equal rate on both sides).
+    c.hp = Math.max(0, c.hp - RAMP_RATE);
+    // Clamp current to the falling ceiling (a heal this tick cannot exceed it).
+    if (c.hp > c.startingHp) c.hp = c.startingHp;
+    const amount = beforeHp - c.hp;
+    if (amount > 0) {
+      state.events.push({
+        tick: state.tick,
+        type: 'ramp_tick',
+        target: side,
+        amount,
+        remainingHp: c.hp,
+      });
+    }
+  }
 }
 
 // ─── Tick loop ───────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ import {
   type RelicSlots,
   type Trigger,
 } from '@packbreaker/content';
-import { simulateCombat } from '../src/combat';
+import { RAMP_START_TICK, simulateCombat } from '../src/combat';
 
 const TINKER = ClassId('tinker');
 const MARAUDER = ClassId('marauder');
@@ -287,10 +287,17 @@ describe('on_low_health threshold boundary', () => {
     const ghost = combatant(bag(placement('iron-cap', 'g1', 0, 0)), 30);
     const res = simulateCombat(input(player, ghost), { items: customItems });
 
-    // Iron Cap should NOT fire — its on_low_health trigger was never eligible
-    // (hpPct stayed at 50, never < 50).
+    // Iron Cap should NOT fire in the pre-ramp window — its on_low_health trigger
+    // was never eligible (hpPct stayed at 50, never < 50). Scoped to tick <
+    // RAMP_START_TICK: the combat stalls (burst15 fires once, iron-cap is inert),
+    // so from t500 the CF-83 ceiling-decrement ramp correctly drops the ghost's
+    // ratio below 50% (15/30 → 12/27 = 44%) and fires iron-cap then — a distinct,
+    // correct behavior that does not bear on the 50%-boundary invariant here.
     const ironCapFires = res.events.filter(
-      (e) => e.type === 'item_trigger' && e.source.placementId === PlacementId('g1'),
+      (e) =>
+        e.type === 'item_trigger' &&
+        e.source.placementId === PlacementId('g1') &&
+        e.tick < RAMP_START_TICK,
     );
     expect(ironCapFires).toHaveLength(0);
   });

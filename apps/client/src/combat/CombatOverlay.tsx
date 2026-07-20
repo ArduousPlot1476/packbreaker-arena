@@ -74,6 +74,11 @@ const MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']> = new Set([
   'stun_consumed',
   'buff_apply',
   'buff_remove',
+  // CF-83 (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS
+  // RATIFIED", item 6): a ramp-only mutual-KO draw must NOT hit the zero-content
+  // fast-skip, or the CF-84 legibility fix is bypassed on exactly the population
+  // it renders honestly. 9 of 11 CombatEvent['type'] members now meaningful.
+  'ramp_tick',
 ]);
 // Phaser RESIZE mode adapts to the actual parent size after the first
 // layout tick; createCombatGame falls back to safe non-zero defaults
@@ -275,6 +280,16 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
 
   const isWin = result?.outcome === 'player_win';
+  // CF-84: honest 3-way DISPLAY outcome (player_win → win, ghost_win → loss, draw
+  // → draw). The ECONOMY below (goldEarned / trophyEarned / heartsPost) still
+  // collapses a draw to 'loss' — a draw costs 1 heart + the clamped trophy delta,
+  // unchanged (item 7). Only the render label changes: stop showing a draw as LOST.
+  const displayOutcome: 'win' | 'loss' | 'draw' =
+    result?.outcome === 'player_win'
+      ? 'win'
+      : result?.outcome === 'draw'
+        ? 'draw'
+        : 'loss';
   const ruleset = ctx.state.state.ruleset;
   const goldEarned = isWin ? ruleset.winBonusGold : 0;
   // CF-38 antidote (trophy axis): call the sim's canonical award derivation
@@ -368,7 +383,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       {phase === 'resolved' && result && (
         <RoundResolution
           round={ctx.state.state.round}
-          outcome={isWin ? 'win' : 'loss'}
+          outcome={displayOutcome}
           damageDealt={damageDealt}
           damageTaken={damageTaken}
           goldEarned={goldEarned}

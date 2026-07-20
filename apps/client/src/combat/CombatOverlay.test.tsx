@@ -78,6 +78,7 @@ const ZERO_CONTENT_RESULT: CombatResult = {
   outcome: 'draw',
   finalHp: { player: 30, ghost: 30 },
   endedAtTick: 600,
+  endReason: 'ko' as const,
 };
 
 // Case B fixture — outcome === 'draw' + damageDealt === 0 +
@@ -130,6 +131,7 @@ const OFFSET_HEAL_RESULT: CombatResult = {
   outcome: 'draw',
   finalHp: { player: 30, ghost: 30 },
   endedAtTick: 600,
+  endReason: 'ko' as const,
 };
 
 // vi.mock factories are hoisted to the top of the module — any
@@ -191,11 +193,12 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
     // M1.5b PR 1: the lazy class-select Suspense fallback shares the
     // run-boot-fallback testid with the non-Suspense createRun-in-flight
     // fallback. Wait for the combat overlay's resolution panel itself
-    // (DEFEAT header from the zero-content bypass) rather than fallback-
-    // absence — the brief stub-mounted state would also satisfy the
-    // negation but doesn't have the consumer mounted yet.
+    // (DRAW header from the zero-content bypass — CF-84 renders a draw
+    // honestly as DRAW, not the pre-CF-84 "DEFEAT"/"LOST") rather than
+    // fallback-absence — the brief stub-mounted state would also satisfy
+    // the negation but doesn't have the consumer mounted yet.
     await waitFor(() => {
-      expect(screen.getByText(/DEFEAT/)).toBeInTheDocument();
+      expect(screen.getByText(/DRAW/)).toBeInTheDocument();
     });
 
     // Phaser canvas container is NOT rendered — the option-2 branch
@@ -204,8 +207,9 @@ describe('CombatOverlay — zero-content fast-skip predicate (M1.3.4b + Codex P1
     // createCombatGame is never called.
     expect(mocks.createCombatGame).not.toHaveBeenCalled();
 
-    // RoundResolution renders with DEFEAT header and DEALT 0 / TAKEN 0.
-    expect(screen.getByText(/DEFEAT/)).toBeInTheDocument();
+    // RoundResolution renders with DRAW header (CF-84: a draw renders honestly
+    // as DRAW, not the pre-CF-84 "DEFEAT"/"LOST") and DEALT 0 / TAKEN 0.
+    expect(screen.getByText(/DRAW/)).toBeInTheDocument();
     expect(screen.getByText(/DEALT/)).toBeInTheDocument();
     expect(screen.getByText(/TAKEN/)).toBeInTheDocument();
 
@@ -366,6 +370,7 @@ describe('CombatOverlay — pre-commit trophy read (CF-72 / CF-38 load-bearing i
     outcome: 'player_win',
     finalHp: { player: 30, ghost: 0 },
     endedAtTick: 60,
+    endReason: 'ko' as const,
   };
 
   it('panel derives from the PRE-combat trophy at phase === resolved, and the sim has not yet committed', async () => {

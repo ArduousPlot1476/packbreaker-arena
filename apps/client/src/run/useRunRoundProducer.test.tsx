@@ -14,14 +14,14 @@ import { useRun, type CombatDonePayload } from './useRun';
 import { loadLocal } from '../persistence';
 
 const WIN: CombatDonePayload = {
-  result: { events: [], outcome: 'player_win', finalHp: { player: 30, ghost: 0 }, endedAtTick: 5 },
+  result: { events: [], outcome: 'player_win', finalHp: { player: 30, ghost: 0 }, endedAtTick: 5, endReason: 'ko' as const },
   opponentGhostId: null,
   opponentClassId: 'marauder' as ClassId,
   damageDealt: 30,
   damageTaken: 0,
 };
 const LOSS: CombatDonePayload = {
-  result: { events: [], outcome: 'ghost_win', finalHp: { player: 0, ghost: 12 }, endedAtTick: 3 },
+  result: { events: [], outcome: 'ghost_win', finalHp: { player: 0, ghost: 12 }, endedAtTick: 3, endReason: 'ko' as const },
   opponentGhostId: null,
   opponentClassId: 'marauder' as ClassId,
   damageDealt: 10,

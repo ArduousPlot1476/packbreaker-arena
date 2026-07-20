@@ -692,6 +692,18 @@ export type CombatEvent =
       readonly amount: number        // the amount being removed (matches the original buff_apply)
     }
   | {
+      // CF-83 resolution ramp (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84
+      // DRAW SEMANTICS RATIFIED"). A source-less, environmental HP drain — NOT a
+      // damage event (it bypasses trigger resolution). One per side per tick from
+      // RAMP_START_TICK. In MEANINGFUL_EVENT_TYPES so a ramp-only mutual-KO draw
+      // does not hit CombatOverlay's zero-content fast-skip.
+      readonly tick: number
+      readonly type: 'ramp_tick'
+      readonly target: EntityRef
+      readonly amount: number
+      readonly remainingHp: number
+    }
+  | {
       readonly tick: number
       readonly type: 'combat_end'
       readonly outcome: CombatOutcome
@@ -700,11 +712,24 @@ export type CombatEvent =
 
 export type CombatOutcome = 'player_win' | 'ghost_win' | 'draw'
 
+/** CF-84 termination cause (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW
+ *  SEMANTICS RATIFIED", item 7). `outcome` carries the KO SHAPE (draw = mutual,
+ *  player_win/ghost_win = decisive); `endReason` carries the CAUSE:
+ *    - 'ko'      — item-driven death before the ramp (tick < RAMP_START_TICK)
+ *    - 'ramp_ko' — ramp-driven death (tick >= RAMP_START_TICK); covers every
+ *                  ramp-driven termination regardless of shape
+ *    - 'timeout' — tick cap reached (endedAtTick === MAX_COMBAT_TICKS);
+ *                  dead-but-required-for-replay once the ramp guarantees
+ *                  termination.
+ *  Additive telemetry field on combat_end (§ 16). */
+export type EndReason = 'ko' | 'ramp_ko' | 'timeout'
+
 export interface CombatResult {
   readonly events: ReadonlyArray<CombatEvent>
   readonly outcome: CombatOutcome
   readonly finalHp: { readonly player: number; readonly ghost: number }
   readonly endedAtTick: number
+  readonly endReason: EndReason
 }
 
 
@@ -1011,6 +1036,10 @@ export type TelemetryEvent =
       readonly endedAtTick: number
       readonly damageDealt: number
       readonly damageTaken: number
+      // CF-84 additive field (CF-41 additive-telemetry-field precedent). Optional
+      // for the wire transition window: a pre-deploy client omits it and the
+      // server's .strict() validator must still accept the event.
+      readonly endReason?: EndReason
     })
 
   // Onboarding
