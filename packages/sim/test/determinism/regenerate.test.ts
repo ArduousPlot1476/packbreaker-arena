@@ -18,7 +18,8 @@ describe.runIf(ENABLED)('M1.2.5 + M1.2.6 fixture regeneration', () => {
     console.log(formatCoverage(coverage));
     expect(written).toBe(224);
     expect(coverage.bossRound.ok, 'boss round (>=10x)').toBe(true);
-    expect(coverage.tickCap.ok, 'tick-cap draw (>=1x organic)').toBe(true);
+    expect(coverage.tickCap.ok, 'CF-83 Clause 1a: zero tick-cap draws (endedAtTick===600)').toBe(true);
+    expect(coverage.rampResolution.ok, 'resolution ramp exercised (>=1x)').toBe(true);
     expect(coverage.recipes.ok, 'all 12 recipes (>=1x each)').toBe(true);
     expect(coverage.pairs.ok, 'all (class, starter relic) pairs (>=5x each)').toBe(true);
     expect(coverage.rotation270.ok, 'rotation 270 on non-square (>=1x)').toBe(true);

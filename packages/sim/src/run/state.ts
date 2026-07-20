@@ -34,6 +34,7 @@ import {
   type CombatInput,
   type CombatOutcome,
   type CombatResult,
+  type EndReason,
   type Combatant,
   type Contract,
   type ContractId,
@@ -106,6 +107,8 @@ export interface ApplyCombatOutcomeInput {
   readonly damageDealt: number;
   readonly damageTaken: number;
   readonly endedAtTick: number;
+  /** CF-84 termination cause; emitted additively on combat_end telemetry. */
+  readonly endReason: EndReason;
   readonly opponentGhostId: GhostId | null;
   readonly opponentClassId: ClassId | null;
 }
@@ -1072,6 +1075,7 @@ class RunControllerImpl implements RunController {
       endedAtTick: input.endedAtTick,
       damageDealt: input.damageDealt,
       damageTaken: input.damageTaken,
+      endReason: input.endReason,
     });
     this.emit({
       tsClient: this.startedAt,
@@ -1168,6 +1172,7 @@ class RunControllerImpl implements RunController {
       damageDealt,
       damageTaken,
       endedAtTick: result.endedAtTick,
+      endReason: result.endReason,
       opponentGhostId: null,
       opponentClassId: ghost.classId,
     });
@@ -1386,9 +1391,13 @@ function computeItemGoldIncome(
 }
 
 /** Computes per-side damage totals from a CombatResult.events stream. Used
- *  for round_end telemetry and the RunHistoryEntry damage fields. status_tick
- *  damage counts toward the side that took it, even though it has no source. */
-function computeDamageStats(
+ *  for round_end telemetry and the RunHistoryEntry damage fields, and (CF-83
+ *  Fix A) by the client's DEALT/TAKEN display — one gross-item-damage
+ *  definition for both. Sums only `damage` / `status_tick`, so the CF-83
+ *  ramp drain (a source-less `ramp_tick`, not a damage event) is excluded:
+ *  a ramp-resolved draw honestly reports 0 / 0. status_tick damage counts
+ *  toward the side that took it, even though it has no source. */
+export function computeDamageStats(
   events: ReadonlyArray<CombatEvent>,
 ): { damageDealt: number; damageTaken: number } {
   let damageDealt = 0;

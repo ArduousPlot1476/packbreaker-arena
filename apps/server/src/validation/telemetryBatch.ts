@@ -62,6 +62,10 @@ export const RunOutcomeSchema = z.enum([
 ])
 export const RoundOutcomeSchema = z.enum(['win', 'loss'])
 export const CombatOutcomeSchema = z.enum(['player_win', 'ghost_win', 'draw'])
+// CF-84 additive field on combat_end. `.optional()` is load-bearing for the wire
+// transition: this server tolerance must ship+deploy BEFORE the client emits
+// endReason (Rule 31), and a pre-deploy client omitting it must still validate.
+export const EndReasonSchema = z.enum(['ko', 'ramp_ko', 'timeout'])
 export const RelicSlotSchema = z.enum(['mid', 'boss'])
 export const RotationSchema = z.union([
   z.literal(0),
@@ -126,7 +130,7 @@ const combatStart = z
   .object({ ...baseShape, name: z.literal('combat_start'), runId: idString, round: num, opponentGhostId: idString.nullable() })
   .strict()
 const combatEnd = z
-  .object({ ...baseShape, name: z.literal('combat_end'), runId: idString, round: num, outcome: CombatOutcomeSchema, endedAtTick: num, damageDealt: num, damageTaken: num })
+  .object({ ...baseShape, name: z.literal('combat_end'), runId: idString, round: num, outcome: CombatOutcomeSchema, endedAtTick: num, damageDealt: num, damageTaken: num, endReason: EndReasonSchema.optional() })
   .strict()
 const tutorialStepReached = z
   .object({ ...baseShape, name: z.literal('tutorial_step_reached'), stepId: z.string().min(1) })

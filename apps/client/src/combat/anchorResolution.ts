@@ -31,6 +31,7 @@ export type AnchorMode = 'source' | 'target' | 'both' | 'portrait' | 'unanchored
  *  | stun_consumed  | 'target'     | M1.4b VFX intent — affected entity is focus.
  *  | buff_apply     | 'target'     | M1.4b VFX intent — recipient is focus.
  *  | buff_remove    | 'target'     | M1.4b VFX intent — recipient is focus.
+ *  | ramp_tick      | 'target'     | CF-83 resolution ramp drain shows on the affected side.
  */
 export const ANCHOR_RULE: Record<CombatEvent['type'], AnchorMode> = {
   combat_start: 'unanchored',
@@ -42,6 +43,7 @@ export const ANCHOR_RULE: Record<CombatEvent['type'], AnchorMode> = {
   stun_consumed: 'target',
   buff_apply: 'target',
   buff_remove: 'target',
+  ramp_tick: 'target',
   combat_end: 'portrait',
 };
 
@@ -89,6 +91,8 @@ export function resolveAnchor(event: CombatEvent, layout: BagLayout): ResolvedAn
       }
       break;
     case 'status_tick':
+    case 'ramp_tick':
+      // ramp_tick: a source-less side drain, same target: EntityRef shape as status_tick.
       if (mode === 'target' || mode === 'both') {
         result.target = resolveEntity(event.target, layout);
       }

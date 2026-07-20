@@ -4,7 +4,8 @@
 //   - HP arithmetic remains sim-authoritative (event payloads' remainingHp /
 //     newHp / finalHp).
 //   - CombatDonePayload (damageDealt / damageTaken / opponentGhostId)
-//     pre-computed against initialPlayerHp / initialGhostHp − finalHp,
+//     computed via the sim's shared computeDamageStats (gross item damage,
+//     CF-83 ramp-excluded — the same definition round_end telemetry uses),
 //     then forwarded to the reducer's combat_done.
 //
 // What changed at M1.3.4b: the DOM Portrait + HP-bar tree (and its 3
@@ -35,7 +36,7 @@ import {
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
 import { clientBagToSimBag } from '../run/sim-bridge';
-import { trophyDeltaFor } from '@packbreaker/sim';
+import { computeDamageStats, trophyDeltaFor } from '@packbreaker/sim';
 import { runCombat } from './sim-bridge.combat';
 import {
   CombatScene,
@@ -74,6 +75,11 @@ const MEANINGFUL_EVENT_TYPES: ReadonlySet<CombatEvent['type']> = new Set([
   'stun_consumed',
   'buff_apply',
   'buff_remove',
+  // CF-83 (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS
+  // RATIFIED", item 6): a ramp-only mutual-KO draw must NOT hit the zero-content
+  // fast-skip, or the CF-84 legibility fix is bypassed on exactly the population
+  // it renders honestly. 9 of 11 CombatEvent['type'] members now meaningful.
+  'ramp_tick',
 ]);
 // Phaser RESIZE mode adapts to the actual parent size after the first
 // layout tick; createCombatGame falls back to safe non-zero defaults
@@ -177,12 +183,16 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       };
     }, [active, ctx.simRun, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
 
-  // Damage attributable to player / ghost. result.finalHp is HP at the
-  // tick the simulation ended (KO or MAX_COMBAT_TICKS). Clamp to ≥0 so
-  // status-tick lethal hits don't underflow if HP went negative inside
-  // sim before being clamped at the event boundary.
-  const damageDealt = result ? Math.max(0, initialGhostHp - result.finalHp.ghost) : 0;
-  const damageTaken = result ? Math.max(0, initialPlayerHp - result.finalHp.player) : 0;
+  // Damage attributable to player / ghost. CF-83 Fix A: use the sim's
+  // shared computeDamageStats — gross item + status damage summed from the
+  // event stream — the SAME definition round_end telemetry uses, so display
+  // and telemetry can't disagree. This excludes the source-less CF-83 ramp
+  // drain (a `ramp_tick`, not a damage event), so a ramp-resolved draw
+  // honestly reports 0 / 0; it also reports gross (pre-heal) damage rather
+  // than the old net-of-heal `finalHp` delta.
+  const { damageDealt, damageTaken } = result
+    ? computeDamageStats(result.events)
+    : { damageDealt: 0, damageTaken: 0 };
 
   // Zero-content fast-skip — see decision-log 2026-05-04 + the Codex P1
   // amendment block in the same entry. Predicate checks event CONTENT,
@@ -275,6 +285,16 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
 
   const isWin = result?.outcome === 'player_win';
+  // CF-84: honest 3-way DISPLAY outcome (player_win → win, ghost_win → loss, draw
+  // → draw). The ECONOMY below (goldEarned / trophyEarned / heartsPost) still
+  // collapses a draw to 'loss' — a draw costs 1 heart + the clamped trophy delta,
+  // unchanged (item 7). Only the render label changes: stop showing a draw as LOST.
+  const displayOutcome: 'win' | 'loss' | 'draw' =
+    result?.outcome === 'player_win'
+      ? 'win'
+      : result?.outcome === 'draw'
+        ? 'draw'
+        : 'loss';
   const ruleset = ctx.state.state.ruleset;
   const goldEarned = isWin ? ruleset.winBonusGold : 0;
   // CF-38 antidote (trophy axis): call the sim's canonical award derivation
@@ -368,7 +388,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       {phase === 'resolved' && result && (
         <RoundResolution
           round={ctx.state.state.round}
-          outcome={isWin ? 'win' : 'loss'}
+          outcome={displayOutcome}
           damageDealt={damageDealt}
           damageTaken={damageTaken}
           goldEarned={goldEarned}

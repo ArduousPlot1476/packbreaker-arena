@@ -8,7 +8,7 @@ import { CoinGlyph } from '../icons/icons';
 
 interface RoundResolutionProps {
   round: number;
-  outcome: 'win' | 'loss';
+  outcome: 'win' | 'loss' | 'draw';
   damageDealt: number;
   damageTaken: number;
   goldEarned: number;
@@ -30,9 +30,22 @@ export function RoundResolution({
   onNext,
 }: RoundResolutionProps) {
   const isWin = outcome === 'win';
-  const headerColor = isWin ? 'var(--r-uncommon)' : 'var(--life-stroke)';
-  const headerLabel = isWin ? 'VICTORY' : 'DEFEAT';
-  const headline = isWin ? 'You crushed the ghost.' : 'The ghost outlasted you.';
+  const isDraw = outcome === 'draw';
+  // CF-84 (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS
+  // RATIFIED", item 7): a draw renders honestly as DRAW, not "DEFEAT/LOST". The
+  // economy is UNCHANGED — a draw still costs 1 heart + the clamped trophy delta,
+  // shown below via the caller's loss-computed gold/trophy/hearts values.
+  const headerColor = isWin
+    ? 'var(--r-uncommon)'
+    : isDraw
+      ? 'var(--text-secondary)'
+      : 'var(--life-stroke)';
+  const headerLabel = isWin ? 'VICTORY' : isDraw ? 'DRAW' : 'DEFEAT';
+  const headline = isWin
+    ? 'You crushed the ghost.'
+    : isDraw
+      ? 'Both fell — a draw.'
+      : 'The ghost outlasted you.';
   return (
     <div
       className="ease-snap"

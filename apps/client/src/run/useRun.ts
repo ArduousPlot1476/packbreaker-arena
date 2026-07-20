@@ -1093,6 +1093,7 @@ export function useRun(options: UseRunOptions = {}) {
       damageDealt: payload.damageDealt,
       damageTaken: payload.damageTaken,
       endedAtTick: payload.result.endedAtTick,
+      endReason: payload.result.endReason,
       opponentGhostId: payload.opponentGhostId,
       opponentClassId: payload.opponentClassId,
     });

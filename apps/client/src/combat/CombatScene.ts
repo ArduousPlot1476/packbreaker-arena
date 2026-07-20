@@ -32,6 +32,7 @@ import type { CombatEvent, EntityRef } from '@packbreaker/content';
 import type { BagLayout } from '../bag/layout';
 import { resolveEventAnchors } from './eventAnchorResolver';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
+import { koFlashTargets } from './koFlash';
 
 // ─────────────────────────────────────────────────────────────────────
 // Palette — locked per visual-direction.md § 3 + semantic extensions.
@@ -440,6 +441,10 @@ export class CombatScene extends Phaser.Scene {
     } else if (ev.type === 'status_tick') {
       if (ev.target === 'player') this.playerHp = ev.remainingHp;
       else this.ghostHp = ev.remainingHp;
+    } else if (ev.type === 'ramp_tick') {
+      // CF-83 resolution ramp: authoritative remainingHp drives the HP bar.
+      if (ev.target === 'player') this.playerHp = ev.remainingHp;
+      else this.ghostHp = ev.remainingHp;
     } else if (ev.type === 'status_apply') {
       if (ev.status === 'burn') {
         this.burnStacks[ev.target] = ev.stacks;
@@ -507,6 +512,16 @@ export class CombatScene extends Phaser.Scene {
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
+    } else if (ev.type === 'ramp_tick') {
+      // CF-83 resolution ramp: a source-less side drain (decision-log.md
+      // 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED"). Renders like
+      // status_tick — a red floater + burst at the affected side's portrait — so
+      // the ramp's "sudden death" drain reads on-screen (item 6).
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      if (anchors.target) {
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed, true);
+        this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
+      }
     } else if (ev.type === 'item_trigger') {
       // M1.4b2.3: brief "item activated" beat at the source anchor.
       // ANCHOR_RULE.item_trigger='source'. Reuses TEX.lineHit (thin red
@@ -570,9 +585,13 @@ export class CombatScene extends Phaser.Scene {
       this.pulsePortrait(refs);
     } else if (ev.type === 'combat_end') {
       this.cameras.main.shake(SHAKE_DURATION_MS, SHAKE_INTENSITY);
-      const koSide: EntityRef = ev.outcome === 'player_win' ? 'ghost' : 'player';
-      const refs = koSide === 'player' ? this.playerRefs : this.ghostRefs;
-      this.spawnKoFlash(refs);
+      // CF-84 honest KO flash (round-3 P3): a decisive win flashes EXACTLY the
+      // loser's portrait; a mutual-KO draw flashes BOTH, since both died. The
+      // ramp_tick MEANINGFUL_EVENT_TYPES addition now routes ramp-only draws
+      // through Phaser — the previous two-way branch flashed only the player.
+      for (const side of koFlashTargets(ev.outcome)) {
+        this.spawnKoFlash(side === 'player' ? this.playerRefs : this.ghostRefs);
+      }
     }
     // All event types except recipe_combine consume resolveEventAnchors.
     // CF 4b open, sim-emission-blocked (recipe_combine not in CombatEvent union).

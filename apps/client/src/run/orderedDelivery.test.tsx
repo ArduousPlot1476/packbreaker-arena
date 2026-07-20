@@ -41,7 +41,7 @@ import { RunProvider, useRunContext } from './RunContext';
 import type { CombatDonePayload } from './useRun';
 
 const WIN: CombatDonePayload = {
-  result: { events: [], outcome: 'player_win', finalHp: { player: 30, ghost: 0 }, endedAtTick: 5 },
+  result: { events: [], outcome: 'player_win', finalHp: { player: 30, ghost: 0 }, endedAtTick: 5, endReason: 'ko' as const },
   opponentGhostId: null,
   opponentClassId: 'marauder' as ClassId,
   damageDealt: 30,

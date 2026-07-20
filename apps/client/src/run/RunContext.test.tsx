@@ -478,6 +478,7 @@ describe('useRun onCombine — surfaces a REAL sim footprint-rejection to the CT
           outcome: 'player_win' as const,
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: 'marauder' as ClassId,
@@ -575,6 +576,7 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
       outcome: 'player_win' as const,
       finalHp: { player: 30, ghost: 0 },
       endedAtTick: 5,
+      endReason: 'ko' as const,
     };
 
     act(() => {
@@ -594,6 +596,7 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
       damageDealt: 30,
       damageTaken: 6,
       endedAtTick: 5,
+      endReason: 'ko' as const,
       opponentGhostId: null,
       opponentClassId: 'marauder',
     });
@@ -630,6 +633,7 @@ describe('useRun onCombatDone — capture-delta routing + Bucket A dissolution (
       outcome: 'ghost_win' as const,
       finalHp: { player: 0, ghost: 12 },
       endedAtTick: 3,
+      endReason: 'ko' as const,
     };
 
     act(() => {
@@ -682,6 +686,7 @@ describe('useRun onCombatDone — trophy accumulation through sim authority (CF-
       outcome: 'player_win' as const,
       finalHp: { player: 30, ghost: 0 },
       endedAtTick: 5,
+      endReason: 'ko' as const,
     };
     act(() => {
       ctx.onCombatDone({
@@ -716,6 +721,7 @@ describe('useRun onCombatDone — trophy accumulation through sim authority (CF-
       outcome: 'ghost_win' as const,
       finalHp: { player: 0, ghost: 12 },
       endedAtTick: 3,
+      endReason: 'ko' as const,
     };
     act(() => {
       ctx.onCombatDone({
@@ -745,6 +751,7 @@ describe('useRun onCombatDone — trophy accumulation through sim authority (CF-
           outcome: 'player_win' as const,
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: 'marauder' as ClassId,
@@ -765,6 +772,7 @@ describe('useRun onCombatDone — trophy accumulation through sim authority (CF-
           outcome: 'ghost_win' as const,
           finalHp: { player: 0, ghost: 12 },
           endedAtTick: 3,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: 'marauder' as ClassId,
@@ -785,6 +793,7 @@ describe('useRun onCombatDone — trophy accumulation through sim authority (CF-
       outcome: 'player_win' as const,
       finalHp: { player: 30, ghost: 0 },
       endedAtTick: 5,
+      endReason: 'ko' as const,
     };
     for (let i = 0; i < 3; i++) {
       act(() => ctx.onContinue());
@@ -876,6 +885,7 @@ describe.skip('useRun handlers — terminal-outcome no-op guards (M1.5a PR 2 Pha
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -923,6 +933,7 @@ describe.skip('useRun handlers — terminal-outcome no-op guards (M1.5a PR 2 Pha
             events: [],
             finalHp: { player: 30, ghost: 0 },
             endedAtTick: 5,
+            endReason: 'ko' as const,
           },
           opponentGhostId: null,
           opponentClassId: null,
@@ -968,6 +979,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1122,6 +1134,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1188,6 +1201,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1263,6 +1277,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1349,6 +1364,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 0, ghost: 12 },
           endedAtTick: 3,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1409,6 +1425,7 @@ describe('useRun pendingRelicOffer + isRunEnded — M1.5a PR 3 Phase 2b detectio
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,
@@ -1759,6 +1776,7 @@ describe('RunProvider — save-on-quiescent timing (M1.5b PR 3 / 5b.3a)', () => 
             outcome: 'player_win' as const,
             finalHp: { player: 30, ghost: 0 },
             endedAtTick: 5,
+            endReason: 'ko' as const,
           },
           opponentGhostId: null,
           opponentClassId: 'tinker' as ClassId,
@@ -2562,6 +2580,7 @@ describe('save-on-quiescent — terminal-outcome guard regression (5b.3b Phase 2
           events: [],
           finalHp: { player: 30, ghost: 0 },
           endedAtTick: 5,
+          endReason: 'ko' as const,
         },
         opponentGhostId: null,
         opponentClassId: null,

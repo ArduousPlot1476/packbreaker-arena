@@ -13,7 +13,8 @@
 //
 // M1.2.5 coverage targets (ratified):
 //   1. Boss round (round 11) reached >=10 times.
-//   2. Tick-cap draw (endedAtTick === 600) >=1 time. ORGANIC ONLY.
+//   2. Tick-cap draws (endedAtTick === 600) === 0 (CF-83 Clause 1a: the ramp
+//      guarantees termination before the cap); resolution ramp exercised >=1x.
 //   3. All 12 recipes >=1x each (target #3 narrowed; two Capstones excepted).
 //   4. All 6 starter relics × both classes appear in starter slot >=5 times each.
 //   5. Rotation 270 on a non-square item >=1 time.
@@ -78,6 +79,8 @@ interface GeneratedFixture {
   readonly recipesFired: ReadonlyArray<RecipeId>;
   readonly rotation270OnNonSquare: boolean;
   readonly tickCapDraw: boolean;
+  /** CF-83: a resolution-ramp `ramp_tick` event fired in at least one round. */
+  readonly rampResolution: boolean;
   readonly bossRoundReached: boolean;
   /** M1.2.6: relics granted during the run (in order). Empty for M1.2.5
    *  fixtures (no grant_relic actions in the 0–199 set). */
@@ -231,6 +234,7 @@ function generateOneFixture(spec: FixtureSpec): GeneratedFixture {
   const pending: ItemId[] = [];
   let rotation270OnNonSquare = false;
   let tickCapDraw = false;
+  let rampResolution = false;
   let bossRoundReached = false;
 
   let safeguard = 0;
@@ -292,13 +296,16 @@ function generateOneFixture(spec: FixtureSpec): GeneratedFixture {
       perRoundCombatEvents.push([...events]);
       const round = ctrl.getState().history[ctrl.getState().history.length - 1]?.round ?? 0;
       if (round === 11) bossRoundReached = true;
-      // Tick-cap draw: combat_end at tick === MAX_COMBAT_TICKS (600) with
-      // outcome === 'draw'. See packages/sim/src/combat.ts where the cap path
-      // emits the synthetic tick-600 combat_end.
+      // CF-83 Clause 1a: with the resolution ramp, NO combat reaches the cap.
+      // A tick-600 combat_end draw is now a RAMP REGRESSION — coverage asserts
+      // this count is === 0 (was >= 1 pre-CF-83).
       const last = events[events.length - 1];
       if (last && last.type === 'combat_end' && last.outcome === 'draw' && last.tick === 600) {
         tickCapDraw = true;
       }
+      // The ramp fired iff a ramp_tick event is present (ratification item 6).
+      // Positive Clause-1a coverage: the corpus must actually exercise the ramp.
+      if (events.some((e) => e.type === 'ramp_tick')) rampResolution = true;
     }
   }
 
@@ -320,6 +327,7 @@ function generateOneFixture(spec: FixtureSpec): GeneratedFixture {
     recipesFired,
     rotation270OnNonSquare,
     tickCapDraw,
+    rampResolution,
     bossRoundReached,
     grantedRelics,
   };
@@ -338,6 +346,7 @@ function shapeIsSquare(shape: ReadonlyArray<{ col: number; row: number }>): bool
 interface CoverageReport {
   bossRound: { count: number; ok: boolean };
   tickCap: { count: number; ok: boolean };
+  rampResolution: { count: number; ok: boolean };
   recipes: { perRecipe: Record<string, number>; ok: boolean; missing: string[] };
   pairs: { perPair: Record<string, number>; ok: boolean; missing: string[] };
   rotation270: { ok: boolean };
@@ -351,6 +360,7 @@ interface CoverageReport {
 function evaluateCoverage(fixtures: ReadonlyArray<GeneratedFixture>): CoverageReport {
   const bossRoundCount = fixtures.filter((f) => f.bossRoundReached).length;
   const tickCapCount = fixtures.filter((f) => f.tickCapDraw).length;
+  const rampResolutionCount = fixtures.filter((f) => f.rampResolution).length;
   const rotation270Hit = fixtures.some((f) => f.rotation270OnNonSquare);
 
   const perRecipe: Record<string, number> = {};
@@ -441,7 +451,11 @@ function evaluateCoverage(fixtures: ReadonlyArray<GeneratedFixture>): CoverageRe
 
   return {
     bossRound: { count: bossRoundCount, ok: bossRoundCount >= 10 },
-    tickCap: { count: tickCapCount, ok: tickCapCount >= 1 },
+    // CF-83 Clause 1a: ZERO tick-cap draws (the ramp guarantees termination
+    // before the cap; a nonzero count is a ramp regression), and the ramp is
+    // positively exercised (>= 1 fixture resolves via a ramp_tick).
+    tickCap: { count: tickCapCount, ok: tickCapCount === 0 },
+    rampResolution: { count: rampResolutionCount, ok: rampResolutionCount >= 1 },
     recipes: { perRecipe, ok: missingRecipes.length === 0, missing: missingRecipes },
     pairs: { perPair, ok: missingPairs.length === 0, missing: missingPairs },
     rotation270: { ok: rotation270Hit },
@@ -612,7 +626,8 @@ export function formatCoverage(cov: CoverageReport): string {
   const lines: string[] = [];
   lines.push(`Coverage report:`);
   lines.push(`  boss round (>=10)        : ${cov.bossRound.count} ${cov.bossRound.ok ? '[OK]' : '[FAIL]'}`);
-  lines.push(`  tick-cap draw (>=1)      : ${cov.tickCap.count} ${cov.tickCap.ok ? '[OK]' : '[FAIL]'}`);
+  lines.push(`  tick-cap draw (===0 / 1a) : ${cov.tickCap.count} ${cov.tickCap.ok ? '[OK]' : '[FAIL]'}`);
+  lines.push(`  ramp resolution (>=1)    : ${cov.rampResolution.count} ${cov.rampResolution.ok ? '[OK]' : '[FAIL]'}`);
   lines.push(`  rotation 270 (>=1)       : ${cov.rotation270.ok ? '[OK]' : '[FAIL]'}`);
   lines.push(`  recipes (>=1 each)       : ${cov.recipes.ok ? '[OK]' : `[FAIL — missing: ${cov.recipes.missing.join(', ')}]`}`);
   for (const [k, n] of Object.entries(cov.recipes.perRecipe)) {
