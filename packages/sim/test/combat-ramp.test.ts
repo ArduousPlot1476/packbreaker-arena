@@ -100,6 +100,65 @@ describe('CF-83 resolution ramp', () => {
   });
 });
 
+// ─── Round-2 guard: the ramp must not override an item KO ────────────
+// Codex PR-A round-2 P2. When runTick lands an item/status KO at tick >=
+// RAMP_START_TICK, the death check should resolve it decisively; without the
+// guard the ramp runs first and drains the SURVIVOR too, flipping a win/loss
+// into a false draw. The dangerous direction (a side item-KO'd while the
+// survivor is alive and earns the round) is UN-sampled by the frozen corpus —
+// POPULATION CAVEAT (ii) — so it is pinned here by construction. iron-sword =
+// 4 dmg / 50 ticks (fires at 50,100,...); a 40-HP bare ghost dies on the 10th
+// hit at exactly tick 500 === RAMP_START_TICK.
+
+describe('CF-83 round-2 KO-before-ramp guard', () => {
+  it('ghost item-KO at tick 500 with the player alive resolves player_win, not a ramp draw (heart-robbing direction)', () => {
+    // Player 3 HP + iron-sword; ghost 40 HP, no damage. runTick KOs the ghost at
+    // tick 500; pre-guard the ramp then drains the alive 3-HP player to 0 → false
+    // draw (a heart the player earned). The guard skips the ramp once ghost is down.
+    const r = simulateCombat(
+      input(combatant(bag(placement('iron-sword', 'p1')), 3), combatant(bag(), 40)),
+    );
+    expect(r.outcome).toBe('player_win'); // RED (draw) under ramp-before-death-check
+    expect(r.endedAtTick).toBe(RAMP_START_TICK);
+    expect(r.finalHp).toEqual({ player: 3, ghost: 0 });
+  });
+
+  it('player item-KO at tick 500 with the ghost alive resolves ghost_win, not a ramp draw (mirror)', () => {
+    const r = simulateCombat(
+      input(combatant(bag(), 40), combatant(bag(placement('iron-sword', 'g1')), 3)),
+    );
+    expect(r.outcome).toBe('ghost_win'); // RED (draw) under ramp-before-death-check
+    expect(r.endedAtTick).toBe(RAMP_START_TICK);
+    expect(r.finalHp).toEqual({ player: 0, ghost: 3 });
+  });
+
+  it('a side that item-dips to 0 but heals above 0 by the death check is alive, so the ramp still resolves it (ramp_ko — guard does not over-fire)', () => {
+    // Ghost: Healing Salve + 8 HP. At tick 500 an iron-sword hit drops it to 0
+    // (damage rem 0), then the salve's on_taken_damage heal (3) revives it to 3 —
+    // ALIVE at the death check. Both sides survive runTick, so the guard applies
+    // the ramp, which finishes the ghost 3→0 → ramp_ko at tick 500. This is green
+    // under BOTH the current ordering and the guard; it goes RED only under an
+    // OVER-firing guard that skips the ramp on the mid-tick dip (which would let
+    // the combat run past tick 500). endedAtTick === 500 pins that.
+    const r = simulateCombat(
+      input(
+        combatant(bag(placement('iron-sword', 'p1')), 30),
+        combatant(bag(placement('healing-salve', 'g1')), 8),
+      ),
+    );
+    expect(r.outcome).toBe('player_win');
+    expect(r.endReason).toBe('ramp_ko');
+    expect(r.endedAtTick).toBe(RAMP_START_TICK);
+    // Pin the transient dip: an item hit took the ghost to exactly 0 at tick 500,
+    // and the combat still resolved via the ramp (not an item KO) — so the salve
+    // revived it above 0 and the guard did NOT treat it as already-resolved.
+    const itemDipToZero = r.events.some(
+      (e) => e.type === 'damage' && e.target === 'ghost' && e.tick === RAMP_START_TICK && e.remainingHp === 0,
+    );
+    expect(itemDipToZero).toBe(true);
+  });
+});
+
 // ─── Termination invariant (Rule 28-falsifiable by construction) ─────
 
 function cellCount(shape: ItemShape): number {

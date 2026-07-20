@@ -258,7 +258,16 @@ export function simulateCombat(
     // reaches the cap alive. Runs AFTER runTick (items act first) and BEFORE the
     // death check (which then catches the ramp KO → correct win/loss/draw). The
     // first decrement applies at tick === RAMP_START_TICK (500), not 501.
-    if (state.tick >= RAMP_START_TICK) {
+    //
+    // Round-2 guard (CF-83 PR-A): apply the ramp only when BOTH sides are still
+    // alive after runTick. runTick can land an item/status KO at tick >= 500; the
+    // death check below is what should resolve that KO decisively. Without this
+    // guard the ramp runs first and drains the SURVIVOR too, flipping a decisive
+    // win/loss into a false draw — robbing a heart the player earned. A side that
+    // dipped to 0 mid-tick but healed back above 0 (e.g. Healing Salve) is alive
+    // here, so a legitimate ramp resolution is NOT skipped. endReason is untouched
+    // (item 7): a death at tick >= RAMP_START_TICK stays 'ramp_ko' by tick, not cause.
+    if (state.tick >= RAMP_START_TICK && player.hp > 0 && ghost.hp > 0) {
       applyResolutionRamp(state);
     }
 
