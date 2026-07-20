@@ -32,6 +32,7 @@ import type { CombatEvent, EntityRef } from '@packbreaker/content';
 import type { BagLayout } from '../bag/layout';
 import { resolveEventAnchors } from './eventAnchorResolver';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
+import { koFlashTargets } from './koFlash';
 
 // ─────────────────────────────────────────────────────────────────────
 // Palette — locked per visual-direction.md § 3 + semantic extensions.
@@ -584,9 +585,13 @@ export class CombatScene extends Phaser.Scene {
       this.pulsePortrait(refs);
     } else if (ev.type === 'combat_end') {
       this.cameras.main.shake(SHAKE_DURATION_MS, SHAKE_INTENSITY);
-      const koSide: EntityRef = ev.outcome === 'player_win' ? 'ghost' : 'player';
-      const refs = koSide === 'player' ? this.playerRefs : this.ghostRefs;
-      this.spawnKoFlash(refs);
+      // CF-84 honest KO flash (round-3 P3): a decisive win flashes EXACTLY the
+      // loser's portrait; a mutual-KO draw flashes BOTH, since both died. The
+      // ramp_tick MEANINGFUL_EVENT_TYPES addition now routes ramp-only draws
+      // through Phaser — the previous two-way branch flashed only the player.
+      for (const side of koFlashTargets(ev.outcome)) {
+        this.spawnKoFlash(side === 'player' ? this.playerRefs : this.ghostRefs);
+      }
     }
     // All event types except recipe_combine consume resolveEventAnchors.
     // CF 4b open, sim-emission-blocked (recipe_combine not in CombatEvent union).
