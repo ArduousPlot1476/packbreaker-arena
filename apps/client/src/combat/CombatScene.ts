@@ -143,6 +143,12 @@ export interface CombatSceneInitData {
    *  orchestrator at combat-phase entry. Stored on the scene at M1.4a;
    *  consumed by M1.4b's item-anchored VFX via combat/anchorResolution.ts. */
   bagLayout: BagLayout;
+  /** CF-85 Surface 1: index-aligned item-attribution labels for `events`
+   *  (combat/attribution.ts — pure, tested there). labels[i] names the
+   *  item that caused events[i]; null = unattributed (ramp_tick stays
+   *  null BY DESIGN). The scene renders labels verbatim — all resolution
+   *  logic stays in the pure module. */
+  eventLabels?: ReadonlyArray<string | null>;
   onCombatEnd: () => void;
 }
 
@@ -205,6 +211,7 @@ export class CombatScene extends Phaser.Scene {
   // NOTE: named `combatEvents` (not `events`) because Phaser.Scene
   // declares `events: EventEmitter` as a reserved instance member.
   private combatEvents: ReadonlyArray<CombatEvent> = [];
+  private eventLabels: ReadonlyArray<string | null> = [];
   private endedAtTick = 0;
   private msPerTick = 100;
   private initialPlayerHp = 30;
@@ -237,6 +244,7 @@ export class CombatScene extends Phaser.Scene {
 
   init(data: CombatSceneInitData): void {
     this.combatEvents = data.events;
+    this.eventLabels = data.eventLabels ?? [];
     this.endedAtTick = data.endedAtTick;
     this.msPerTick = Math.round(1000 / data.ticksPerSecond);
     this.initialPlayerHp = data.initialPlayerHp;
@@ -418,7 +426,9 @@ export class CombatScene extends Phaser.Scene {
     ) {
       const ev = this.combatEvents[this.nextEventIdx]!;
       this.applyEventState(ev);
-      this.playEventVisuals(ev);
+      // CF-85 Surface 1: labels are index-aligned with combatEvents, so
+      // nextEventIdx (still pointing at ev here) is the label index.
+      this.playEventVisuals(ev, this.eventLabels[this.nextEventIdx] ?? null);
       this.nextEventIdx += 1;
       flushed += 1;
     }
@@ -452,7 +462,12 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private playEventVisuals(ev: CombatEvent): void {
+  /** CF-85 Surface 1: `label` is the attributed item name for this event
+   *  (null = unattributed). Damage/heal/DoT floaters carry it inline;
+   *  item_trigger gains a small name floater at the source anchor so "an
+   *  item activated" finally says WHICH item. ramp_tick renders without a
+   *  label by design — the CF-83 drain has no item source. */
+  private playEventVisuals(ev: CombatEvent, label: string | null = null): void {
     if (ev.type === 'damage') {
       // M1.4b1 + M1.4b2.1 + M1.4b2.2: consume resolveEventAnchors.
       // Damage='both' populates source AND target. M1.4b2.2 closes
@@ -466,7 +481,9 @@ export class CombatScene extends Phaser.Scene {
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
         const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
-        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed);
+        // CF-85 Surface 1: the damage floater names its causing item.
+        const text = '−' + String(ev.amount) + (label ? ' · ' + label : '');
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, text, PALETTE_HEX.lifeRed);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareDmg, 5);
         this.flashPortrait(refs, PALETTE.lifeRed);
       }
@@ -482,7 +499,8 @@ export class CombatScene extends Phaser.Scene {
       // anchor — same primitive as the recipient burst per Q2 (no new
       // VFX in .b2.1; item-cell halo is M1.4b2.2 territory).
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
-      this.spawnFloater(refs, '+' + String(ev.amount), PALETTE_HEX.rarityUncommon);
+      // CF-85 Surface 1: the heal floater names its causing item.
+      this.spawnFloater(refs, '+' + String(ev.amount) + (label ? ' · ' + label : ''), PALETTE_HEX.rarityUncommon);
       this.spawnParticleBurst(refs, TEX.plusHeal, 5);
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.source) {
@@ -509,7 +527,12 @@ export class CombatScene extends Phaser.Scene {
       // ANCHOR_RULE.status_tick='target' guarantees a target anchor.
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
-        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.damage), PALETTE_HEX.rarityLegendary, true);
+        // CF-85 Surface 1: the DoT tick names the status-APPLYING item
+        // (status_tick is source-less on the wire; attribution.ts
+        // correlates the prior status_apply). Null label → bare number,
+        // never "unknown".
+        const text = '−' + String(ev.damage) + (label ? ' · ' + label : '');
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, text, PALETTE_HEX.rarityLegendary, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
     } else if (ev.type === 'ramp_tick') {
@@ -542,6 +565,13 @@ export class CombatScene extends Phaser.Scene {
           this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHitTeal, 4);
         } else {
           this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.lineHit, 2);
+        }
+        // CF-85 Surface 1: the activation beat names WHICH item fired —
+        // the 5-run note's "what did that" clause, answered at the
+        // moment it happens. Small + secondary so the damage/heal
+        // hierarchy above it is untouched.
+        if (label) {
+          this.spawnFloaterAt(anchors.source.x, anchors.source.y, label, PALETTE_HEX.textSecondary, true);
         }
       }
     } else if (ev.type === 'buff_apply') {
