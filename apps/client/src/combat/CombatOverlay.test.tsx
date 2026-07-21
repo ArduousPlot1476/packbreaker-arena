@@ -22,7 +22,7 @@
 
 import { useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { RefObject } from 'react';
 import type {
   ClassId,
@@ -544,5 +544,83 @@ describe('CombatOverlay — DEALT/TAKEN via computeDamageStats (CF-83 Fix A)', (
     expect(payload.damageTaken).toBe(12);
     // 30 dealt to the ghost (no ghost heal → gross == net); locks the dealt side.
     expect(payload.damageDealt).toBe(30);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────
+// CF-85 Surface 2b — the reveal reaches the REAL post-combat path
+// (decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1
+// read-only …"). Pattern-9 antidote: the RoundResolution.test.tsx unit
+// suite instantiates the component WITH opponentBuild and passes — that
+// proves the component, not the wiring. This test drives the REAL
+// CombatOverlay resolved-phase render (runCombat mocked; the ghost build
+// flows through the REAL buildCombatInput → makeGhostForRound →
+// simBagToClientBag, exactly as in production) and asserts the
+// "VIEW OPPONENT BUILD" toggle actually renders + opens through the real
+// BagBoard renderer. If CombatOverlay ever stops supplying opponentBuild
+// (the "component built, call site never calls" defect), this fails.
+// ────────────────────────────────────────────────────────────────────
+describe('CombatOverlay — CF-85 S2b opponent-build reveal reaches the real resolved path', () => {
+  const WIN_RESULT: CombatResult = {
+    events: [
+      { tick: 0, type: 'combat_start', playerHp: 30, ghostHp: 30 },
+      {
+        tick: 50,
+        type: 'damage',
+        source: { side: 'player', placementId: 'p0' as PlacementId },
+        target: 'ghost',
+        amount: 30,
+        remainingHp: 0,
+      },
+      { tick: 60, type: 'combat_end', outcome: 'player_win', finalHp: { player: 30, ghost: 0 } },
+    ],
+    outcome: 'player_win',
+    finalHp: { player: 30, ghost: 0 },
+    endedAtTick: 60,
+    endReason: 'ko' as const,
+  };
+
+  async function renderToResolution() {
+    mocks.runCombat.mockReturnValue(WIN_RESULT);
+    render(
+      <RunProvider>
+        <CombatOverlay active={true} onDone={vi.fn()} bagContainerRef={NULL_BAG_REF} />
+      </RunProvider>,
+    );
+    await waitFor(() => {
+      expect(mocks.createCombatGame).toHaveBeenCalled();
+    });
+    const sceneOpts = mocks.createCombatGame.mock.calls[0]![1] as { onCombatEnd: () => void };
+    act(() => {
+      sceneOpts.onCombatEnd();
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/VICTORY/)).toBeInTheDocument();
+    });
+  }
+
+  it('supplies opponentBuild through the real render path: the toggle renders, collapsed', async () => {
+    await renderToResolution();
+    // The toggle exists ONLY when CombatOverlay passes opponentBuild — the
+    // exact wiring the component unit test cannot exercise.
+    expect(screen.getByTestId('view-opponent-build')).toBeInTheDocument();
+    // Collapsed by default — the board is not shown until the toggle is clicked.
+    expect(screen.queryByTestId('opponent-build-board')).toBeNull();
+  });
+
+  it('opens to the ghost’s real build through the real BagBoard renderer (24-cell grid + ≥1 item)', async () => {
+    await renderToResolution();
+    fireEvent.click(screen.getByTestId('view-opponent-build'));
+    const board = screen.getByTestId('opponent-build-board');
+    // Real BagBoard grid — 6×4 = 24 drop cells (same renderer the player
+    // board uses; no bespoke grid).
+    expect(board.querySelectorAll('[data-cell-col]')).toHaveLength(24);
+    // The round-1 ghost carries ≥1 real item (makeGhostForRound
+    // ITEM_COUNT_BY_ROUND[0] === 1), rendered read-only (cursor:default).
+    expect(
+      board.querySelectorAll('[style*="cursor: default"]').length,
+    ).toBeGreaterThanOrEqual(1);
+    // Fail-closed inspector on opponent items (CF 57): no buttons inside.
+    expect(within(board).queryAllByRole('button')).toHaveLength(0);
   });
 });
