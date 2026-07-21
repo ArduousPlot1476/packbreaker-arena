@@ -49,6 +49,15 @@ interface BagBoardProps {
    * handshake (M1.4a). Optional — non-combat callers can omit.
    */
   containerRef?: RefObject<HTMLDivElement>;
+  /**
+   * Read-only display mode (CF-85 Surface 2b: the post-combat opponent-
+   * build reveal renders the ghost bag through THIS renderer — one grid,
+   * no bespoke sibling). Items are non-draggable WITHOUT the dimmed
+   * combat styling, and the item-info popover stays fail-closed on
+   * opponent items per the CF 57 DraggableItem contract. Default `false`
+   * (interactive player board).
+   */
+  readOnly?: boolean;
 }
 
 export function BagBoard({
@@ -61,6 +70,7 @@ export function BagBoard({
   combineRejection,
   compact = false,
   containerRef,
+  readOnly = false,
 }: BagBoardProps) {
   const cellSize = useCellSize();
   const W = BAG_COLS * cellSize;
@@ -178,7 +188,12 @@ export function BagBoard({
         )}
 
         {bag.map((b) => (
-          <DraggableItem key={b.uid} item={b} disabled={dimmed} enableInfoPopover />
+          <DraggableItem
+            key={b.uid}
+            item={b}
+            disabled={dimmed || readOnly}
+            enableInfoPopover={!readOnly}
+          />
         ))}
       </div>
       {!compact && (

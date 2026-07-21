@@ -3,8 +3,26 @@
 // real outcome / damage / gold / hearts from the resolved CombatResult
 // (commit 1's seed-bag/seed-shop dissolution removed the canned demo
 // values that previously hardcoded "VICTORY +1 +18 3/3").
+//
+// CF-85 Surface 2b (decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN
+// against Phase-1 read-only …"): optional post-combat opponent-build
+// reveal. gdd.md §14 forbids the full bag PRE-combat only; §12 names the
+// post-round "view opponent build" use. Collapsed by default so the core
+// reward summary is never evicted (anchor DoD 6). The board is BagBoard
+// in readOnly mode — the SAME renderer the player board uses — inside a
+// local inert DndContext (BagCell/DraggableItem consume dnd-kit hooks;
+// no sensors, no handlers, nothing can move).
 
+import { useState } from 'react';
+import { DndContext } from '@dnd-kit/core';
+import { CellSizeProvider } from '../bag/CellSize';
+import { BagBoard } from '../bag/BagBoard';
+import type { BagItem } from '../run/types';
 import { CoinGlyph } from '../icons/icons';
+
+/** Reveal cell size: 6 cols × 40px + BagBoard's 32px padding = 272px,
+ *  inside the 360px card at both 1280×720 and 390-wide viewports. */
+const REVEAL_CELL_PX = 40;
 
 interface RoundResolutionProps {
   round: number;
@@ -16,6 +34,13 @@ interface RoundResolutionProps {
   hearts: number;
   maxHearts: number;
   onNext: () => void;
+  /** CF-85 Surface 2b: the ghost build this round actually fought with
+   *  (adapted via simBagToClientBag from the SAME Combatant the sim
+   *  consumed). Optional — omitting it renders the pre-CF-85 panel. */
+  opponentBuild?: {
+    classLabel: string;
+    bagItems: BagItem[];
+  };
 }
 
 export function RoundResolution({
@@ -28,7 +53,9 @@ export function RoundResolution({
   hearts,
   maxHearts,
   onNext,
+  opponentBuild,
 }: RoundResolutionProps) {
+  const [showBuild, setShowBuild] = useState(false);
   const isWin = outcome === 'win';
   const isDraw = outcome === 'draw';
   // CF-84 (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS
@@ -127,6 +154,60 @@ export function RoundResolution({
           TAKEN <span style={{ color: 'var(--life-stroke)' }}>{damageTaken}</span>
         </span>
       </div>
+      {opponentBuild && (
+        <div style={{ marginBottom: 16 }}>
+          <button
+            type="button"
+            data-testid="view-opponent-build"
+            onClick={() => setShowBuild((v) => !v)}
+            className="ease-snap label-cap"
+            style={{
+              width: '100%',
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: 'transparent',
+              color: 'var(--text-secondary)',
+              fontSize: 10,
+              letterSpacing: '0.08em',
+              border: '1px solid var(--border-default)',
+              cursor: 'pointer',
+            }}
+          >
+            {showBuild ? 'HIDE OPPONENT BUILD ▴' : 'VIEW OPPONENT BUILD ▾'}
+          </button>
+          {showBuild && (
+            <div data-testid="opponent-build-board" style={{ marginTop: 10 }}>
+              <div
+                data-testid="opponent-build-caption"
+                className="label-cap"
+                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 2 }}
+              >
+                GHOST — {opponentBuild.classLabel}
+              </div>
+              <div className="flex justify-center">
+                {/* Inert DndContext: the bag/ components consume dnd-kit
+                    hooks; with no sensors and no handlers nothing is
+                    interactive. readOnly keeps items undimmed but
+                    non-draggable, inspector fail-closed (CF 57). */}
+                <DndContext sensors={[]}>
+                  <CellSizeProvider value={REVEAL_CELL_PX}>
+                    <BagBoard
+                      bag={opponentBuild.bagItems}
+                      drag={null}
+                      hover={null}
+                      dimmed={false}
+                      recipeMatches={[]}
+                      onCombine={() => {}}
+                      compact
+                      readOnly
+                    />
+                  </CellSizeProvider>
+                </DndContext>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <button
         onClick={onNext}
         className="ease-snap hover-lift label-cap"
