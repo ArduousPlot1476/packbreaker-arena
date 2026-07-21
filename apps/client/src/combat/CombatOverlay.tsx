@@ -35,8 +35,10 @@ import {
 } from '@packbreaker/content';
 import { useRunContext } from '../run/RunContext';
 import type { CombatDonePayload } from '../run/useRun';
-import { clientBagToSimBag } from '../run/sim-bridge';
+import type { BagItem } from '../run/types';
+import { clientBagToSimBag, simBagToClientBag } from '../run/sim-bridge';
 import { computeDamageStats, trophyDeltaFor } from '@packbreaker/sim';
+import { buildEventAttribution } from './attribution';
 import { runCombat } from './sim-bridge.combat';
 import {
   CombatScene,
@@ -148,7 +150,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   // renders within a single combat. Captures the bag snapshot + bag
   // dimensions used at simulation time so the M1.4a BagLayout
   // handshake measures against the same state the sim consumed.
-  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, ghostClassId, bagSnapshot, bagDimensions } =
+  const { result, initialPlayerHp, initialGhostHp, ghostClassLabel, ghostId, ghostClassId, bagSnapshot, bagDimensions, ghostBagItems, eventLabels } =
     useMemo(() => {
       if (!active || ctx.simRun === null) {
         return {
@@ -160,6 +162,8 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           ghostClassId: null as ClassId | null,
           bagSnapshot: ctx.state.bag,
           bagDimensions: ctx.state.state.ruleset.bagDimensions,
+          ghostBagItems: [] as BagItem[],
+          eventLabels: [] as ReadonlyArray<string | null>,
         };
       }
       const { input, ghostClass, ghostId: gid, ghostClassId: gcid } = buildCombatInput(
@@ -171,6 +175,15 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         },
       );
       const r = runCombat(input);
+      // CF-85 Surface 2b: retain the ghost placements the sim actually
+      // fought with (previously discarded post-memo) — client shape via
+      // the existing simBagToClientBag adapter, consumed by the
+      // RoundResolution opponent-build reveal.
+      const ghostBag = simBagToClientBag(input.ghost.bag);
+      // CF-85 Surface 1: index-aligned item-attribution labels for the
+      // event stream (pure module; the scene renders them verbatim).
+      // Player index = the same bag snapshot the sim consumed.
+      const labels = buildEventAttribution(r.events, ctx.state.bag, ghostBag);
       return {
         result: r,
         initialPlayerHp: input.player.startingHp,
@@ -180,6 +193,8 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         ghostClassId: gcid as ClassId | null,
         bagSnapshot: ctx.state.bag,
         bagDimensions: ctx.state.state.ruleset.bagDimensions,
+        ghostBagItems: ghostBag,
+        eventLabels: labels,
       };
     }, [active, ctx.simRun, ctx.state.state.round, ctx.state.state.seed, ctx.state.bag, ctx.state.state.ruleset.bagDimensions]);
 
@@ -268,6 +283,9 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         ghostClassLabel,
         playerClassLabel: ctx.state.state.className,
         bagLayout,
+        // CF-85 Surface 1: index-aligned attribution labels (pure module
+        // output; the scene renders them verbatim, no lookup of its own).
+        eventLabels,
         onCombatEnd: () => setPhase('resolved'),
       });
       gameRef.current = game;
@@ -282,7 +300,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       else if (gameRef.current) gameRef.current.destroy(true);
       gameRef.current = null;
     };
-  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef]);
+  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef, eventLabels]);
 
   const isWin = result?.outcome === 'player_win';
   // CF-84: honest 3-way DISPLAY outcome (player_win → win, ghost_win → loss, draw
@@ -396,6 +414,9 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           hearts={heartsPost}
           maxHearts={ctx.state.state.maxHearts}
           onNext={handleNext}
+          // CF-85 Surface 2b: the ghost build this combat ACTUALLY fought
+          // (post-combat reveal — gdd.md §14's pre-combat restriction N/A).
+          opponentBuild={{ classLabel: ghostClassLabel, bagItems: ghostBagItems }}
         />
       )}
     </div>
