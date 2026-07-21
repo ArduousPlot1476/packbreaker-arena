@@ -48,6 +48,14 @@ import type { BagItem, ItemId, ShopSlot } from './types';
  *  authoritative formula from sim. */
 export { computeRerollCost } from '@packbreaker/sim';
 
+/** Re-exported from sim for the CF-85 Surface 3 run-goal hint (LeftRail):
+ *  the intent panel's win/loss trophy numbers come from the SAME award
+ *  derivation the sim applies and CombatOverlay's resolution panel shows
+ *  (the CF-38/CF-72 co-drift antidote — one formula, three consumers,
+ *  zero twin literals). rulesets.ts lives on sim's run path, not
+ *  combat.ts, so this stays main-chunk-safe. */
+export { trophyDeltaFor } from '@packbreaker/sim';
+
 /** Build a sim Rng from a base SimSeed. Identical inputs always produce
  *  identical sequences (mulberry32, integer-only) — that's the determinism
  *  contract sim's fixture suite enforces. */

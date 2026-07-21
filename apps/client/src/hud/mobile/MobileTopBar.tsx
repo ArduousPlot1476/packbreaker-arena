@@ -1,56 +1,55 @@
 // Mobile compact top bar (390-wide vertical) per gdd.md § 14 +
 // M1.3.3 layout-audit decision 1 (revised). Left side: gold, hearts,
-// round. Right side: opponent intent — `GhostGlyph` + two 20px mono
-// silhouette swatches (sword/shield default) — grouped with the
-// 5b.3b ⋯ run-options trigger so justify-between keeps them clustered.
-// Class is implied by the silhouette pair pattern, not text.
+// round. Right side: opponent intent — `GhostGlyph` + up to two 20px
+// mono silhouette swatches (CF-85 Surface 2a: the REAL round-ghost
+// marquee, same ghostIntentForRound derivation as the desktop
+// LeftRail) — grouped with the 5b.3b ⋯ run-options trigger so
+// justify-between keeps them clustered. Class is implied by the
+// silhouette pattern, not text.
 
-import type { RunState } from '../../run/types';
+import { useMemo } from 'react';
+import type { ItemId, RunState } from '../../run/types';
+import { ghostIntentForRound } from '../../combat/ghostIntent';
 import { CoinGlyph, GhostGlyph, HeartGlyph, ICONS } from '../../icons/icons';
 import { AbandonRunMenu } from '../../run/AbandonRunMenu';
 
-function OpponentSilhouette() {
-  // Default opponent silhouettes for the M1 prototype: sword + shield
-  // (matches desktop LeftRail's OpponentSilhouettes at 32px → 20px on
-  // mobile, monochrome via brightness(0) invert(0.6)).
-  const Sword = ICONS['iron-sword'];
-  const Shield = ICONS['wooden-shield'];
+function OpponentSilhouette({ itemIds }: { itemIds: ReadonlyArray<ItemId> }) {
   return (
     <div className="flex items-center gap-1">
       <div style={{ width: 18, height: 18 }}>
         <GhostGlyph />
       </div>
-      <div
-        style={{
-          width: 20,
-          height: 20,
-          background: 'var(--bg-deep)',
-          borderRadius: 3,
-          padding: 2,
-        }}
-      >
-        <div style={{ filter: 'brightness(0) invert(0.6)' }}>
-          <Sword />
-        </div>
-      </div>
-      <div
-        style={{
-          width: 20,
-          height: 20,
-          background: 'var(--bg-deep)',
-          borderRadius: 3,
-          padding: 2,
-        }}
-      >
-        <div style={{ filter: 'brightness(0) invert(0.6)' }}>
-          <Shield />
-        </div>
-      </div>
+      {itemIds.map((id) => {
+        const Icon = ICONS[id] ?? ICONS['copper-coin'];
+        return (
+          <div
+            key={id}
+            data-testid={`intent-silhouette-${id}`}
+            style={{
+              width: 20,
+              height: 20,
+              background: 'var(--bg-deep)',
+              borderRadius: 3,
+              padding: 2,
+            }}
+          >
+            <div style={{ filter: 'brightness(0) invert(0.6)' }}>
+              <Icon />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 export function MobileTopBar({ state }: { state: RunState }) {
+  // CF-85 Surface 2a: same pure derivation as LeftRail — one intent,
+  // two viewports. Memo keyed on the derivation inputs.
+  const intent = useMemo(
+    () => ghostIntentForRound(state.seed, state.round, state.ruleset.bagDimensions),
+    [state.seed, state.round, state.ruleset.bagDimensions],
+  );
   return (
     <div
       className="flex items-center justify-between"
@@ -91,7 +90,7 @@ export function MobileTopBar({ state }: { state: RunState }) {
           cluster so the outer justify-between keeps them grouped
           (otherwise it would push them to opposite edges). */}
       <div className="flex items-center gap-2">
-        <OpponentSilhouette />
+        <OpponentSilhouette itemIds={intent.marqueeItemIds} />
         <AbandonRunMenu />
       </div>
     </div>

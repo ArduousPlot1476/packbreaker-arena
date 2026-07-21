@@ -33,6 +33,10 @@ vi.mock('../run/RunContext', () => ({
 // Import after vi.mock so the lazy module resolution picks up the
 // mocked RunContext.
 import { LeftRail } from './LeftRail';
+// CF-85: expected intent/hint values compute through the same pure
+// derivations the component consumes (no twin literals).
+import { ghostIntentForRound } from '../combat/ghostIntent';
+import { trophyDeltaFor } from '../run/sim-bridge';
 
 function makeRunStateFixture(overrides: Partial<RunState> = {}): RunState {
   return {
@@ -80,7 +84,7 @@ describe('LeftRail', () => {
   });
 
   it('Marauder + Iron Will: card + starter slot reflect Marauder content (the playtest catch)', () => {
-    const { getByText, getAllByText, queryByText } = mountWithState(
+    const { getByText, getAllByText, getByTestId, queryByText } = mountWithState(
       makeRunStateFixture({
         className: 'Marauder',
         classId: 'marauder' as ClassId,
@@ -91,7 +95,9 @@ describe('LeftRail', () => {
         },
       }),
     );
-    expect(getByText('Marauder')).toBeInTheDocument();
+    // Scoped to the player class card: the CF-85 intent panel can
+    // legitimately render the same class name for an odd-round ghost.
+    expect(getByTestId('player-class').textContent).toBe('Marauder');
     expect(
       getByText(/\+1 base damage on every damage effect/),
     ).toBeInTheDocument();
@@ -162,5 +168,78 @@ describe('LeftRail', () => {
     expect(
       getByText('+6 starting gold and +10% recipe potency.'),
     ).toBeInTheDocument();
+  });
+});
+
+// ─── CF-85 Surfaces 2a + 3 (decision-log.md 2026-07-20 § "CF-85 SCOPE ───
+// REDRAWN against Phase-1 read-only …"). Acceptance: the intent panel
+// shows the REAL apparent class + REAL 1–2 marquee silhouettes for the
+// current round's ghost (changing round-to-round, never the full bag),
+// and the run-goal hint shows the real round + real SIGNED win/loss
+// trophy deltas + the contract objective — no hardcoded "Round 4"/"±1".
+//
+// Expected values compute through the SAME derivations the component
+// uses (ghostIntentForRound / trophyDeltaFor) — the CF-38 co-drift
+// antidote: no twin literals that could agree by coincidence.
+
+describe('LeftRail — CF-85 real opponent intent (Surface 2a) + real run-goal hint (Surface 3)', () => {
+  it('renders the REAL ghost class and REAL marquee silhouettes for round 1 (not the hardcoded sword+shield pair)', () => {
+    const state = makeRunStateFixture();
+    const intent = ghostIntentForRound(state.seed, state.round, state.ruleset.bagDimensions);
+    const { getByTestId } = mountWithState(state);
+
+    expect(getByTestId('intent-class').textContent).toBe(intent.classLabel);
+    expect(intent.marqueeItemIds.length).toBeGreaterThan(0);
+    expect(intent.marqueeItemIds.length).toBeLessThanOrEqual(2);
+    for (const id of intent.marqueeItemIds) {
+      expect(getByTestId(`intent-silhouette-${id}`)).toBeInTheDocument();
+    }
+  });
+
+  it('intent changes round-to-round: round 2 renders the round-2 ghost class + marquee', () => {
+    const state = makeRunStateFixture({ round: 2 });
+    const intent = ghostIntentForRound(state.seed, 2, state.ruleset.bagDimensions);
+    const { getByTestId } = mountWithState(state);
+    expect(getByTestId('intent-class').textContent).toBe(intent.classLabel);
+    for (const id of intent.marqueeItemIds) {
+      expect(getByTestId(`intent-silhouette-${id}`)).toBeInTheDocument();
+    }
+  });
+
+  it('never renders more than 2 marquee silhouettes (gdd.md §14: never the full bag pre-combat)', () => {
+    // Round 9 ghost carries 4 items (ITEM_COUNT_BY_ROUND) — the panel must not show them all.
+    const state = makeRunStateFixture({ round: 9 });
+    const { container } = mountWithState(state);
+    expect(
+      container.querySelectorAll('[data-testid^="intent-silhouette-"]').length,
+    ).toBeLessThanOrEqual(2);
+  });
+
+  it('run-goal hint shows real round + real signed win/loss deltas (win +10 / loss 0 at round 1, trophy 0)', () => {
+    const state = makeRunStateFixture();
+    const win = trophyDeltaFor('win', state.round, state.trophy);
+    const loss = trophyDeltaFor('loss', state.round, state.trophy);
+    const { getByTestId } = mountWithState(state);
+    expect(getByTestId('intent-hint').textContent).toBe(
+      `Round ${state.round} · Win +${win} · Loss ${loss}`,
+    );
+  });
+
+  it('loss delta is the real POST-CLAMP value (round 2, trophy 12 → Loss -5), not a hardcoded ±1', () => {
+    const state = makeRunStateFixture({ round: 2, trophy: 12 });
+    const win = trophyDeltaFor('win', 2, 12);
+    const loss = trophyDeltaFor('loss', 2, 12);
+    const { getByTestId, queryByText } = mountWithState(state);
+    expect(loss).toBe(-5);
+    expect(getByTestId('intent-hint').textContent).toBe(`Round 2 · Win +${win} · Loss ${loss}`);
+    expect(queryByText(/±1 trophy/)).toBeNull();
+    expect(queryByText('Round 4 · ±1 trophy')).toBeNull();
+  });
+
+  it('hint carries the contract objective (state.contractName / contractText)', () => {
+    const { getByTestId } = mountWithState(makeRunStateFixture());
+    const contract = getByTestId('intent-contract').textContent ?? '';
+    expect(contract).toContain('Neutral');
+    expect(contract).toContain('No modifiers');
   });
 });
