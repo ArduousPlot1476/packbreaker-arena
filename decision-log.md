@@ -4,6 +4,52 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-21 — CF-85 PR-B MERGED (`c3f8d73`): four legibility surfaces + S2b prominence fix shipped (item attribution / real intent panel / post-combat opponent-build reveal / real run-goal hint); Codex 2 rounds CLEAN; CF-85 STAYS OPEN on surface 2c; counter UNCHANGED 81/33/10/61/52; arc claim-accuracy catches PENDING ratification
+
+PR-B merged to `main` at `c3f8d73` (`--no-ff`; parents `ac4fe7d` + `1fa159a`; GitHub PR \#55 `state: closed`, `merged: true`, merged_at 2026-07-21T20:52:08Z, merge_commit_sha `c3f8d73e8b`). Lands surfaces 1 + 2a + 2b + 3 of the redrawn CF-85 scope (decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …", anchor `ac4fe7d`, the Rule 20 gate). 15 files changed, ALL under `apps/client/src` — client-only; zero `packages/sim` / `content-schemas.ts` / `packages/content` / fixture-corpus / migration / server diff (combat is client-simulated, so no wire crosses and no corpus moves). `c3f8d73` is the artifact anchor.
+
+### 1 — Four surfaces + prominence fix shipped
+- **S1 — item attribution on trigger.** New pure module `combat/attribution.ts` (anchorResolution/koFlashTargets precedent): index-aligned item-name labels over the event stream — `damage`/`heal`/`item_trigger`/`status_apply` resolve `ItemRef` (`{side, placementId}`) against the side's bag (side-namespaced keys); source-less `status_tick` correlates the prior `status_apply` for `(target, status)`; `ramp_tick` unattributed BY DESIGN. `CombatScene` renders labels verbatim.
+- **S2a — real pre-combat intent panel (§14-legal).** New pure module `combat/ghostIntent.ts`: real apparent class + 1–2 real marquee silhouettes via the ONE quarantined `makeGhostForRound` call; selection is pure on the `GhostTemplate` / `Combatant` SHAPE (survives the generator's M2 deletion). `LeftRail` + `MobileTopBar` de-faked (were literal "Ghost" + hardcoded iron-sword/wooden-shield).
+- **S2b — post-combat opponent-build reveal (the primary clause-2 leg).** `RoundResolution` collapsed-by-default "VIEW OPPONENT BUILD" toggle → the ghost's real build through `BagBoard` with a new additive `readOnly` prop (same renderer, inspector fail-closed per CF 57). `CombatOverlay` retains the ghost placements it previously discarded (`simBagToClientBag`).
+- **S3 — real run-goal hint.** `LeftRail.tsx` "Round 4 · ±1 trophy" REPLACED by real round + signed win/loss `trophyDeltaFor` deltas + contract objective (`state.contractName` / `state.contractText`). Grep-clean of the placeholder.
+- **S2b prominence fix (`1b765f2`).** Visual-playtest catch: the reveal was correctly wired but the collapsed toggle read as a CAPTION (transparent fill, muted `--text-secondary`, near-invisible `--border-default`) beneath the accent NEXT ROUND CTA. Raised to a filled `--surface` secondary control (`--text-primary`, 11px) — clearly-a-control, still subordinate to the primary CTA. Settled by a real-browser probe (system Chrome via puppeteer-core, throwaway under `scratch/cf85-s2b/`): CAUSE 1 (present-but-subtle) — clip refuted in numbers at 1280×720 + 390×844, wiring confirmed working end-to-end.
+- **Standalone Pattern-9 test (`1fa159a`).** `CombatOverlay.test.tsx` drives the REAL resolved path (runCombat mocked; ghost build flows through the real `buildCombatInput → makeGhostForRound → simBagToClientBag`) and asserts the toggle renders + opens — the coverage the component-only unit tests could not discharge. Green on `a117f31`; stands as a regression guard.
+
+### 2 — Codex: 2 rounds, both CLEAN
+R1 clean on `a117f31` (2026-07-21T02:49:56Z, "Didn't find any major issues", reviewed commit `a117f3108b`); R2 clean on `1fa159a` (2026-07-21T20:19:05Z, reviewed commit `1fa159a14c`) after the prominence fix + test push. Zero findings across both rounds; ceiling never tripped; 0 meta-audits. **Catches +0 on the Codex axis** (no findings to disposition).
+
+### 3 — Gates
+`tsc -b --noEmit --force` exit 0; Rule 13 triple-green `10 successful, 10 total / 0 cached` ×3 cold-cache (run on both `a117f31` and the prominence-fix tip); `turbo run lint` 7/7 (schema-sync enforced); full client suite `668 passed / 15 skipped` (pre-prominence-fix), affected suites `15/15` after. All verified this session.
+
+### 4 — CF status: CF-85 STAYS OPEN on 2c; `replay_viewed` still unwired
+This merge does NOT close CF-85 — surface 2c (player-submitted ghost provenance / persistent storage) is genuine lifetime/provenance coupling, stays M2, CF-85 stays OPEN on it (the redraw's explicit residual). CF-89 (choosing/why legibility) unchanged, did not ride PR-B. **`replay_viewed` telemetry is STILL NOT WIRED** — the surface-2b interaction event is absent from the `TelemetryEvent` union entirely (plan-only, telemetry-plan.md); wiring needs a schema bump this client-only PR forbids. Master-dev referenced it as "CF-90", but **CF-90 is NOT in canon** (grep 0; highest CF token is CF-89) — it needs its own opening append (deferred here, not opened in this entry).
+
+### 5 — Process observations (ORDINALS PENDING master-dev ratification)
+The PR-B arc caught, IN-GATE, several master-dev claim-accuracy errors (Class A / Rule 30; zero shipped defects). Per the PR-A precedent — the 76–80 master-dev claim-drift catches landed in their own ratified entry (decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED …"), NOT the merge-close — these are RECORDED here as observations but their **catch/drift ordinals are NOT assigned and the counter is NOT moved**; assignment awaits master-dev ratification:
+- **Two fabricated code-site paths** in the PR-B implementation prompt — `apps/client/src/run/LeftRail.tsx` (real: `hud/LeftRail.tsx`) and `apps/client/src/combat/RoundResolution.tsx` (real: `screens/RoundResolution.tsx`). The Catch 64 / Catch 77 fabricated-path shape; caught at PR-B Step 0 by handoff-verify before any code.
+- **The S2b "missing-prop-threading" premise** — the plumbing-fix prompt asserted the real render call site does not pass `opponentBuild`; REFUTED (it is passed at `CombatOverlay.tsx` as an always-truthy literal), confirmed by static read + the empirical Pattern-9 integration test green on `a117f31`. A whole plumbing-fix prompt built on a refuted shipped-state premise.
+- **The CF-90 carried-state claim** (§ 4) — `replay_viewed` cited as "ruled CF-90" across the probe + prominence prompts; CF-90 absent from canon. Catch 81 (carried-state) shape.
+Candidate ordinals per the 76–81 precedent: Catches 82+ / paired Drifts 62+. Master-dev's call on the exact count (incl. whether the two fabricated paths bundle to one) and on opening CF-90 for `replay_viewed`.
+
+### Counter
+Ordinal walk (live from canon; tip = decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …" carrying **81/33/10/61/52**): highest **Catch 81**, **Rule 33**, **Pattern 10**, **Drift 61**, **CF-89**; `CF-90`-or-higher grep → **0**. This merge closes NO CF (CF-85 stays open on 2c), opens NO CF (`replay_viewed` / CF-90 deferred), had zero Codex findings, and the arc's claim-accuracy catches are held for ratification (§ 5) — so every delta is **+0**.
+
+| axis | baseline (tip `ac4fe7d`) | delta | total (this entry) |
+|---|---|---|---|
+| catches | 81 | +0 | 81 |
+| rules | 33 | +0 | 33 |
+| patterns | 10 | +0 | 10 |
+| drifts | 61 | +0 | 61 |
+| open-CFs | 52 | +0 | 52 |
+
+Running line: **81/33/10/61/52 → 81/33/10/61/52** — catches **81** / rules **33** / patterns **10** / drifts **61** / open-CFs **52**. Docs-close of a code merge; the counter anchor is this entry's own docs commit (a docs SHA later than, and distinct from, the merge `c3f8d73`).
+
+Open-CF touch (delta only; full backlog carried unchanged per decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED …"):
+- **CF-85** — client legibility. Surfaces 1 + 2a + 2b + 3 SHIPPED (merged `c3f8d73`). STAYS OPEN on surface 2c (provenance / storage, M2).
+
+---
+
 ## 2026-07-20 — CF-85 SCOPE REDRAWN against Phase-1 read-only (tip `16dee1a`): surface-2 deferral REVERSED for the data-available legs (2a pre-combat §14-legal + 2b post-combat reveal JOIN PR-B); PR-B = surfaces 1 + 2a + 2b + 3; surface 2c (ghost provenance/storage) stays M2; strategy clause SPLIT — placing COVERED by CF-60 (CLOSED/shipped) + recipe glow, choosing/why UNCOVERED → CF-89 OPENED (design-scope); Catch 81 + Drift 61 + Rule 32 scope note
 
 Docs-only supersession, insertion-only — the Rule 20 gate for PR-B. Baseline: main tip `16dee1a`. SUPERSEDES the surface scope of decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED …" item 11 (surfaces 1+3 → PR-B; surface 2 DEFERRED). That entry is NOT edited — its scope was correct against the data then available; the 5-run confusion note (2026-07-20, post-`32558e7`, verbatim across all 5 runs) + this session's Phase-1 read-only supersede the deferral. Source basis: the CF-85 Phase-1 read-only report (this session, zero mutations, tip `16dee1a` — Q1–Q6, file:line + verbatim return-type / event / string evidence), the handoff-verify pass on the investigation prompt, and the 5-run note. No code, schema, migration, or fixture. Rule 20: no PR-B implementation prompt may cite this until it carries a real SHA.
