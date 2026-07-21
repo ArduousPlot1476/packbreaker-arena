@@ -4,6 +4,33 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-21 — `replay_viewed` telemetry CF OPENED at CF-90 (RATIFIED OVERRIDE of the naive next-free walk); `bf92671`'s Rule-26 CF-90 leak SUPERSEDED + recorded as ESCAPED Catch 85 + Drift 65; decision-log append self-scan HELD; counter 84/34/10/64/52 → 85/34/10/65/53
+
+Docs-only, insertion-only. Baseline: tip `a580144` (decision-log.md 2026-07-21 § "CF-85 ARC CLAIM-ACCURACY RATIFIED …"), `84/34/10/64/52`. Opens ONE telemetry CF, records the SOLE escaped defect of the CF-85 arc, and supersedes (does not edit) the leak that caused it. No code, schema, corpus, or migration change.
+
+### 1 — `replay_viewed` CF OPENED at CF-90 (ratified override)
+Opens the CF for wiring `replay_viewed` (telemetry-plan.md:266 — fires when the player opens the S2b post-round "view opponent build"). The event is ABSENT from the `TelemetryEvent` union in `content-schemas.ts` (plan-only — no schema variant, one step worse than schema-only). The emit site — the S2b "VIEW OPPONENT BUILD" toggle — is now live on `main` at `c3f8d73` (CF-85 PR-B), so the event is finally wireable. Scope: additive schema-bump (`content-schemas.ts` + the `packages/content` mirror, byte-identical per the schema-sync mechanism) under the CF-41 additive-telemetry-field precedent; server-mediated via posthog-node (no client-direct PostHog). Sequenced AFTER PR-B merge. **This entry OPENS the CF only — it does NOT perform the schema change.** OPEN.
+
+**Ordinal — CF-90, a ratified override of the naive walk.** A naive highest-ordinal grep-walk returns one integer past CF-90, because the merge-close `bf92671` emitted the literal `CF-90` token four times (as not-in-canon / carried-claim / deferred references). Master-dev RULED the opening at **CF-90**: those four are NON-OPENING mentions, and a mention does not take an ordinal — an OPENING does. This entry is CF-90's canonical opening; its prior appearances in `bf92671` are resolved by it. Opening one past CF-90 instead would strand CF-90 as a PHANTOM — the counter-integrity defect precedent (the `rule-ordinal-9` phantom + `catch-ordinal-9` double-assignment, recorded in grep-safe hyphenated form at decision-log.md 2026-07-18 § "CF-68 next-target selection …"). The override is recorded here, not silently picked.
+
+### 2 — `bf92671`'s CF-90 leak SUPERSEDED (append-only; not edited)
+`bf92671` (decision-log.md 2026-07-21 § "CF-85 PR-B MERGED …") emitted `CF-90` four times, including the self-refuting line "CF-90 is NOT in canon (grep 0; highest CF token is CF-89)" — false on landing, since that entry's own body contains `CF-90`. Per the append-only invariant, `bf92671` is NOT edited; this entry SUPERSEDES its four `CF-90` references and the false grep-0 claim. Future walkers resolve `CF-90` to the § 1 opening. The Rule-26 remedy for an already-landed violation is supersession + record, never rewrite.
+
+### 3 — Catch 85 (ESCAPED) + Drift 65
+- **Catch 85 (class Rule 26 / counter-integrity) — ESCAPED TO PUSHED CANON.** `bf92671` emitted the future ordinal token `CF-90` four times in the merge-close entry, including the self-refuting grep-0 claim (§ 2) — the exact highest-ordinal grep-walk pollution Rule 26 exists to prevent. Unlike every other catch of this arc — the master-dev claim-accuracy Catches 82/83/84 (all caught in-gate by handoff-verify / Step-0 inspection) and the in-gate Codex/visual findings (CF-67, no catch) — this one **ESCAPED**: it landed in committed, pushed canon (`bf92671`) and was surfaced only one entry later, when Append A's Rule-26 discipline forced the `decision-log-close` walk that found the token. It is **Claude-Code-side** (this session authored `bf92671`), DISTINCT from the master-dev-side Catches 82–84. It is the arc's SOLE escaped defect, and the standing-concern signature's escalation: the process apparatus generated a failure that cleared its own gates.
+- **Drift 65** — the paired Topic drift for Catch 85 (Claude-Code-side process drift — the future-ordinal emission).
+
+### 4 — decision-log append self-scan (HELD — no ordinal)
+Before committing an append, `decision-log-close` should grep the entry's OWN added lines for any `CF-N` / `Rule-N` / `Catch-N` token at or above the current next-free ordinal that is NOT the entry's own opening, and HALT if found. Gap exposed by Catch 85: `handoff-verify` excludes decision-log appends by design (its own out-of-scope note), and `decision-log-close` this arc did not self-scan added lines for future-ordinal pollution — so the `bf92671` leak cleared both gates. First instance (Catch 85); codify on a second per the standing restraint (do not codify process apparatus on one instance). Held-candidate space is separate from the codified ordinal space.
+
+### Counter
+Ordinal walk (live from canon; tip `a580144` = decision-log.md 2026-07-21 § "CF-85 ARC CLAIM-ACCURACY RATIFIED …" carrying **84/34/10/64/52**): highest **Catch 84**, **Rule 34**, **Pattern 10**, **Drift 64** (grep-confirmed). CF ordinal: RATIFIED OVERRIDE to CF-90 (§ 1) — the naive grep-max is inflated by `bf92671`'s non-opening mentions; CF-90 is substantively free and is opened here. Deltas by ID: catches **+1** (Catch 85, ESCAPED); rules **+0** (append self-scan HELD, no ordinal); patterns **+0**; drifts **+1** (Drift 65); open-CFs **+1** (CF-90 OPENED). Running line: **84/34/10/64/52 → 85/34/10/65/53** — catches **85** / rules **34** / patterns **10** / drifts **65** / open-CFs **53**. Docs-only; the counter anchor is this entry's own docs commit.
+
+Open-CF touch (delta only):
+- **CF-90** — `replay_viewed` telemetry wiring (S2b "view opponent build" open event; additive schema-bump, CF-41 precedent, server-mediated). OPENED (this entry, ratified override), sequenced after PR-B merge. OPEN.
+
+---
+
 ## 2026-07-21 — CF-85 ARC CLAIM-ACCURACY RATIFIED (ratified follow-up to the merge-close `bf92671`): Catches 82/83/84 + Drifts 62/63/64 (all master-dev claim-accuracy, caught in-gate, zero shipped defects); Rule 34 (bare-filename carry) NEW; Hypothesis-in-Context HELD; counter 81/33/10/61/52 → 84/34/10/64/52
 
 Docs-only, insertion-only. Ratifies the master-dev claim-accuracy catches HELD at the merge-close (decision-log.md 2026-07-21 § "CF-85 PR-B MERGED …" § 5), per the PR-A precedent that master-dev claim-drifts land in their own ratified entry, not the merge-close (decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED …", where Catches 76–80 landed separately from the PR-A merge). Baseline: tip `bf92671`, `81/33/10/61/52`. No shipped state re-recorded; no code, schema, corpus, or CF change.
