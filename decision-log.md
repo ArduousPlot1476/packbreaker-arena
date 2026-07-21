@@ -4,6 +4,32 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-21 — CF-85 ARC CLAIM-ACCURACY RATIFIED (ratified follow-up to the merge-close `bf92671`): Catches 82/83/84 + Drifts 62/63/64 (all master-dev claim-accuracy, caught in-gate, zero shipped defects); Rule 34 (bare-filename carry) NEW; Hypothesis-in-Context HELD; counter 81/33/10/61/52 → 84/34/10/64/52
+
+Docs-only, insertion-only. Ratifies the master-dev claim-accuracy catches HELD at the merge-close (decision-log.md 2026-07-21 § "CF-85 PR-B MERGED …" § 5), per the PR-A precedent that master-dev claim-drifts land in their own ratified entry, not the merge-close (decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED …", where Catches 76–80 landed separately from the PR-A merge). Baseline: tip `bf92671`, `81/33/10/61/52`. No shipped state re-recorded; no code, schema, corpus, or CF change.
+
+### Catches (three; each master-dev claim-accuracy caught in-gate, zero shipped defects)
+- **Catch 82 (Class A / Rule 30) — bundled fabricated code-site paths (PR-B implementation prompt).** The prompt's Inputs directory-qualified two bare filenames from the Phase-1 report: `apps/client/src/run/LeftRail.tsx` (real: `hud/LeftRail.tsx`) and `apps/client/src/combat/RoundResolution.tsx` (real: `screens/RoundResolution.tsx`) — synthesized prefixes, the same shape as Catch 64 (package prefix) and Catch 77 (fabricated path). Two paths, ONE root (a single directory-inference habit) → ONE catch, per the one-root precedent (decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED …" item 2 — three findings, one root, +0). Caught at Step-0 handoff-verify before any code; all line facts verified at the real paths, no mis-implementation.
+- **Catch 83 (Class A / Rule 30) — the S2b "missing-prop-threading" premise.** The S2b revision prompt's Context asserted as FACT that the real render call site did not pass `opponentBuild`. FALSE against tip `a117f31`: the single non-test render site `CombatOverlay.tsx:407` passed it as an always-truthy object literal, and the ghost build was retained (not discarded post-memo). Caught by the Rule 8 Step-0 inspection halt + an empirical integration test proving the toggle reaches the real resolved path (green on `a117f31`). No source mutated — the "fix" would have been for a defect that did not exist.
+- **Catch 84 (Class A / Rule 32) — carried-state telemetry-CF ordinal.** An ordinal for the `replay_viewed` telemetry follow-up was cited across prompts as ruled / in-canon, but had never been appended (grep 0). Caught by handoff-verify. Rule 32 class (carried state cited without a live-repo check), the Catch 81 shape. Recorded here by substance only; the ordinal's first canonical appearance is its own opening entry (the follow-up telemetry-CF append), keeping the highest-ordinal grep-walk clean (Rule 26).
+
+### Drifts (three; Topic-2, one paired per catch — the 76–80 pairing precedent)
+Drift 62 (Catch 82's path-directory inference), Drift 63 (Catch 83's causal-claim-as-fact), Drift 64 (Catch 84's carried-ordinal). All master-dev-side.
+
+### Rule 34 — bare-filename carry (NEW)
+A filename cited in a read-only / Phase-1 report WITHOUT its directory path must be carried into a downstream implementation prompt VERBATIM (bare), or resolved by grep/find against the live tree first — never directory-qualified by inference. A bare filename does not determine its directory; inferring one fabricates a path. Codification bar MET: second instance across distinct arcs (the Catch 64 / Catch 77 fabricated-path shape → Catch 82); structurally generic (every Phase-1 → Phase-2 handoff carries bare filenames); low-burden (carry-verbatim-or-grep). Extends Rule 30's "never emit an unverified code-site qualifier" to the specific bare-filename → directory inference.
+
+### Hypothesis-in-Context (HELD — no ordinal)
+A suspected cause of a defect stated in an implementation prompt must appear as the hypothesis Step 0 TESTS, not as an asserted FACT in the Context. (Catch 83: the "missing prop" was the prompt's premise, not a flagged hypothesis; framed as "suspected cause — verify at Step 0", the refutation would have been the expected outcome rather than a catch.) First clean instance: Catch 83. Shares the "infer repo state instead of verify" root with Rule 34 but is a distinct failure shape (causal claim vs path qualifier). HELD for a second instance per the standing restraint (do not codify process apparatus on a single instance); held-candidate space is separate from the codified ordinal space.
+
+### Closing observation (mints nothing)
+All three catches are master-dev claim-accuracy with zero shipped defects — the standing-concern signature: the process apparatus (Phase prompts, hand-offs) generating its own failures faster than the playable surface advances. Recorded as a watch, not a rule.
+
+### Counter
+Ordinal walk (live from canon; tip `bf92671` = decision-log.md 2026-07-21 § "CF-85 PR-B MERGED …" carrying **81/33/10/61/52**): highest **Catch 81**, **Rule 33**, **Pattern 10**, **Drift 61**, **CF-89** (grep-confirmed). Deltas by ID: catches **+3** (Catch 82, 83, 84); rules **+1** (Rule 34 — Hypothesis-in-Context HELD, no ordinal); patterns **+0**; drifts **+3** (Drift 62, 63, 64); open-CFs **+0** (no CF opened or closed — the telemetry CF is a separate follow-up append). Running line: **81/33/10/61/52 → 84/34/10/64/52** — catches **84** / rules **34** / patterns **10** / drifts **64** / open-CFs **52**. Docs-only ratification; the counter anchor is this entry's own docs commit.
+
+---
+
 ## 2026-07-21 — CF-85 PR-B MERGED (`c3f8d73`): four legibility surfaces + S2b prominence fix shipped (item attribution / real intent panel / post-combat opponent-build reveal / real run-goal hint); Codex 2 rounds CLEAN; CF-85 STAYS OPEN on surface 2c; counter UNCHANGED 81/33/10/61/52; arc claim-accuracy catches PENDING ratification
 
 PR-B merged to `main` at `c3f8d73` (`--no-ff`; parents `ac4fe7d` + `1fa159a`; GitHub PR \#55 `state: closed`, `merged: true`, merged_at 2026-07-21T20:52:08Z, merge_commit_sha `c3f8d73e8b`). Lands surfaces 1 + 2a + 2b + 3 of the redrawn CF-85 scope (decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …", anchor `ac4fe7d`, the Rule 20 gate). 15 files changed, ALL under `apps/client/src` — client-only; zero `packages/sim` / `content-schemas.ts` / `packages/content` / fixture-corpus / migration / server diff (combat is client-simulated, so no wire crosses and no corpus moves). `c3f8d73` is the artifact anchor.
