@@ -163,11 +163,24 @@ export function RoundResolution({
             className="ease-snap label-cap"
             style={{
               width: '100%',
-              padding: '8px 12px',
+              padding: '9px 12px',
               borderRadius: 6,
-              background: 'transparent',
-              color: 'var(--text-secondary)',
-              fontSize: 10,
+              // CF-85 S2b prominence (visual-playtest catch, probe evidence
+              // scratch/cf85-s2b/). The reveal is correctly wired, but the
+              // collapsed toggle read as a CAPTION — transparent fill, muted
+              // --text-secondary, near-invisible --border-default — so players
+              // scanned past it to the accent NEXT ROUND CTA. Raised to a
+              // clearly-a-control SECONDARY treatment: a --surface fill gives
+              // it a button body distinct from the --surface-elev card
+              // (visual-direction.md § 6 "buttons are filled rectangles"),
+              // --text-primary makes the label read as active, and the border
+              // now registers against the fill. Deliberately NEUTRAL (no
+              // accent) so it never competes with the filled-accent NEXT ROUND
+              // primary — outline-vs-fill keeps the hierarchy. Tokens only, no
+              // motion, behavior unchanged.
+              background: 'var(--surface)',
+              color: 'var(--text-primary)',
+              fontSize: 11,
               letterSpacing: '0.08em',
               border: '1px solid var(--border-default)',
               cursor: 'pointer',
