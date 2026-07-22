@@ -4,6 +4,33 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-22 — CF-91 CLOSED (merge `1dc785a`): run-end honest-draw display shipped — additive `combatOutcome` retained on RunHistoryEntry, RunEndScreen renders a distinct D (scope B1 as ratified, economy byte-untouched); Codex 1 round CLEAN; counter 85/34/10/65/54 → 85/34/10/65/53
+
+Merged to `main` at `1dc785a` (`--no-ff`; parents `7818697` + `f5826c4`; merge message "Merge cf91-runend-draw-display (\#56)"; GitHub PR \#56 auto-closes on push). 10 files, +153/−16: both schema files + `packages/sim` + `apps/client` + 3 run-scenario fixtures + 2 test files. **CLOSES CF-91** (opened + scope (B1) ratified at decision-log.md 2026-07-21 § "CF-91 OPENED: run-end per-round strip renders draw as loss …" — the Rule 20 gate the implementation prompt cited at its real SHA `7818697`). The catch-vs-followup fork was dispositioned **+0 at open** against CF-84's quoted overlay-scoped close text — settled there, not re-litigated here. `1dc785a` is the artifact anchor; the counter anchor is this entry's own docs commit.
+
+### 1 — Shipped exactly as ratified (B1)
+`RunHistoryEntry` gains an additive **OPTIONAL** `combatOutcome?: CombatOutcome` (content-schemas.ts + the `packages/content` mirror, byte-identical, schema-sync lint-enforced; optional per the Rule 17 validate-not-transform load boundary — the CF-43 `bornFromRecipe` / CF-67 `bossRewardItemId` posture — so pre-CF-91 in-progress saves still validate). `applyCombatOutcome` retains `combatOutcome: input.outcome` on the history push; the `draw → 'loss'` RoundOutcome collapse is **UNCHANGED** and every economic consumer (hearts, `trophyDeltaFor`, run-end detection, `round_end` telemetry) is byte-untouched — CF-84's "a draw still costs" heart/trophy semantics preserved BY CONSTRUCTION. RunEndScreen's pip renders a distinct **D** when `combatOutcome === 'draw'`, reusing CF-84's overlay DRAW token (`var(--text-secondary)`, no new visual token); an entry lacking the field falls back to the collapsed W/L (pre-CF-91 saves render exactly as before — no regression).
+
+### 2 — Step-0 additive-only finding (the halt-gate did not fire)
+The 224-fixture `.jsonl` determinism corpus is UNTOUCHED: `FixtureTerminalState` (harness.ts:36-41) snapshots `{outcome, roundsReached, finalHearts, perRoundCombatEvents}` and never `RunHistoryEntry` — 231 harness tests green post-change. The 3 `.json` run-scenario fixtures took the field mechanically (17 history entries via a line-anchored insertion: win → `player_win` / loss → `ghost_win`; the corpus contains no draws; diff +17/−0); `round_end.outcome` zero-change (RoundOutcome untouched). The semantic-re-baseline HALT branch did not fire.
+
+### 3 — Rule 28 red-then-green (proven by isolated revert)
+Both new tests proven RED by stashing ONLY the two behavioral files (sim retention + client render) while keeping the tests, then restored: sim — `expected undefined to be 'draw'` / `expected undefined to be 'player_win'`; client — `expected 'loss' to be 'draw'`. The legacy-fallback test stayed GREEN under the revert (correct — the fallback is the pre-fix behavior). Sim invariant locked: a mutual-ramp-KO draw records `outcome: 'loss'` + `combatOutcome: 'draw'`; a win records `'win'` + `'player_win'` (`outcome === 'win'` iff `combatOutcome === 'player_win'`).
+
+### 4 — Codex: 1 round, CLEAN
+Round 1 landed as a top-level ISSUE comment (the clean-pass shape; reviews endpoint 0 post-trigger bot entries), comment id `5047161561`, 2026-07-22T14:11:40Z, 3m39s after the explicit `@codex review` trigger (Catch 55 discipline — PAT-created PRs never auto-queue): verbatim "Codex Review: Didn't find any major issues. What shall we delve into next?" — "**Reviewed commit:** `f5826c46d9`" = branch tip (stale-SHA guard PASS). **0 findings, ceiling 0/4, 0 meta-audits; catches +0 on the Codex axis** (a clean pass is the review working — CF-67 principle).
+
+### 5 — Gates
+Rule 13 triple-green: `turbo run lint typecheck test build --force` ×3 cold-cache, each verbatim `25 successful, 25 total` / `0 cached, 25 total`. `typecheck` + `lint` 17/17 (schema-sync byte-identity enforced). Full suites: sim 548 passed / 1 skipped, client 672 passed / 15 skipped. All run this session on the branch tip `f5826c4` pre-merge.
+
+### Counter
+Light code-merge close (the M2.1-era single-CF-close shape). Baseline: tip entry decision-log.md 2026-07-21 § "CF-91 OPENED: run-end per-round strip renders draw as loss …" carrying **85/34/10/65/54**. Deltas by ID: catches **+0** (Codex clean; the open-entry fork disposition stands); rules **+0**; patterns **+0**; drifts **+0**; open-CFs **−1** (CF-91 CLOSED — the sole CF delta; nothing opens). Running line: **85/34/10/65/54 → 85/34/10/65/53** — catches **85** / rules **34** / patterns **10** / drifts **65** / open-CFs **53**. Anchor independence: `1dc785a` (merge) is the artifact anchor; the counter total lands at this entry's own docs commit, a later and distinct SHA.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-91** — run-end honest-draw display. **CLOSED** at `1dc785a` (this entry).
+
+---
+
 ## 2026-07-21 — CF-91 OPENED: run-end per-round strip renders draw as loss (RunEndScreen — the honest-draw surface CF-84 did NOT cover; its render claim was overlay-scoped); scope (B1) RATIFIED — additive `combatOutcome` on RunHistoryEntry (RoundOutcome stays win|loss, economy byte-untouched), (A) widen-RoundOutcome REJECTED; step-3 catch-fork RESOLVED +0 (CF-84 close text overlay-scoped, no over-claim); counter 85/34/10/65/53 → 85/34/10/65/54
 
 Docs-only, insertion-only — the Rule 20 implementation gate for the (B1) fix. Baseline: tip `9852fa9` (decision-log.md 2026-07-21 § "CF-85 ARC DISPOSITION + Q3 COUNTER-SYSTEM VERDICT (a) …") carrying **85/34/10/65/53**. Opens ONE CF (CF-91), ratifies its scope (B1), and dispositions the catch-vs-followup fork against CF-84's quoted close text. No code, schema, corpus, or migration change; the CF opens, nothing closes. **Rule 20: no (B1)/CF-91 implementation prompt may cite this entry until it carries a real SHA.**
