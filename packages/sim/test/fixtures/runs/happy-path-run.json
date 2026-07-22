@@ -201,6 +201,7 @@
       {
         "round": 1,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -210,6 +211,7 @@
       {
         "round": 2,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -219,6 +221,7 @@
       {
         "round": 3,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,

@@ -1056,6 +1056,11 @@ class RunControllerImpl implements RunController {
     this.history.push({
       round: this.currentRound,
       outcome: roundOutcome,
+      // CF-91: retain the un-collapsed CombatOutcome so the run-end per-round
+      // strip can render a draw honestly. `roundOutcome` (above) still collapses
+      // draw → 'loss' for hearts/trophy (economy UNCHANGED); this field is
+      // display-only and has no economic consumer.
+      combatOutcome: input.outcome,
       damageDealt: input.damageDealt,
       damageTaken: input.damageTaken,
       goldEarnedThisRound,

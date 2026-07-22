@@ -329,3 +329,46 @@ describe('RunEndScreen — CF-67 conditional reward field (9th field, boss Legen
     expect(getByTestId('runend-reward-name').textContent).toBe('World-Forged Heart');
   });
 });
+
+describe('RunEndScreen — CF-91 honest draw pip', () => {
+  it('renders a draw round as a distinct "D" (data-outcome="draw"), not a loss L', () => {
+    // Round 3 is a genuine DRAW: RoundOutcome collapsed to 'loss' (economy —
+    // CF-84 UNCHANGED), combatOutcome retains 'draw' (CF-91). Others are wins.
+    mocks.ctxValue = makeCtx({
+      outcome: 'eliminated',
+      history: Array.from({ length: 11 }, (_, i) => ({
+        round: (i + 1) as RoundNumber,
+        outcome: i === 2 ? ('loss' as const) : ('win' as const),
+        combatOutcome: i === 2 ? ('draw' as const) : ('player_win' as const),
+        damageDealt: 20,
+        damageTaken: i === 2 ? 20 : 6,
+        goldEarnedThisRound: i === 2 ? 0 : 5,
+        opponentGhostId: null,
+        opponentClassId: null,
+      })),
+    });
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
+    const drawPip = getByTestId('runend-pip-3');
+    expect(drawPip.getAttribute('data-outcome')).toBe('draw'); // RED pre-fix: 'loss'
+    expect(drawPip.textContent).toBe('D'); // RED pre-fix: 'L'
+    // Neighboring rounds still render as wins — only the draw promotes.
+    expect(getByTestId('runend-pip-1').getAttribute('data-outcome')).toBe('win');
+    expect(getByTestId('runend-pip-2').getAttribute('data-outcome')).toBe('win');
+  });
+
+  it('falls back to the collapsed RoundOutcome (L) for a pre-CF-91 entry lacking combatOutcome', () => {
+    // A pre-CF-91 persisted save: the history entry has no combatOutcome field
+    // (optional at the load boundary). The pip must fall back to outcome 'loss'
+    // and render 'L' — the exact prior behavior, no regression.
+    mocks.ctxValue = makeCtx({
+      outcome: 'eliminated',
+      history: [
+        { round: 1 as RoundNumber, outcome: 'loss' as const, damageDealt: 5, damageTaken: 30, goldEarnedThisRound: 0, opponentGhostId: null, opponentClassId: null },
+      ],
+    });
+    const { getByTestId } = render(<RunEndScreen onPlayAgain={() => {}} onRestart={() => {}} />);
+    const pip = getByTestId('runend-pip-1');
+    expect(pip.getAttribute('data-outcome')).toBe('loss');
+    expect(pip.textContent).toBe('L');
+  });
+});

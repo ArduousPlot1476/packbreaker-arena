@@ -371,6 +371,7 @@
       {
         "round": 1,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -380,6 +381,7 @@
       {
         "round": 2,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -389,6 +391,7 @@
       {
         "round": 3,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -398,6 +401,7 @@
       {
         "round": 4,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -407,6 +411,7 @@
       {
         "round": 5,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -416,6 +421,7 @@
       {
         "round": 6,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -425,6 +431,7 @@
       {
         "round": 7,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -434,6 +441,7 @@
       {
         "round": 8,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -443,6 +451,7 @@
       {
         "round": 9,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -452,6 +461,7 @@
       {
         "round": 10,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 1,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
@@ -461,6 +471,7 @@
       {
         "round": 11,
         "outcome": "win",
+        "combatOutcome": "player_win",
         "damageDealt": 50,
         "damageTaken": 0,
         "goldEarnedThisRound": 1,
