@@ -509,6 +509,14 @@ export type RoundOutcome = 'win' | 'loss'
 export interface RunHistoryEntry {
   readonly round: RoundNumber
   readonly outcome: RoundOutcome
+  /** CF-91: the un-collapsed CombatOutcome for this round, retained so the
+   *  run-end per-round strip renders a draw honestly. `outcome` (RoundOutcome)
+   *  collapses draw → 'loss' for the economy (unchanged); this preserves the
+   *  distinction for DISPLAY only. OPTIONAL: pre-CF-91 persisted saves lack it
+   *  (the load boundary VALIDATES, does not transform — Rule 17), and
+   *  RunEndScreen falls back to `outcome` (W/L) when absent. The sim writes it
+   *  on every live history push. */
+  readonly combatOutcome?: CombatOutcome
   readonly damageDealt: number
   readonly damageTaken: number
   readonly goldEarnedThisRound: number

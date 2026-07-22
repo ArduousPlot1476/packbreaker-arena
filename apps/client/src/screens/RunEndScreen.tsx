@@ -110,33 +110,45 @@ function RelicSlotCard({ relicName, tierLabel, testId }: RelicSlotProps) {
 
 interface BreadcrumbPipProps {
   readonly round: number;
-  readonly outcome: 'win' | 'loss' | 'untouched';
+  readonly outcome: 'win' | 'loss' | 'draw' | 'untouched';
 }
 
 function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
   const isWin = outcome === 'win';
   const isLoss = outcome === 'loss';
+  const isDraw = outcome === 'draw';
   const dotStyle = isWin
     ? {
         background: 'rgba(245, 185, 66, 0.16)',
         border: '1px solid #f5b942',
         color: '#f5b942',
       }
-    : isLoss
+    : isDraw
       ? {
-          // Hatched fill via repeating linear gradient — color-independent
-          // differentiation per design board.
-          backgroundImage:
-            'repeating-linear-gradient(45deg, rgba(232, 92, 92, 0.18) 0 2px, transparent 2px 5px)',
-          border: '1px solid #e85c5c',
-          color: '#e85c5c',
+          // CF-91: a draw renders as a distinct neutral "D", reusing CF-84's
+          // overlay DRAW token (RoundResolution's headerColor is
+          // var(--text-secondary)) rather than the loss red — the run-end strip
+          // now matches the resolution overlay's honest-draw semantics. Economy
+          // is UNCHANGED (a draw still cost a heart); this is display only.
+          background: 'rgba(138, 155, 176, 0.14)',
+          border: '1px solid var(--text-secondary, #8a9bb0)',
+          color: 'var(--text-secondary, #8a9bb0)',
         }
-      : {
-          background: 'transparent',
-          border: '1px dashed #3a3a3a',
-          color: '#6a6a6a',
-        };
-  const label = isWin ? 'W' : isLoss ? 'L' : '·';
+      : isLoss
+        ? {
+            // Hatched fill via repeating linear gradient — color-independent
+            // differentiation per design board.
+            backgroundImage:
+              'repeating-linear-gradient(45deg, rgba(232, 92, 92, 0.18) 0 2px, transparent 2px 5px)',
+            border: '1px solid #e85c5c',
+            color: '#e85c5c',
+          }
+        : {
+            background: 'transparent',
+            border: '1px dashed #3a3a3a',
+            color: '#6a6a6a',
+          };
+  const label = isWin ? 'W' : isDraw ? 'D' : isLoss ? 'L' : '·';
   return (
     <div
       data-testid={`runend-pip-${round}`}
@@ -199,9 +211,17 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
   // round in state.history. History entries match by `.round`, NOT by
   // array index — defensive against any future history shape.
   const totalRounds = state.state.totalRounds;
-  const historyByRound = new Map<number, 'win' | 'loss'>();
+  const historyByRound = new Map<number, 'win' | 'loss' | 'draw'>();
   for (const entry of state.state.history) {
-    historyByRound.set(entry.round, entry.outcome);
+    // CF-91: prefer the un-collapsed combatOutcome so a draw round renders a
+    // distinct "D". Pre-CF-91 saves lack combatOutcome (optional at the load
+    // boundary) — fall back to the collapsed RoundOutcome (W/L), the prior
+    // behavior. Only a genuine 'draw' promotes; player_win / ghost_win keep the
+    // existing win / loss pips.
+    historyByRound.set(
+      entry.round,
+      entry.combatOutcome === 'draw' ? 'draw' : entry.outcome,
+    );
   }
   const breadcrumbRounds: ReadonlyArray<BreadcrumbPipProps> = Array.from(
     { length: totalRounds },

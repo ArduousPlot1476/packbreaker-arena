@@ -240,6 +240,12 @@ const RunHistoryEntrySchema = z
   .object({
     round: RoundNumberSchema,
     outcome: RoundOutcomeSchema,
+    // CF-91: un-collapsed combat result, retained for honest run-end draw
+    // display. OPTIONAL (permissive) so a pre-CF-91 save lacking it still
+    // validates rather than being hard-rejected — same load-boundary posture as
+    // bossRewardItemId / bornFromRecipe below (VALIDATES, does not transform;
+    // Rule 17). RunEndScreen falls back to `outcome` (W/L) when absent.
+    combatOutcome: z.enum(['player_win', 'ghost_win', 'draw']).optional(),
     damageDealt: z.number(),
     damageTaken: z.number(),
     goldEarnedThisRound: z.number(),

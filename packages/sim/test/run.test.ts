@@ -592,6 +592,36 @@ describe('hearts & elimination', () => {
   });
 });
 
+// ─── CF-91: combatOutcome retention (honest run-end draw display) ──
+
+describe('CF-91 combatOutcome retention', () => {
+  it('a draw round retains combatOutcome "draw" while RoundOutcome collapses to "loss"', () => {
+    // Player (empty bag, 30 HP) vs a 30-HP itemless ghost: neither deals damage,
+    // so the CF-83 ramp drains both sides at an equal rate to a simultaneous
+    // mutual KO → draw. The economy collapses draw → 'loss' (a heart is spent,
+    // CF-84 semantics UNCHANGED), but combatOutcome retains the honest 'draw'.
+    const ctrl = createRun(baseInput());
+    const result = ctrl.startCombat(emptyGhost(30));
+    expect(result.outcome).toBe('draw');
+    const entry = ctrl.getState().history.at(-1)!;
+    expect(entry.outcome).toBe('loss'); // RoundOutcome collapse UNCHANGED (economy)
+    expect(entry.combatOutcome).toBe('draw'); // CF-91 retention (RED pre-fix: undefined)
+  });
+
+  it('a win round records combatOutcome "player_win" (outcome==="win" ⟺ combatOutcome==="player_win")', () => {
+    const knife = defineTestItem('cf91-knife', [
+      { type: 'on_round_start', effects: [{ type: 'damage', amount: 30, target: 'opponent' }] },
+    ], { tags: ['weapon'] });
+    const ctrl = createRun(baseInput({ itemsRegistry: { [knife.id]: knife } }));
+    ctrl.buyItem(0);
+    ctrl.placeItem(knife.id, { col: 0, row: 0 }, 0);
+    ctrl.startCombat(emptyGhost(1));
+    const entry = ctrl.getState().history.at(-1)!;
+    expect(entry.outcome).toBe('win');
+    expect(entry.combatOutcome).toBe('player_win');
+  });
+});
+
 // ─── Telemetry callback ──────────────────────────────────────────
 
 describe('telemetry callback', () => {
