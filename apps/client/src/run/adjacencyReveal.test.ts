@@ -133,6 +133,35 @@ describe('computeItemRevealRows — three display classes', () => {
     expect(rows[0]!.qualifier).toBeNull()
   })
 
+  it('class-3 GATE (Codex round-1 P2): Spark Stone beside Copper Coin (no triggers) → ZERO rows', () => {
+    // No adjacent item can provoke → the sim can never fire the reaction in
+    // this layout → the row is suppressed, matching the board (the detector
+    // emits no pair, so nothing glows).
+    const bag = [item('spark', 'spark-stone', 0, 0), item('coin', 'copper-coin', 1, 0)]
+    expect(computeItemRevealRows(bag, 'spark')).toEqual([])
+  })
+
+  it('class-3 GATE: Spark Stone beside Vampire Fang (weapon tag but on_hit-only → not a provoker) → ZERO rows', () => {
+    // Passes the trigger-level matchTags on TAGS but fails canProvoke — the
+    // gate is provoker-existence, not tag-existence.
+    const bag = [item('spark', 'spark-stone', 0, 0), item('fang', 'vampire-fang', 1, 0)]
+    expect(computeItemRevealRows(bag, 'spark')).toEqual([])
+  })
+
+  it('class-3 GATE quantifier falsifier: Spark Stone beside Copper Coin AND Iron Sword → row PRESENT', () => {
+    // One provoker among several non-provokers must open the gate — true
+    // under `some`, false under `every`; the other gate cases pass under
+    // either quantifier.
+    const bag = [
+      item('spark', 'spark-stone', 1, 0),
+      item('coin', 'copper-coin', 0, 0),
+      item('sword', 'iron-sword', 2, 0),
+    ]
+    const rows = computeItemRevealRows(bag, 'spark')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.revealClass).toBe(3)
+  })
+
   it('multi-effect: Resonance Crystal beside Iron Sword renders ONE ROW PER EFFECT, both class 1', () => {
     // damage +1 AND cooldown_pct −10, both on the same on_adjacent_trigger.
     const bag = [item('res', 'resonance-crystal', 0, 0), item('sword', 'iron-sword', 1, 0)]

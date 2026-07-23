@@ -120,6 +120,31 @@ describe('BagBoard — adjacency reveal gating (CF-89 PR-A, default OFF)', () =>
     expect(chips[0]!.textContent).toBe('+1');
   });
 
+  it('suppressing the only adjacency row leaves NO orphaned ADJACENCY section header (Codex round-1 P2)', () => {
+    // Spark Stone beside Copper Coin: the class-3 row is gate-suppressed (no
+    // provoker), so the popover must render its plain CF 57 shape — no empty
+    // ADJACENCY header.
+    render(
+      <DndContext>
+        <BagBoard
+          bag={[
+            { uid: 'spark', itemId: 'spark-stone' as ItemId, col: 0, row: 0, rot: 0 },
+            { uid: 'coin', itemId: 'copper-coin' as ItemId, col: 1, row: 0, rot: 0 },
+          ]}
+          drag={null}
+          hover={null}
+          dimmed={false}
+          recipeMatches={[]}
+          onCombine={vi.fn()}
+          adjacencyReveal="popover"
+        />
+      </DndContext>,
+    );
+    fireEvent.click(screen.getByLabelText('Spark Stone'));
+    expect(screen.getByTestId('item-info-popover')).toBeTruthy();
+    expect(screen.queryByTestId('adjacency-section')).toBeNull();
+  });
+
   it('chips are reveal-on-intent: closing the popover removes them', () => {
     renderBoard({ adjacencyReveal: 'popover' });
     const trigger = screen.getByLabelText('Whetstone');

@@ -204,6 +204,14 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
   const rows: RevealRow[] = []
   for (const trigger of def.triggers) {
     const isReactionHost = trigger.type === 'on_adjacent_trigger'
+    // Per-trigger provoker gate, hoisted above the effects loop (Codex PR-57
+    // round-1 P2): an on_adjacent_trigger can only ever fire if at least one
+    // adjacent item can provoke it (trigger-level matchTags). The expression
+    // reads only trigger + adjacents, so hoisting is behavior-identical for
+    // the buff rows below. Non-reaction hosts are always open.
+    const gateOpen = !isReactionHost
+      ? true
+      : adjacents.some((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
     for (const effect of trigger.effects) {
       if (effect.type === 'buff_adjacent') {
         // Aura or reaction buff — an adjacency row either way.
@@ -213,9 +221,6 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
         const affectedItems = adjacents.filter((a) => tagsMatch(effect.matchTags, getItem(a.itemId)))
         // Ratified affected-set rule: effect-matchTags-filtered adjacents,
         // gated (reaction hosts) on ≥1 provoker existing.
-        const gateOpen = !isReactionHost
-          ? true
-          : adjacents.some((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
         const affected: AffectedRef[] = (gateOpen ? affectedItems : []).map((a) => ({
           uid: a.uid,
           name: getItem(a.itemId).name,
@@ -239,6 +244,15 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
         // Class 3: an on_adjacent_trigger whose effect lands elsewhere
         // (apply_status at the opponent today). Condition + effect only —
         // no adjacent item is affected, so the panel is SUPPRESSED (null).
+        //
+        // Gate-closed → suppress the ROW entirely (Codex PR-57 round-1 P2,
+        // ratified rationale): suppression makes the card agree with the
+        // board. The detector emits no reaction pair for a provokerless
+        // layout, so the item does not glow; a card row on a non-glowing
+        // item asserts a relationship the board denies. (Class-1/2 rows
+        // keep their gate-closed row + honest empty state — they have an
+        // affected panel to carry it; panel-availability is secondary.)
+        if (!gateOpen) continue
         const effectText = describeEffect(effect)
         if (effectText == null) continue
         rows.push({
