@@ -42,6 +42,15 @@ export interface PopoverProps {
   ariaLabel?: string;
   className?: string;
   testId?: string;
+  /**
+   * Presentation mode (CF-89 PR-A). 'anchored' (default) is the original
+   * anchor-positioned, viewport-clamped dialog. 'sheet' renders the SAME
+   * dialog — identical Rule 12 contract (role/focus trap/Esc/scrim/focus
+   * return) — pinned to the bottom edge, full-width, scrollable: the locked
+   * mobile bottom-sheet solution for the adjacency reveal. Anchor position is
+   * ignored in sheet mode (the anchorRef still receives focus on close).
+   */
+  presentation?: 'anchored' | 'sheet';
   children: ReactNode;
 }
 
@@ -52,6 +61,7 @@ export function Popover({
   ariaLabel,
   className,
   testId = 'popover',
+  presentation = 'anchored',
   children,
 }: PopoverProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -59,9 +69,10 @@ export function Popover({
 
   // Position after render (pre-paint) so we can measure the dialog and clamp it
   // into the viewport without a visible flash. Prefer below the anchor, flip
-  // above when there isn't room.
+  // above when there isn't room. Sheet mode needs no measurement — it is
+  // edge-pinned, not anchor-positioned.
   useLayoutEffect(() => {
-    if (!open) {
+    if (!open || presentation === 'sheet') {
       setPos(null);
       return;
     }
@@ -82,7 +93,7 @@ export function Popover({
     }
     if (top < gap) top = gap;
     setPos({ top, left });
-  }, [open, anchorRef]);
+  }, [open, anchorRef, presentation]);
 
   // Auto-focus the dialog on open; return focus to the trigger on close/unmount.
   useEffect(() => {
@@ -142,21 +153,42 @@ export function Popover({
         data-testid={testId}
         className={className}
         onKeyDown={onKeyDown}
-        style={{
-          position: 'fixed',
-          top: pos?.top ?? 0,
-          left: pos?.left ?? 0,
-          visibility: pos ? 'visible' : 'hidden',
-          zIndex: 41,
-          maxWidth: 'min(280px, calc(100vw - 16px))',
-          background: 'var(--surface)',
-          border: '1px solid var(--border-default)',
-          borderRadius: 8,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          padding: 10,
-          color: 'var(--text-primary)',
-          outline: 'none',
-        }}
+        style={
+          presentation === 'sheet'
+            ? {
+                // Bottom sheet: edge-pinned, full-width, capped height so the
+                // board above stays fully visible; scrolls internally.
+                position: 'fixed',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 41,
+                maxHeight: '45vh',
+                overflowY: 'auto',
+                background: 'var(--surface)',
+                borderTop: '1px solid var(--border-default)',
+                borderRadius: '12px 12px 0 0',
+                boxShadow: '0 -8px 24px rgba(0,0,0,0.4)',
+                padding: 12,
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }
+            : {
+                position: 'fixed',
+                top: pos?.top ?? 0,
+                left: pos?.left ?? 0,
+                visibility: pos ? 'visible' : 'hidden',
+                zIndex: 41,
+                maxWidth: 'min(280px, calc(100vw - 16px))',
+                background: 'var(--surface)',
+                border: '1px solid var(--border-default)',
+                borderRadius: 8,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                padding: 10,
+                color: 'var(--text-primary)',
+                outline: 'none',
+              }
+        }
       >
         {children}
       </div>

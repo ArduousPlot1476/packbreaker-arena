@@ -48,8 +48,10 @@ function assertNever(value: never): never {
 }
 
 /** Ticks → seconds via the canonical constant (never hardcode /10). Strips a
- *  trailing `.0` so whole seconds read "5s", not "5.0s". */
-function formatSeconds(ticks: number): string {
+ *  trailing `.0` so whole seconds read "5s", not "5.0s". Exported (CF-89
+ *  PR-A) so the adjacency reveal renders cooldown after-values in the same
+ *  unit/precision as these lines — one formatter, no drift. */
+export function formatSeconds(ticks: number): string {
   const seconds = ticks / TICKS_PER_SECOND;
   return Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1);
 }
@@ -145,7 +147,9 @@ export function describeEffect(effect: Effect): string | null {
   }
 }
 
-function triggerCondition(trigger: Trigger): string {
+/** Exported (CF-89 PR-A): the adjacency reveal's row condition line reuses
+ *  this wording verbatim so card text and describeItem lines never diverge. */
+export function triggerCondition(trigger: Trigger): string {
   switch (trigger.type) {
     case 'on_round_start':
       return 'Round start';

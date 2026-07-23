@@ -105,6 +105,7 @@ export function DesktopRunScreen() {
               onCombine={onCombine}
               combineRejection={combineRejection}
               containerRef={bagContainerRef}
+              adjacencyReveal="popover"
             />
           </div>
           <ShopPanel
