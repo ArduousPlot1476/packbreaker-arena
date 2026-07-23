@@ -45,7 +45,7 @@
 
 import { applyPct } from '@packbreaker/sim/src/math'
 import { getItem } from '@packbreaker/content'
-import type { Item, Trigger } from '@packbreaker/content'
+import type { Item, ItemTag, Trigger } from '@packbreaker/content'
 import { describeEffect, triggerCondition } from '../items/describeItem'
 import { canProvoke, edgeAdjacencyMap } from './adjacency'
 import type { BagItem } from './types'
@@ -90,7 +90,7 @@ export interface RevealRow {
   readonly affected: ReadonlyArray<AffectedRef> | null
 }
 
-function tagsMatch(matchTags: ReadonlyArray<string> | undefined, item: Item): boolean {
+function tagsMatch(matchTags: ReadonlyArray<ItemTag> | undefined, item: Item): boolean {
   if (!matchTags || matchTags.length === 0) return true
   return matchTags.some((tag) => item.tags.includes(tag))
 }

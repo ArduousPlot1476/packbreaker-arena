@@ -228,7 +228,13 @@ export function BagBoard({
             disabled={dimmed || readOnly}
             enableInfoPopover={!readOnly}
             adjacencyRows={revealEnabled ? revealRows?.get(b.uid) : undefined}
-            revealPresentation={adjacencyReveal}
+            revealPresentation={
+              adjacencyReveal === undefined
+                ? undefined
+                : adjacencyReveal === 'sheet'
+                  ? 'sheet'
+                  : 'anchored'
+            }
             onInfoOpenChange={revealEnabled ? onInfoOpenChange : undefined}
           />
         ))}
