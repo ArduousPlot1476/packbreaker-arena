@@ -124,13 +124,43 @@ describe('computeItemRevealRows — three display classes', () => {
     expect(rows[0]!.affected![0]!.deltas).toEqual([])
   })
 
-  it('class 3 (opponent-status reaction): Spark Stone beside Iron Sword → condition + effect, affected panel SUPPRESSED (null)', () => {
+  it('class 3 (opponent-status reaction): Spark Stone beside Iron Sword → affected panel SUPPRESSED (null), triggeredBy names the provoker', () => {
     const bag = [item('spark', 'spark-stone', 0, 0), item('sword', 'iron-sword', 1, 0)]
     const rows = computeItemRevealRows(bag, 'spark')
     expect(rows).toHaveLength(1)
     expect(rows[0]!.revealClass).toBe(3)
     expect(rows[0]!.affected).toBeNull()
     expect(rows[0]!.qualifier).toBeNull()
+    expect(rows[0]!.triggeredBy).toEqual(['Iron Sword'])
+  })
+
+  it('class-3 triggeredBy mixed layout: one provoker + one non-provoker adjacent → names ONLY the provoker (fix round 2)', () => {
+    // Derived from the gate’s own collection: coin is adjacent but cannot
+    // provoke, so it must not appear in the "Triggered by" set.
+    const bag = [
+      item('spark', 'spark-stone', 1, 0),
+      item('coin', 'copper-coin', 0, 0),
+      item('sword', 'iron-sword', 2, 0),
+    ]
+    const rows = computeItemRevealRows(bag, 'spark')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.triggeredBy).toEqual(['Iron Sword'])
+  })
+
+  it('compact labels (fix round 2): resonance-crystal rows carry "+1 dmg" / "-10% cooldown"; whetstone "+1 dmg"', () => {
+    // Labels are value+unit only — never the rule sentence (describeItem
+    // owns the rule statement). Multi-vs-single rendering is the UI’s call;
+    // the model always computes the label.
+    const res = computeItemRevealRows(
+      [item('res', 'resonance-crystal', 0, 0), item('sword', 'iron-sword', 1, 0)],
+      'res',
+    )
+    expect(res.map((r) => r.label)).toEqual(['+1 dmg', '-10% cooldown'])
+    const whet = computeItemRevealRows(
+      [item('sword', 'iron-sword', 0, 0), item('whet', 'whetstone', 1, 0)],
+      'whet',
+    )
+    expect(whet.map((r) => r.label)).toEqual(['+1 dmg'])
   })
 
   it('class-3 GATE (Codex round-1 P2): Spark Stone beside Copper Coin (no triggers) → ZERO rows', () => {
@@ -180,7 +210,8 @@ describe('computeItemRevealRows — three display classes', () => {
     const rows = computeItemRevealRows(bag, 'kit')
     expect(rows).toHaveLength(1)
     expect(rows[0]!.revealClass).toBe(2) // trigger_chance_pct → probabilistic
-    expect(rows[0]!.text).not.toMatch(/poison/)
+    expect(rows[0]!.label).toBe('+30% trigger chance')
+    expect(rows[0]!.label).not.toMatch(/poison/)
   })
 
   it('item with no adjacency relationships → zero rows (Iron Sword alone)', () => {

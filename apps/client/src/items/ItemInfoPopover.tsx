@@ -49,7 +49,15 @@ function deltaText(a: AffectedRef): string {
     .join(' · ');
 }
 
+/** Renders ONLY what is live in this bag layout right now ("rule above, live
+ *  consequence below", fix round 2): describeItem's lines above own the rule
+ *  statement; this section never restates it. Class 1 = affected rows with
+ *  resolved values (or the actionable gate-closed empty state — ratified to
+ *  STAY); class 2 = affected rows with the qualifier in the value slot;
+ *  class 3 = "Triggered by:" naming the provokers. Compact per-effect labels
+ *  appear only when the item has 2+ adjacency rows. */
 function AdjacencySection({ rows }: { rows: ReadonlyArray<RevealRow> }) {
+  const multi = rows.length > 1;
   return (
     <div
       data-testid="adjacency-section"
@@ -64,48 +72,67 @@ function AdjacencySection({ rows }: { rows: ReadonlyArray<RevealRow> }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {rows.map((row, i) => (
           <div key={i} data-testid={`adjacency-row-class${row.revealClass}`}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.3 }}>
-              {row.text}
-            </div>
-            {row.qualifier && (
+            {multi && (
               <div
-                className="label-cap"
-                data-testid="adjacency-qualifier"
-                style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}
+                className="label-cap tnum"
+                data-testid="adjacency-effect-label"
+                style={{ fontSize: 9, color: 'var(--text-muted)', marginBottom: 1 }}
               >
-                {row.qualifier}
+                {row.label}
               </div>
             )}
-            {row.affected !== null && (
-              <div data-testid="adjacency-affected" style={{ marginTop: 3 }}>
-                {row.affected.length === 0 ? (
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    No adjacent items affected
-                  </div>
-                ) : (
-                  row.affected.map((a) => (
-                    <div
-                      key={a.uid}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        fontSize: 11,
-                        lineHeight: 1.4,
-                      }}
-                    >
-                      <span style={{ color: 'var(--text-secondary)' }}>{a.name}</span>
-                      {/* Class-2 rows carry no deltas by construction — the
-                          after-value row is suppressed, never rendered. */}
-                      {a.deltas.length > 0 && (
-                        <span className="tnum" style={{ color: 'var(--text-primary)' }}>
-                          {deltaText(a)}
-                        </span>
-                      )}
-                    </div>
-                  ))
-                )}
+            {row.revealClass === 3 ? (
+              <div
+                data-testid="adjacency-triggered-by"
+                style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}
+              >
+                Triggered by:{' '}
+                <span style={{ color: 'var(--text-primary)' }}>
+                  {(row.triggeredBy ?? []).join(', ')}
+                </span>
               </div>
+            ) : (
+              row.affected !== null && (
+                <div data-testid="adjacency-affected">
+                  {row.affected.length === 0 ? (
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                      No adjacent items affected
+                    </div>
+                  ) : (
+                    row.affected.map((a) => (
+                      <div
+                        key={a.uid}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          fontSize: 11,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <span style={{ color: 'var(--text-secondary)' }}>{a.name}</span>
+                        {/* Class 1: resolved before→after. Class 2: the
+                            qualifier in the value slot — live state, never
+                            the trigger-condition sentence. */}
+                        {row.revealClass === 1 && a.deltas.length > 0 && (
+                          <span className="tnum" style={{ color: 'var(--text-primary)' }}>
+                            {deltaText(a)}
+                          </span>
+                        )}
+                        {row.revealClass === 2 && row.qualifier && (
+                          <span
+                            className="label-cap"
+                            data-testid="adjacency-qualifier"
+                            style={{ fontSize: 9, color: 'var(--text-muted)' }}
+                          >
+                            {row.qualifier}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )
             )}
           </div>
         ))}

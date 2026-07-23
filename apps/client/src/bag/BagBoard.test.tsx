@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { DndContext } from '@dnd-kit/core';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { BagItem, ItemId } from '../run/types';
 import { BagBoard } from './BagBoard';
 
@@ -152,5 +152,93 @@ describe('BagBoard — adjacency reveal gating (CF-89 PR-A, default OFF)', () =>
     expect(screen.getAllByTestId('adjacency-chip')).toHaveLength(1);
     fireEvent.click(trigger); // toggle closed
     expect(screen.queryByTestId('adjacency-chip')).toBeNull();
+  });
+});
+
+describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above, live consequence below)', () => {
+  // The falsifier is the OCCURRENCE COUNT: describeItem's rule sentence must
+  // appear EXACTLY ONCE in the whole popover. Presence-only would pass on the
+  // pre-fix build (which rendered it twice — once in the lines, once in the
+  // section).
+  const countOf = (haystack: string, needle: string) => haystack.split(needle).length - 1;
+
+  function openPopover(bag: BagItem[], label: string): string {
+    render(
+      <DndContext>
+        <BagBoard
+          bag={bag}
+          drag={null}
+          hover={null}
+          dimmed={false}
+          recipeMatches={[]}
+          onCombine={vi.fn()}
+          adjacencyReveal="popover"
+        />
+      </DndContext>,
+    );
+    fireEvent.click(screen.getByLabelText(label));
+    return screen.getByTestId('item-info-popover').textContent ?? '';
+  }
+
+  const bagItem = (uid: string, itemId: string, col: number, row: number): BagItem => ({
+    uid,
+    itemId: itemId as ItemId,
+    col,
+    row,
+    rot: 0,
+  });
+
+  it('class 1 gate-open (Whetstone + Iron Sword): rule sentence EXACTLY ONCE; resolved row present', () => {
+    const text = openPopover(
+      [bagItem('sword', 'iron-sword', 0, 0), bagItem('whet', 'whetstone', 1, 0)],
+      'Whetstone',
+    );
+    expect(countOf(text, 'When an adjacent weapon triggers — nearby weapon items +1 dmg')).toBe(1);
+    expect(text).toContain('4 → 5');
+  });
+
+  it('class 1 gate-closed (Whetstone + Vampire Fang): rule sentence EXACTLY ONCE; the actionable empty state STAYS (ratified reversal)', () => {
+    const text = openPopover(
+      [bagItem('whet', 'whetstone', 0, 0), bagItem('fang', 'vampire-fang', 1, 0)],
+      'Whetstone',
+    );
+    expect(countOf(text, 'When an adjacent weapon triggers — nearby weapon items +1 dmg')).toBe(1);
+    expect(text).toContain('No adjacent items affected');
+  });
+
+  it("class 2 (Berserker's Greataxe + Iron Sword): rule sentence EXACTLY ONCE; qualifier survives without expanding into the condition sentence", () => {
+    const text = openPopover(
+      [bagItem('axe', 'berserkers-greataxe', 0, 0), bagItem('sword', 'iron-sword', 2, 0)],
+      "Berserker's Greataxe",
+    );
+    expect(countOf(text, 'Below 50% HP — nearby items +3 dmg')).toBe(1);
+    expect(screen.getByTestId('adjacency-qualifier').textContent).toBe('if triggered');
+    expect(screen.getByTestId('adjacency-row-class2').textContent).toContain('Iron Sword');
+  });
+
+  it('class 3 (Spark Stone + Iron Sword): rule sentence EXACTLY ONCE; "Triggered by:" names the real provoker', () => {
+    const text = openPopover(
+      [bagItem('spark', 'spark-stone', 0, 0), bagItem('sword', 'iron-sword', 1, 0)],
+      'Spark Stone',
+    );
+    expect(countOf(text, 'When an adjacent weapon triggers — burn 1 to enemy')).toBe(1);
+    expect(screen.getByTestId('adjacency-triggered-by').textContent).toBe(
+      'Triggered by: Iron Sword',
+    );
+  });
+
+  it('multi-effect item (Resonance Crystal) renders compact per-effect labels; single-effect (Whetstone) renders none', () => {
+    openPopover(
+      [bagItem('res', 'resonance-crystal', 0, 0), bagItem('sword', 'iron-sword', 1, 0)],
+      'Resonance Crystal',
+    );
+    const labels = screen.getAllByTestId('adjacency-effect-label').map((l) => l.textContent);
+    expect(labels).toEqual(['+1 dmg', '-10% cooldown']);
+    cleanup();
+    openPopover(
+      [bagItem('sword', 'iron-sword', 0, 0), bagItem('whet', 'whetstone', 1, 0)],
+      'Whetstone',
+    );
+    expect(screen.queryByTestId('adjacency-effect-label')).toBeNull();
   });
 });

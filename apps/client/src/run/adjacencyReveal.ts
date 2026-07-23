@@ -45,8 +45,8 @@
 
 import { applyPct } from '@packbreaker/sim/src/math'
 import { getItem } from '@packbreaker/content'
-import type { Item, ItemTag, Trigger } from '@packbreaker/content'
-import { describeEffect, triggerCondition } from '../items/describeItem'
+import type { Effect, Item, ItemTag, Trigger } from '@packbreaker/content'
+import { describeEffect } from '../items/describeItem'
 import { canProvoke, edgeAdjacencyMap } from './adjacency'
 import type { BagItem } from './types'
 
@@ -80,19 +80,46 @@ export interface AffectedRef {
 
 export interface RevealRow {
   readonly revealClass: RevealClass
-  /** "Condition — effect", built from describeItem's own formatters. */
-  readonly text: string
+  /** Compact per-effect label ("+1 dmg" / "−10% cooldown" / "+20% trigger
+   *  chance"), rendered ONLY when the item has 2+ adjacency rows
+   *  (multi-effect disambiguation). Never the rule sentence: describeItem
+   *  owns the rule statement — the section renders live consequences only
+   *  ("rule above, live consequence below", fix round 2). */
+  readonly label: string
   /** Class-2 qualifier ("if triggered" / "chance on trigger"); null else. */
   readonly qualifier: string | null
   /** Affected adjacent items. null = SUPPRESS the panel entirely (class 3);
    *  [] = panel with its empty state (e.g. a gated reaction buff with no
-   *  provoker adjacent). Class-2 entries carry no deltas. */
+   *  provoker adjacent — ratified to STAY: it is actionable and agrees with
+   *  the dark glow). Class-2 entries carry no deltas. */
   readonly affected: ReadonlyArray<AffectedRef> | null
+  /** Class 3 only: provoker NAMES for the "Triggered by:" line, collected
+   *  from the SAME predicate the gate uses (never a parallel check — a
+   *  second implementation could drift from the gate). null for class 1/2. */
+  readonly triggeredBy: ReadonlyArray<string> | null
 }
 
 function tagsMatch(matchTags: ReadonlyArray<ItemTag> | undefined, item: Item): boolean {
   if (!matchTags || matchTags.length === 0) return true
   return matchTags.some((tag) => item.tags.includes(tag))
+}
+
+/** Compact per-effect label for multi-effect disambiguation — value + unit
+ *  only, never the rule sentence (describeItem owns that). */
+function compactLabel(effect: Effect): string {
+  if (effect.type === 'buff_adjacent') {
+    switch (effect.stat) {
+      case 'damage':
+        return `${effect.amount >= 0 ? '+' : ''}${effect.amount} dmg`
+      case 'cooldown_pct':
+        return `${effect.amount}% cooldown`
+      case 'trigger_chance_pct':
+        return `+${effect.amount}% trigger chance`
+    }
+  }
+  // Class-3 fallback (no shipped multi-effect class-3 item): the terse
+  // describeItem effect clause is already compact ("burn 1 to enemy").
+  return describeEffect(effect) ?? effect.type
 }
 
 /** Is this host trigger's buff deterministic at arrange time? Per the ratified
@@ -204,14 +231,16 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
   const rows: RevealRow[] = []
   for (const trigger of def.triggers) {
     const isReactionHost = trigger.type === 'on_adjacent_trigger'
-    // Per-trigger provoker gate, hoisted above the effects loop (Codex PR-57
-    // round-1 P2): an on_adjacent_trigger can only ever fire if at least one
-    // adjacent item can provoke it (trigger-level matchTags). The expression
-    // reads only trigger + adjacents, so hoisting is behavior-identical for
-    // the buff rows below. Non-reaction hosts are always open.
-    const gateOpen = !isReactionHost
-      ? true
-      : adjacents.some((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
+    // Per-trigger provoker SET, collected above the effects loop. The gate
+    // (Codex PR-57 round-1 P2) is DERIVED from this same collection — never a
+    // parallel predicate, so the "Triggered by:" line and the suppression
+    // decision cannot drift apart (fix round 2). Non-reaction hosts have no
+    // provoker concept and are always open.
+    const provokers =
+      isReactionHost === false
+        ? null
+        : adjacents.filter((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
+    const gateOpen = provokers === null || provokers.length > 0
     for (const effect of trigger.effects) {
       if (effect.type === 'buff_adjacent') {
         // Aura or reaction buff — an adjacency row either way.
@@ -229,16 +258,17 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
               ? deltasFor(a, effect.stat, totals)
               : [],
         }))
-        // No dangling "condition — " when the effect renders to nothing
-        // (describeItem's own rule for zero-amount buffs).
-        const effectText = describeEffect(effect)
-        if (effectText == null) continue
+        // Skip effects that render to nothing (describeItem's own rule for
+        // zero-amount buffs) — same no-op guard as before the restatement
+        // removal.
+        if (describeEffect(effect) == null) continue
         rows.push({
           revealClass,
-          text: `${triggerCondition(trigger)} — ${effectText}`,
+          label: compactLabel(effect),
           qualifier:
             revealClass === 2 ? (probabilistic ? 'chance on trigger' : 'if triggered') : null,
           affected,
+          triggeredBy: null,
         })
       } else if (isReactionHost) {
         // Class 3: an on_adjacent_trigger whose effect lands elsewhere
@@ -253,13 +283,15 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
         // keep their gate-closed row + honest empty state — they have an
         // affected panel to carry it; panel-availability is secondary.)
         if (!gateOpen) continue
-        const effectText = describeEffect(effect)
-        if (effectText == null) continue
+        if (describeEffect(effect) == null) continue
         rows.push({
           revealClass: 3,
-          text: `${triggerCondition(trigger)} — ${effectText}`,
+          label: compactLabel(effect),
           qualifier: null,
           affected: null,
+          // The live-state content of a class-3 row: WHO can set it off,
+          // straight from the gate's own collection.
+          triggeredBy: (provokers ?? []).map((a) => getItem(a.itemId).name),
         })
       }
       // Non-adjacency effects on non-reaction triggers: not an adjacency
