@@ -197,7 +197,7 @@ describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above,
     expect(text).toContain('4 → 5');
   });
 
-  it('class 1 gate-closed (Whetstone + Vampire Fang): rule sentence EXACTLY ONCE; the actionable empty state STAYS (ratified reversal)', () => {
+  it('gate-closed (Whetstone + Vampire Fang; class 2 since round 3): rule sentence EXACTLY ONCE; the actionable empty state STAYS (ratified reversal)', () => {
     const text = openPopover(
       [bagItem('whet', 'whetstone', 0, 0), bagItem('fang', 'vampire-fang', 1, 0)],
       'Whetstone',

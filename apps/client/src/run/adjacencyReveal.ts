@@ -122,11 +122,47 @@ function compactLabel(effect: Effect): string {
   return describeEffect(effect) ?? effect.type
 }
 
-/** Is this host trigger's buff deterministic at arrange time? Per the ratified
- *  class-1 set: on_round_start auras + on_adjacent_trigger reaction buffs.
- *  Everything else (on_low_health today; any future host) is conditional. */
-function deterministicHost(trigger: Trigger): boolean {
-  return trigger.type === 'on_round_start' || trigger.type === 'on_adjacent_trigger'
+/** The provoker set for a reaction-host trigger: adjacent items that can fire
+ *  a top-level trigger AND pass the trigger-level matchTags. null for
+ *  non-reaction hosts (no provoker concept). SINGLE SOURCE for the gate, the
+ *  "Triggered by:" names, the determinism split, and the totals filter —
+ *  never re-derived in parallel. */
+function collectProvokers(
+  trigger: Trigger,
+  adjacents: ReadonlyArray<BagItem>,
+): BagItem[] | null {
+  if (trigger.type !== 'on_adjacent_trigger') return null
+  return adjacents.filter((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
+}
+
+/** Does this item own a top-level trigger that fires UNCONDITIONALLY —
+ *  on_round_start (tick 0) or on_cooldown (counter elapse)? on_low_health is
+ *  top-level (it CAN provoke — canProvoke stays the pair-existence predicate)
+ *  but conditional: it provokes only if its threshold is crossed. */
+function firesUnconditionally(item: BagItem): boolean {
+  return getItem(item.itemId).triggers.some(
+    (t) => t.type === 'on_round_start' || t.type === 'on_cooldown',
+  )
+}
+
+/** Ratified class-1 amendment (Codex PR-57 round-3 P2, fix round 3): "Class 1
+ *  requires the buff to be UNCONDITIONALLY LIVE for the whole combat" — (a)
+ *  applied at combat start (on_round_start aura), or (b) a reaction buff with
+ *  ≥1 provoker whose top-level trigger fires unconditionally. A reaction
+ *  whose every provoker is conditional (on_low_health-only) — or that has no
+ *  provoker at all — is NOT unconditionally live. Generative mechanism:
+ *  conditionality propagates from provoker to buff; a display class asserted
+ *  from relationship-EXISTENCE rather than firing-CERTAINTY produces a false
+ *  guarantee. ONE predicate for BOTH the aura path (host conditionality:
+ *  on_low_health host → false) and the reaction path (provoker
+ *  conditionality) — unified by construction, not two agreeing copies. */
+function unconditionallyLive(
+  trigger: Trigger,
+  provokers: ReadonlyArray<BagItem> | null,
+): boolean {
+  if (trigger.type === 'on_round_start') return true
+  if (trigger.type === 'on_adjacent_trigger') return (provokers ?? []).some(firesUnconditionally)
+  return false
 }
 
 /** Sim rule 1 statically: per SOURCE item, at most one contribution per
@@ -150,15 +186,14 @@ export function computeAdjacencyBuffTotals(bag: BagItem[]): Map<string, Received
     const applied = new Set<string>()
 
     for (const trigger of def.triggers) {
-      if (!deterministicHost(trigger)) continue
-      // Reaction-host gate (ratified): the buff only ever fires if at least
-      // one adjacent item can provoke this trigger (trigger-level matchTags).
-      if (trigger.type === 'on_adjacent_trigger') {
-        const hasProvoker = adjacents.some(
-          (a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)),
-        )
-        if (!hasProvoker) continue
-      }
+      // Ratified class-1 amendment: totals carry ONLY unconditionally-live
+      // buffs — an on_round_start aura, or a reaction buff with ≥1 provoker
+      // that fires unconditionally. Conditional hosts (on_low_health) and
+      // conditional-only provoker sets contribute nothing (no false
+      // guarantees in deltas or chips). Same collection + predicate as the
+      // row model — never a parallel check.
+      const provokers = collectProvokers(trigger, adjacents)
+      if (!unconditionallyLive(trigger, provokers)) continue
       for (const effect of trigger.effects) {
         if (effect.type !== 'buff_adjacent') continue
         if (effect.stat !== 'damage' && effect.stat !== 'cooldown_pct') continue
@@ -231,21 +266,20 @@ export function computeItemRevealRows(bag: BagItem[], uid: string): RevealRow[] 
   const rows: RevealRow[] = []
   for (const trigger of def.triggers) {
     const isReactionHost = trigger.type === 'on_adjacent_trigger'
-    // Per-trigger provoker SET, collected above the effects loop. The gate
-    // (Codex PR-57 round-1 P2) is DERIVED from this same collection — never a
-    // parallel predicate, so the "Triggered by:" line and the suppression
-    // decision cannot drift apart (fix round 2). Non-reaction hosts have no
-    // provoker concept and are always open.
-    const provokers =
-      isReactionHost === false
-        ? null
-        : adjacents.filter((a) => canProvoke(a) && tagsMatch(trigger.matchTags, getItem(a.itemId)))
+    // Per-trigger provoker SET, collected once above the effects loop. The
+    // gate (round-1 P2), the "Triggered by:" names (round 2), and the
+    // determinism split (round 3) are ALL derived from this same collection —
+    // never a parallel predicate, so none of them can drift apart.
+    const provokers = collectProvokers(trigger, adjacents)
     const gateOpen = provokers === null || provokers.length > 0
     for (const effect of trigger.effects) {
       if (effect.type === 'buff_adjacent') {
-        // Aura or reaction buff — an adjacency row either way.
+        // Aura or reaction buff — an adjacency row either way. Class 1 only
+        // when the buff is unconditionally live (ratified amendment): a
+        // conditional host OR a conditional-only (or empty) provoker set
+        // inherits class 2 — no after-value may be shown.
         const probabilistic = effect.stat === 'trigger_chance_pct'
-        const conditional = !deterministicHost(trigger)
+        const conditional = !unconditionallyLive(trigger, provokers)
         const revealClass: RevealClass = probabilistic || conditional ? 2 : 1
         const affectedItems = adjacents.filter((a) => tagsMatch(effect.matchTags, getItem(a.itemId)))
         // Ratified affected-set rule: effect-matchTags-filtered adjacents,

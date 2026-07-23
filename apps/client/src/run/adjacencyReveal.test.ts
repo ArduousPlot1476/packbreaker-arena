@@ -80,12 +80,50 @@ describe('computeItemRevealRows — three display classes', () => {
     expect(fang.deltas).toEqual([])
   })
 
-  it('gate closes: Whetstone beside ONLY Vampire Fang → row present, affected [] (no provoker, buff can never fire)', () => {
+  it('gate closes: Whetstone beside ONLY Vampire Fang → row present, affected [], class 2 (not unconditionally live)', () => {
+    // Round-3 amendment consequence: zero provokers means the buff is not
+    // unconditionally live, so the row inherits class 2 (vacuously, "every
+    // provoker is conditional"). Renders identically — the empty state line —
+    // but the classification is honest.
     const bag = [item('whet', 'whetstone', 0, 0), item('fang', 'vampire-fang', 1, 0)]
     const rows = computeItemRevealRows(bag, 'whet')
     expect(rows).toHaveLength(1)
-    expect(rows[0]!.revealClass).toBe(1)
+    expect(rows[0]!.revealClass).toBe(2)
     expect(rows[0]!.affected).toEqual([])
+  })
+
+  it('ROUND-3 FALSIFIER — conditional-only provoker: Resonance Crystal beside World-Forged Heart → class 2, ZERO totals, ZERO chips', () => {
+    // The heart can provoke (on_low_health is top-level) but never
+    // unconditionally — the reaction buff exists only if the heart drops
+    // below 50% HP. Pre-amendment this showed a guaranteed-looking 15 → 16
+    // delta and a chip. Conditionality propagates from provoker to buff.
+    const bag = [item('res', 'resonance-crystal', 0, 0), item('heart', 'world-forged-heart', 1, 0)]
+    const rows = computeItemRevealRows(bag, 'res')
+    expect(rows.map((r) => r.revealClass)).toEqual([2, 2])
+    expect(rows.map((r) => r.qualifier)).toEqual(['if triggered', 'if triggered'])
+    expect(rows[0]!.affected!.map((a) => a.uid)).toEqual(['heart'])
+    expect(rows[0]!.affected![0]!.deltas).toEqual([])
+    expect(computeAdjacencyBuffTotals(bag).get('heart')).toBeUndefined()
+    expect(computeChipEntries(bag, 'res')).toEqual([])
+  })
+
+  it('ROUND-3 quantifier falsifier — mixed provokers: Resonance + Heart + Iron Sword → class 1 with resolved deltas (one unconditional provoker suffices under `some`)', () => {
+    // The sword (on_cooldown) fires unconditionally, so the reaction buff IS
+    // unconditionally live; it applies to every matching adjacent, so the
+    // heart's 15-damage effect legitimately resolves 15 → 16.
+    const bag = [
+      item('heart', 'world-forged-heart', 0, 0),
+      item('res', 'resonance-crystal', 1, 0),
+      item('sword', 'iron-sword', 2, 0),
+    ]
+    const rows = computeItemRevealRows(bag, 'res')
+    expect(rows.map((r) => r.revealClass)).toEqual([1, 1])
+    const dmgRow = rows[0]!
+    const heart = dmgRow.affected!.find((a) => a.uid === 'heart')!
+    expect(heart.deltas).toEqual([{ kind: 'damage', before: 15, after: 16 }])
+    const sword = dmgRow.affected!.find((a) => a.uid === 'sword')!
+    expect(sword.deltas).toEqual([{ kind: 'damage', before: 4, after: 5 }])
+    expect(computeAdjacencyBuffTotals(bag).get('heart')).toEqual({ damage: 1, cooldownPct: -10 })
   })
 
   it('DoD worked case: Mana Potion → Iron Sword cooldown 50t → 42t → "4.2s" (applyPct floor + formatSeconds)', () => {
