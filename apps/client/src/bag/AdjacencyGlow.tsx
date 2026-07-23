@@ -29,11 +29,13 @@ export function AdjacencyGlow({ bag, synergies }: AdjacencyGlowProps) {
   const W = BAG_COLS * cellSize
   const H = BAG_ROWS * cellSize
 
-  // Union of every cell of every uid appearing as reactor or provoker.
+  // Union of every cell of every uid appearing as source or target — glow
+  // treatment is role- and kind-agnostic (both 'reaction' and 'aura' pairs
+  // light the same teal; the reveal card carries the semantics).
   const uids = new Set<string>()
   for (const s of synergies) {
-    uids.add(s.reactorUid)
-    uids.add(s.provokerUid)
+    uids.add(s.sourceUid)
+    uids.add(s.targetUid)
   }
   const cellKeys = new Set<string>()
   for (const b of bag) {

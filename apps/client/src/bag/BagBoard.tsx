@@ -11,10 +11,13 @@
 // — total bag area must fit 240px at 52px cells × 4 rows + 32px
 // padding, no room for the desktop header/footer).
 
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { RefObject } from 'react';
 import type { BagItem, Cell, RecipeMatch } from '../run/types';
 import { detectAdjacencySynergies } from '../run/adjacency';
+import { computeChipEntries, computeItemRevealRows } from '../run/adjacencyReveal';
+import type { RevealRow } from '../run/adjacencyReveal';
+import { AdjacencyChips } from './AdjacencyChips';
 import { AdjacencyGlow } from './AdjacencyGlow';
 import { BagCell } from './BagCell';
 import { useCellSize } from './CellSize';
@@ -58,6 +61,15 @@ interface BagBoardProps {
    * (interactive player board).
    */
   readOnly?: boolean;
+  /**
+   * Adjacency-reveal gate + presentation (CF-89 PR-A). UNDEFINED = OFF —
+   * the ratified fail-safe default: a mount that does not opt in (the
+   * RoundResolution S2b readOnly reveal, any future mount) renders zero
+   * reveal surfaces. Deliberately NOT keyed off `readOnly` — that would
+   * conflate two concerns. The two run screens opt in with their locked
+   * presentation: DesktopRunScreen 'popover', MobileRunScreen 'sheet'.
+   */
+  adjacencyReveal?: 'popover' | 'sheet';
 }
 
 export function BagBoard({
@@ -71,6 +83,7 @@ export function BagBoard({
   compact = false,
   containerRef,
   readOnly = false,
+  adjacencyReveal,
 }: BagBoardProps) {
   const cellSize = useCellSize();
   const W = BAG_COLS * cellSize;
@@ -80,6 +93,27 @@ export function BagBoard({
   // prop only because the parents also consume it, whereas synergies are used
   // solely here). One mount in BagBoard covers Desktop + Mobile run screens.
   const synergies = useMemo(() => detectAdjacencySynergies(bag), [bag]);
+
+  // CF-89 PR-A: adjacency reveal model, computed ONLY when a mount opts in
+  // (adjacencyReveal set). Ungated mounts pay nothing and render nothing.
+  const revealEnabled = adjacencyReveal !== undefined;
+  const revealRows = useMemo<ReadonlyMap<string, RevealRow[]> | null>(
+    () =>
+      revealEnabled
+        ? new Map(bag.map((b) => [b.uid, computeItemRevealRows(bag, b.uid)]))
+        : null,
+    [bag, revealEnabled],
+  );
+  // Which item's reveal is open — drives the affected-cell chips
+  // (reveal-on-intent: chips exist only while a reveal is up).
+  const [revealUid, setRevealUid] = useState<string | null>(null);
+  const onInfoOpenChange = useCallback((uid: string, open: boolean) => {
+    setRevealUid((prev) => (open ? uid : prev === uid ? null : prev));
+  }, []);
+  const chipEntries = useMemo(
+    () => (revealEnabled && revealUid !== null ? computeChipEntries(bag, revealUid) : []),
+    [bag, revealEnabled, revealUid],
+  );
 
   let preview: { valid: boolean; cells: Cell[] } | null = null;
   if (drag && hover) {
@@ -193,8 +227,14 @@ export function BagBoard({
             item={b}
             disabled={dimmed || readOnly}
             enableInfoPopover={!readOnly}
+            adjacencyRows={revealEnabled ? revealRows?.get(b.uid) : undefined}
+            revealPresentation={adjacencyReveal}
+            onInfoOpenChange={revealEnabled ? onInfoOpenChange : undefined}
           />
         ))}
+
+        {/* After the tiles so chips paint on top of the items they annotate. */}
+        {revealEnabled && <AdjacencyChips bag={bag} entries={chipEntries} />}
       </div>
       {!compact && (
         <div className="flex items-center justify-between mt-2" style={{ width: W }}>

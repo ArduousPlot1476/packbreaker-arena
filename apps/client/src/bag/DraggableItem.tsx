@@ -9,13 +9,14 @@
 // inner button. A pointerdown on the inner button still bubbles to the outer
 // drag listeners, so dragging works from anywhere on the item.
 
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ICONS } from '../icons/icons';
 import { ITEMS } from '../run/content';
 import { ItemInfoPopover } from '../items/ItemInfoPopover';
 import { INSPECT_TRIGGER_STYLE, useItemInfoTrigger } from '../items/useItemInfoTrigger';
+import type { RevealRow } from '../run/adjacencyReveal';
 import type { BagItem } from '../run/types';
 import { useCellSize } from './CellSize';
 import { dimsOf } from './layout';
@@ -32,12 +33,29 @@ interface DraggableItemProps {
    * player-only inspector onto the opponent's bag.
    */
   enableInfoPopover?: boolean;
+  /**
+   * Adjacency reveal rows for this item (CF-89 PR-A), forwarded to
+   * ItemInfoPopover. Omitted (the default, and every ungated mount) = the
+   * popover renders its plain CF 57 shape.
+   */
+  adjacencyRows?: ReadonlyArray<RevealRow>;
+  /** Popover presentation; the mobile run screen threads 'sheet'. */
+  revealPresentation?: 'anchored' | 'sheet';
+  /**
+   * Open/close notifications for the inspect popover, keyed by this item's
+   * uid — BagBoard uses it to render affected-cell chips for the OPEN reveal
+   * (reveal-on-intent). Absent on ungated mounts.
+   */
+  onInfoOpenChange?: (uid: string, open: boolean) => void;
 }
 
 export function DraggableItem({
   item,
   disabled = false,
   enableInfoPopover = false,
+  adjacencyRows,
+  revealPresentation,
+  onInfoOpenChange,
 }: DraggableItemProps) {
   const cellSize = useCellSize();
   const def = ITEMS[item.itemId];
@@ -59,6 +77,18 @@ export function DraggableItem({
   const infoEnabled = enableInfoPopover && !disabled;
   const info = useItemInfoTrigger(infoEnabled);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Chip coordination (CF-89 PR-A): report open/close so BagBoard can render
+  // affected-cell chips for the open reveal. Cleanup signals close on unmount
+  // (e.g. the item is sold/combined while its popover is up).
+  const infoOpen = info.open;
+  useEffect(() => {
+    if (!onInfoOpenChange) return;
+    onInfoOpenChange(item.uid, infoOpen);
+    return () => {
+      if (infoOpen) onInfoOpenChange(item.uid, false);
+    };
+  }, [infoOpen, item.uid, onInfoOpenChange]);
 
   const visual = (
     <RarityFrame rarity={def.rarity} w={dims.w} h={dims.h} size={cellSize - 4}>
@@ -112,6 +142,8 @@ export function DraggableItem({
           open={info.open}
           onClose={info.close}
           anchorRef={triggerRef}
+          adjacencyRows={adjacencyRows}
+          presentation={revealPresentation}
         />
       )}
     </>

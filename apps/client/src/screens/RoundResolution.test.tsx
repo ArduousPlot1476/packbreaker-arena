@@ -104,6 +104,31 @@ describe('RoundResolution — CF-85 Surface 2b opponent-build reveal', () => {
     expect(getByText('NEXT ROUND →')).toBeInTheDocument();
   });
 
+  it('CF-89 PR-A gate: the S2b readOnly mount renders ZERO adjacency-reveal surfaces even over a LIVE synergy pair', () => {
+    // Ghost bag with a real reaction pair (whetstone beside iron-sword) AND a
+    // real aura pair (mana-potion beside iron-sword): if the reveal were
+    // inheriting into this mount, every surface below would render. The
+    // RoundResolution BagBoard passes NO adjacencyReveal prop (default OFF —
+    // the ratified fail-safe direction, decision-log.md 2026-07-22
+    // § "CF-89 L1/L2 PHASE 1 RATIFIED …" § 4), so none may appear.
+    const synergyGhostBag: BagItem[] = [
+      { uid: 'g0', itemId: 'iron-sword' as ItemId, col: 0, row: 0, rot: 0 },
+      { uid: 'g1', itemId: 'whetstone' as ItemId, col: 1, row: 0, rot: 0 },
+      { uid: 'g2', itemId: 'mana-potion' as ItemId, col: 1, row: 1, rot: 0 },
+    ];
+    const { getByTestId, queryByTestId } = render(
+      <RoundResolution
+        {...baseProps()}
+        opponentBuild={{ classLabel: 'Tinker', bagItems: synergyGhostBag }}
+      />,
+    );
+    fireEvent.click(getByTestId('view-opponent-build'));
+    expect(getByTestId('opponent-build-board')).toBeInTheDocument();
+    expect(queryByTestId('adjacency-section')).toBeNull();
+    expect(queryByTestId('adjacency-chips')).toBeNull();
+    expect(queryByTestId('adjacency-chip')).toBeNull();
+  });
+
   it('draw outcome still renders the reveal (mutual-KO draws are exactly where "what killed me" matters)', () => {
     const { getByTestId } = render(
       <RoundResolution

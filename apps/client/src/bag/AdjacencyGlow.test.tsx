@@ -9,7 +9,7 @@ import { AdjacencyGlow } from './AdjacencyGlow'
 
 const SWORD: BagItem = { uid: 'sword', itemId: 'iron-sword' as ItemId, col: 0, row: 0, rot: 0 } // 1×2 V → 2 cells
 const WHET: BagItem = { uid: 'whet', itemId: 'whetstone' as ItemId, col: 1, row: 0, rot: 0 } // 1×1 → 1 cell
-const SYNERGY: AdjacencySynergy = { reactorUid: 'whet', provokerUid: 'sword' }
+const SYNERGY: AdjacencySynergy = { sourceUid: 'whet', targetUid: 'sword', kind: 'reaction' }
 
 describe('AdjacencyGlow', () => {
   it('renders a rect for every cell of both items in a synergy', () => {

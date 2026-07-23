@@ -139,6 +139,7 @@ export function MobileRunScreen() {
               combineRejection={combineRejection}
               compact
               containerRef={bagContainerRef}
+              adjacencyReveal="sheet"
             />
           </div>
           {activeTab === 'shop' && (

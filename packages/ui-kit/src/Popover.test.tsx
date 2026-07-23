@@ -84,3 +84,57 @@ describe('Popover — focus contract (Rule 12)', () => {
     expect(document.activeElement).toBe(dialog);
   });
 });
+
+describe('Popover — sheet presentation (CF-89 PR-A)', () => {
+  function SheetHarness({ initialOpen = true }: { initialOpen?: boolean }) {
+    const [open, setOpen] = useState(initialOpen);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    return (
+      <>
+        <button ref={triggerRef} data-testid="trigger" onClick={() => setOpen(true)}>
+          open
+        </button>
+        <Popover
+          open={open}
+          onClose={() => setOpen(false)}
+          anchorRef={triggerRef}
+          ariaLabel="Item info"
+          presentation="sheet"
+        >
+          <div>Sheet body</div>
+        </Popover>
+      </>
+    );
+  }
+
+  it('renders the same labelled dialog contract, pinned to the bottom edge and always visible', () => {
+    render(<SheetHarness />);
+    const dialog = screen.getByRole('dialog', { name: 'Item info' });
+    expect(dialog).toHaveTextContent('Sheet body');
+    // Edge-pinned, not anchor-positioned: bottom 0, full width, no
+    // hidden-until-measured phase (anchored mode hides until pos lands).
+    expect(dialog.style.bottom).toBe('0px');
+    expect(dialog.style.left).toBe('0px');
+    expect(dialog.style.right).toBe('0px');
+    expect(dialog.style.visibility).not.toBe('hidden');
+    // Capped height so the board above the sheet stays fully visible.
+    expect(dialog.style.maxHeight).toBe('45vh');
+  });
+
+  it('keeps the Rule 12 close paths: Esc closes and returns focus to the trigger', () => {
+    render(<SheetHarness />);
+    const dialog = screen.getByRole('dialog', { name: 'Item info' });
+    expect(document.activeElement).toBe(dialog);
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId('trigger'));
+  });
+
+  it('keeps the scrim (aria-hidden), and tap-away closes', () => {
+    render(<SheetHarness />);
+    const scrim = screen.getByRole('dialog').previousElementSibling as HTMLElement;
+    expect(scrim.getAttribute('aria-hidden')).toBe('true');
+    fireEvent.pointerDown(scrim);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
