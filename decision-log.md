@@ -4,6 +4,60 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-24 — CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE about shipped code — `shouldEndRun` records `'eliminated'` for ANY round-11 loss regardless of hearts, never `'won'`; replacement ruling RATIFIED — the `'eliminated'` ENUM stands with ZERO code change, and the original rationale is recorded as having argued AGAINST what the code actually does; CF-92 OPENED (distinct run-end render for a boss-loss elimination — CF-91 shape, display-only, enum and economy byte-untouched); Catch 96 + Drift 75 (master-dev, Class A / Rule 30 — a balance-bible TBD read as shipped state, propagated into canon AND into two bible sections); Rule 36 mechanism instance (no new ordinal); balance-bible.md § 15 "Lose:" + § 18 item 4 CORRECTED in place; CF-87 stays OPEN; counter 95/36/10/74/52 → 96/36/10/75/53
+
+Docs-only, insertion-only, two files. Baseline tip `8efb7da` (decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …") carrying **95/36/10/74/52**. That entry is NOT edited — its § 7 stays readable as authored. No code, schema, content, corpus, or migration change. Surfaced by Claude Code during the CF-87 Phase 2 visual probe, on the first real-play boss loss ever observed.
+
+### 1 — THE PREMISE WAS FALSE (code quoted, not described)
+§ 7 ruled "CURRENT BEHAVIOR STANDS" on the stated basis that a hearts-remaining boss loss already records `outcome: 'won'`. Observed at the probe (player lost the boss holding 2 of 3 hearts): the run ended `'eliminated'`. Path — `applyCombatOutcome` collapses the boss win to `roundOutcome = 'loss'`; `advancePhase` (`state.ts:555-559`): `const lastOutcome = this.lastCombatOutcomeForRound();` then `if (this.shouldEndRun(lastOutcome)) { this.endRun(lastOutcome === 'win' ? 'won' : 'eliminated'); return; }`; `shouldEndRun` (`state.ts:1283-1290`) takes `if (this.currentRound >= this.effectiveRuleset.maxRounds) { … return true; }` — the `if (this.hearts <= 0) return true;` guard is NOT the one taken, hearts are 2; `endRun` (`state.ts:1295-1306`) assigns `this.outcome = outcome`, here `'eliminated'`. The comment at `state.ts:1286` states it outright: `// At the max round: any termination ends the run. Win → 'won', loss → 'eliminated'.` `run_end` emitted `outcome: 'eliminated'`, `heartsRemaining: 2`.
+
+**VACATED, NOT CORRECTED.** § 7's frame was that code had pre-decided the question. With that premise false, the ruling is void rather than mis-worded — a ruling and its stated basis stand or fall together.
+
+### 2 — REPLACEMENT RULING RATIFIED: THE ENUM STANDS
+The run ends at round 11 regardless of hearts. ANY round-11 loss — hearts exhausted or boss defeat with hearts remaining — records `outcome: 'eliminated'` and FORFEITS the reward. **ZERO code change**; the sim is correct and always was. `RunOutcome` gains no member; no schema change; no corpus impact.
+
+**RATIONALE, RESTATED HONESTLY.** § 7 argued that `'eliminated'` with hearts remaining "breaks the hearts contract" — an argument AGAINST the behavior now ratified. The conclusion (no code change) survives; its original reasoning does not. Recorded so a future reader does not mistake a lucky conclusion for a sound derivation. The actual basis: the enum records that the run ended in failure, which is true; `'won'` over a fight the player watched their character lose would be the dishonest render CF-84 exists to prevent, inverted.
+
+### 3 — THE PLAYER-FACING COST IS REAL, AND § 4 IS ITS DISPOSITION
+At balance-bible.md § 15's ~30% first-attempt target, roughly 70% of players who reach round 11 will lose the boss holding hearts and read "eliminated." One string carries two run shapes. The ENUM is ratified (§ 2); the STRING is a defect. Route (D) is what makes it observable — it was latent and unreachable before. The cost is accepted only in the interval between this entry and § 4's CF landing.
+
+### 4 — CF-92 OPENED: distinct run-end render for a boss-loss elimination
+Opens the CF for a RunEndScreen render distinguishing "reached round 11, lost the boss with hearts remaining" from "hearts exhausted." **CF-91 shape** (decision-log.md 2026-07-22 § "CF-91 CLOSED (merge `1dc785a`): run-end honest-draw display shipped …"): the `RunOutcome` enum, the economy, and every consumer stay byte-untouched; only what the player reads changes.
+
+**SCOPE — opens on the PROBLEM, not a solution.** Whether the distinction is derivable from existing `RunState` fields (`hearts` / `currentRound` / `outcome`) or requires an additive field is its Phase 1's question. **UNVERIFIED HERE** — RunEndScreen's props have not been inspected this session, and no claim about them is made (Rule 30 posture). Telemetry needs nothing: `run_end` already carries `heartsRemaining` alongside `roundReached`, so both elimination shapes are distinguishable in PostHog today.
+
+**SEQUENCING.** Does NOT ride the CF-87 Phase 2 PR, which is in flight on `cf87-boss-chokepoint` and touches no run-end logic — folding it in would be scope creep on an open branch. Sequenced after CF-87. Rule 20: no implementation prompt cites this opening until this entry carries a real SHA. M2. **OPEN.**
+
+**ORDINAL.** Resolved by a live walk this session (tip `8efb7da`): grep of decision-log.md for `CF-9[0-9]` and `CF-[1-9][0-9][0-9]` returns only CF-90 and CF-91 at or above the highest confirmed opening. **CF-90 = OPENING** (decision-log.md 2026-07-21 § "`replay_viewed` telemetry CF OPENED at CF-90 …"). **CF-91 = OPENING** (decision-log.md 2026-07-21 § "CF-91 OPENED: run-end per-round strip renders draw as loss …"; CLOSED at decision-log.md 2026-07-22 § "CF-91 CLOSED (merge `1dc785a`) …"). No `CF-92`-or-higher token appears anywhere — no non-opening mention to overshoot on (contrast the CF-90 ratified-override case, decision-log.md 2026-07-21 § "`replay_viewed` telemetry CF OPENED at CF-90 …", where four `CF-90` mentions in `bf92671` inflated the naive walk). Highest minted = CF-91; next-free resolves to exactly **CF-92**.
+
+### 5 — CATCH 96 + DRIFT 75 (master-dev, Class A / Rule 30, post-propagation)
+**MECHANISM: a balance-bible TBD read as shipped state.** The CF-87 Phase 1 report was ACCURATE — it stated that `shouldEndRun` ends the run at `currentRound >= maxRounds` regardless of outcome or hearts, a claim about TERMINATION, and true. Master-dev converted it into a claim about OUTCOME RECORDING (`records outcome: 'won'`), which the report never made and nothing verified. The `'won'` came from balance-bible.md § 15's own TBD speculation ("or `outcome: 'won'` if the player… los[es] the boss combat itself — **TBD**"). A TBD is a question, not a finding.
+
+PROPAGATION: into canon at `8efb7da` § 7, and from there into balance-bible.md § 15 and § 18 item 4 via that entry's § 9. Surfaced by Claude Code post-execution → **COUNTED** per decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge …" § 13. **NO CATCH on Claude Code** — it implemented a ratified ruling faithfully and is the actor that caught it.
+
+**RULE 36 MECHANISM INSTANCE, no new ordinal.** Master-dev cited the artifact where the claim was ENCOUNTERED (the bible's TBD) as though it described the artifact that AUTHORS the behavior (`state.ts`). Rule 36 was minted at decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …" § 14 for exactly this; its first post-codification instance appears in the arc that minted it. Strengthens the codification; requires nothing new.
+
+### 6 — BIBLE CORRECTIONS (Rule 33)
+(a) § 15 "Lose:" line and (b) § 18 item 4 both corrected in place to § 2's ruling, replacing the `'won'` text landed at `8efb7da`. § 18 item 4's original proposal/alternative preserved as superseded. NOT touched: § 15 L307, which stays DEFERRED to the Phase 2 close per decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …" § 9(e). balance-bible.md is re-uploaded to project knowledge after this commit (Rule 35 rider, carried).
+
+### 7 — CF-87 UNAFFECTED
+The Phase 2 PR touches no run-end logic; route (D)'s rulings live at decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …" §§ 4, 5, 6, 8, none of which depend on § 7. CF-87 stays OPEN.
+
+### Counter
+Ordinal walk live from canon at tip `8efb7da`; baseline **95/36/10/74/52**.
+
+Deltas by ID: catches **+1** (Catch 96); rules **+0** (Rule 36 instance referenced, not re-minted); patterns **+0**; drifts **+1** (Drift 75 → Catch 96); open-CFs **+1** (CF-92 OPENED, § 4; NONE closed — CF-87 stays OPEN).
+
+Running line: **95/36/10/74/52 → 96/36/10/75/53** — catches **96** / rules **36** / patterns **10** / drifts **75** / open-CFs **53**.
+
+Anchor: docs-only, so this entry's own docs commit is BOTH the counter anchor and the entry anchor.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-87** — boss-encounter wiring. Stays **OPEN**. Phase 2 PR in flight on `cf87-boss-chokepoint`, unaffected by this supersession.
+- **CF-92** — distinct run-end render for a boss-loss elimination. **OPENED** (this entry, § 4). Display-only, CF-91 shape, M2, sequenced after CF-87. Rule 20-gated on this entry's SHA.
+
+---
+
 ## 2026-07-24 — CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss (A wrong bag / B wrong stats + architecture inversion / C rejected on M2-replacement + full-regen cost); SCOPE REDUCED — the FORGE_TYRANT bag, forge-tyrant-boss contract, mutators, sim application path, reward gate, and D2 tile ALL ALREADY SHIP, leaving ~5-6 files of client wiring at ZERO corpus cost; mutator sourcing ROUND-KEYED (contract swap REJECTED — collides with CF-68); round predicate LITERAL `=== 11` (bossRound stays zero-consumer, first-consumer converts both sites in one act); hpOverride two-site split made deliberate + relics carry verbatim; bible § 15 bag AMENDED to shipped content and § 18 item 4 boss-loss lever RULED (current behavior stands: run ends, `outcome: 'won'`, reward forfeit); CF-87 closure criterion PINNED to configuration + tile readability, NOT the ~30% band; master-dev architectural framing REFUTED by this Phase 1 — NO ordinal, design-prediction class, ratified by non-overrule; Catch 93 + Drift 72 (master-dev, Phase 1 prompt — two instances, one authoring act) + Catch 94 + Drift 73 (Claude Code, Phase 1 report — commit-site vs catch-site mis-attribution) + Catch 95 + Drift 74 (master-dev, this close prompt — two clauses, one authoring act); the stale-path CONDITIONAL CATCH DROPPED, no ordinal (already dispositioned 2026-07-19; re-minting would double-count); Rule 36 NEW (cite the authoring artifact, not the encountering artifact); three candidates HELD, NONE opened; CF-87 stays OPEN → Phase 2; counter 92/35/10/71/52 → 95/36/10/74/52
 
 Docs-only, insertion-only, two files (decision-log.md + balance-bible.md). Baseline tip `e7b6ddc` (decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge …") carrying **92/35/10/71/52**. Source: the CF-87 Phase 1 read-only investigation (this session, zero mutations, tree = session-start). No code, schema, content, corpus, or migration change. Rule 20: no Phase 2 implementation prompt cites this entry until it carries a real SHA.

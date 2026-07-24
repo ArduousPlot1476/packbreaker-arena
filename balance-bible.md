@@ -336,7 +336,7 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost, but with overr
 
 ### Reward
 - Win: choose 1 of 3 from { `world-forged-heart` (Legendary), one random Epic, the boss relic for the player's class }.
-- Lose: the run ends at Round 11 regardless of outcome. Hearts hitting 0 in the boss fight ends the run with `outcome: 'eliminated'`; losing the boss combat with ≥1 heart remaining ends the run with `outcome: 'won'` and FORFEITS the reward. RATIFIED (was TBD) — decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …"; the boss-loss lever is § 18 item 4.
+- Lose: the run ends at Round 11 regardless of outcome. Hearts hitting 0 in the boss fight AND losing the boss combat with ≥1 heart remaining BOTH end the run with `outcome: 'eliminated'` and FORFEIT the reward. RATIFIED — decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE …" (supersedes the earlier `'won'`-on-hearts-remaining reading; the sim records `'eliminated'` for any max-round loss). The boss-loss lever is § 18 item 4.
 
 ---
 
@@ -392,7 +392,7 @@ These are tuning questions that can't be answered until M1 graybox runs:
 1. **Base HP (30) vs (40)** — at 30 HP, a single Greatsword (12 dmg/hit, 60 cd) deals 24 dmg in 12s, which is most of a player's HP. May feel too lethal. Consider 40.
 2. **Reroll cost curve** — `gdd.md` § 17 question 7. Currently start at 1, +1 per reroll. Alternative: start at 2, flat. Affects shop optimization tempo.
 3. **Recipe `rotationLocked: false` always** — should we ship one or two `rotationLocked: true` recipes to test directional play? Defer to M2 unless a pre-M1 review changes our minds.
-4. **Boss-fight loss handling** — **RULED** (decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …"): the run ends at Round 11 regardless of outcome; losing the boss with ≥1 heart remaining records `outcome: 'won'` and forfeits the reward, and hearts hitting 0 in the boss fight records `outcome: 'eliminated'`. *Superseded proposals, kept for the record: lose your last heart, run ends `outcome: 'eliminated'` but still credits "reached round 11" progress for daily contracts; or, boss is best-of-three.*
+4. **Boss-fight loss handling** — **RULED** (decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE …"): the run ends at Round 11 regardless of outcome; ANY round-11 loss — hearts exhausted OR losing the boss combat with ≥1 heart remaining — records `outcome: 'eliminated'` and forfeits the reward. (The earlier `'won'`-on-hearts-remaining reading, from decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …" § 7, is VACATED — the sim records `'eliminated'` for any max-round loss; `shouldEndRun` never produces `'won'` for a loss.) *Superseded proposals, kept for the record: lose your last heart, run ends `outcome: 'eliminated'` but still credits "reached round 11" progress for daily contracts; or, boss is best-of-three.*
 5. **Class-affinity pool weights (+50% / −25%)** — first numbers. May need to widen to make classes feel more distinct, or tighten if they feel too restrictive.
 6. **Status stack caps (10)** — picked from gut. May cap lower (5) if poison stacks become the dominant build. Telemetry-driven.
 7. **Vampire Fang lifesteal (`heal(2)` per `on_hit`)** — flat heal not scaled to damage dealt. Alternative: percentage-based lifesteal. Flat is easier to author, probably needs no change for M1.
