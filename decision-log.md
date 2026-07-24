@@ -4,6 +4,177 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-23 — CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon): the four-run note returned all three clauses RESOLVED, clauses INVERTED from two prior verbatim-identical rounds; GENERATIVE FINDING — strategy comprehension is DOWNSTREAM of mechanical legibility, so L2 recipe lookahead is DEMOTED to a held candidate, not opened; CF-83 clause 1b MET (0/196 tick-cap draws post-ramp, longest tick 500/509/507/509 against a 600 cap) with its rule-of-three limit recorded not buried; ramp engagement QUANTIFIED at 14.8% `ramp_ko` (nobody forecast it); Catch 89 (Claude-Code, false-completion ledger, no paired drift) + Catch 90 + Drift 69 (master-dev, THREE instances bundled under one ordinal: an analytical query whose output label asserts a conclusion its construction cannot support) + Catch 91 + Drift 70 (master-dev, Class A / Rule 30 — TEN unverified source-of-truth assertions from ONE authoring act) + Catch 92 + Drift 71 (master-dev, same mechanism, SEPARATE authoring act — the amendments block itself, ordinal-split per the bundling rule this entry states); all twelve gate-surfaced by decision-log-close and its verification fan-out before landing; Rule 35 NEW (canonical-copy sync); Rule 28 needs NO widening — already widened at 2026-07-19 § "CF-64 CLOSED …" (no scope note, no ordinal); seven of nine held candidates got real evidence, NONE opened; counter 88/34/10/68/53 → 92/35/10/71/52
+
+Docs-only, insertion-only. Baseline tip `ff986cc` (decision-log.md 2026-07-23 § "CF-89 PR-A CLOSED: L1 adjacency-effect reveal shipped …") carrying **88/34/10/68/53**. No PR, no merge, no code, schema, content, corpus, or migration change. The artifact this entry reports on — merge `3e35f40` — is ALREADY in canon; what is new here is the **MEASUREMENT**. `3e35f40` is CF-89's ARTIFACT anchor; because this entry is docs-only, its own docs commit is BOTH the counter anchor and the entry anchor.
+
+### 1 — THE MEASUREMENT: four-run note, third round, clauses INVERTED
+The five-run note has been posed three times. The first two rounds (decision-log.md 2026-07-19 § "COMBAT NON-RESOLUTION + LEGIBILITY diagnosed …" and 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …") returned **verbatim-identical** clauses. This round, on `ff986cc`, four runs returned all three RESOLVED:
+
+- "I understand how my objects create advantage"
+- "I can see and understand what the ghost uses against me"
+- "I understand where is the strategic logic behind choosing and placing comes from"
+
+**Instrument fidelity.** Clause 3 preserved the original's grammar with the negation stripped — a transformation of the prior note, not fresh prose. The comparison is sound because the instrument did not change between rounds.
+
+**BASIS: four runs on `ff986cc`.** A fifth run in the raw window (`run-3654608534`, client `0.0.1+16ca9e7`, started 2026-07-23T02:43Z — **2026-07-22 21:43 local**) is **EXCLUDED** — different build, prior day, and already recorded in canon as separate evidence. `16ca9e7` is `m2-cf89-pra-l1-adjacency-reveal` work fully contained in `3e35f40` (`git branch -a --contains 16ca9e7` → `m2-cf89-pra-l1-adjacency-reveal`, `main`, `remotes/origin/main`), so that run DID see the reveal; it is excluded for **heterogeneity, not irrelevance**. The sample is smaller than both prior rounds and is recorded as such.
+
+### 2 — CF-89 CLOSED
+Artifact anchor `3e35f40` (the already-merged PR-A). CF-89 closes on **MEASUREMENT**, not on a new merge.
+
+CF-89 was opened on a **COVERAGE-AXIS SPLIT** (decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …"): the strategy clause divides into **PLACING**, declared COVERED by shipped CF-60 + recipe glow, and **CHOOSING + explanatory-WHY**, declared UNCOVERED — which became CF-89.
+
+**GENERATIVE FINDING: the split was real, but the operative dimension was DEPTH, not AXIS.** CF-60 covered placing at **BINARY** depth — *these two items interact*. PR-A deepened the **SAME** surface to **RESOLVED-VALUE** depth — *this item gives that item +1, right now, in this layout*. That deepening resolved the choosing/why clause with **ZERO choosing-side surface built**: no shop-card affordance shipped, and held candidate (b) confirms the shop card still has none. The uncovered thing was not a different axis; it was **the same axis at insufficient depth**.
+
+**A CF closes when its problem is gone, not when its planned PR list is exhausted.** PR-B was planned, not promised.
+
+### 3 — L2 RECIPE LOOKAHEAD DEMOTED TO HELD CANDIDATE
+Not opened as a CF. If L2 rode CF-89 it would inherit a justification now **measured false**. Its Phase 1 stays ratified at `1fb51c6` (decision-log.md 2026-07-22 § "CF-89 L1/L2 PHASE 1 RATIFIED …") and nothing is lost by waiting. Any future opening rests on a **DIFFERENT** rationale — recipe discoverability for a non-author player — which has **ZERO measured evidence today**.
+
+### 4 — AUTHOR-COMPREHENSION CONFOUND (recorded; caps the result)
+The instrument is sensitive in **one direction only**: a verbatim return from the author is devastating evidence, but resolution by the author is **necessary and not sufficient** for a stranger. This is a structural limit of solo self-certification, not a defect of this round. No tester recruitment is proposed here.
+
+### 5 — CF-83 CLAUSE 1b MET
+Pre-ramp (07-07 → 07-19): **260 combats, 33 tick-cap draws = 12.69%, 2 mutual-KO = 0.77%**. Both reproduce canon's ratified fractions **exactly** — decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED …" records verbatim "tick-cap draws 33/260=12.7%; sub-cap (mutual-KO) draws 2/260=0.77%", and CF-83's Clause 1b names "Baseline to beat: 12.7% (33/260)". The query therefore validates against two independently-known numbers before being trusted on the new window. (12.69% is the unrounded form of canon's 12.7%; the fractions are identical.)
+
+Post-ramp (07-21 → 07-24): **196 combats, 0 tick-cap draws = 0%, 7 mutual-KO = 3.57%**.
+
+**TIMEZONE (load-bearing for § 1's exclusion).** All PostHog timestamps are UTC; decision-days are local (America/Chicago, UTC−5). The post-ramp window 07-21 → 07-24 UTC is correct as written — neither query carried an upper bound. In UTC all four `ff986cc` runs and the excluded `16ca9e7` run share the date 07-23; in local time the `16ca9e7` run started 2026-07-22 21:43 and the four started 16:21–18:55 on 07-23. **The prior-day exclusion in § 1 is only legible in local time.**
+
+**SPLIT CLEANLINESS — unambiguous by construction.** 2026-07-20, the CF-83 merge day, carries **ZERO combats**, so no day straddles the deploy. Pre-ramp is 07-07→07-19 (25+18+10+21+74+31+20+61 = 260; tick-cap 7+3+0+3+12+2+1+5 = 33). Post-ramp is 07-21→07-24 (107+37+48+4 = 196; tick-cap 0).
+
+**PROVENANCE CAVEAT.** The post-ramp window includes 07-21 and 07-22 play whose provenance is not established here. The four-run session **ALONE** contributes 42 combats with 0 tick-cap draws, so the conclusion is 0% on **both the broad and the narrow denominator**.
+
+**MECHANISM EVIDENCE, stronger than the rate:** per-run longest tick **500 / 509 / 507 / 509** against a 600 cap. Tick-600 is not rare — it is **structurally unreachable**.
+
+**HONEST LIMIT, recorded not buried:** 0/196 gives a 95% upper bound of **1.53%** by the rule of three (3/196), so the sample **alone** does not establish <1% at 95% confidence. **RULED MET regardless** — clause 1a already proved construction, and the tick distribution shows the mechanism operating in production. Clause 1b was a **named verification, NOT an open CF** (the M1-exit-gate deferral precedent), so discharging it moves **NO counter axis**.
+
+### 6 — RAMP ENGAGEMENT QUANTIFIED (new; nobody forecast it)
+Post-ramp `endReason`: **29 `ramp_ko` of 196 = 14.8%**; 167 `ko` (29 + 167 = 196). The **61 blank-`endReason` rows are all 07-19** — before the field existed on either peer (first `endReason` code `8744da2`, 2026-07-20, "feat(sim,client): CF-83 ceiling-decrement resolution ramp + CF-84 honest draw semantics (PR-A code)"). They are **pre-feature nulls, not transition-window nulls**, and fall outside the post-ramp window entirely. **Query scope, stated so the claim is not over-read:** the `endReason` query covered ~07-17 onward (7-day window); within it the ONLY blank rows are those 61, exactly 07-19's combat count. Days 07-07→07-16 were **outside the query and are not claimed either way**.
+
+Pre-ramp tick-cap draws were 12.7%; post-ramp tiebreaker resolutions are 14.8%. **NEARLY THE SAME POPULATION, now decided rather than drawn.** CF-83 was scoped as a resolution fix, explicitly not a lethality fix — this is the **first quantification of the residual**: ~15% of combats still do not resolve on item damage, and the ramp **MASKS** that rather than removing it. It is leader-preserving, so the outcome is not arbitrary. Whether a ramp-decided win **READS as earned** is a legibility question the note does not cover. **CANDIDATE, NOT OPENED.**
+
+### 7 — MUTUAL-KO RATE UP 4.6× (0.77% → 3.57%)
+Predictable and designed-in: the ramp drains both sides simultaneously. Recorded because it **moved and was not forecast**.
+
+### 8 — SIDE-CHANNEL CANDIDATE DISPOSITIONS
+Seven of the nine candidates held at decision-log.md 2026-07-23 § "CF-89 PR-A CLOSED …" § 9 got real evidence from one session. **NONE opened.**
+
+- **(a) glow saturation — RULED AGAINST, no CF.** Reported in play as "telling me what items are affected" at density. This was canon's "strongest candidate for its own CF"; the playtest disposed of it.
+- **(b) shop-card affordance — WEAKENED, held.** Purchase clarity held; the R1-Whetstone-class error did not recur. The author confound (§ 4) applies.
+- **(c) class-2 "if triggered" copy — did not surface. HELD.**
+- **(d) empty-state disambiguation — the state NEVER FIRED across four runs.** Priority collapses. HELD.
+- **(e) inert-buff row — did not surface. HELD.**
+- **(f) class-1/2 reveal at the S2b mount — JUSTIFICATION WEAKENED, HELD.** Canon says clause 2 **MOVED** / was addressed by "the primary clause-2 leg" (CF-85 PR-B) — never "resolved," and a leg is not the whole answer. This round's note returns clause 2 comprehended, which shows the **EXISTING** leg suffices; it does **not** show the held candidate is worthless. **NOTE THE CIRCULARITY, recorded rather than relied on:** the gloss "what the ghost uses against me" attaches in canon to this very held, unbuilt candidate.
+- **(i) Marauder invisibility — SECOND real-play observation** ("just differently-flavored"). **CF-86 STRENGTHENED, not rescoped.**
+
+### 9 — CF-87 STRENGTHENED (not rescoped)
+Three of three completed runs won at **round 11**. `telemetry-plan.md` § 4 names a median pinned at 11 as the "boss too easy" signal. Canon records that neutral real-play runs never fight the § 15 Forge Tyrant while still collecting its round-11 reward. **Deferral cost now OBSERVED, not inferred** — the same shape as candidate (i).
+
+### 10 — M2 PACING — FIRST READ, n=2
+Only **two** runs yield a valid completed wall-clock: **15.28 and 17.18 min**, both inside the 12–20 band that M1 retired and deferred to M2. `run-805796263` completed but was left open (108.92-min span — **not a play duration**). `run-31235681` was **INCOMPLETE at pull time**; its 8.37 min is a partial span to the last event, **NOT a run length**. n=2 is directionally positive and is explicitly **NOT a pacing validation**.
+
+Outcome split, four runs / 42 combats: **37 player_win / 3 ghost_win / 2 draw (88.1% / 7.1% / 4.8%)**, against 2026-07-19's 83.8% / 2.7% / 13.5%. Draws converted **mostly to wins, some to losses**; the loss rate rose **2.6× (2.7% → 7.1%)** off a very low base.
+
+### 11 — CATCH 89 (Claude-Code-side, false-completion ledger, GATE-SURFACED)
+A definition-of-done ledger reported items 1–6 ✅ "reported verbatim" while the message itself contained only a **structural summary**; the raw output was delivered one turn later, self-corrected, with the gap named. Rule 10 category 5 ("Verbatim output presence vs structural summary"). **Rule 10 category 5's literal scope is Step 1 reports; applying it to a DoD ledger is a SCOPE EXTENSION, recorded as such. No ordinal.** Surfaced at the Step-2 authorization gate by master-dev.
+
+**NO PAIRED DRIFT** — per the Catch 68 author-agnostic precedent (followed by Catch 71 and Catch 74). Pairing is a **per-catch ruling, not an author-side law**: Catch 85 is Claude-Code-side and did take paired Drift 65. **RULING (master-dev):** Catch 89 takes no paired drift because **no trackable Topic exists on the Claude-Code side** — a single ledger overstatement, no second instance. Drift 65 was minted for Catch 85 because that catch **WAS** a recurring process drift. **Pairing turns on Topic existence, not author side.** The recurring half of Catch 89 is master-dev-side (the self-attesting-DoD authoring root below) and is already recorded as a held convention.
+
+**ROOT, master-dev-side and recorded as the more useful half:** the DoD items were authored as **SELF-ATTESTATIONS** ("reported verbatim") rather than **ARTIFACT ASSERTIONS** ("reply contains raw `git rev-parse` output"). A DoD checkbox the acting party ticks about its own compliance **cannot fail**. **HELD** as a prompt-authoring convention — first instance, and the standing restraint against codifying process apparatus on one instance applies.
+
+### 12 — CATCH 90 + DRIFT 69 (master-dev; THREE INSTANCES BUNDLED under one generative mechanism)
+**MECHANISM: an analytical query whose OUTPUT LABEL asserts a conclusion its CONSTRUCTION cannot support.**
+
+- **Instance 1** — an `endReason`-vs-tick query authored as a CF-88 cause check. `endReason` is **DERIVED** from tick, so the query could return nothing but perfect agreement; it did (`ramp_ko` ⟺ ≥500, `ko` ⟺ <500, zero crossover). It would have been read as "CF-88 shows zero production instances" — **a false finding one step from canon**. Master-dev had flagged the derivation in the same turn and then built the query that assumes it away.
+- **Instance 2** — `git merge-base --is-ancestor 16ca9e7 3e35f40` authored as a predates-the-arc test and labeled `PRE-PR-A`. A merge commit's ancestry includes **BOTH parents**, so every commit on the feature branch passes; the test cannot separate the two cases it was written to separate. `git branch --contains` did the actual work.
+- **Instance 3** — a per-`runId` min-to-max event-span query labeled `wall_clock_min` and read as completed-run duration. The span of an **INCOMPLETE** run is not a run length; `run-31235681` (no `run_end`) entered a median of completed durations at 8.37 min. Same mechanism as instances 1 and 2, **third occurrence in one arc**. Surfaced by master-dev at draft review, **post-propagation** — Trey had executed the query.
+
+Bundled under one ordinal per the one-root precedent, which **originates** at decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED …" item 2 (three findings, one root, +0) and is applied at Catch 82 (decision-log.md 2026-07-21 § "CF-85 ARC CLAIM-ACCURACY RATIFIED …": "Two paths, ONE root (a single directory-inference habit) → ONE catch, per the one-root precedent") and again at Catch 86. All three instances were **self-surfaced AFTER execution**.
+
+### 13 — POST-PROPAGATION SELF-CATCH: the distinguisher's unhandled third cell
+The ratified distinguisher (decision-log.md 2026-07-22 § "CF-89 fork ROUTED: content-texture inventory verdict (a) SURFACE ratified …" § 4) covers **pre-propagation self-catch (EXCLUDED)** and **gate-or-other-actor-surfaced (COUNTED)**. Catch 90 is neither: authored, **EXECUTED by Trey**, then self-surfaced by the author.
+
+**RULED COUNTED** — **propagation, not the identity of the surfacer, is the operative fact**; an artifact that has already been acted on has escaped the author's own gate. This **extends the convention; NO RULE ORDINAL.**
+
+### 14 — RULE 35 (NEW) — CANONICAL-COPY SYNC
+**A canonical project-file copy must be verified against repo HEAD before being cited as an input to any Phase prompt or artifact, or re-uploaded from HEAD first.**
+
+**Codification bar MET.** This is the SECOND instance of the root recorded at Drift 61 ("the project knowledge base RETAINS artifacts removed from the live repo"), whose trigger was named in advance ("a dedicated convention codifies on a second instance"); this is the **mirror direction** — the copy **LACKS what HEAD has**. Bend criteria also independently satisfied: structurally generic (any canonical file), low-burden (verify-or-re-upload), predictable surface (every Phase 1 reads canonical files).
+
+**MEASURED BOTH SIDES this session.** The project copy's `buff_adjacent` Effect variant lacks effect-level `matchTags` and its `CombatEvent` union carries **8** members. HEAD has `matchTags` (content-schemas.ts:240-251) and **11** members — verbatim from HEAD, in declaration order: `combat_start` · `item_trigger` · `damage` · `heal` · `status_apply` · `status_tick` · `stun_consumed` · `buff_apply` · `buff_remove` · `ramp_tick` · `combat_end`. Staleness spans at minimum M1.1.1 (2026-04-26, the `matchTags` addition) through CF-83 (2026-07-20, the `ramp_tick` addition).
+
+`content-schemas.ts` is the only `.ts` among the canonical project files and the only one with a CI-enforced repo counterpart, so `check-schemas-sync` (root `package.json`) keeps the two **REPO** copies byte-identical while having **zero visibility** into the project upload.
+
+**+0 CATCH.** The CF-89 Phase 1 rider flagged the discrepancy prospectively and PR-A shipped correct because the implementer read HEAD. The defect is the **ABSENCE OF A DETECTING GATE**, which is what Rule 35 supplies. **REMEDIATION IS MASTER-DEV-SIDE:** full-file replace from HEAD, diff the replacement, no spot-patch.
+
+### 15 — RULE 28 NEEDS NO WIDENING (no scope note, no ordinal)
+Rule 28 was **already widened** at decision-log.md 2026-07-19 § "CF-64 CLOSED (frozen-corpus regeneration drift isolated on UNCHANGED code …)" to, verbatim: "Any verification step — test, gate, OR diagnostic command — must be able to produce a different result under the negation of what it claims to establish. A check that returns the same output whether the hypothesis is true or false is not verification. Applies to invariant tests and one-off diagnostics equally."
+
+Catch 90's three instances are **instances OF that widening, not grounds for a new one**. **NO scope note, NO ordinal.** Restating an existing widening as new would be **Catch 91's own shape**.
+
+### 16 — CANDIDATES FLAGGED, NONE OPENED
+- **(i) HP-CEILING INVARIANT.** The ramp's termination guarantee is **CONDITIONAL** — `RAMP_RATE` 3 from tick 500 yields 300 HP of drain and holds only because HP_max = 229 ≤ 300 (canon derives it verbatim: "**HP_max = 30 + 199 = 229**" and "**HP_max = 229 ≤ 300 → R = 3 RATIFIED**, per R ≥ HP_max/100 = 2.29"). Canon records the condition; **NOTHING ENFORCES IT**. If M2 content pushes max achievable HP past 300, tick-cap draws return **silently** and clause 1b un-meets itself. The Rule 28-shaped invariant test: max achievable HP ≤ (`MAX_COMBAT_TICKS` − `RAMP_START_TICK`) × `RAMP_RATE`. Real declaration sites: `RAMP_START_TICK = 500` and `RAMP_RATE = 3` at packages/sim/src/combat.ts:161-162; `MAX_COMBAT_TICKS = 600` at packages/content/src/schemas.ts:1092 and its byte-identical mirror content-schemas.ts:1092 — **NOT** packages/sim.
+- **(ii) RAMP-DECIDED-OUTCOME LEGIBILITY** (from § 6).
+- **(iii) MISSING `combat_end`.** `run-805796263` reached round 11 with only **10** `combat_end` events; the other two round-11 runs each carry 11. One event unaccounted for, in the same run that shows a 108.92-min span (plausibly a dropped batch during a long idle). **WATCH — n=1, no ordinal, no CF.** Related in kind to (iv).
+- **(iv) `run_end`-ON-ABANDON EMIT PATH: UNTESTED, not weakened.** The four-run sample contains **ZERO abandoned runs** (3 completed → `run_end` fired 3/3; 1 in-progress at pull time → correctly absent; 2 two-event stubs = false starts). No evidence in either direction — **watch only**. If it does not fire, `telemetry-plan.md` § 4 Goal 1 abandon-rate-by-round is unmeasurable — the Catch 53 / CF 62 dead-emit-path shape, held for a second instance.
+
+### 17 — CF-88 IS NOT MEASURABLE FROM TELEMETRY AS SHIPPED (recorded; opens nothing)
+Cause lives in the `CombatEvent` log (`ramp_tick` vs `damage`), which telemetry does not carry. The only telemetry proxy would be `damageDealt` against the round's ghost HP — ramp damage **bypasses the damage path**, so a `ramp_ko` with `damageDealt` ≥ ghost HP is a mislabeled item KO. That needs the real ghost HP curve first. **CF-88 stays OPEN, M2/M3.**
+
+### 18 — OPEN-CF ENUMERATION GAP (recorded as a rider; opens nothing)
+Four counter axes are **monotonic ordinal accumulators**, so a highest-minted grep independently verifies them. The fifth is **SET CARDINALITY over a mutable set** — CFs open and close, so no grep-walk can falsify it, and the highest-minted CF says nothing about how many are open.
+
+**Consequence: the open-CF axis has NEVER been independently verified.** This is structurally distinct from the two parked counter-integrity defects (the rule-ordinal-9 phantom and the catch-ordinal-9 double-assignment), which are **known-wrong values** rather than an **unverifiable axis**. Surfaced by Claude Code's fifth-slot caveat this session. Verification requires a full open/close-pair walk; **NOT scheduled here.**
+
+### 19 — CATCH 91 + DRIFT 70 (master-dev, Class A / Rule 30): TEN INSTANCES from ONE authoring act
+**MECHANISM: an unverified assertion about the content of a source-of-truth artifact — canon or code — in an artifact headed for canon.**
+
+The authoring act is the prompt for this entry. The eight:
+
+1. **Threshold false-novelty.** The `telemetry-plan.md` tick-cap conflict was flagged as a **FRESH candidate** at "three places, two values". Both halves false: the live file carries **FOUR** sites (§ 3 line 109 "<1%", § 4 line 166 "< 0.5%", § 5 line 183 "> 1%", § 6 line 198 "> 1%"), and the conflict is **ALREADY IN CANON** — decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED …" enumerated it plus a **SECOND** metric-definition conflict (balance-bible.md § 2 counts ALL draws; telemetry-plan.md counts tick-cap only) and closed it "Reported, not resolved." Clause 1b already RULED it: threshold 1%, § 4's 0.5% the outlier.
+2. **Fabricated Rule 31 attribution** (§ 6). "the Rule 31 server-first transition window, behaving as designed" appears **nowhere in the repo**; no entry discusses blank `endReason` rows on any date. The dates also make it impossible — 07-19 predates the first `endReason` code (`8744da2`, 2026-07-20).
+3. **False drift-pairing law** (§ 11). "drifts pair with master-dev catches only" is refuted by one of its own cited precedents: Catch 85 is Claude-Code-side and took paired Drift 65.
+4. **Misstated CF-89 opening premise** (§ 2). CF-89 opened on a coverage-axis split (choosing/why vs **PLACING**); "what does this do" appears nowhere in decision-log.md.
+5. **Stale Rule 28 scope** (§ 15). Rule 28 was already widened to "test, gate, OR diagnostic command"; the proposed widening restated an existing one.
+6. **Unflagged Rule 10 cat-5 scope extension** (§ 11). Cat 5's literal scope is Step 1 reports; a DoD ledger is outside it.
+7. **Overstated clause-2 "resolved" + circular (f) reasoning** (§ 8). Canon says MOVED/addressed by "the primary clause-2 leg," never resolved; and the gloss relied on attaches to the very held candidate being dispositioned.
+8. **Wrong `RAMP_RATE` symbol and `MAX_COMBAT_TICKS` path** (§ 16). Code has `RAMP_RATE`, not `R`; `MAX_COMBAT_TICKS` lives in packages/content, not packages/sim.
+9. **The bundling precedent cited as Catch 86** when 86 is itself an application — surfaced by decision-log-close, **waved through by master-dev as "already correct"** and omitted from the original eight; recovered by this sweep.
+10. **"the nine canonical files"** (§ 14) — a count carried from master-dev's operating spec and asserted as canon-backed. Grep across decision-log.md + tech-architecture.md for the count → **zero hits**. The defect is not the number; it is **attributing a non-canon fact to canon**.
+
+**BUNDLING RULE, stated so it is checkable: bundle within a single authoring act; separate ordinals across distinct artifacts.** This is what distinguishes Catches 82/83/84 (three artifacts, three ordinals) from Catch 86 (one drafting act, two clauses, one ordinal).
+
+**ALL EIGHT surfaced by decision-log-close and its verification fan-out BEFORE landing** — counted per the Catch 81 / 86 in-gate precedent, distinct from the CF-67 code axis. Drift 70 paired.
+
+**CEILING ANALOGUE TRIPPED (recorded, no ordinal).** Eight findings in one review pass is the master-dev analogue of the 4th-finding ceiling. Master-dev's response was to **STRIP rather than patch** — any claim not backed by a grep was removed, not footnoted. A meta-audit trigger for this axis is **HELD, not codified**: first instance, and the standing restraint against codifying process apparatus on one instance applies to master-dev's own axis too.
+
+**NOT A CANDIDATE (instance 1's residue):** the threshold disposition is ruled; what remains is a one-line § 4 clerical edit, master-dev-side, separate commit. The only new fact is that the file is **still unfixed** as of this entry.
+
+### 20 — CATCH 92 + DRIFT 71 (master-dev; TWO instances, ONE authoring act, DISTINCT from Catch 91's)
+Same mechanism as Catch 91 — **an unverified assertion about the content of a source-of-truth artifact in an artifact headed for canon** — but a **SEPARATE authoring act**: the FINAL AMENDMENTS block, written **after** Catch 91's defects were already surfaced and separately executed by Trey.
+
+- **Instance 1** — the Rule 28 widening cited as bare "decision-log.md 2026-07-19", **ambiguous across multiple same-day entries**; the widening's own nearest header is 2026-07-19 § "CF-64 CLOSED (frozen-corpus regeneration drift isolated on UNCHANGED code …)". This is **CATCH 86'S EXACT SHAPE** — the date+header citation invariant — emitted **INSIDE the entry that mints Catch 91 for this class**.
+- **Instance 2** — the one-root bundling precedent cited as Catch 82. Catch 82 is **itself an application**; its own text traces to decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED …" item 2. **Second CONSECUTIVE misattribution of the same precedent chain** (86 → 82 → origin); a chain three deep invites exactly this failure. Observation recorded, nothing codified.
+
+Both surfaced by the master-dev-commissioned Y sweep, **EXECUTED by decision-log-close** — other-actor-surfaced, **COUNTED** per the Catch 81 / 86 in-gate precedent.
+
+**ORDINAL SPLIT RULING:** separated from Catch 91 by the bundling rule stated in § 19 — bundle within an authoring act, separate ordinals across distinct artifacts (Catches 82/83/84 precedent: three artifacts, three ordinals). **Applied against master-dev's own count, having been stated when it cost nothing.** Drift 71 paired.
+
+### Counter
+Light docs-only close (the single-CF-close shape; the CF-91 CLOSED precedent). Ordinal walk live from canon at tip `ff986cc`, greps run this session: highest **Catch 88**, **Rule 34**, **Pattern 10**, **Drift 68**, **CF-91** (all grep-confirmed).
+
+Deltas by ID: catches **+4** (Catch 89; Catch 90 — THREE instances under one ordinal; Catch 91 — TEN instances under one ordinal; Catch 92 — TWO instances, separate authoring act); rules **+1** (**Rule 35 only** — the Rule 28 note is DELETED, not demoted: § 15 records that the widening already exists); patterns **+0**; drifts **+3** (Drift 69 → Catch 90, Drift 70 → Catch 91, Drift 71 → Catch 92; Catch 89 takes no paired drift — no trackable Topic, per § 11's ruling); open-CFs **−1** (CF-89 **CLOSED**; **NOTHING opened** — every candidate in §§ 6, 8, 16 is held).
+
+Running line: **88/34/10/68/53 → 92/35/10/71/52** — catches **92** / rules **35** / patterns **10** / drifts **71** / open-CFs **52**.
+
+Anchor: docs-only, so this entry's own docs commit is BOTH the counter anchor and the entry anchor. `3e35f40` is CF-89's ARTIFACT anchor and is already in canon.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-89** — choosing/why legibility. **CLOSED** on measurement (this entry); artifact anchor `3e35f40`. L2 recipe lookahead demoted to a held candidate, NOT carried as open scope.
+
+---
+
 ## 2026-07-23 — CF-89 PR-A CLOSED: L1 adjacency-effect reveal shipped (merge 3e35f40, PR \#57); three ratified display rulings landed (rule-above/live-consequence-below · gate-closed empty state KEPT, prior suppression lean REVERSED · class-1 UNCONDITIONALLY-LIVE amendment); Catch 87 + Drift 68 and Catch 88 + Drift 67 (both master-dev authoring defects, one gate-surfaced one playtest-surfaced); Codex +0 across 4 rounds (CF-67); Pattern 10 instance recorded (no new ordinal); nine candidates HELD, none opened; CF-89 stays OPEN → PR-B; counter 86/34/10/66/53 → 88/34/10/68/53
 
 Artifact anchor merge `3e35f40` (--no-ff, PR \#57, base `1fb51c6`), 17 files. Client + ui-kit only — ZERO diff under packages/sim, packages/content, content-schemas.ts, or the determinism corpus. Tests 76 → 89. CF-89 stays OPEN (PR-B / L2 recipe lookahead next; CF-85 surface 2c unchanged).
