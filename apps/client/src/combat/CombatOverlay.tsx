@@ -30,6 +30,7 @@ import {
   type CombatEvent,
   type CombatInput,
   type CombatResult,
+  type ContractMutator,
   type GhostId,
   type PlacementId,
 } from '@packbreaker/content';
@@ -50,7 +51,7 @@ import {
 import { computeBagLayout } from '../bag/layout';
 import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
-import { makeGhostForRound } from './ghost';
+import { opponentForRound } from './opponentForRound';
 
 // Event types that mean "the player needs to see this combat play out."
 // Used by the option-2 zero-content fast-skip predicate. Codex P1 fix on
@@ -103,9 +104,20 @@ export function buildCombatInput(
   bag: ReturnType<typeof useRunContext>['state']['bag'],
   state: ReturnType<typeof useRunContext>['state']['state'],
   player: { startingHp: number; recipeBornPlacementIds: ReadonlyArray<PlacementId> },
-): { input: CombatInput; ghostClass: string; ghostId: GhostId; ghostClassId: ClassId } {
+): {
+  input: CombatInput;
+  ghostClass: string;
+  ghostId: GhostId;
+  ghostClassId: ClassId;
+  mutators: ReadonlyArray<ContractMutator>;
+} {
   const playerBag = clientBagToSimBag(bag, state.ruleset.bagDimensions);
-  const ghost = makeGhostForRound(state.seed, state.round, state.ruleset.bagDimensions);
+  // CF-87 route (D): ONE shared chokepoint picks the round's opponent — the
+  // procedural ghost for rounds 1–10, the § 15 Forge Tyrant at round 11 — and
+  // hands back the mutators the fight forwards to the sim. This is the SAME call
+  // ghostIntentForRound makes, so the intent panel and the fight stay one
+  // derivation (decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …" §§ 4, 8).
+  const opponent = opponentForRound(state.seed, state.round, state.ruleset.bagDimensions);
   const input: CombatInput = {
     seed: state.seed,
     player: {
@@ -132,13 +144,18 @@ export function buildCombatInput(
       startingHp: player.startingHp,
       recipeBornPlacementIds: player.recipeBornPlacementIds,
     },
-    ghost: ghost.combatant,
+    ghost: opponent.combatant,
   };
-  return { input, ghostClass: titleCase(ghost.classId), ghostId: ghost.id, ghostClassId: ghost.classId };
-}
-
-function titleCase(s: string): string {
-  return s.length > 0 ? s[0]!.toUpperCase() + s.slice(1) : s;
+  return {
+    input,
+    // "Forge Tyrant" at round 11, else the class display name. Feeds the
+    // CombatScene ghost portrait AND the RoundResolution S2b reveal label,
+    // both of which read this single string.
+    ghostClass: opponent.displayLabel,
+    ghostId: opponent.ghostId,
+    ghostClassId: opponent.classId,
+    mutators: opponent.mutators,
+  };
 }
 
 export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlayProps) {
@@ -166,7 +183,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           eventLabels: [] as ReadonlyArray<string | null>,
         };
       }
-      const { input, ghostClass, ghostId: gid, ghostClassId: gcid } = buildCombatInput(
+      const { input, ghostClass, ghostId: gid, ghostClassId: gcid, mutators } = buildCombatInput(
         ctx.state.bag,
         ctx.state.state,
         {
@@ -174,7 +191,9 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           recipeBornPlacementIds: ctx.simRun.getRecipeBornPlacementIds(),
         },
       );
-      const r = runCombat(input);
+      // CF-87 route (D): forward the round's mutators (boss_only at round 11,
+      // empty otherwise). Empty list → sim short-circuits → unchanged combat.
+      const r = runCombat(input, mutators);
       // CF-85 Surface 2b: retain the ghost placements the sim actually
       // fought with (previously discarded post-memo) — client shape via
       // the existing simBagToClientBag adapter, consumed by the
