@@ -321,8 +321,8 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost, but with overr
 | (3,0)–(4,1) 2×2 | `bloodmoon-plate` | Heavy armor + retaliation |
 | (5,0) 1×1 | `vampire-fang` | Lifesteal |
 | (0,2)–(1,2) 2×1 H | `warhammer` | Stun pressure |
-| (2,2) 1×1 | `iron-mace` | Extra stun |
-| (3,2) 1×1 | `apple` | Heal regen |
+| (2,2)–(3,2) 2×1 H | `iron-mace` | Extra stun |
+| (4,2) 1×1 | `apple` | Heal regen |
 | (5,2) 1×1 | `whetstone` | Buffs adjacent weapons |
 | Rest | empty | |
 
@@ -336,7 +336,7 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost, but with overr
 
 ### Reward
 - Win: choose 1 of 3 from { `world-forged-heart` (Legendary), one random Epic, the boss relic for the player's class }.
-- Lose: run ends with `outcome: 'eliminated'` if hearts hit 0 in the boss fight, or `outcome: 'won'` if the player declines the boss fight by reaching Round 11 with ≥1 heart but losing the boss combat itself — TBD. **See § 19 open lever.**
+- Lose: the run ends at Round 11 regardless of outcome. Hearts hitting 0 in the boss fight ends the run with `outcome: 'eliminated'`; losing the boss combat with ≥1 heart remaining ends the run with `outcome: 'won'` and FORFEITS the reward. RATIFIED (was TBD) — decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …"; the boss-loss lever is § 18 item 4.
 
 ---
 
@@ -392,7 +392,7 @@ These are tuning questions that can't be answered until M1 graybox runs:
 1. **Base HP (30) vs (40)** — at 30 HP, a single Greatsword (12 dmg/hit, 60 cd) deals 24 dmg in 12s, which is most of a player's HP. May feel too lethal. Consider 40.
 2. **Reroll cost curve** — `gdd.md` § 17 question 7. Currently start at 1, +1 per reroll. Alternative: start at 2, flat. Affects shop optimization tempo.
 3. **Recipe `rotationLocked: false` always** — should we ship one or two `rotationLocked: true` recipes to test directional play? Defer to M2 unless a pre-M1 review changes our minds.
-4. **Boss-fight loss handling** — losing the boss with hearts remaining: does the player get to retry the boss, or is the run over? Proposal: lose your last heart, run ends `outcome: 'eliminated'`, but still credits "reached round 11" progress for daily contracts. Alternative: boss is best-of-three. Decide before M1 graybox.
+4. **Boss-fight loss handling** — **RULED** (decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED …"): the run ends at Round 11 regardless of outcome; losing the boss with ≥1 heart remaining records `outcome: 'won'` and forfeits the reward, and hearts hitting 0 in the boss fight records `outcome: 'eliminated'`. *Superseded proposals, kept for the record: lose your last heart, run ends `outcome: 'eliminated'` but still credits "reached round 11" progress for daily contracts; or, boss is best-of-three.*
 5. **Class-affinity pool weights (+50% / −25%)** — first numbers. May need to widen to make classes feel more distinct, or tighten if they feel too restrictive.
 6. **Status stack caps (10)** — picked from gut. May cap lower (5) if poison stacks become the dominant build. Telemetry-driven.
 7. **Vampire Fang lifesteal (`heal(2)` per `on_hit`)** — flat heal not scaled to damage dealt. Alternative: percentage-based lifesteal. Flat is easier to author, probably needs no change for M1.
