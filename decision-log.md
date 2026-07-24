@@ -4,6 +4,74 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-24 — CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED — real-play round 11 now fights the § 15 Forge Tyrant configuration, ~5-6 client files, ZERO sim/content/schema/corpus diff as ratified; CF-87 STAYS OPEN on the measurement leg — the § 10 criterion is two-legged and leg 2 (D2 tile readable) is UNMET, so closing here would close on an exhausted PR list, which that criterion exists to prevent; balance-bible.md § 15 L307 amendment LANDED (held at `8efb7da` § 9(e), now shipped fact) + the § 15 ~30% carve-out UNSUSPENDED after being unmeasurable since 2026-07-19; Codex 1 round CLEAN, ceiling never tripped, +0 catches (CF-67 ruling); Pattern 9 FIFTH instance referenced, NO new ordinal; Catch 97 + Drift 76 (master-dev, Class A / Rule 30 — a pattern-instance count asserted without walking canon, gate-surfaced by decision-log-close Step 0 before it was written); master-dev meta-audit trigger RULED AGAINST codification with an escape-based reconsideration trigger recorded; counter 96/36/10/75/53 → 97/36/10/76/53
+
+Artifact anchor merge `ab3e4be` (`--no-ff`, PR \#58, branch tip `c59e8a8`, re-verification merge `4d3d29d`). 6 files, all `apps/client`, +497/−31. Baseline tip `cf2e859` (decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected) …") carrying **96/36/10/75/53**. The counter anchor is this entry's own docs commit.
+
+### 1 — WHAT SHIPPED
+A single shared round-11 derivation (`apps/client/src/combat/opponentForRound.ts`) consumed by BOTH `buildCombatInput` and `ghostIntentForRound`, so the intent panel's promise and the combat's reality are one derivation — the `ghostIntent.ts:60-63` advertise-what-you-fight invariant preserved by construction, and the CF-85 quarantine ruling's one-call-site sanction honored. Rounds 1–10 delegate to `makeGhostForRound` unchanged. Round 11 (literal `=== 11`, comment-paired to the reward-gate literals) returns the boss: `FORGE_TYRANT`'s bag, `hpOverride` 50 applied client-side, `damageBonus` / `lifestealPctBonus` forwarded through a widened `runCombat`, and `relics.boss = 'conquerors-crown'` carried verbatim. `run_start.contractId` stays `'neutral'` — the round-keyed lookup as ratified, no contract swap, CF-68 uncollided.
+
+Shipped EXACTLY as ratified at decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …" §§ 4, 5, 6, 8. Zero diff under `packages/sim`, `packages/content`, `content-schemas.ts`, or either determinism corpus — the boundary held, verified per-path at merge.
+
+### 2 — CF-87 STAYS OPEN: the criterion is two-legged and leg 2 is UNMET
+§ 10 pinned closure at: a real round-11 fight verifiably runs the § 15 configuration AND the D2 boss-win tile becomes readable, windowed by `clientVersion`.
+- **Leg 1 — MET.** Construction plus Rule 19 rendered proof at 1280×720 and 390-wide: the intent panel reads "Ghost · Forge Tyrant · Round 11" and the S2b reveal shows the § 15 bag.
+- **Leg 2 — UNMET.** No round-11 telemetry has been read against a post-merge build. The tile has never rendered boss data.
+
+**CF-87 REMAINS OPEN.** Closing at the merge would close because the planned PR list is exhausted — the precise failure the criterion was pinned to prevent (decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge …": a CF closes when its problem is gone, not when its PR list is exhausted). The remaining work is play, not code: runs reaching round 11 on a post-`ab3e4be` build, then a D2 read. WINDOWING KEY: `clientVersion` = 0.0.1+ab3e4be; pre-merge round-11 events exist against the 40-HP marauder and must be windowed out. No join needed — `clientVersion` is stamped onto every event's PostHog properties at the batch envelope.
+
+### 3 — § 15 CARVE-OUT UNSUSPENDED
+balance-bible.md § 15's ~30% first-attempt boss-win target was SUSPENDED at decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED (Phase 2 gate) …" item 10 as unmeasurable while the encounter was never instantiated. It is instantiated. **UNSUSPENDED.** The target value is unchanged; only its measurability changed. `packages/sim/test/fixtures/runs/README.md` trigger (a) — organic boss-win rate exceeding 30% — becomes live for the first time. Note the direction: the first observed real boss fight was a LOSS (§ 4), so the early signal runs opposite to "boss too easy."
+
+### 4 — FIRST REAL BOSS LOSS OBSERVED (n=1, an observation, not a measurement)
+The Rule 19 visual probe produced the first boss defeat this project has ever recorded: player lost at round 11 holding 2 of 3 hearts. Directionally consistent with the ~30% target, off an injected save on a dev build — **n=1, NOT a measurement**, recorded so § 3's now-live signal has its first data point in context. It is also what surfaced Catch 96 (decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected) …") and what CF-92 exists to render honestly.
+
+### 5 — PATTERN 9 FIFTH INSTANCE (referenced, NO new ordinal)
+"Server registers, client never calls." Canon enumeration, walked live this session: (1) CF-57 — `describeItem` `add_gold`, no consumer; (2) CF-68 — daily-contract route; (3) CF-75 — `/v1/player/save` — all three codified at decision-log.md 2026-07-15 § "Catch 59 … + Pattern 9 codified"; (4) `error_boundary_caught` — typed, validated, tested, zero emit site — recorded at decision-log.md 2026-07-18 § "COMBAT NON-RESOLUTION + LEGIBILITY diagnosed …" as a further instance, no ordinal. **CF-87 is the FIFTH.**
+
+It is the cleanest yet: the `FORGE_TYRANT` bag, the `forge-tyrant-boss` contract, its mutators, the sim's `applyBossMutatorsToGhost`, and the round-11 reward gate ALL shipped, unit-tested, and reachable — and no client code path ever invoked them. The dead surface was invisible precisely because every component in isolation was correct and tested. Note the count's own scope: instance 4 is NOT CF-scoped, which is why a CF-only count reads "fourth" and is wrong — the pattern is about unwired surface, not about CFs. **No new ordinal, no scope note.**
+
+### 6 — MASTER-DEV META-AUDIT TRIGGER: RULED AGAINST CODIFICATION
+Held at decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge …" (first instance) and deferred twice this session. Second instance is now on record: Catches 90/91/92 (2026-07-23) and Catches 93/95/96 (2026-07-24). The second-instance convention's bar is MET — and the ruling is **DO NOT CODIFY.**
+
+RATIONALE: all six were caught before reaching a player; ZERO escaped to shipped state. A meta-audit layer would add process whose own failure mode — more apparatus, less playable surface — IS the standing concern it would purport to address. COUNTERWEIGHT RECORDED HONESTLY: Catch 96 reached canon AND two balance-bible sections and was surfaced by a playtest probe, not by a gate — the strongest argument for codifying, and it is rejected because the probe catching it is the playtesting mechanism WORKING, which is the capability this project has been deliberately strengthening.
+
+RECONSIDERATION TRIGGER, named so it is checkable: a master-dev catch that ESCAPES to shipped state or to a player-visible surface. Catch 96 did not — route (D) made its subject observable, but the defect was caught before any player met it.
+
+### 7 — CODEX: 1 ROUND, CLEAN, +0 CATCHES
+One round, 0 raw findings, 4-finding ceiling never engaged, 0 meta-audits. Landed as an issue comment (the clean-pass shape the `codex-cycle` skill anticipates; `/pulls/58/reviews` stayed empty). Stale-SHA guard PASS — reviewed `c59e8a8a94` = the branch tip. Per the CF-67 ruling, review yield is not a catch; a clean round is +0 by construction.
+
+### 8 — GATES AT MERGE
+Re-verified on the MERGE RESULT `4d3d29d`, not merely on the branch tip — `main` had advanced `8efb7da` → `cf2e859` since branching, so no green had ever been observed on the actual merge product. Clean merge (ort, no conflicts). `turbo lint typecheck test build --force` 25/25. `tsc -b --noEmit --force` (client) exit 0 — `turbo --force` does not bust `tsc -b`'s incremental cache. Rule 13 triple-green, 3× cold-cache, sim determinism harness green all three. Corpora zero diff. Three-dot diff unchanged at 6 files / +497/−31, so the PR body's scope claim matched the rendered diff at merge.
+
+### 9 — BIBLE AMENDMENTS (Rule 33)
+(a) § 15's opening "with overrides applied by the run controller" — the amendment HELD at decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …" § 9(e) now LANDS. It was deferred because route (D) was ratified but not shipped, and asserting an unshipped implementation as bible-current is a Rule 30 violation. Route (D) shipped at `ab3e4be`; it is now shipped fact. (b) § 15 carve-out annotated UNSUSPENDED per § 3. balance-bible.md is re-uploaded to project knowledge after this commit (Rule 35 rider, carried and now discharged for this file).
+
+### 10 — BRANCH DELETED
+`cf87-boss-chokepoint` deleted locally (merged; no PAT needed for local refs). The PAT cannot delete remote refs — unchanged limitation, no remote ref was created beyond the PR branch.
+
+### 11 — CATCH 97 + DRIFT 76 (master-dev, Class A / Rule 30, gate-surfaced pre-write)
+This entry's draft asserted CF-87 as Pattern 9's "fourth instance" — an ordinal count emitted into an artifact headed for canon without walking canon. The live enumeration returns FIVE (§ 5); "fourth" silently dropped the 2026-07-18 `error_boundary_caught` instance. Same mechanism as Catch 96, different surface: a claim about source-of-truth content asserted rather than verified.
+
+Surfaced by decision-log-close at Step 0, BEFORE the entry was written — **COUNTED** per the distinguisher ratified at decision-log.md 2026-07-22 § "CF-89 fork ROUTED: content-texture inventory verdict (a) SURFACE ratified …" § 4: a drafting error surfaced by a verification gate or other actor is counted even before landing (Catches 82-84, 86, 87 are the applications). **NO CATCH on Claude Code** — it walked the enumeration it was not asked to walk, and halted rather than writing a contestable count into permanent canon.
+
+**NO NEW RULE.** Rule 30 already governs; restating it would be Catch 91's own shape. **BEARING ON § 6, recorded rather than left implicit:** this is the apparatus catching a master-dev defect in-gate — evidence FOR § 6's ruling against a meta-audit layer, not against it. § 6's reconsideration trigger (escape to shipped state or a player-visible surface) did NOT fire. § 6 stands unamended.
+
+### Counter
+Ordinal walk live from canon at tip `cf2e859`; baseline **96/36/10/75/53**.
+
+Deltas by ID: catches **+1** (Catch 97); rules **+0** (§ 6 rules AGAINST codification); patterns **+0** (§ 5 references Pattern 9, does not extend it); drifts **+1** (Drift 76 → Catch 97); open-CFs **+0** — **CF-87 stays OPEN** on § 2's leg 2; nothing opened, nothing closed.
+
+Running line: **96/36/10/75/53 → 97/36/10/76/53** — catches **97** / rules **36** / patterns **10** / drifts **76** / open-CFs **53**.
+
+Anchor: `ab3e4be` is the ARTIFACT anchor; this entry's own docs commit is the COUNTER anchor.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-87** — boss-encounter wiring. Route (D) SHIPPED at `ab3e4be`. Stays **OPEN** on the § 10 measurement leg (D2 tile readable, windowed by `clientVersion`). No further code work is scoped; closure is a play-and-read.
+- **CF-92** — distinct run-end render for a boss-loss elimination. OPEN, display-only, now backed by a real observation (§ 4).
+
+---
+
 ## 2026-07-24 — CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE about shipped code — `shouldEndRun` records `'eliminated'` for ANY round-11 loss regardless of hearts, never `'won'`; replacement ruling RATIFIED — the `'eliminated'` ENUM stands with ZERO code change, and the original rationale is recorded as having argued AGAINST what the code actually does; CF-92 OPENED (distinct run-end render for a boss-loss elimination — CF-91 shape, display-only, enum and economy byte-untouched); Catch 96 + Drift 75 (master-dev, Class A / Rule 30 — a balance-bible TBD read as shipped state, propagated into canon AND into two bible sections); Rule 36 mechanism instance (no new ordinal); balance-bible.md § 15 "Lose:" + § 18 item 4 CORRECTED in place; CF-87 stays OPEN; counter 95/36/10/74/52 → 96/36/10/75/53
 
 Docs-only, insertion-only, two files. Baseline tip `8efb7da` (decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …") carrying **95/36/10/74/52**. That entry is NOT edited — its § 7 stays readable as authored. No code, schema, content, corpus, or migration change. Surfaced by Claude Code during the CF-87 Phase 2 visual probe, on the first real-play boss loss ever observed.

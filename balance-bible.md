@@ -304,7 +304,7 @@ Shop pool weights for a Tinker player at Round 7 (Common + Uncommon + Rare gates
 
 ## 15. Boss — Forge Tyrant (M1)
 
-A fixed scripted ghost. Same `Combatant` shape as a normal ghost, but with overrides applied by the run controller.
+A fixed scripted ghost. Same `Combatant` shape as a normal ghost. Under route (D) — SHIPPED at decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`) …" — the mutator overrides (HP / damage / lifesteal) are applied at the client-side round-11 chokepoint (`opponentForRound`), NOT the run controller: real play never traverses the controller's `startCombatFromGhostBuild` path.
 
 ### Identity
 - `classId: 'marauder'`
@@ -330,7 +330,7 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost, but with overr
 "Tyrant's Wrath" — +2 base damage to all of the boss's damage effects, +15% lifesteal globally on its bag. This is on top of the boss's relic and class passive.
 
 ### Difficulty target
-- A player arriving at Round 11 with an "average" build (1 Epic, 1–2 Rares, mostly Uncommons, ~22 effective HP at start after armor) should win ~30% of boss combats on first attempt. Higher with synergy-heavy builds.
+- A player arriving at Round 11 with an "average" build (1 Epic, 1–2 Rares, mostly Uncommons, ~22 effective HP at start after armor) should win ~30% of boss combats on first attempt. Higher with synergy-heavy builds. **MEASURABILITY (2026-07-24):** this ~30% target was SUSPENDED as unmeasurable at decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED (Phase 2 gate) …" item 10 while the boss was never instantiated; it is UNSUSPENDED now that route (D) shipped (decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`) …") — real round-11 boss-win rate is measurable, windowed by `clientVersion`. Target value unchanged.
 - A player who has ignored both armor and damage (incoherent build) should win <10%.
 - A "perfect" player with a recipe-capstoned Epic and class-stacked relics should win 70%+.
 
