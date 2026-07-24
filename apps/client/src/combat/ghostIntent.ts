@@ -8,19 +8,20 @@
 // combat will actually fight.
 //
 // Coupling discipline (anchor entry, Redraw item 1): `makeGhostForRound`
-// is ratified-disposable M2-deletion scaffolding, so the generator call is
-// quarantined in ghostIntentForRound — the ONE sanctioned call site next
-// to CombatOverlay's — and everything downstream (marquee selection,
-// rendering) consumes only the GhostTemplate/Combatant SHAPE. When M2
-// ghost storage replaces the generator, swap the one call; the selection
-// and every rendering consumer survive unchanged.
+// is ratified-disposable M2-deletion scaffolding. CF-87 route (D) tightened
+// its quarantine further — the generator is now reached only through a SINGLE
+// shared chokepoint, `opponentForRound`, which BOTH this intent panel and
+// CombatOverlay's fight consume, so the panel's promise and the combat's
+// reality are one derivation (round 11 is the § 15 Forge Tyrant for both).
+// Everything downstream (marquee selection, rendering) consumes only the
+// Combatant SHAPE. When M2 ghost storage replaces the generator, swap the one
+// call in opponentForRound; the selection and every rendering consumer survive.
 
 import type { BagDimensions, BagPlacement, ClassId, SimSeed } from '@packbreaker/content';
-import { CLASSES } from '@packbreaker/content';
 import { RARITY_RANK } from '../bag/layout';
 import { ITEMS } from '../run/content';
 import type { ItemId } from '../run/types';
-import { makeGhostForRound } from './ghost';
+import { opponentForRound } from './opponentForRound';
 
 /** How many marquee silhouettes the intent panel may show. gdd.md § 14
  *  caps the pre-combat reveal at 1–2 items; 2 is the ratified maximum. */
@@ -57,19 +58,20 @@ export function selectMarqueeItemIds(
   return unique.slice(0, max);
 }
 
-/** Real intent for the round the player is arranging against. Same
- *  (seed, round, dims) call CombatOverlay.buildCombatInput makes, so the
- *  panel's promise and the combat's reality are one derivation — the
- *  intent can never advertise a ghost the fight won't produce. */
+/** Real intent for the round the player is arranging against. Consumes the
+ *  SAME opponentForRound chokepoint CombatOverlay.buildCombatInput does, so the
+ *  panel's promise and the combat's reality are one derivation — the intent can
+ *  never advertise a ghost the fight won't produce. At round 11 that opponent is
+ *  the § 15 Forge Tyrant (label + marquee derived from its real bag). */
 export function ghostIntentForRound(
   seed: SimSeed,
   round: number,
   dims: BagDimensions,
 ): GhostIntent {
-  const ghost = makeGhostForRound(seed, round, dims);
+  const opponent = opponentForRound(seed, round, dims);
   return {
-    classId: ghost.classId,
-    classLabel: CLASSES[ghost.classId]?.displayName ?? String(ghost.classId),
-    marqueeItemIds: selectMarqueeItemIds(ghost.combatant.bag.placements),
+    classId: opponent.classId,
+    classLabel: opponent.displayLabel,
+    marqueeItemIds: selectMarqueeItemIds(opponent.combatant.bag.placements),
   };
 }

@@ -21,14 +21,24 @@
 // promise is satisfied post-split — the combat-only sim subgraph
 // ships exclusively in the combat chunk.
 
-import type { CombatInput, CombatResult } from '@packbreaker/content';
+import type { CombatInput, CombatResult, ContractMutator } from '@packbreaker/content';
 import { simulateCombat } from '@packbreaker/sim';
 import { SHOP_POOL_ITEMS } from '../run/content';
 
 /** Run a combat. Pure delegation to sim's simulateCombat — the only
  *  client-side concern is constructing the CombatInput from client-shape
  *  state (handled at the call site in CombatOverlay; this bridge just
- *  forwards). */
-export function runCombat(input: CombatInput): CombatResult {
-  return simulateCombat(input, { items: SHOP_POOL_ITEMS });
+ *  forwards).
+ *
+ *  CF-87 route (D): forwards contract `mutators` to the sim, which applies
+ *  boss_only damageBonus / lifestealPctBonus ghost-side (packages/sim/src/
+ *  combat.ts applyBossMutatorsToGhost). Omitted / empty for every non-boss
+ *  round — the sim short-circuits an empty mutator list, so a normal combat's
+ *  trajectory is unchanged. hpOverride is NOT a sim concern (see
+ *  opponentForRound.ts §8 note). */
+export function runCombat(
+  input: CombatInput,
+  mutators?: ReadonlyArray<ContractMutator>,
+): CombatResult {
+  return simulateCombat(input, { items: SHOP_POOL_ITEMS, mutators });
 }
