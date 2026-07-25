@@ -4,6 +4,135 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-25 — CF-94 CLOSED (merge `f6015b0`, PR \#59): CP6's two-guard asymmetric liveness gate SHIPPED — the FIRST sim change since the CF-83 ramp; **closure basis ruled ON MERGE, not on measurement** (unlike CF-87 and CF-89) because the defect is verifiable by test and the ablation matrix proves both guards independently necessary and jointly sufficient; all FIVE canon line-pins RE-PINNED to `f6015b0` — five map to five, NONE collapsed, and the CP6 entry's pins to `008f2f9` REMAIN VALID because `--no-ff` preserved it as an ancestor (verified, both pins live for different purposes); determinism proved by byte-identical double-write with the CLEAN TREE as the stronger result — two regenerations reproduce the COMMITTED fixtures; drift enumerated at 12 distinct fixtures across 14 path entries, stated as COST; TWO RECONCILIATIONS — the `.json` 18-vs-19 figures are NOT a defect (different populations, both prior usages correct) and the 12-changed-vs-11-predicted delta is recorded UNRECONCILED, not reconstructed; Catch 113 + Drift 90 and Catch 114 + Drift 91 (master-dev — the second being **Rule 37's FIRST APPLICATION after codification, against its own author**) + Catch 115 (Claude Code, NO paired drift) + Catch 116 + Drift 92 and Catch 117 + Drift 93 and Catch 118 + Drift 94 (Claude Code; 118 was **surfaced-and-declined by Claude Code, then RULED IN by master-dev** — a `SURFACED, NOT MINTED` item in a LANDED entry is a debt that decays, so it is closed in place) — **FOUR catches against Claude Code, ALL SELF-SURFACED, and the gate defects among them invisible to master-dev by construction: the count reflects DISCLOSURE QUALITY, not degradation**; THREE no-catch rulings with grounds recorded; cardinal-from-recall HELD at five instances with its trigger RESTATED NOT ADVANCED — master-dev's lean was to codify and it DECLINED to advance its own trigger; five technical learnings and a WATCH at FIVE instances, its category renamed from "toolchain false greens" to **silent under-reporting checks** because the fifth is not a toolchain fact, named and NOT minted; CF-93 round-11 RE-MEASURE DUE before CF-93 Phase 2; counter 112/37/10/89/54 → 118/37/10/94/53
+
+**ARTIFACT ANCHOR: merge `f6015b0`** (parents `a00831a` + `5249633`, `--no-ff`, 16 files, +448 −178; PR \#59 closed merged 2026-07-25T20:06:36Z). **COUNTER ANCHOR: this entry's own docs commit.** Docs-only, insertion-only, `decision-log.md` alone. Baseline tip `f6015b0`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards …" carrying **112/37/10/89/54**, read from the file this session.
+
+### 1 — CF-94 CLOSED, and the closure basis is ruled rather than assumed
+**CF-94 closes ON MERGE, not on measurement.** That is a departure from the two closest recent precedents — CF-87 (decision-log.md 2026-07-25 § "CF-87 CLOSED on MEASUREMENT (both legs of the § 10 criterion MET; docs-only, NO artifact merge — the CF-89 precedent) …") and CF-89 — and the departure is deliberate.
+
+**Ground:** CF-94's defect is *a 0-HP combatant acts on the opponent and benefits from doing so*. That is verifiable **by test**, not by play-rate. The ablation matrix (§ 3) proves both guards independently necessary and jointly sufficient, each ablation verified-applied before execution. There is no outstanding behavioural question whose answer could reopen it.
+
+**The scheduled CF-93 re-measure (§ 9) concerns CF-93's NUMBERS, not CF-94's CORRECTNESS.** Conflating them would hold a CF open on a measurement that cannot falsify it — the inverse of the § 10-criterion discipline CF-87 was closed under. **CLOSED.**
+
+### 2 — WHAT SHIPPED: CP6's two guards, re-pinned to `f6015b0`
+**GUARD 1 — cross-side gate at ORIGINATION.** An effect originated by a combatant whose current HP is `<= 0` resolves only if it does not cross to the opponent. Both call sites are inside `resolveEffect`, both AFTER target resolution so the `pickRandomItemRef` draw is never skipped. Damage queued while the source was alive still LANDS when it drains — that is what preserves CF-84's item-driven mutual-KO draw.
+
+**GUARD 2 — source-benefit gate at APPLICATION.** In `applyDamage`, at source HP `<= 0` the source gets no lifesteal and no source-side `on_hit`. The damage lands; the dead derive no benefit from it. The TARGET's `on_taken_damage` is untouched — being hit is not a benefit.
+
+**ALL FIVE PINS RE-PINNED — five map to five, none collapsed:**
+
+| statement | `008f2f9` | `f6015b0` |
+|---|---|---|
+| `const sourceIsDead = sourceCombatant.hp <= 0;` | `:534` | **`:541`** |
+| `if (!sourceIsDead && sourceSideStats.lifestealPct > 0) {` | `:536` | **`:543`** |
+| `if (!sourceIsDead) fireDamageReactions(… 'on_hit' …)` | `:566` | **`:573`** |
+| guard 1 — `resolveEffect` case `'damage'` | `:767` | **`:774`** |
+| guard 1 — `resolveEffect` case `'apply_status'` | `:827` | **`:837`** |
+
+**THE CP6 ENTRY'S PINS TO `008f2f9` REMAIN VALID.** `--no-ff` preserved `008f2f9` as an ancestor — verified by `git merge-base --is-ancestor 008f2f9 HEAD` returning 0, along with `18e4e66`, `85a08f1` and `5249633`. **Both pin sets are live and serve different purposes:** `008f2f9` describes the guard as ratified; `f6015b0` describes it as shipped. Neither supersedes the other, and a rebase or squash would have orphaned the first.
+
+### 3 — GATES
+**DETERMINISM — byte-identical double-write, `git status` NOT used as the proof** (Rule 28 as widened at the CF-64 close):
+
+> `AGGREGATE A = 02cbec0029f6bf9d1f2fa0a46bfa34d745e69814d1de23a389f151f864b75dab`
+> `AGGREGATE B = 02cbec0029f6bf9d1f2fa0a46bfa34d745e69814d1de23a389f151f864b75dab`
+> `IDENTICAL: all 243 per-file hashes match byte-for-byte across both writes`
+
+**The clean tree after both writes is the STRONGER result** — it establishes not merely that regeneration is self-consistent but that it reproduces the **committed** fixtures exactly.
+
+**TYPECHECK — `tsc -b --noEmit --force`, NO PIPE**, exit 0 across `packages/content`, `packages/sim`, `apps/server`, `apps/client`. The no-pipe form is load-bearing and is why this reading is trusted where an earlier one is not (§ 6(d)). Zero output is the full output; `tsc` prints nothing on success.
+
+**RULE 13 — 4 cold-cache full-workspace runs**, `Tasks: 10 successful, 10 total`, `Cached: 0 cached, 10 total` every run; content 31 · ui-kit 37 · sim 557 (+1 skipped) · server 122 (+24 skipped) · client 719 (+15 skipped) = **1466 passed, zero failure markers**. `ECONNREFUSED` lines in client stdout are error-path tests logging their error object, not failures — evidenced by 64/64 files passed and zero failure markers.
+
+**POST-MERGE RE-VERIFICATION ON MERGED MAIN, BEFORE PUSH:** guards present at the § 2 line numbers; 10/10 tasks, 0 cached, 1466 passed. Verifying after merging and before pushing is the ordering that makes the check meaningful.
+
+**CODEX — 2 rounds, 1 finding, ceiling never tripped, no meta-audit.** Round 1: one **P2** — the helper's JSDoc was CP4's, left attached when the call site moved, asserting "EVALUATED AT APPLICATION, NOT ENQUEUE" and warning against the enqueue-time gating CP6 deliberately adopted. A maintainer following it would revert CP6 and re-destroy CF-84's draw. Fixed comment-only at `5249633`; a **second instance Codex did not flag** (`apply_status` guard still labelled "CF-94 CP4, site 2") was fixed in the same pass. **Round 2 CLEAN** — and it landed on `/issues/59/comments` with `/pulls/59/reviews` **EMPTY**, the documented split; **polling both surfaces is what caught it**. Per the CF-67 ruling, a pre-merge finding dispositioned before merge takes **+0 catches**.
+
+### 4 — DRIFT, enumerated as COST
+**9 `.jsonl` modified:** `011-greedy-1011`, `037-greedy-1037`, `071-hoarder-1071`, `206-relic-collector-2006`, `207-relic-collector-2007`, `211-relic-collector-2011`, `212-relic-collector-2012`, `213-relic-collector-2013`, `215-relic-collector-2015`. **2 `.jsonl` renamed:** `220-relic-collector` 362020 → 42020 and `221-relic-collector` 302021 → 62021 — same slot and strategy, different seed suffix, because the generator's coverage-driven seed search moved. **1 `.json`:** `no-cascade.json`, whose entire diff is one suppressed post-mortem `bloodmoon-plate` retaliation (damage event gone, `finalHp.player` 20 → 23, `endedAtTick` and `outcome` unchanged, the `item_trigger` event REMAINING because the trigger fired and only its cross-side effect was gated) — S2a closing, visible in a fixture.
+
+**That is 12 distinct fixtures across 14 path entries. NOT AN IMPACT MEASURE** — the corpus boss carries `lifestealPct 0` where the real-play boss carries 15, so fixture drift under-reads real-play reach by construction (decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE (insertion-only, no edit to the landed entry) …" § 6).
+
+### 5 — TWO RECONCILIATIONS
+**(a) `.json` 18 vs 19 — NOT A DEFECT.** **18** = the re-baselineable fixture `.json`: 12 in `fixtures/combats/` + 6 in `fixtures/runs/`. **19** = every `.json` under `fixtures/`, adding `rng-sequences.json` — a mulberry32 golden file consumed only by `rng.test.ts`, by neither fixture suite, whose own description reads "If your build diverges from any of these, your build is broken — DO NOT regenerate, fix the impl." **Different populations; both prior usages correct in their context** — re-baseline scope legitimately excludes a file that must never be re-baselined, and a determinism proof legitimately includes it precisely because it must not move. **No prior artifact needs correcting.**
+
+**(b) 12 changed fixtures vs 11 predicted TEST FAILURES — UNRECONCILED.** These are different quantities: 11 counted failing *tests* (10 in `harness.test.ts`, 1 in `combat-fixtures.test.ts`), 12 counts changed *fixtures*. The seed-search account — a renamed slot can be replaced without its old fixture having failed replay — is **PLAUSIBLE AND UNTESTED**. Which 10 harness fixtures failed was never captured. **Recorded UNRECONCILED, not reconstructed.**
+
+### 6 — CATCHES
+Enumerated; no cardinal stated. Ordinals walked live.
+
+**(a) Catch 113 + Drift 90 — master-dev.** `on_round_start` classified as "active" in the CP6 hypothesis's trigger taxonomy. It is dispatched by the tick loop at `combat.ts:357`, not by anything the combatant did — active only in the weaker sense that the combatant's own item originates the effect. **Thin, zero consequence** (it does not touch guard 2, which gates only `on_hit`), refuted from code during the Step 1 read-only pass. **Paired drift:** Rule 30 claim-accuracy is an established master-dev Topic.
+
+**(b) Catch 114 + Drift 91 — master-dev.** Asserted "One is wrong" of the `.json` 18-vs-19 figures. **Neither was** (§ 5(a)). The mechanism is a conclusion drawn from comparing counts over **NON-HOMOGENEOUS POPULATIONS** — and that is **Rule 37's FIRST APPLICATION SINCE CODIFICATION, landing against the author who codified it** two entries earlier. **Paired drift:** the Topic exists — Catch 102 (a plateau concluded from an aggregate spanning item-decided and ramp-decided combats) is the first instance of this same mechanism and took Drift 81; this is the second.
+
+**(c) Catch 115 — Claude Code. `codex-cycle`'s PR-open precondition SKIPPED.** The skill requires the PR body to clear `handoff-verify` **and** master-dev to sign off on the verbatim title and body **before** the POST. Neither happened; the PR was opened on the strength of the hand-off's Step 4 instruction, which specifies what the body must *carry*, not its verbatim text — and the skill is explicit that prompt-level authorization does not substitute. Claims were verified post-hoc and **all correct**.
+
+**DISTINGUISHER RULED BY MASTER-DEV, RECORDED BECAUSE IT GENERALISES:** a self-catch **DURING** authoring is EXCLUDED — that is ordinary revision, and counting it would make the ledger measure drafting volume. A self-report **AFTER the artifact has crossed a boundary** is **COUNTED** — the defect is complete, and disclosure is honesty about it, not prevention of it. Here the PR was open and Codex had already reviewed against it.
+
+**NO PAIRED DRIFT ORDINAL.** Per the Topic-existence test at decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …" § 11. The mechanism is **a required pre-crossing gate omitted** — not a false claim. It is therefore NOT the Claude-Code claim-accuracy Topic established at Catch 111, and it matches no other Claude-Code-side instance. **First instance of its own mechanism, no Topic → no pairing.**
+
+**(d) Catch 116 + Drift 92 — Claude Code.** `npx tsc -b --noEmit --force | tail -5; echo "exit=$?"` reports **`tail`'s** status, never `tsc`'s. Every `exit=0` in that battery measured a pager. **A verification step reporting a status it never measured** — Rule 28's mechanism exactly — and **its false green crossed to master-dev in the Phase 2 report**. Canon's own seam governs: a broken verification step that EXECUTES and fails its job takes a catch, whereas one specified-and-caught-before-running does not. Validly re-run with no pipe; all four packages exit 0 (§ 3). **Paired drift:** the Claude-Code claim-accuracy Topic established at Catch 111.
+
+**(e) Catch 117 + Drift 93 — Claude Code.** `85a08f1`'s commit message states "DRIFT: 11 distinct fixtures" while enumerating 9 + 2 + 1 in the same sentence. **The cardinal contradicts its own enumeration.** It **ESCAPED into an IMMUTABLE artifact** — a pushed commit message — which is the aggravating factor: corrected in the PR body, and superseded here, but **not rewritten**, because rewriting it would orphan `008f2f9` and every canon pin depending on it. **Paired drift:** same Topic as (d).
+
+**(f) Catch 118 + Drift 94 — Claude Code.** The post-merge verification reported **four** re-pinned sites where canon pins **five**. The cause: a grep pattern carrying a **literal closing paren** — `if (!sourceIsDead)` — which cannot match the compound condition `if (!sourceIsDead && sourceSideStats…`, silently dropping `:543`. **Mechanically identical to (d)** — a search reporting less than it claimed — and **it crossed to master-dev in the post-merge report**, where it read as a genuine five-versus-four discrepancy rather than as a pattern defect. **Separate authoring act from (d), own ordinal** per the Catch 92 artifact-boundary split. **Paired drift:** the Claude-Code claim-accuracy Topic established at Catch 111, the same Topic carrying (d) and (e).
+
+**DISPOSITION PATH RECORDED, because the procedure is the transferable part.** Claude Code surfaced this candidate in the Step 0(a) reconciliation and **declined to mint it**, on the ground that minting an ordinal master-dev had not ruled would invert the very discipline this entry records. **That was correct procedure.** Master-dev then ruled it in. The ruling turns on a point worth keeping: **a `SURFACED, NOT MINTED` item inside a LANDED entry is not a neutral placeholder — it is a debt that decays**, because the context that makes it rulable is in the session, not the log. Surfacing without minting is right in the moment; leaving it unminted at landing is not. **Closing it in place cost one ordinal; carrying it forward would have cost the reasoning.**
+
+**NO CATCH — three rulings, grounds recorded:**
+- **The `git checkout`-over-uncommitted-work void negation.** Author-checked mid-work, crossed nothing, and the void result was **excluded rather than reported**. A Rule 28 instance is recorded; no restatement is minted — restating an existing rule as new is Catch 91's shape.
+- **The determinism-hash discrepancy** (`62c7ddb…` versus the § 3 aggregate). Different tree states — the earlier hash predated `no-cascade.json`'s regeneration — both valid double-writes, and correctly explained. **Only late.**
+- **`git merge -F -` failing with `could not read file '-'`.** It **errored BEFORE mutating**: HEAD stayed at `a00831a`, nothing half-applied. A tool invocation that fails closed is not a defect.
+
+**⚠ THE ASYMMETRY, RECORDED SO THE LEDGER IS READ CORRECTLY.** Three catches land against Claude Code here, **ALL SELF-SURFACED**, and three of the gate defects — the `| tail` exit status, the void negation, the grep-pattern miss below — **would have been invisible to master-dev by construction**, since only the executing side sees whether a check measured what it claimed. **The count reflects DISCLOSURE QUALITY, not degradation.** A ledger that punishes disclosure teaches concealment.
+
+**⚠ THE ASYMMETRY HOLDS AFTER (f), AND (f) SHARPENS IT.** Four of the six catches here are Claude-Code-side, and the fourth — (f) — was surfaced by the same party it counts against, in a reconciliation step that existed only because the earlier report was checked rather than trusted. **Nothing in master-dev's position could have produced it**: a grep's pattern is visible only to whoever ran it.
+
+### 7 — HELD: cardinal-from-recall, trigger RESTATED not ADVANCED
+Five instances now, **both sides of the relay**: "six figures" (walk returned four); "four PostHog result sets" (there are seven); "the only HP predicates" (there are four; two exposed sites became seven); "One is wrong" of 18-vs-19 (neither was, § 6(b)); and `85a08f1`'s "11 distinct fixtures" (§ 6(e)). **(e) is the first to reach an IMMUTABLE artifact** — that is the escalation.
+
+**The trigger as written was "if a cardinal-from-recall defect recurs AFTER this session." It has NOT fired.** Master-dev's stated lean is to codify, **and it DECLINED to advance its own trigger.** Both the escalation and the restraint are recorded: a trigger loosened by the party it would bind is not a trigger, and holding to it while wanting the opposite is the whole value of writing it down in advance. **HELD. No ordinal.**
+
+### 8 — TECHNICAL LEARNINGS (no ordinals)
+- **(a) `npx` overwrites `npm_lifecycle_event` to `"npx"`.** A `describe.runIf(process.env.npm_lifecycle_event === '…')` gate therefore SKIPS silently under `npx`, reporting "1 skipped" and reading as a pass. Only `corepack pnpm --filter … <script>` sets it correctly. **A false green of the Rule 28 shape.**
+- **(b) The `.json` fixtures have NO scripted regeneration path.** The mechanism is the instruction carried in every `combats/*.json` `$comment`: recreate `_bootstrap-fixtures.test.ts`, run, delete. Regenerating ALL 12 deliberately makes the non-drifting ones a **formatting control** — they came out byte-identical, which is what proves the writer's serialization matches the committed format. **HELD, named so it does not decay for whoever regenerates next.**
+- **(c) `rng-sequences.json` is a GOLDEN file, not a fixture.** Regeneration is forbidden by its own description; divergence means the implementation is broken (§ 5(a)).
+- **(d) `git merge -F -` does not read stdin.** Write the message to a file.
+- **(e) A grep pattern containing a literal closing paren cannot match a compound condition.** `if (!sourceIsDead)` misses `if (!sourceIsDead && …)`, and the miss is **silent** — the search returns fewer hits and reads as a complete enumeration (§ 6(f)). Unlike (a)–(d) this is an author-side pattern defect rather than a tool quirk, but the CONSEQUENCE is the same shape and that is why it is listed here: **a check that silently under-reports.**
+
+**⚠ WATCH, NAMED NOT MINTED: silent under-reporting checks now number FIVE** — `turbo run --force` not busting `tsc -b`'s incremental cache; a stray `@types/node` ambient leak; `npx` clobbering `npm_lifecycle_event`; `| tail` swallowing exit status; a grep pattern that cannot match its target. Rule 28 governs the discipline in every case. **The category is renamed from "toolchain false greens" to "silent under-reporting checks"** because the fifth instance is not a toolchain fact, and a category named after its most common cause would have excluded it. **Whether the recurring SHAPE earns a pattern ordinal is NOT ruled here** — that is master-dev's call, and naming the count and the corrected category is what makes it rulable later.
+
+### 9 — CF-93 ROUND-11 RE-MEASURE DUE
+CF-93's round-11 figures were taken on **pre-guard** code, and CP6 changes round-11 outcomes. **10–12 fresh runs on merged main, re-read round 11, THEN CF-93 Phase 2.**
+
+**Master-dev's expectation, recorded AS AN EXPECTATION AND NOT A FINDING:** 1/11 = 9.1% → plausibly 4/11 = 36.4%, crossing balance-bible.md § 15's ~30% first-attempt target from below. The mechanism is that all three round-11 draws were sub-cap item-driven mutual KOs, the population guard 2 converts. **It is a prediction; the measurement is what settles it, and recording it as anything firmer would be the shape this arc has minted five catches for.**
+
+**CF-93's rounds-1–10 leg is UNTOUCHED by CP6** — 95/97 item-decided, and the inherited CF-83 Clause 2 at 6.25% against a ratified 15–25% band. That leg needs no re-measure.
+
+### Counter
+Full close (PR merge). Ordinal walk live from canon at tip `f6015b0`, greps run this session with a phantom-higher control on every axis: highest **Catch 112**, **Rule 37**, **Pattern 10**, **Drift 89**, **CF-94** — and `Catch 11[3-9]` → 0, `Catch 12[0-9]` → 0, `Rule 3[89]` → 0, `Drift 9[0-9]` → 0, `CF-9[5-9]` → 0, `Pattern 1[1-9]` → 0. **CF-94 closure gate:** an explicit-closure grep returns **0**, and its status statements read `CF-94 OPEN` ×3 / `CF-94 stays OPEN` ×1 — open at tip, safe to close.
+
+Deltas by ID: catches **+6** (Catch 113 § 6(a), master-dev; Catch 114 § 6(b), master-dev; Catch 115 § 6(c), Claude-Code-side; Catch 116 § 6(d), Claude-Code-side; Catch 117 § 6(e), Claude-Code-side; Catch 118 § 6(f), Claude-Code-side — surfaced-and-declined by Claude Code, **ruled in by master-dev**). Rules **+0** — § 6(b) is Rule 37's first APPLICATION, not a re-mint; § 6's no-catch block records a Rule 28 instance without restatement. Patterns **+0** — § 8's WATCH names a candidate shape and expressly does not rule it. Drifts **+5** (Drift 90 → Catch 113; Drift 91 → Catch 114; Drift 92 → Catch 116; Drift 93 → Catch 117; Drift 94 → Catch 118). **Catch 115 alone takes NO paired drift** — first instance of an omitted-pre-crossing-gate mechanism, distinct from the Claude-Code claim-accuracy Topic established at Catch 111, per the reasoning shown at § 6(c); Catches 116, 117 and 118 all pair under that Topic. Open-CFs **−1** — **CF-94 CLOSED** (§ 1); **NOTHING opened**; S6 and facet 3 stay **HELD**; CF-83, CF-84, CF-87, CF-91 stay closed.
+
+Running line: **112/37/10/89/54 → 118/37/10/94/53** — catches **118** / rules **37** / patterns **10** / drifts **94** / open-CFs **53**.
+
+**ARITHMETIC SHOWN:** catches 112 + 6 = 118 · rules 37 + 0 = 37 · patterns 10 + 0 = 10 · drifts 89 + 5 = 94 · open-CFs 54 − 1 = 53.
+
+**FOUR OF THE SIX CATCHES ARE CLAUDE-CODE-SIDE (115, 116, 117, 118) AND ALL FOUR WERE SELF-SURFACED.** Recorded next to the arithmetic so the ratio is read with § 6's asymmetry paragraph rather than apart from it.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **37** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so distinct codified rules stand at **36**. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The **53** is carried forward by arithmetic, unverified by enumeration. The re-enumeration remains unscheduled — **and this entry's `−1` is the first decrement since it was last flagged, which does not make the axis any more verified.**
+
+**ANCHORS, both named:** **artifact anchor** = merge `f6015b0`; **counter anchor** = this entry's own docs commit. Distinct, per the SHA-vs-section-anchor independence canon records.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-94** — reaction alive-guard. **CLOSED** (this entry, § 1) on MERGE `f6015b0`. CP6's two guards shipped; all five line-pins re-pinned (§ 2); gates and Codex cycle recorded (§ 3). S6 and facet 3 remain HELD and are NOT folded into the closure.
+- **CF-93** — the difficulty curve. Stays **OPEN**. Its round-11 leg requires a RE-MEASURE on merged main before Phase 2 (§ 9); its rounds-1–10 leg is untouched by CP6.
+
+Remote-branch state after `git fetch --prune origin`: `origin/cf87-boss-chokepoint` is **gone** (deleted in the browser this session; the prune removed a stale local tracking ref, which an earlier report had read as still-present). `origin/cf94-cp4-liveness` survives and is a candidate for the same cleanup.
+
+---
+
 ## 2026-07-25 — CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards — a CROSS-SIDE gate at ORIGINATION plus a SOURCE-BENEFIT gate at application — because CP4's placement destroyed CF-84's item-driven mutual-KO draw, converting it into a win for whichever side the `['player', 'ghost']` array literal drains first, which is always the player; **CF-84's semantics are PRESERVED under CP6 and CF-84 stays CLOSED, not reopened**; CP5 (a pure origination gate, guard 1 alone) RECORDED DEAD — a cross-side predicate cannot reach `vampire-fang`'s `heal 2 target 'self'`, and the failure was found BY PROBE, not by reading: reading predicted a single revive, execution found a sustained resurrection loop in which a 4-HP ghost kills a 30-HP player; ABLATION MATRIX recorded — the two guards are ORTHOGONAL, each independently necessary, jointly sufficient, and neither ablation touches the draw or the ramp regression; the no-guard negation is NOT REQUIRED and the one attempted run is EXCLUDED AS VOID rather than reported; master-dev's active/reactive trigger taxonomy CORRECTED on one member from the dispatch sites; deciders GREEN and corpus drift 11 files stated as COST; **Rule 20-gated — NO regeneration, PR, or merge until this entry carries a real SHA**; counter 112/37/10/89/54 → 112/37/10/89/54 (all axes UNCHANGED)
 
 Docs-only, insertion-only, `decision-log.md` alone. Baseline tip `8c2d893`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CUT POINT PLACED at CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is CROSS-SIDE, not effect-type …" carrying **112/37/10/89/54**, read from the file this session. No code, schema, content, corpus, or migration change lands here — the implementation sits unpushed on `cf94-cp4-liveness` (§ 6). Docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor**.
