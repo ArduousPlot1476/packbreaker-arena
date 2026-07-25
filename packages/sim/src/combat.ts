@@ -470,6 +470,39 @@ function runDamageResolution(state: CombatState): void {
   }
 }
 
+/** CF-94 CP6 GUARD 1 — cross-side liveness gate (decision-log.md 2026-07-25 §
+ *  "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the
+ *  cut point moves from ONE application-time gate to TWO guards …"). An effect
+ *  originated by a combatant whose CURRENT HP is <= 0 resolves only if it does NOT
+ *  cross to the opponent. Self-side effects (heal-self, buff_adjacent) are untouched
+ *  at either liveness — a 0-HP combatant may not act ON THE OPPONENT, but its
+ *  triggers still fire and it stays a valid heal target until the death check.
+ *
+ *  TWO CALL SITES, BOTH INSIDE resolveEffect, both AFTER target resolution so the
+ *  pickRandomItemRef draw is never skipped:
+ *    - case 'damage'       — at ORIGINATION, before the PendingDamage is queued
+ *                            (top-level) or applied inline (reaction)
+ *    - case 'apply_status' — opponent-targeted status
+ *
+ *  ⚠ EVALUATED AT ORIGINATION, NOT AT APPLICATION — the REVERSE of superseded CP4,
+ *  and the reversal is the point. Damage queued while the source was still alive
+ *  LANDS when it drains, even though the source died in between. That is what
+ *  preserves CF-84's item-driven mutual-KO draw: an application-time gate suppresses
+ *  the second hit and hands the win to whichever side the ['player', 'ghost'] literal
+ *  drains first, which is always the player. Do not "fix" this back to applyDamage.
+ *
+ *  The dead source's BENEFIT from that landing hit — lifesteal and source-side
+ *  on_hit — is withheld separately, by GUARD 2 inside applyDamage. */
+function crossesToOpponentWhileDead(
+  state: CombatState,
+  sourceSide: EntityRef,
+  targetSide: EntityRef,
+): boolean {
+  if (targetSide === sourceSide) return false; // self-side never crosses
+  const sourceCombatant = sourceSide === 'player' ? state.player : state.ghost;
+  return sourceCombatant.hp <= 0;
+}
+
 /** Applies a damage event: HP mutation, event emission, lifesteal, reactions.
  *  Called during damage_resolution drain (for top-level events) and inline
  *  during reaction effect resolution (for reaction events flagged
@@ -501,7 +534,13 @@ function applyDamage(state: CombatState, pd: PendingDamage): void {
   // Lifesteal: source-side's relic-summed lifestealPct of capped amount.
   // Applies to all damage events (top-level and reaction) symmetrically —
   // Bloodmoon Plate's retaliation lifesteals back if its owner has lifestealPct.
-  if (sourceSideStats.lifestealPct > 0) {
+  // CF-94 CP6 GUARD 2 — source-benefit gate. The damage LANDS; a combatant at
+  // 0 HP derives no benefit from it. Read AFTER the HP mutation, so a
+  // self-targeted killing blow is judged on post-damage HP (no shipped item
+  // self-damages — that arm is untested by content, called out not assumed).
+  const sourceIsDead = sourceCombatant.hp <= 0;
+
+  if (!sourceIsDead && sourceSideStats.lifestealPct > 0) {
     const healAmount = applyBp(cappedAmount, sourceSideStats.lifestealPct * 100);
     const beforeHp = sourceCombatant.hp;
     const newHp = Math.min(sourceCombatant.startingHp, beforeHp + healAmount);
@@ -527,7 +566,11 @@ function applyDamage(state: CombatState, pd: PendingDamage): void {
   // target side. Single round each, canonical placement order. Reactions'
   // damage effects flow back through resolveEffect with isReaction=true,
   // which routes to applyDamage inline (not queued).
-  fireDamageReactions(state, pd.sourceSide, 'on_hit', pd.source);
+  // :563 dispatches ONLY source-side on_hit (fireDamageReactions filters on
+  // trigger.type and selects bag+triggerState by side), so this suppresses
+  // exactly the dead source's on_hit. The TARGET's on_taken_damage below is
+  // untouched — being hit is not a benefit the dead derive.
+  if (!sourceIsDead) fireDamageReactions(state, pd.sourceSide, 'on_hit', pd.source);
   fireDamageReactions(state, pd.targetSide, 'on_taken_damage', pd.source);
 }
 
@@ -724,6 +767,11 @@ function resolveEffect(
     case 'damage': {
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
+      // CF-94 CP6 GUARD 1 — cross-side gate at ORIGINATION, after
+      // resolveTargetSideForDamage above so the pickRandomItemRef draw is never
+      // skipped. Damage queued while the source was alive still LANDS when it
+      // drains — that is what preserves CF-84's item-driven mutual-KO draw.
+      if (crossesToOpponentWhileDead(state, sourceSide, targetSide)) return;
       const buffSum = sumActiveBuffs(state.activeBuffs, source, 'damage');
       // Locked answer 15: recipeBonusPct applies multiplicatively to recipe-born
       // sources BEFORE flat additions (buffs, bonusBaseDamage).
@@ -779,6 +827,14 @@ function resolveEffect(
     case 'apply_status': {
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
+      // CF-94 CP6 GUARD 1, second call site. AFTER target resolution above, so the
+      // random_item rng draw is never skipped. Unlike the 'damage' site there is no
+      // queue here — apply_status resolves immediately, so origination and
+      // application coincide and this gate is correct at either reading. Closes the
+      // adjacency path: a 0-HP combatant whose weapon fires on_low_health reaches
+      // fireAdjacentReactions, and an adjacent spark-stone / fire-oil would
+      // otherwise burn the opponent from the dead.
+      if (crossesToOpponentWhileDead(state, sourceSide, targetSide)) return;
       const targetStatus = targetSide === 'player' ? state.playerStatus : state.ghostStatus;
       // Locked answer 15: recipeBonusPct applies to status stacks BEFORE the
       // silent cap from STATUS_STACK_CAPS. Stun (boolean) ignores stacks per

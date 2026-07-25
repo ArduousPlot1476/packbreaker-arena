@@ -533,28 +533,17 @@
     },
     {
       "tick": 400,
-      "type": "damage",
-      "source": {
-        "side": "ghost",
-        "placementId": "g1"
-      },
-      "target": "player",
-      "amount": 3,
-      "remainingHp": 20
-    },
-    {
-      "tick": 400,
       "type": "combat_end",
       "outcome": "player_win",
       "finalHp": {
-        "player": 20,
+        "player": 23,
         "ghost": 0
       }
     }
   ],
   "expectedOutcome": "player_win",
   "expectedFinalHp": {
-    "player": 20,
+    "player": 23,
     "ghost": 0
   },
   "expectedEndedAtTick": 400
