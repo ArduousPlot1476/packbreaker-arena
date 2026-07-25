@@ -4,6 +4,197 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-25 — CF-87 CLOSED on MEASUREMENT (both legs of the § 10 criterion MET; docs-only, NO artifact merge — the CF-89 precedent): leg 2 met by `D2 — Boss win rate (round 11, by build)`, built as a `GROUP BY properties.clientVersion` BREAKDOWN and deliberately NOT a hardcoded filter; leg 1 corroborated BEHAVIORALLY by an unplanned 9-build natural experiment (pre-`ab3e4be` 29/30 = 96.7% → post-merge 1/11 = 9.1%, an 87.6-point shift coincident with route (D) shipping) — stronger than the Rule 19 render proof, which showed the boss DISPLAYED where this shows it FOUGHT; boss win rate **1/11 = 9.1%** against balance-bible.md § 15's ~30% first-attempt target, recorded with FOUR unsoftened limits (n=11 with a Clopper-Pearson 95% CI that CONTAINS 30%; author confound running the wrong way; § 10's own text excluding the band from closure; guardrail asymmetry); draws are LOSSES by construction (`state.ts:1037`), so 9.1% is the whole number and no draw-excluded alternative exists; Catch 98 + Drift 77 (a build-time-derived value frozen into canon as a fixed literal) + Catch 99 + Drift 78 (closure bound to a band § 10 excludes by name, off a Rule 32 paraphrase) — both master-dev, Class A, NO new rule ordinal minted; PRECEDENT RATIFIED that a self-surfaced catch COUNTS, with the delegation provenance recorded because master-dev ruled on two catches against itself; CF-92 Phase 1 ANSWERED (no boss-specific run-end branch exists; CF-92 STAYS OPEN); CF-93 OPENED (rounds 4–10 unlosable → round-11 cliff; problem only, no cause asserted); combat-duration item HELD with a named trigger; balance-bible.md § 15 reward line ANNOTATED (M1 ships 2 of 3; random-Epic leg M2-deferred, NO catch — Rule 33 postdates CF-67's close); three canon walks REPORTED, nothing minted from them, one of which REFUTED its own question's framing; counter 97/36/10/76/53 → 99/36/10/78/53
+
+Docs-only, insertion-only, two files (decision-log.md + balance-bible.md). Baseline tip `360d6dc` (decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED …") carrying **97/36/10/76/53**. No code, schema, content, corpus, or migration change. **This entry's own docs commit is BOTH the counter anchor and the entry anchor** — there is no artifact merge, because CF-87 closed on MEASUREMENT, not on a PR (decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …").
+
+### 1 — CF-87 CLOSED: BOTH LEGS MET
+
+The criterion, quoted VERBATIM from decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …" § 10 (pulled from the literal text, not a carry — see § 5):
+
+> CF-87 closes when a real round-11 fight verifiably runs the § 15 configuration AND the D2 boss-win tile becomes readable (windowed by `clientVersion`). Hitting the ~30% band is balance-bible.md § 16 guardrail work, NOT closure — a badly missed band post-ship is a tuning investigation, not a CF-87 reopen. Pinned NOW because CF-89 demonstrated that a CF closes when its problem is gone, not when its planned PR list is exhausted, and the inverse failure is a CF held open on a tuning number.
+
+- **Leg 1 — MET at merge, already recorded** (decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED …" § 2: construction plus a Rule 19 rendered proof). **ADDITIONALLY corroborated BEHAVIOURALLY this session** — see § 3. The render proof established that the boss is DISPLAYED; the distribution shift establishes that it is FOUGHT. That is a different and stronger class of evidence, and it was not available until now.
+- **Leg 2 — MET.** The tile exists: a SQL insight named `D2 — Boss win rate (round 11, by build)` on the `D2 — Item & Build Meta` dashboard. It renders real boss data across 9 builds and 41 round-11 attempts.
+
+**IMPLEMENTATION CHOICE, RECORDED EXPLICITLY SO NO FUTURE READER ASSUMES A FILTER.** The windowing is a **`GROUP BY properties.clientVersion` BREAKDOWN**, not a hardcoded `clientVersion = '<literal>'` filter. RATIONALE: a literal filter returns the EMPTY SET on the very next commit, because CF-54 stamps the value at build time from `git rev-parse --short HEAD` (`apps/client/vite.config.ts`) — i.e. a literal filter would transplant Catch 98's own mechanism (§ 4) into the dashboard and make the tile self-invalidating. The breakdown is immune: new builds appear as new rows rather than silently emptying the tile. This choice is what makes leg 2 durable rather than momentary, and it is also what produced § 3's natural experiment as a side effect.
+
+**CLOSURE GATE (skill Step 2.2), walked live:** a grep of decision-log.md for `CF-87 CLOSED` / `CF-87 closed` at tip `360d6dc` returned ZERO hits — CF-87 has never been closed, and the tip carries it explicitly OPEN ("**CF-87** — boss-encounter wiring. Route (D) SHIPPED at `ab3e4be`. Stays **OPEN** on the § 10 measurement leg"). The closure evidence is in this entry's §§ 1–3. **CF-87 is CLOSED.**
+
+### 2 — THE MEASUREMENT
+
+Build `0.0.1+360d6dc`, HEAD frozen for the session. **11 round-11 combats: 1 `player_win` / 7 `ghost_win` / 3 `draw`. ALL ELEVEN `endReason: ko` — zero `ramp_ko`.** Boss win rate **1/11 = 9.1%** against balance-bible.md § 15's ~30% first-attempt target.
+
+**DRAWS ARE LOSSES — there is no draw-excluded alternative number.** `packages/sim/src/run/state.ts:1037` collapses the three-way `CombatOutcome` to a two-way `RoundOutcome` before any consumer sees the distinction: `const roundOutcome: RoundOutcome = input.outcome === 'player_win' ? 'win' : 'loss';`. A draw therefore costs a heart (`state.ts:1049-1055`, the `else` arm), takes the loss trophy delta via `trophyDeltaFor(roundOutcome, …)`, earns 0 gold, ends the run `'eliminated'` (`state.ts:555-559` reads the COLLAPSED field through `lastCombatOutcomeForRound`), and **forfeits the reward at all three gates** — `state.ts:911-919` (`grantRelic` boss branch), `state.ts:953-960` (`grantBossItem`), and `apps/client/src/run/useRun.ts:667-674` (the client offer gate). Each tests `outcome === 'win'`, NOT "not a loss". Verified against executing code, not types or comments (Rule 30). **9.1% is the whole number.**
+
+**A NOTE ON THE ZERO `ramp_ko`, recorded so it is not over-read:** `endReason` is a pure function of tick, not of cause — `packages/sim/src/combat.ts:283`: `const endReason: EndReason = state.tick >= RAMP_START_TICK ? 'ramp_ko' : 'ko';`. Every boss combat this session ended between ticks 50 and 140, i.e. far below `RAMP_START_TICK`. "All eleven `ko`" is therefore ENTAILED by the tick data, not independent evidence about it. See § 11(c).
+
+**HONEST LIMITS — all four, unsoftened.**
+
+**(a) n=11 IS SMALL AND THE TARGET IS NOT STATISTICALLY EXCLUDED.** The exact Clopper-Pearson 95% CI for 1/11 is **[0.23%, 41.3%]**, which **CONTAINS 30%**. `P(≤1 win | true p = 0.30, n = 11) ≈ 11.3%` — suggestive, NOT significant. Computed this session, not carried. This measurement cannot and does not establish that the boss misses its band; it establishes that the band is now measurable and that the first read sits well below it.
+
+**(b) AUTHOR CONFOUND, running the wrong way.** The sole tester authored all 45 items and all 12 recipes. His win rate should sit ABOVE what § 15 describes for an "average" build, not below it. Coming in at roughly a third of target DESPITE that advantage is the direction that makes the signal actionable rather than dismissible — the confound, if corrected for, would push the true population rate DOWN, not up. The same confound is already on record weakening a different finding (the shop-card affordance item), so this is a known and consistently-applied caveat, not a convenience.
+
+**(c) MISSING THE BAND IS NOT A CF-87 MATTER, BY § 10'S OWN TEXT.** Quoted verbatim in § 1: "Hitting the ~30% band is balance-bible.md § 16 guardrail work, NOT closure — a badly missed band post-ship is a tuning investigation, not a CF-87 reopen." This is why the 9.1% appears here as a RECORDED MEASUREMENT and not as a closure obstacle, and why it does not reopen CF-87. It is also the clause master-dev's Catch 99 (§ 5) contradicted.
+
+**(d) GUARDRAIL ASYMMETRY — and it is worse than asymmetry.** `packages/sim/test/fixtures/runs/README.md` trigger (a) fires on an organic boss-win rate **EXCEEDING** 30% — a too-EASY trigger. No codified trigger anywhere covers too-HARD. Two refinements from the live walk, recorded because they sharpen the point: (i) trigger (a) is an AND-conjunction whose first conjunct is "M1.5 client integration replaces scripted strategies with player input", and it is written as a revisit trigger for the `BOSS_RELIC_PAIR_EXCEPTIONS` coverage list rather than as a balance guardrail at all; (ii) **balance-bible.md § 16 contains NO per-round or per-round-band trigger of ANY kind** — its five triggers key on item pick rate (low), item pick rate (high), build win rate (high, ≥100 instances), recipe completion (never, 50+ runs), and class win-rate GAP (>8 points). The round axis is ABSENT, not merely one-sided. **RECORDED. Nothing proposed.** (§ 8 opens on the adjacent problem; it does not propose a guardrail.)
+
+### 3 — NATURAL EXPERIMENT (unplanned — § 1's breakdown produced it)
+
+The by-build tile shows **9 builds**. Aggregated:
+
+| Population | Round-11 attempts | Wins | Rate |
+|---|---|---|---|
+| Pre-`ab3e4be` builds | 30 | 29 | **96.7%** |
+| Post-merge (`0.0.1+360d6dc`) | 11 | 1 | **9.1%** |
+
+An **87.6-point shift**, coincident with route (D) shipping. Nobody designed this comparison; it fell out of choosing a breakdown over a filter (§ 1).
+
+**THIS IS BEHAVIOURAL LEG-1 EVIDENCE, AND IT OUTRANKS THE RENDER PROOF.** The Rule 19 probe showed the boss is DISPLAYED — an intent panel reading "Ghost · Forge Tyrant · Round 11" and an S2b reveal showing the § 15 bag. A render proof cannot distinguish a correctly-labelled boss from a correctly-labelled boss that fights like the old 40-HP marauder. The outcome distribution can, and it moved by 87.6 points at exactly the merge boundary. Route (D) is not merely rendering the § 15 configuration; it is fighting it.
+
+**INDEPENDENT CORROBORATION, and the sharp part.** The `0.0.1+ff986cc` row reads **3 attempts / 3 wins / 100%** — which reproduces EXACTLY the observation already on CF-87's record at decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …" § 9 ("Three of three completed runs won at **round 11**", on that entry's stated "BASIS: four runs on `ff986cc`"). A note taken from live play weeks ago, reproduced independently by a query built this session that knew nothing about it. Two instruments, one number.
+
+**DATA-HYGIENE NOTE (recorded fact; opens nothing).** One build in the breakdown stamps **`m1.5c-pr1`**, not `0.0.1+<sha>`. The `clientVersion` FORMAT has changed historically, not merely its value. This STRENGTHENS Catch 98 (§ 4) — a canon-frozen literal is fragile against a moving value AND against a moving format — and independently vindicates breakdown-over-filter (§ 1): a filter written against either format would have silently dropped the other. **No CF.**
+
+### 4 — CATCH 98 + DRIFT 77 (master-dev, Class A / Rule 30)
+
+Canon at `360d6dc` § 2 records the windowing key as a fixed literal: "WINDOWING KEY: `clientVersion` = 0.0.1+ab3e4be". The CF-54 scheme derives that value at BUILD time — `apps/client/vite.config.ts` runs `git rev-parse --short HEAD` at Vite config load and composes `` `${pkgVersion}+${gitSha}` `` — so the value MOVES on every commit.
+
+**MECHANISM: a build-time-derived value frozen into canon as a fixed literal.** This is a CATEGORY ERROR, not a stale value. The correct predicate is a SET — "any build at or after `ab3e4be`" — and canon recorded a single literal. A stale value would be fixable by substitution alone; a category error reproduces itself every time the artifact is regenerated, which is precisely what a dashboard filter would have done (§ 1).
+
+**EMPIRICALLY CONFIRMED, not merely reasoned:** `ab3e4be` appears in **0 of 9** builds across 41 round-11 attempts. The literal recorded in canon as THE windowing key matches nothing that was ever emitted. Had leg 2 been executed as written, the tile would have returned the empty set and the closure evidence would have read as absent rather than as mis-keyed.
+
+**SUPERSEDED BY SUBSTITUTION** — this entry records the actual value used (`0.0.1+360d6dc`) and the actual mechanism (breakdown, § 1). The tip entry is NOT edited; its § 2 stays readable as authored, per insertion-only discipline.
+
+**NO NEW RULE ORDINAL.** Rule 30 already governs; minting another would be the restatement defect this project has already caught once. Reinforced by the data-hygiene note in § 3 (the format moved too, so even a set-predicate over `0.0.1+*` would have been incomplete).
+
+### 5 — CATCH 99 + DRIFT 78 (master-dev, Class A / Rule 30 + Rule 32)
+
+Master-dev bound CF-87's closure to hitting balance-bible.md § 15's ~30% band, and pre-committed numeric bands on that basis — when **§ 10's own text explicitly excludes the band from closure by name.** The criterion did not merely fail to require the band; it pre-empted the substitution in advance ("Hitting the ~30% band is … NOT closure", quoted verbatim in § 1). A criterion that names and rejects a substitution is the hardest possible case to substitute against.
+
+**AGGRAVATING FACTOR, recorded rather than softened:** master-dev was working from a session-carry **PARAPHRASE** of § 10 rather than its verbatim text. That is Rule 32's exact failure mode — carried state not reconciled against canon. Rule 30 governs the unverified assertion; Rule 32 governs the mechanism that produced it. Both apply, jointly.
+
+**SELF-SURFACED PRE-WRITE**, during closing-entry drafting, by master-dev's own Rule 32 session-open walk. **Nothing reached canon.** Counted per § 6.
+
+**NO NEW RULE ORDINAL.** Rules 30 and 32 jointly govern the whole of it. A third would be the same restatement shape this project has already minted a catch for, and would carry Pattern 10's under-generalization risk — codifying to this instance's surface (a § 10 paraphrase) rather than to its generative mechanism (a carried paraphrase substituted for canon). Pattern 10's ratified remedy is to state the mechanism and test the draft wording against a hypothetical variant sharing the mechanism but not the surface; a rule scoped to "closure criteria" would fail that test immediately.
+
+**§ 6 OF THE TIP ENTRY STANDS UNAMENDED.** The ruling against a meta-audit layer (decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED …" § 6) holds, and its reconsideration trigger — a master-dev catch that ESCAPES to shipped state or to a player-visible surface — **did NOT fire.** Catch 98 propagated into canon but not into shipped state; Catch 99 never left the draft. Both were caught by the apparatus working.
+
+### 6 — PRECEDENT RATIFIED: A SELF-SURFACED CATCH COUNTS
+
+Catches 98 and 99 were surfaced by master-dev's own Rule 32 session-open walk, not by a different actor. **RULING: they COUNT.**
+
+**THE DERIVATION IS NARROWER THAN IT FIRST APPEARS — recorded precisely, because the live walk found canon already covers most of it.**
+
+- **Catch 98 needs NO extension at all.** It PROPAGATED — it reached canon at `360d6dc` § 2. The post-propagation self-catch ruling at decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …" § 13 governs it DIRECTLY: "propagation, not the identity of the surfacer, is the operative fact". The same principle is stated even more crisply, and EARLIER on the same date, at decision-log.md 2026-07-23 § "CF-89 PR-A CLOSED: L1 adjacency-effect reveal shipped (merge `3e35f40`, PR \#57) …" § 5: "An authoring defect that survives into a build or a handoff artifact is a catch regardless of who surfaces it." Catch 98 is a straightforward application. That ruling has already been applied to a self-surfaced catch once before, in the immediately preceding arc.
+- **Catch 99 is where the extension does work.** It never propagated, so the pre-propagation exclusion is the live question. The distinguisher ratified at decision-log.md 2026-07-22 § "CF-89 fork ROUTED: content-texture inventory verdict (a) SURFACE ratified …" § 4 counts a drafting error "surfaced by a verification gate / other actor" even before landing. **A Rule 32 session-open walk IS a verification gate** — that is the reading ratified here, and it is the same shape as Catch 97, which was counted for being gate-surfaced pre-write by decision-log-close Step 0.
+
+**WHY ACTOR IDENTITY IS NOT THE OPERATIVE TERM.** Reading the distinguisher to require a DIFFERENT actor would scope it to its instances' surface feature (who happened to notice) rather than to its generative mechanism (whether a verification gate ran). That is Pattern 10's exact failure mode, and Pattern 10's ratified remedy is to test the wording against a variant sharing the mechanism but not the surface. The variant here is trivial to construct and canon has already decided it: Catch 97, gate-surfaced pre-write, counted. Nothing about that ruling turned on who was operating the gate.
+
+**COUNTER-ARGUMENT, RECORDED NOT BURIED:** this lets master-dev inflate its own catch count. **REJECTED** — the counter is a defect ledger, not a score. Under-counting is the more dangerous direction: an uncounted defect is an unlearned one. And every master-dev catch carries a paired drift, so inflation costs on both axes simultaneously rather than buying anything.
+
+**⚠ PROVENANCE — RECORDED SO THE LEDGER'S INTEGRITY IS AUDITABLE.** Trey **DELEGATED all three rulings** to master-dev ("I will defer to your leans"). Master-dev therefore ruled on **two catches against itself**, and on **the precedent governing whether its own self-caught errors count at all**. It ruled against its own interest on all three. This is recorded not as credit but as disclosure: a future reader auditing this arc should know that the counting authority and the counted party were the same, on this entry, by explicit delegation.
+
+**NO NEW RULE ORDINAL** — this extends an existing distinguisher's reading, and per the § 4/§ 5 reasoning a fresh ordinal would restate what Rules 30/32 and the 2026-07-22 and 2026-07-23 rulings already carry.
+
+### 7 — CF-92 PHASE 1 ANSWERED (CF-92 STAYS OPEN)
+
+Read-only inspection this session of `apps/client/src/screens/RunEndScreen.tsx`. CF-92 was opened with its props explicitly NOT inspected (decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE about shipped code …" § 4 recorded that as "**UNVERIFIED HERE** … Rule 30 posture"). Inspected now:
+
+- **NO branch anywhere distinguishes a round-11 boss elimination from an ordinary mid-run elimination.**
+- Props are exactly two callbacks — `onPlayAgain` and `onRestart`; everything else reads `useRunContext()`.
+- **The literal `11` does not appear in the file.** `round` enters only via `runEndSubCopy`'s interpolation and the meta cell's `{round} / {totalRounds}`; it is never compared against a boss predicate.
+- Every branch keys on `outcome` alone: `OUTCOME_LABELS`, `OUTCOME_GLYPHS`, `runEndSubCopy`, and the accent/type treatment.
+- A boss loss therefore renders `✕` / `DEFEAT` / `Eliminated · Round 11` / `#e85c5c` — **byte-identical to a round-3 loss but for the interpolated number.**
+
+**THE ASYMMETRY IS THE SHARP PART:** the WIN path already reads `` `Round ${round} boss defeated` ``. **Boss-aware copy exists on one side only.** The screen already knows how to say "boss" — it just never says it to the player who lost to one.
+
+**EVIDENCE BASE MOVED FROM n=1 TO n=10.** The tip entry recorded a single observed boss loss (§ 4 there, "n=1, NOT a measurement"). This session, **10 of 11 runs ended in a boss-loss elimination**. The surface CF-92 exists to fix is now the MODAL run-ending experience, not an edge case.
+
+**Phase 1 is answered; Phase 2 is NOT scoped here.** No solution is proposed, no field is designed, no render is specified. **CF-92 STAYS OPEN.**
+
+### 8 — CF-93 OPENED: the difficulty curve
+
+**ORDINAL WALKED LIVE from canon this session** (not assumed — Catch 97 was minted for asserting an ordinal without walking): `grep -oE 'CF-[0-9]+' decision-log.md` tops out at **CF-92**; `grep -cE 'CF-(9[3-9]|[1-9][0-9]{2,})' decision-log.md` returns **0**; a `git grep` for `CF-93`-or-higher across ALL tracked files, all branch names, and all commit messages returns **zero hits**; and combining the modern `CF-N` form with the older `CF N` space form, the ordinal space is CONTIGUOUS 1–92 with no reclaimable gap. Highest minted = **CF-92** (opened at decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE about shipped code …" § 4). Next free resolves to exactly **CF-93**. The walk was run twice, independently, with the second pass instructed to refute the first; it failed to.
+
+**THE PROBLEM.** Rounds 4–10 across this session's sample are **76 combats / 76 player wins / ZERO losses**. Round 11 then drops to **9.1%** — a ~91-point cliff in a single round. The pre-boss population extends the unlosable band THROUGH round 11 (§ 3: 96.7%), so this is not a boss-only observation: it is a curve whose entire difficulty is concentrated in one round, and which was previously flat all the way to the end. balance-bible.md § 16 has no guardrail testing for a round band being unlosable — indeed no per-round trigger of any kind (§ 2(d)).
+
+**INTERNAL CORROBORATION, worth recording:** 7 rounds × 11 runs = **77** expected combats for rounds 4–10; **76** were observed. The delta is exactly **1**, matching the missing-`combat_end` observation in § 11(a). Two independently-derived anomalies agreeing on the same single event.
+
+**OPENS ON THE PROBLEM ONLY. NO CAUSE ASSERTED, NO FIX SCOPED.** Master-dev's damage-stack hypothesis — Marauder passive +1, `conquerors-crown` +4, Tyrant's Wrath +2 = +7 base damage per effect, plus 15% lifesteal, plus 50 HP, against a round-10 ghost at ~38 HP — is recorded **AS A HYPOTHESIS ONLY and is UNVERIFIED.** It needs its own Phase 1 and gets no standing here.
+
+**NOTED WITHOUT RULING:** the boss carries the relic it awards. Verified in code, not inferred — `apps/client/src/combat/opponentForRound.ts:103-107` carries `relics: { ...FORGE_TYRANT.relics }` verbatim with `relics.boss = 'conquerors-crown'`, and `conquerors-crown` is the Marauder boss relic (`packages/content/src/relics.ts:108-114`, `classAffinity: MARAUDER`, `slot: 'boss'`) — i.e. exactly what `generateBossRelicOffer` awards a Marauder player on the win. **No entry ratifies that arrangement.** Recorded as an observation for CF-93's Phase 1 to consider; it is NOT asserted as the cause.
+
+**CF-93 is OPEN.** Rule 20: no implementation prompt cites this opening until this entry carries a real SHA. M2.
+
+### 9 — HELD, NOT OPENED: combat playback duration
+
+Boss combats this session ran **50 / 50 / 50 / 50 / 51 / 60 / 60 / 73 / 100 / 100 / 140 ticks**. At `msPerTick = 100` (`apps/client/src/combat/CombatScene.ts:216`, `this.msPerTick = Math.round(1000 / data.ticksPerSecond)` with `TICKS_PER_SECOND = 10`), the **median is 60 ticks = 6.0 s of playback, ≈ 6.5 s to the resolution panel** once `COMBAT_END_SETTLE_MS = 480` (`CombatScene.ts:74`) is included.
+
+**FIGURE CORRECTED IN DRAFT, recorded for accuracy:** an earlier draft of this item carried "~5.5 s to the resolution panel". That figure belongs to the **50-tick** case (5.0 s + 0.48 s = 5.48 s), not to the 60-tick median. Recomputed from the tick list this session; the median figures above are the correct ones. Caught pre-write, no propagation, no ordinal — recorded only because § 9 is a quantitative held item and a future reader may re-derive it.
+
+tech-architecture.md § 2 justifies the Phaser/React renderer split partly on "the 8–20s combat window where canvas earns its keep" (verified verbatim; the dash is U+2013). **8 of 11 boss combats fall below that 8 s floor** — the same count whether or not the settle is included.
+
+**Auto-compression does NOT engage on these.** The gap-triggered fast-forward requires a gap to the next event exceeding `DEAD_TIME_THRESHOLD_TICKS = 8` (`apps/client/src/combat/tickAdvancer.ts:88-98`), which a dense KO does not produce; the zero-content fast-skip requires `outcome === 'draw'` **AND** no meaningful events (`apps/client/src/combat/CombatOverlay.tsx:240-247`), and a `ko` is event-bearing by definition. Only the player's manual SKIP shortens these.
+
+**HELD, not opened** — n=11, and it may resolve as a downstream consequence of § 8's curve work (a boss that is fought longer is a boss fought at a different difficulty). **TRIGGER, named so it is checkable: if § 8's investigation lands without moving boss combat above the 8 s floor, open it.**
+
+### 10 — BIBLE ANNOTATION: § 15 reward line (M1 ships 2 of 3)
+
+balance-bible.md § 15 reads "Win: choose 1 of 3 from { `world-forged-heart` (Legendary), one random Epic, the boss relic for the player's class }". **CODE SHIPS 2 OF 3.** Verified against executing code (Rule 30): `apps/client/src/run/useRun.ts:675-684` builds the card array from `generateBossRelicOffer(seed, classId)` — which returns exactly ONE relic, because it filters `relic.slot === 'boss' && relic.classAffinity === classId` and M1 ships one boss relic per class (`packages/sim/src/run/relicOffer.ts:77-89`) — plus one fixed `world-forged-heart` item card. `RelicOfferModal` renders exactly `cards.length`. **The random-Epic leg is UNIMPLEMENTED.**
+
+It is **RATIFIED-DEFERRED to M2 in three separate entries, all dated 2026-07-12**, walked and confirmed this session:
+- decision-log.md 2026-07-12 § "CF-67 OPENED (corrected): boss win-reward item legs missing; relic branch already wired" — "Random-Epic leg (variable footprint, pool-random selection, real bag-placement UX) deferred to M2, alongside § 18 open lever \#8".
+- decision-log.md 2026-07-12 § "CF-67 Phase 1 ratified (auto-place disposition, reverses earlier player-placement lean)" — "Random-Epic leg stays deferred to M2."
+- decision-log.md 2026-07-12 § "CF-67 Phase 2 CLOSED: boss-win Legendary reward (world-forged-heart) auto-placed + choose-one exclusivity (PR \#41, merge `f6a2102`); Codex clean 2 rounds; Rules 21 + 22 codified" — "Random-Epic leg stays M2."
+
+**§ 15's reward line is ANNOTATED IN PLACE** to state that M1 ships 2 of 3, citing the CF-67 Phase 2 close. In-place bible annotation is the convention Rule 33's precedent permits for bible files (as already applied to § 15's "Lose:" line and § 18 item 4).
+
+**NO CATCH — and the reasoning is recorded explicitly rather than left implicit.** Rule 33 (correlated-site update) was codified at decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED (Phase 2 gate) …", which is **AFTER** CF-67 closed on 2026-07-12. A rule cannot be applied retroactively to an act that predates its codification. The bible line was correct-as-scoped when written (it describes the designed reward set) and merely un-annotated as to shipped state; this entry supplies the annotation.
+
+### 11 — CANON WALKS (all three walked live; reported, nothing minted)
+
+**(a) MISSING `combat_end` — a SECOND instance of the held item's shape.** The held item is authored at decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …" § 16, and reads VERBATIM:
+
+> - **(iii) MISSING `combat_end`.** `run-805796263` reached round 11 with only **10** `combat_end` events; the other two round-11 runs each carry 11. One event unaccounted for, in the same run that shows a 108.92-min span (plausibly a dropped batch during a long idle). **WATCH — n=1, no ordinal, no CF.** Related in kind to (iv).
+
+This session's observation matches that shape: round 6 carries **10** `combat_end` events where rounds 5 and 7 each carry **11**, and all 11 runs necessarily passed through round 6 — one event missing. Independently corroborated by § 8's arithmetic (77 expected vs 76 observed across rounds 4–10, delta exactly 1). One `combat_end` is emitted per resolved combat (`packages/sim/src/run/state.ts:1073-1084`), so the expected count is exact.
+
+**REPORTED DIFFERENCES, not smoothed:** the first instance is a WHOLE-RUN count anomaly whose missing round canon does NOT identify, hedged to "plausibly a dropped batch during a long idle" on a run with a 108.92-min span. This session's is round-IDENTIFIED (round 6) across a multi-run population with no long-idle span attached. Same shape — a `combat_end` that should exist and does not — different resolution.
+
+**⚠ CANON STATES NO PROMOTION TRIGGER.** The held item's entire disposition is "**WATCH — n=1, no ordinal, no CF.**" There is no codified threshold, condition, or mechanism for promoting it off the held list; the "held for a second instance" clause in the neighbourhood belongs to sibling item (iv)'s dead-emit-path shape, not to (iii). **A second instance is therefore RECORDED here; whether that promotes it is a master-dev call, not a mechanical consequence.** Nothing minted.
+
+**(b) `combat_start` — the question's framing is REFUTED; canon has a third, older answer.** The walk was asked whether `combat_start` (typed in content-schemas.ts § 15, declared in the server validator, forwardable by construction, never emitted in real play) had been CLASSIFIED as a Pattern 9 instance or only recorded as a fact about `opponentGhostId`. **NEITHER.** It has its own dedicated opening and its own catch, minted **2026-07-06** — nine days BEFORE Pattern 9 was codified — at decision-log.md 2026-07-06 § "CF 62 (OPENED) + Catch 53 — combat_start telemetry dead-emit-path (M2 deferral; surfaced by real-gameplay verification)". That CF was opened for exactly this defect, and its catch was explicitly left unclassed ("No new taxonomy class minted … held for second instance").
+
+**`combat_start` is ABSENT from every Pattern 9 enumeration in canon**, including the most heavily audited one — the live five-instance walk at decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED …" § 5, which was itself the subject of Catch 97. Pattern 9 was codified 2026-07-15 and never retro-enumerated the 2026-07-06 opening into itself. The `opponentGhostId` bullet at decision-log.md 2026-07-24 § "CF-87 PHASE 1 RATIFIED: route (D) client-side canonical boss …" § 15 records the PostHog-reachability fact and "opens nothing"; it does not classify.
+
+**STATUS REPORTED, NOT RULED:** no entry records that CF as CLOSED. Whether it is still counted inside the open-CF total of 53 is **UNVERIFIED** — recent entries carry the backlog forward without enumerating (see the Counter caveat below). **No ordinal minted, no classification made, nothing opened.** Confirmed independently: telemetry-plan.md's D1 dashboard does NOT reference `combat_start` (its two combat cards read `endedAtTick`, a live `combat_end` property), so **no dashboard card is silently dead** — the doc-side claim that `combat_start` "fires at first sim tick" (telemetry-plan.md § 3) remains the surface that opening was filed against.
+
+**(c) CF-88 — scope is FINER than the enum; the session's read is ORTHOGONAL, not superseding.** CF-88 was opened at decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED (PR-A merged `32558e7`): Clause 1a MET (390→0, determinism SHA-equal) … CF-88 OPENED (endReason cause-vs-tick, 16-combat gap); Rule 33 correlated-site sweep scoped by this closure" § 6. The "NOT measurable from telemetry as shipped" claim was authored by a LATER, DIFFERENT entry — decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …" § 17 (Rule 36: the authoring artifact, not the encountering one).
+
+**CF-88's premise is NOT superseded.** Its question is which combats LABELLED `ramp_ko` were actually item/status KOs — a 16-combat gap between `ramp_ko`-by-tick (451) and `ramp_tick`-bearing combats (435). Reading `endReason` off `combat_end` cannot separate those two populations, because both carry the identical literal, and because the field is a pure function of tick (`packages/sim/src/combat.ts:283`, quoted in § 2). The discriminating datum — `ramp_tick` presence in the `CombatEvent` log — is not on the telemetry wire at all. Canon pre-empted this exact read: a prior query of the same shape "could return nothing but perfect agreement; it did", and was ruled a near-miss false finding.
+
+**What the session's read DOES establish** is field presence and population health — `endReason` ships, arrives in PostHog, and populates with distinct values — an axis no CF-88 text ever put in doubt. **CF-88 stays OPEN. Nothing ruled, nothing closed.**
+
+### Counter
+
+Ordinal walk live from canon at tip `360d6dc`; baseline **97/36/10/76/53**. Every figure below was verified against this entry's own enumeration, not adopted from the prompt (Rule 10 category 3, widened).
+
+Deltas by ID: catches **+2** (Catch 98 § 4, Catch 99 § 5); rules **+0** (§§ 4, 5, 6 each rule AGAINST a new ordinal — Rules 30 and 32 govern, and the 2026-07-22 / 2026-07-23 rulings carry § 6); patterns **+0** (§ 5 and § 6 reference Pattern 10, neither extends it; § 11(b) declines to classify); drifts **+2** (Drift 77 → Catch 98, Drift 78 → Catch 99); open-CFs **net 0** — **−1** (CF-87 **CLOSED**, § 1) **+1** (CF-93 **OPENED**, § 8).
+
+Running line: **97/36/10/76/53 → 99/36/10/78/53** — catches **99** / rules **36** / patterns **10** / drifts **78** / open-CFs **53**.
+
+Anchor: docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor.** There is no artifact anchor — CF-87 closed on MEASUREMENT, not on a PR.
+
+COUNTER-INTEGRITY RIDERS, both already on record and restated because this entry moves two axes: (i) the rules field **36** is the HIGHEST RULE ORDINAL REACHED, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so distinct codified rules stand at 35; (ii) the open-CF axis is the one axis that cannot be verified by a grep-walk — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The 53 is carried forward by arithmetic, unverified by enumeration, exactly as canon already records.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-87** — boss-encounter wiring. **CLOSED** (this entry, § 1) on BOTH legs of the § 10 criterion: leg 1 at `ab3e4be` and behaviourally corroborated by § 3's natural experiment; leg 2 by the `D2 — Boss win rate (round 11, by build)` breakdown tile. Closed on measurement, not on a PR list.
+- **CF-92** — distinct run-end render for a boss-loss elimination. **STAYS OPEN.** Phase 1 ANSWERED (§ 7): no boss-specific branch exists, props are two callbacks, the literal `11` is absent from the file. Phase 2 unscoped. Evidence base n=1 → n=10.
+- **CF-93** — the difficulty curve: rounds 4–10 unlosable (76/76) then a ~91-point cliff at round 11. **OPENED** (this entry, § 8). Problem only; no cause asserted, no fix scoped; the damage-stack account is recorded as an unverified hypothesis. Rule 20-gated on this entry's SHA. M2.
+
+---
+
 ## 2026-07-24 — CF-87 PHASE 2 MERGED (`ab3e4be`, PR \#58): route (D) SHIPPED — real-play round 11 now fights the § 15 Forge Tyrant configuration, ~5-6 client files, ZERO sim/content/schema/corpus diff as ratified; CF-87 STAYS OPEN on the measurement leg — the § 10 criterion is two-legged and leg 2 (D2 tile readable) is UNMET, so closing here would close on an exhausted PR list, which that criterion exists to prevent; balance-bible.md § 15 L307 amendment LANDED (held at `8efb7da` § 9(e), now shipped fact) + the § 15 ~30% carve-out UNSUSPENDED after being unmeasurable since 2026-07-19; Codex 1 round CLEAN, ceiling never tripped, +0 catches (CF-67 ruling); Pattern 9 FIFTH instance referenced, NO new ordinal; Catch 97 + Drift 76 (master-dev, Class A / Rule 30 — a pattern-instance count asserted without walking canon, gate-surfaced by decision-log-close Step 0 before it was written); master-dev meta-audit trigger RULED AGAINST codification with an escape-based reconsideration trigger recorded; counter 96/36/10/75/53 → 97/36/10/76/53
 
 Artifact anchor merge `ab3e4be` (`--no-ff`, PR \#58, branch tip `c59e8a8`, re-verification merge `4d3d29d`). 6 files, all `apps/client`, +497/−31. Baseline tip `cf2e859` (decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected) …") carrying **96/36/10/75/53**. The counter anchor is this entry's own docs commit.

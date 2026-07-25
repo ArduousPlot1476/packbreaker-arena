@@ -335,7 +335,7 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost. Under route (D
 - A "perfect" player with a recipe-capstoned Epic and class-stacked relics should win 70%+.
 
 ### Reward
-- Win: choose 1 of 3 from { `world-forged-heart` (Legendary), one random Epic, the boss relic for the player's class }.
+- Win: choose 1 of 3 from { `world-forged-heart` (Legendary), one random Epic, the boss relic for the player's class }. **M1 SHIPS 2 OF 3** — the Legendary and the class boss relic. The random-Epic leg is UNIMPLEMENTED and RATIFIED-DEFERRED to M2 (decision-log.md 2026-07-12 § "CF-67 Phase 2 CLOSED: boss-win Legendary reward (world-forged-heart) auto-placed + choose-one exclusivity …", where the deferral is stated in all three CF-67 entries of that date). `generateBossRelicOffer` returns exactly one relic — M1 ships one boss relic per class — so the offer renders two cards, not three. Annotated against shipped code at decision-log.md 2026-07-25 § "CF-87 CLOSED on MEASUREMENT (both legs of the § 10 criterion MET …)" § 10.
 - Lose: the run ends at Round 11 regardless of outcome. Hearts hitting 0 in the boss fight AND losing the boss combat with ≥1 heart remaining BOTH end the run with `outcome: 'eliminated'` and FORFEIT the reward. RATIFIED — decision-log.md 2026-07-24 § "CF-87 § 7 VACATED (not corrected): the boss-loss ruling rested on a FALSE PREMISE …" (supersedes the earlier `'won'`-on-hearts-remaining reading; the sim records `'eliminated'` for any max-round loss). The boss-loss lever is § 18 item 4.
 
 ---
