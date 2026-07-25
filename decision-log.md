@@ -4,6 +4,86 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-25 — CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards — a CROSS-SIDE gate at ORIGINATION plus a SOURCE-BENEFIT gate at application — because CP4's placement destroyed CF-84's item-driven mutual-KO draw, converting it into a win for whichever side the `['player', 'ghost']` array literal drains first, which is always the player; **CF-84's semantics are PRESERVED under CP6 and CF-84 stays CLOSED, not reopened**; CP5 (a pure origination gate, guard 1 alone) RECORDED DEAD — a cross-side predicate cannot reach `vampire-fang`'s `heal 2 target 'self'`, and the failure was found BY PROBE, not by reading: reading predicted a single revive, execution found a sustained resurrection loop in which a 4-HP ghost kills a 30-HP player; ABLATION MATRIX recorded — the two guards are ORTHOGONAL, each independently necessary, jointly sufficient, and neither ablation touches the draw or the ramp regression; the no-guard negation is NOT REQUIRED and the one attempted run is EXCLUDED AS VOID rather than reported; master-dev's active/reactive trigger taxonomy CORRECTED on one member from the dispatch sites; deciders GREEN and corpus drift 11 files stated as COST; **Rule 20-gated — NO regeneration, PR, or merge until this entry carries a real SHA**; counter 112/37/10/89/54 → 112/37/10/89/54 (all axes UNCHANGED)
+
+Docs-only, insertion-only, `decision-log.md` alone. Baseline tip `8c2d893`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CUT POINT PLACED at CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is CROSS-SIDE, not effect-type …" carrying **112/37/10/89/54**, read from the file this session. No code, schema, content, corpus, or migration change lands here — the implementation sits unpushed on `cf94-cp4-liveness` (§ 6). Docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor**.
+
+**⚠ LEAN BY RULING.** Technical dispositions only. The two process findings this phase produced — master-dev's `on_round_start` misclassification and the Rule 28 `git checkout`-over-uncommitted-work instance — **BATCH into the CF-94 merge-close** per the sequencing ruling at decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE (insertion-only, no edit to the landed entry) …" § 8. Neither is minted here.
+
+**LINE CITATIONS ARE AT `008f2f9`**, the CP6 commit on `cf94-cp4-liveness` — not at the tip, where the guards do not yet exist. Stated so a reader does not resolve them against `main` and find nothing.
+
+### 1 — CP6 RATIFIED: two guards
+**GUARD 1 — CROSS-SIDE GATE AT ORIGINATION.** An effect originated by a combatant whose current HP is `<= 0` resolves only if it does not cross to the opponent. `packages/sim/src/combat.ts:767` (`resolveEffect` case `'damage'`) and `:827` (case `'apply_status'`), **both AFTER target resolution so the `pickRandomItemRef` draw is never skipped**. Damage queued while the source was alive still LANDS when it drains.
+
+**GUARD 2 — SOURCE-BENEFIT GATE AT APPLICATION.** In `applyDamage`, `const sourceIsDead = sourceCombatant.hp <= 0` (`:534`) gates two things and nothing else: lifesteal (`:536`) and source-side `on_hit` (`:566`). The target's `on_taken_damage` (`:567`) is deliberately untouched — **being hit is not a benefit the dead derive**.
+
+**PRINCIPLE: a dead combatant's in-flight damage lands; the dead derive no benefit from it.**
+
+Two facts recorded because they are the ones an implementation can satisfy in letter and miss:
+- **Guard 2's predicate is read AFTER the HP mutation**, so a self-targeted killing blow is judged on post-damage HP. **No shipped item self-damages — that arm is untested by content and is called out rather than assumed.**
+- **`:566` dispatches ONLY source-side `on_hit`.** `fireDamageReactions` filters on `trigger.type !== type` and selects both `bag` and `triggerState` by `side`, and it calls `fireTrigger(..., false)` so it cannot fan out to adjacency. Gating it suppresses exactly the dead source's own `on_hit`. The pre-authorized narrowing to `on_hit`-and-lifesteal was therefore **unnecessary, not merely unused**.
+
+### 2 — CP4's PLACEMENT SUPERSEDED; CF-84 PRESERVED and NOT reopened
+CP4, ratified at decision-log.md 2026-07-25 § "CF-94 CUT POINT PLACED at CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is CROSS-SIDE, not effect-type …" § 1, evaluated liveness for damage **at application**. That suppresses damage queued by a source which then died mid-drain — and **converts item-driven same-tick mutual KOs into wins for the first drainer**. The first drainer is always the player: `runTriggerPhase` and `runCooldownPhase` both iterate the literal `['player', 'ghost']` (`combat.ts:384`, `:417` at `8c2d893`) and `runDamageResolution` drains FIFO. **The winner was decided by an array literal.**
+
+That contradicted CF-84's ratified position — "both sides died, both pay the existing loss" (decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED (Phase 2 gate): ceiling-decrement ramp R=3 from t500 (trigger-bypass, event-emitting) SUPERSEDES 2125b82's "post-tick-~300 damage ramp" …" § 7) — **without CF-84 being reopened**.
+
+**CP6 PRESERVES CF-84's SEMANTICS**: guard 1 lets originated-while-alive damage land, so both sides still reach 0 and the draw stands. Proven, not argued — `combat.test.ts`'s `simultaneous death` test returns `'draw'` under CP6 and returned `'player_win'` under CP4. **CF-84 stays CLOSED. Nothing here reopens it.** Only CP4's PLACEMENT is superseded; its cross-side PREDICATE survives intact as guard 1. **The prior entry is not edited.**
+
+### 3 — CP5 RECORDED DEAD
+CP5 was guard 1 alone: a pure cross-side origination gate. **It cannot reach `vampire-fang`'s `on_hit`, which is `heal 2 target 'self'` (`packages/content/src/items.ts:581`) — self-side, and a cross-side predicate has no purchase on it.** The dead ghost's queued hit lands, `applyDamage` fires source-side `on_hit`, and the corpse heals itself.
+
+**Master-dev's claim that CP5 suppresses that heal was FALSE.** Recorded plainly.
+
+**THE FAILURE WAS FOUND BY PROBE, NOT BY READING, AND THE DIFFERENCE IS THE POINT.** Reading the code predicted a *single* revive. Execution returned a *sustained loop*: the ghost dips to 0, lands its queued hit, heals back, repeats — observed alive at tick 400 in a combat CP4 resolves at tick 50, with the **player** finishing at 0 HP. A 4-HP ghost kills a 30-HP player. The probe was run precisely because a reasoned reachability claim had already been wrong once in this session; the escalation from "one revive" to "outcome-inverting loop" is the margin that reading did not supply.
+
+### 4 — ABLATION MATRIX: the guards are ORTHOGONAL
+Each ablation was verified-applied before execution, and each result is the observed assertion text.
+
+| Build | cross-side paths (S2a, S7) | resurrection paths (S3, S1) | preservation | simultaneous death | `combat-ramp.test.ts` |
+|---|---|---|---|---|---|
+| **CP6** | closed | closed | GREEN | **`draw`** | 11/11 GREEN |
+| **guard 2 removed** (= CP5) | closed | **5 RED** — `expected +0 to be 26`, `expected +0 to be 25`, `expected 400 to be 50`, self-heal resurrection, `expected +0 to be 26` | GREEN | `draw` | 11/11 GREEN |
+| **guard 1 removed** | **2 RED** — `expected 26 to be 30`, `expected true to be false` | closed | GREEN | `draw` | 11/11 GREEN |
+| **Route C** (over-firing) | closed | closed | **2 RED** | `draw` | **RED** — `expected 'ko' to be 'ramp_ko'` |
+
+**Removing guard 1 reopens ONLY the cross-side paths. Removing guard 2 reopens ONLY the resurrection loop. Neither ablation touches the simultaneous-death draw or the ramp regression.** Both guards are independently necessary and jointly sufficient.
+
+**THE NO-GUARD NEGATION IS NOT REQUIRED.** The two single-guard ablations are **strictly stronger**: removing both yields the union of their failures, which the matrix already exhibits separately. Running it would add no discriminating information.
+
+**⚠ THE ONE NO-GUARD RUN ATTEMPTED IS EXCLUDED AS VOID, NOT REPORTED.** A `git checkout` over uncommitted work silently restored CP4 mid-run, so that negation executed against a partially-mutated CP4 rather than a no-guard build. It was caught by the verify-the-mutation-applied step — three tests passed that could not have passed under a real no-guard build — and the implementation was then committed before the reported battery ran. **Excluding a void run is not the same as omitting an inconvenient one; the exclusion and its cause are on the record.**
+
+### 5 — TRIGGER CLASSIFICATION, corrected from the dispatch sites
+Dispatch sites at `8c2d893`: `on_round_start` `combat.ts:357` · `on_cooldown` `:363` · `on_low_health` `:372` · `on_hit` `:563` · `on_taken_damage` `:564` · `on_adjacent_trigger` `:731`.
+
+Master-dev's taxonomy — `on_hit`/`on_cooldown`/`on_round_start` active; `on_taken_damage`/`on_low_health` reactive; `on_adjacent_trigger` inherits its parent — **holds on five of six members. ONE CORRECTION:**
+
+**`on_round_start` is dispatched by the tick loop at tick 0, not by anything the combatant did.** It is "active" only in the weaker sense that the combatant's own item originates the effect — not in the sense that the combatant acted to cause it. The distinction does not affect guard 2, which touches only `on_hit`; it is recorded because the taxonomy will be reached for again, and a member misfiled as "active because the combatant caused it" would license a wider guard than the code supports.
+
+### 6 — GATE STATE
+Branch `cf94-cp4-liveness`: `008f2f9` (CP6) on `18e4e66` (CP4), **both UNPUSHED**. `main` at `8c2d893`.
+
+**DECIDERS AND SUITES, GREEN:** `combat.test.ts` `simultaneous death` returns `'draw'` · the CP5/CP6 probe 3/3 · `combat-ramp.test.ts` **11/11 including the heal-revive regression at `:135-159`** · full `combat.test.ts` 30/30 · `run-fixtures.test.ts` 6/6.
+
+**CORPUS DRIFT: 11 files — 10 `.jsonl` in the determinism harness, 1 `.json` combat fixture (`no-cascade`), 0 run-scenario `.json`, 0 behavioural. STATED AS COST, NOT AS AN IMPACT MEASURE** — the corpus boss carries `lifestealPct 0` while the real-play boss carries 15, so fixture drift under-reads real-play reach by construction (decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE (insertion-only, no edit to the landed entry) …" § 6).
+
+**NOT REGENERATED. NOT MERGED. NO PR.** **Rule 20: no corpus regeneration, PR, or merge may cite this entry until it carries a real SHA.**
+
+### Counter
+Light entry (single ratification + two supersessions; no PR, no merge, no code). Ordinal walk live from canon at tip `8c2d893`, greps run this session with a phantom-higher control on every axis: highest **Catch 112**, **Rule 37**, **Pattern 10**, **Drift 89**, **CF-94** — and `Catch 11[3-9]` → 0, `Catch 12[0-9]` → 0, `Rule 3[89]` → 0, `Drift 9[0-9]` → 0, `CF-9[5-9]` → 0, `Pattern 1[1-9]` → 0.
+
+Deltas by ID: catches **+0** (both process findings BATCH forward per § 8 of the prior entry — none minted here). Rules **+0** (§ 4 is a Rule 28 INSTANCE — falsifiability empirically proven rather than asserted — and restating an existing rule as new would be Catch 91's shape). Patterns **+0**. Drifts **+0**. Open-CFs **+0** — **CF-94 stays OPEN** with its cut point re-placed; **NOTHING closed**; CF-83, CF-84, CF-87, CF-91 stay closed and CF-84 is expressly not reopened (§ 2).
+
+Running line: **112/37/10/89/54 → 112/37/10/89/54** — catches **112** / rules **37** / patterns **10** / drifts **89** / open-CFs **54**. **All five axes UNCHANGED.**
+
+**ARITHMETIC SHOWN:** catches 112 + 0 = 112 · rules 37 + 0 = 37 · patterns 10 + 0 = 10 · drifts 89 + 0 = 89 · open-CFs 54 + 0 = 54.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **37** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so distinct codified rules stand at **36**. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The **54** is carried forward by arithmetic, unverified by enumeration. The re-enumeration remains unscheduled.
+
+Anchor: docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor**. There is no artifact anchor — the implementation is unpushed and unmerged.
+
+---
+
 ## 2026-07-25 — CF-94 CUT POINT PLACED at CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is CROSS-SIDE, not effect-type — an effect originated by a combatant at HP ≤ 0 resolves only if it does NOT cross to the opponent, with target-less effects classified SELF-SIDE — evaluated at APPLICATION time at TWO sites (`applyDamage` for damage, `resolveEffect` entry for opponent-targeted `apply_status`), both AFTER target resolution; **CP4 is CP2's predicate made implementable, NOT a fourth rival**, and it is stated so because dressing a specification as a discovery is how cut points get re-litigated; **ROUTE D's WORDING AMENDED** — "may not fire its own triggers" is SUPERSEDED, a 0-HP combatant's triggers DO fire and its self-side effects DO resolve, because the literal wording IS Route C and reds `combat-ramp.test.ts:135-159` at tick 250; CP3 DISQUALIFIED on a reachable path (`berserkers-greataxe` → `spark-stone`/`fire-oil` adjacency lets a dead combatant apply burn); CP1 vs CP2 differ ONLY on `buff_adjacent`, which is structurally self-side and cannot reach the opponent; the effect-type union **DOES NOT PARTITION BY TYPE** — three of six carry `target` — and the shipped-content equivalence is recorded as a fact about content at `7153960`, NOT a structural guarantee; **STEP 3 RECORDED AS NON-DISCRIMINATING** — the locked heal-revive test kills Route C and returns GREEN for CP1, CP2 and CP3 alike, so the prompt that billed it as the decider was wrong and the § 2 closure enumeration decided; TWO IMPLEMENTATION HAZARDS recorded so Phase 2 cannot lose them — ENQUEUE-VS-DRAIN (a guard at enqueue never fires and leaves S3 open while appearing correct) and RNG ORDERING (gating before target resolution desyncs the main rng; **LATENT**, zero random_item selectors shipped); trigger budget RULED CONSUMED on suppression; **S6 RULED OUT OF CF-94's SCOPE and HELD** as a replay-cleanliness item; blast radius sized by REAL-PLAY REACH not fixture drift — S1 ghost-side + S2a fire in **100% of round-11 boss fights**, the exact population CF-93's round-11 figures were measured on; **`world-forged-heart`'s reachability claim SUPERSEDED as FALSE** — it is UNREACHABLE in combat, the structural argument against Route B SURVIVES but the example does not; Catch 111 + Drift 88 (**Claude Code**, originated the false reachability claim, self-surfaced; paired drift MINTED on a Topic ruling that declines to keep drawing mechanisms narrowly enough that each is a "first instance") + Catch 112 + Drift 89 (master-dev, FAITHFUL relay of an inherited false claim — the § 7(a)(i) shape, NOT hedge-stripping); **NO CATCH** for the "Step 3 decides it" framing on the design-prediction precedent, master-dev's SECOND self-favorable disposition this session and the FIRST was REJECTED; counter 110/37/10/87/54 → 112/37/10/89/54
 
 Docs-only, insertion-only, `decision-log.md` alone. Baseline tip `7153960`; governing counter entry decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE (insertion-only, no edit to the landed entry) …" carrying **110/37/10/87/54**, read from the file this session and not adopted from the requesting prompt. No code, schema, content, corpus, or migration change. Docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor**.
