@@ -102,28 +102,57 @@ describe('CF-94 CP4 — a 0-HP combatant cannot act on the opponent', () => {
 
 // ─── S3 — the enqueue-vs-drain hazard ───────────────────────────────
 
-describe('CF-94 CP4 — liveness is evaluated at APPLICATION, not at enqueue', () => {
-  it('S3 — a combatant killed mid-drain does not land its already-queued damage', () => {
+describe('CF-94 CP6 — in-flight damage lands; the dead derive no benefit from it', () => {
+  it('S3 (RE-SCOPED) — queued damage from a mid-drain death LANDS, and its on_hit is suppressed', () => {
     // Both sides carry iron-sword (cd 50), so BOTH queue a damage event during
     // the tick-50 cooldown phase, while both are still alive. The drain applies
     // the player's first (canonical side order, player before ghost), taking the
     // 4-HP ghost to 0; the ghost's already-queued hit then drains from a 0-HP
-    // source and must be suppressed.
+    // source.
     //
-    // ⚠ THIS IS THE TEST THAT DISTINGUISHES APPLICATION-TIME FROM ENQUEUE-TIME.
-    // RED under NO GUARD and RED under an ENQUEUE-TIME guard alike — both let the
-    // ghost's queued hit through, leaving finalHp.player at 26. An enqueue check
-    // can never fire here, because neither side is dead when the queue is built.
+    // ⚠ RE-SCOPED FROM CP4. The CP4 form asserted finalHp.player === 30 — the
+    // queued hit suppressed entirely. That property is what destroyed CF-84's
+    // item-driven mutual-KO draw by handing the win to whichever side the
+    // `['player', 'ghost']` literal drains first, and it is deliberately
+    // reversed here. Under CP6 the hit LANDS (guard 1: originated while alive)
+    // and only the dead source's BENEFIT is withheld (guard 2).
+    //
+    // RED under Route C and under CP4 alike — both suppress the landing.
     const r = simulateCombat(
       input(
         combatant(bag(placement('iron-sword', 'p1')), 30),
-        combatant(bag(placement('iron-sword', 'g1')), 4),
+        combatant(bag(placement('iron-sword', 'g1', 0, 0), placement('vampire-fang', 'g2', 2, 0)), 4),
       ),
     );
-    expect(r.finalHp.player).toBe(30);
-    expect(r.finalHp.ghost).toBe(0);
+    expect(r.finalHp.player).toBe(26); // the queued hit LANDED
+    expect(r.finalHp.ghost).toBe(0); // and bought the dead ghost nothing
     expect(r.endedAtTick).toBe(ONE_SHOT_TICK);
     expect(r.outcome).toBe('player_win');
+    // vampire-fang's on_hit (heal 2 self) is the benefit guard 2 withholds.
+    const ghostHealed = r.events.some((e) => e.type === 'heal' && e.target === 'ghost');
+    expect(ghostHealed).toBe(false);
+  });
+
+  it('S1 (EXPLICIT, not transitive) — a 0-HP source does not lifesteal off damage that lands', () => {
+    // Distinct from the on_hit path above: this is the inline lifesteal block.
+    // The ghost is Marauder with bloodfont + crimson-pact (55%), so its landing
+    // iron-sword hit (4 + 1 Marauder passive = 5) would lifesteal
+    // floor(5 * 0.55) = 2 and resurrect it to 2 HP.
+    //
+    // ⚠ THE DAMAGE LANDING IS PART OF THE ASSERTION. Under CP4 this closed only
+    // because applyDamage was never called; here the call happens, the player
+    // loses 5 HP, and the lifesteal is withheld on its own terms.
+    const r = simulateCombat(
+      input(
+        combatant(bag(placement('iron-sword', 'p1')), 30),
+        combatant(bag(placement('iron-sword', 'g1')), 4, MARAUDER, LIFESTEAL_RELICS),
+      ),
+    );
+    expect(r.finalHp.player).toBe(25); // 30 − (4 + 1) — the hit landed
+    expect(r.finalHp.ghost).toBe(0); // no lifesteal resurrection
+    expect(r.endedAtTick).toBe(ONE_SHOT_TICK);
+    const ghostHealed = r.events.some((e) => e.type === 'heal' && e.target === 'ghost');
+    expect(ghostHealed).toBe(false);
   });
 });
 
