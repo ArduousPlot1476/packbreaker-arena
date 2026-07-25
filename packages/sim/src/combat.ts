@@ -470,22 +470,29 @@ function runDamageResolution(state: CombatState): void {
   }
 }
 
-/** CF-94 CP4 liveness gate (decision-log.md 2026-07-25 § "CF-94 CUT POINT PLACED at
- *  CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is
- *  CROSS-SIDE, not effect-type …"). An effect originated by a combatant whose CURRENT
- *  HP is <= 0 resolves only if it does NOT cross to the opponent. Self-side effects
- *  (heal-self, buff_adjacent) are untouched at either liveness — that asymmetry IS the
- *  ruling: a 0-HP combatant may not act ON THE OPPONENT, but its triggers still fire
- *  and it remains a valid heal target until the death check.
+/** CF-94 CP6 GUARD 1 — cross-side liveness gate (decision-log.md 2026-07-25 §
+ *  "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the
+ *  cut point moves from ONE application-time gate to TWO guards …"). An effect
+ *  originated by a combatant whose CURRENT HP is <= 0 resolves only if it does NOT
+ *  cross to the opponent. Self-side effects (heal-self, buff_adjacent) are untouched
+ *  at either liveness — a 0-HP combatant may not act ON THE OPPONENT, but its
+ *  triggers still fire and it stays a valid heal target until the death check.
  *
- *  TWO CALL SITES, both AFTER target resolution so no rng draw is skipped:
- *    - applyDamage (damage), covering the queued drain AND the inline reaction path
- *    - resolveEffect case 'apply_status' (opponent-targeted status)
+ *  TWO CALL SITES, BOTH INSIDE resolveEffect, both AFTER target resolution so the
+ *  pickRandomItemRef draw is never skipped:
+ *    - case 'damage'       — at ORIGINATION, before the PendingDamage is queued
+ *                            (top-level) or applied inline (reaction)
+ *    - case 'apply_status' — opponent-targeted status
  *
- *  EVALUATED AT APPLICATION, NOT ENQUEUE. Top-level damage is queued during the
- *  cooldown phase while both sides are necessarily still alive (the death check ran
- *  at the end of the previous tick), so an enqueue-time check never fires and leaves
- *  the mid-drain kill path open behind a guard that reads as correct. */
+ *  ⚠ EVALUATED AT ORIGINATION, NOT AT APPLICATION — the REVERSE of superseded CP4,
+ *  and the reversal is the point. Damage queued while the source was still alive
+ *  LANDS when it drains, even though the source died in between. That is what
+ *  preserves CF-84's item-driven mutual-KO draw: an application-time gate suppresses
+ *  the second hit and hands the win to whichever side the ['player', 'ghost'] literal
+ *  drains first, which is always the player. Do not "fix" this back to applyDamage.
+ *
+ *  The dead source's BENEFIT from that landing hit — lifesteal and source-side
+ *  on_hit — is withheld separately, by GUARD 2 inside applyDamage. */
 function crossesToOpponentWhileDead(
   state: CombatState,
   sourceSide: EntityRef,
@@ -820,10 +827,13 @@ function resolveEffect(
     case 'apply_status': {
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
-      // CF-94 CP4, site 2. AFTER target resolution above, so the random_item rng
-      // draw is never skipped. Closes the adjacency path: a 0-HP combatant whose
-      // weapon fires on_low_health reaches fireAdjacentReactions, and an adjacent
-      // spark-stone / fire-oil would otherwise burn the opponent from the dead.
+      // CF-94 CP6 GUARD 1, second call site. AFTER target resolution above, so the
+      // random_item rng draw is never skipped. Unlike the 'damage' site there is no
+      // queue here — apply_status resolves immediately, so origination and
+      // application coincide and this gate is correct at either reading. Closes the
+      // adjacency path: a 0-HP combatant whose weapon fires on_low_health reaches
+      // fireAdjacentReactions, and an adjacent spark-stone / fire-oil would
+      // otherwise burn the opponent from the dead.
       if (crossesToOpponentWhileDead(state, sourceSide, targetSide)) return;
       const targetStatus = targetSide === 'player' ? state.playerStatus : state.ghostStatus;
       // Locked answer 15: recipeBonusPct applies to status stacks BEFORE the
