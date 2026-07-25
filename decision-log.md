@@ -4,6 +4,133 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-25 — CF-93 POST-CP6 RE-MEASURE RECORDED (docs-only; CLOSES NOTHING, refines the characterization): on build `0.0.1+3853228`, 9 runs / 76 combats — **round 11 moves 9.1% → 75% (3/4), Fisher two-tailed p = 0.0330**, and balance-bible.md § 15's ~30% target is **no longer falsified** because the Clopper-Pearson interval [19.4%, 99.4%] CONTAINS it, recorded with BOTH honest limits including a **SURVIVOR BIAS the baseline does not share** (4 of 9 runs reached the boss versus 11 of 12); **THE UNLOSABLE BAND CRACKED** — rounds 4–10 were 76/76 across the entire pre-CP6 population and are now 43/45, NOT significant (Fisher p = 0.1364) but CATEGORICAL, something that had never happened has now happened twice with an identified mechanism; **ROUNDS 1–3 REGRESSED** 80.6% → 59.3% with ramp-decided falling hardest 58.3% → 33.3%, which is **CP6's ratified SYMMETRY visible in live data** — the player also lost its 0-HP resurrection, so ramp ties that were survivable now stand and `state.ts:1037` charges a heart; the surviving round-11 draw is **CP6 WORKING** — it cannot be the resurrection path and is necessarily the PRESERVED simultaneous-queue mutual KO, so the path that should be gone is gone and the path that should remain remains; Clause 2 lands **IN BAND at 18.1% but RULE 37 FORBIDS reading it as MET** because its sub-bands are 40.7% and 4.4%, an order of magnitude apart; **⚠ ONE SUPPLIED STATISTIC FAILED RECOMPUTATION** — the rounds-1–3 p-value is **0.0917 by Fisher, not 0.064**, which is uncorrected χ²; the recomputation wins and the test is named; Catches 119–124 + Drifts 95–100, with § 9(e) RULED COUNTED against the design-prediction exclusion on that precedent's own narrowing; **CF-93 stays OPEN, live scope ROUNDS 1–10**, its round-11 leg CANDIDATE-RESOLVED by CF-94 but HELD not closed; counter 118/37/10/94/53 → 124/37/10/100/53
+
+Docs-only, insertion-only, `decision-log.md` alone. **No artifact anchor — this entry's own docs commit is the counter anchor.** Baseline tip `3853228`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CLOSED (merge `f6015b0`, PR \#59): CP6's two-guard asymmetric liveness gate SHIPPED — the FIRST sim change since the CF-83 ramp …" carrying **118/37/10/94/53**, read from the file this session. Every baseline figure below was read FROM CANON, not from the requesting prompt; every statistic was RECOMPUTED from § 1's breakdown.
+
+### 1 — THE RE-MEASURE
+Build `0.0.1+3853228`, **9 runs, 76 `combat_end`**. Baseline for every comparison is canon's `0.0.1+360d6dc` at n=123, per decision-log.md 2026-07-25 § "CF-93 PHASE 1 RATIFIED (read-only characterization; docs-only, NO artifact — the CF-89 / CF-87 measurement-close precedent) …" § 2.
+
+| band | combats | player wins | rate | endReason / outcome detail |
+|---|---|---|---|---|
+| rounds 1–3 | 27 | 16 | **59.3%** | item-decided 13/18 · ramp-decided 3/9 · 5 draws · 6 ghost_wins |
+| rounds 4–10 | 45 | 43 | **95.6%** | 2 losses, both `ko` ghost_wins, rounds 4 and 6 · 0 draws · 0 `ramp_ko` |
+| round 11 | 4 | 3 | **75.0%** | 3 `ko` player_win · 1 `ko` draw · 0 `ramp_ko` |
+| **total** | **76** | **62** | **81.6%** | draws **6/76 = 7.9%** · `ramp_ko` **9/76 = 11.8%**, ALL in rounds 1–3 |
+
+**⚠ GRANULARITY LIMIT, stated rather than papered over.** The supplied data is **BAND-LEVEL**, not per-round. A true round × endReason × outcome enumeration — 11 rows — was not available, so the table above enumerates at the granularity that exists. Every derived figure in this entry is computed from these bands and from nothing finer.
+
+**INTERNAL CONSISTENCY, recomputed:** 18 item + 9 ramp = 27 ✓ · 13 + 3 = 16 ✓ · 27 + 45 + 4 = 76 ✓ · draws 6 = 5 (rounds 1–3) + 1 (round 11) ✓ · rounds 1–3 non-wins 11 = 5 draws + 6 ghost_wins ✓. The breakdown closes on itself.
+
+### 2 — ROUND 11: the § 15 target is no longer FALSIFIED
+**9.1% (1/11) → 75.0% (3/4). Fisher exact, two-tailed: p = 0.0330.** Recomputed, not adopted.
+
+**Clopper-Pearson 95% on 3/4 = [19.4%, 99.4%], which CONTAINS balance-bible.md § 15's ~30% first-attempt target.** The prior interval on 1/11 also contained 30% — canon recorded that as one of CF-87's four honest limits. **What changed is the direction of the point estimate, not the presence of the target in the interval.** The correct statement is that **the target is no longer falsified**, not that it is met.
+
+**BOTH HONEST LIMITS, recorded unsoftened:**
+- **(i) n = 4 constrains almost nothing.** The interval spans four fifths of the probability line. It excludes 9.1% and little else.
+- **(ii) ⚠ SURVIVOR BIAS, AND IT IS NOT SHARED WITH THE BASELINE.** Only **4 of 9** runs produced a round-11 combat, against **11 of 12** in the baseline (canon: "11 round-11 combats", 12 runs). The post-CP6 round-11 population is therefore **MORE SELECTED** — it is the subset that survived a rounds-1–3 band that got materially harder (§ 4). **Some unknown share of the 9.1% → 75% shift is filtering, not CP6.** A like-for-like comparison is not available from this data and is not constructed here.
+
+**QUALITATIVE — AUTHOR TESTIMONY, labelled as such and not as evidence.** Trey reports the round-11 win "felt earned." This is the axis n=4 cannot reach, and it argues against the specific failure mode "CP6 made the boss too easy." **The author confound recorded at CF-87's closure stands and is not diminished by the author also being the reporter here.**
+
+### 3 — THE UNLOSABLE BAND CRACKED
+Rounds 4–10 were **76 / 76** across the ENTIRE pre-CP6 population — not a sample, the whole band. Post-CP6: **43 / 45**, two item-decided (`ko`) ghost_wins at rounds 4 and 6.
+
+**Fisher exact, two-tailed, 0/76 vs 2/45: p = 0.1364.** Recomputed. **NOT statistically significant.**
+
+**But the finding is CATEGORICAL, not distributional.** A band with zero losses across 76 observations now has two, and the mechanism is identified rather than inferred: CP6 suppresses the dead source's benefit, so exchanges that previously resolved in the player's favour by resurrection no longer do. **Recorded as a DIRECTION, not a resolution.** Two events cannot carry a rate, and none is asserted.
+
+### 4 — ROUNDS 1–3 REGRESSED, AND CP6'S SYMMETRY IS VISIBLE IN LIVE DATA
+**80.6% (29/36) → 59.3% (16/27).**
+
+**⚠ THE SUPPLIED p-VALUE FAILED RECOMPUTATION AND THE RECOMPUTATION WINS.** The requesting prompt carried **p ≈ 0.064**; **Fisher exact two-tailed on 29/7 vs 16/11 is p = 0.0917.** The 0.064 figure is reproducible as **uncorrected χ² (1 df, χ² = 3.43)** — so the discrepancy is a **TEST MISMATCH, not an arithmetic error**: the two other p-values in the same prompt are Fisher, and this one silently was not. **This entry uses Fisher throughout and names the test at every figure.** Both tests agree the result is not significant at 0.05, so the qualitative reading is unchanged — but a number entering canon must name the procedure that produced it.
+
+**SUB-BANDS, per Rule 37 — reported alongside, never collapsed:**
+- **item-decided: 91.7% (22/24) → 72.2% (13/18)**
+- **ramp-decided: 58.3% (7/12) → 33.3% (3/9)** — the harder fall, and the diagnostic one.
+
+**MECHANISM, and it is the ratified one observed live.** The Route D Phase 1 symmetry finding — recorded at decision-log.md 2026-07-25 § "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards …" — established by trace that lifesteal and the 0-HP benefit gate are **side-symmetric**: the PLAYER also lost its 0-HP resurrection. Ramp ties the player previously survived now stand, and `packages/sim/src/run/state.ts:1037` collapses the draw to a loss and charges a heart. **CP6 was never a pure player buff; canon said so from a code trace, and the live data now shows it.**
+
+**QUALITATIVE — AUTHOR TESTIMONY, labelled.** Trey reports rounds 1–3 "felt like the game deciding." At 4–11 gold the player has no armour, cannot influence a ramp tiebreak, and loses a heart to a combat **nobody won**. **This is an AGENCY / LEGIBILITY finding, not only a difficulty one**, and it sits adjacent to CF-89's confusion half rather than to CF-93's curve half.
+
+### 5 — THE SURVIVING ROUND-11 DRAW IS CP6 WORKING
+Under CP6 the boss's dying retaliation is suppressed, so the one round-11 draw **cannot** be the resurrection path — that path no longer exists. It is **necessarily the PRESERVED simultaneous-queue mutual KO**: both sides queue lethal damage while alive, both hits land because guard 1 gates at origination, both die.
+
+**That is the exact CF-84 semantics CP6 was built to protect, observed in live play.** The path that should be gone is gone; the path that should remain, remains. **A single observation cannot carry a rate and none is claimed** — but the two paths are distinguishable by construction, and the one that survived is the right one.
+
+### 6 — CLAUSE 2: IN BAND, AND RULE 37 FORBIDS READING IT AS MET
+**Heart-costing (draw + ghost_win) rounds 1–10 = 13/72 = 18.1%**, inside CF-83's ratified **15–25%** band. Prior: 6.25%.
+
+**⚠ THE AGGREGATE DESCRIBES NEITHER SUB-BAND.** Rounds 1–3 = **11/27 = 40.7%**; rounds 4–10 = **2/45 = 4.4%**. An order of magnitude apart, produced by different mechanisms. **Rule 37 is the governing rule and this is its SECOND post-codification application** — the first being decision-log.md 2026-07-25 § "CF-94 CLOSED (merge `f6015b0`, PR \#59) …" § 6(b). A single number sitting inside a band it reaches only by averaging a floor against a ceiling is not a band that has been met.
+
+**Clause 2's OWN rationale is per-run expected heart losses**, not a rate: **13 heart-costing / 9 runs = 1.44 expected losses**, against the ratified "tense and completable" band of **1.65–2.75**. **Just BELOW it.**
+
+**RULED: Clause 2 is NOT MET and NOT FAILED. It moved substantially — 6.25% → 18.1%, 0.7 → 1.44 expected losses — and is NOT READABLE AT THIS HOMOGENEITY.**
+
+### 7 — CF-93's CHARACTERIZATION REFINED
+Recorded verbatim, because it is the finding:
+
+> **Rounds 1–3: losable, not fair. Rounds 4–10: fair, not losable. Round 11: both. The only round in the game that is both losable and fair is the boss.**
+
+**GROUND.** Rounds 1–3 lose **40.7%** of the time, but **a third of those combats (9/27) are decided by an invisible ramp tiebreak** the player cannot influence — losable, not fair. Rounds 4–10 are decided on items, but were **76/76** across the entire prior population and are now **43/45** — fair, not losable. Round 11 is decided on items at a rate whose interval **contains** the § 15 target — both.
+
+**CF-93's ROUND-11 LEG: CANDIDATE-RESOLVED by CF-94, HELD NOT CLOSED.** n=4, an interval spanning [19.4%, 99.4%], and a survivor confound the baseline does not share. **Confirmation needs roughly 10 more runs on a stable build.**
+
+**CF-93's LIVE SCOPE IS ROUNDS 1–10.** Still **PROBLEM ONLY** — no cause asserted beyond what is measured, no fix scoped, no Phase 2.
+
+**⚠ A CF SPLIT WAS CONSIDERED AND DECLINED, recorded so a future reader sees it was decided rather than missed.** The rounds-1–3 agency finding (§ 4) could have been split into its own CF. **Declined:** it is the same mechanism as the rest of CF-93's rounds-1–10 scope — ramp adjudication plus the `state.ts:1037` collapse — and splitting would fragment one fix across two CFs. The finding is recorded under CF-93 with its agency/legibility character named.
+
+### 8 — ANOMALY, UNRECONCILED
+Six runs won round 10; **four** round-11 `combat_end` events. **Delta 2**, up from a delta of 1 in the baseline (canon records 77 expected vs 76 observed across rounds 4–10).
+
+**⚠ SUPPLIED, NOT RECOMPUTED.** The "six runs won round 10" figure is **not derivable from § 1's band-level breakdown** — per-round counts were not available. It is carried as supplied and is flagged here rather than presented as verified.
+
+**TWO CANDIDATE ACCOUNTS, NEITHER TESTED:** missing `combat_end` emissions, or abandons after round 10 — canon carries `run_end`-on-abandon as an **UNTESTED emit path**. **The discriminator is a `round_end` count at round 11:** 6 ⇒ authored and lost in transit; 4 ⇒ never authored. **NOT RUN. Recorded unreconciled, not reconstructed.**
+
+### 9 — CATCHES
+Enumerated; no cardinal stated. All master-dev unless marked. Ordinals walked live.
+
+**(a) Catch 119 + Drift 95 — Rule 30.** Asserted the post-merge build would stamp `0.0.1+f6015b0`. Unverified claim about build behaviour, and false by construction: the merge-close docs commit moved HEAD past the merge, so that value could never appear. Self-surfaced before it was acted on, **but it had already crossed to Trey as an instruction**.
+
+**(b) Catch 120 + Drift 96.** Specified an empirical live-stream `clientVersion` check — "one wasted run beats twelve unusable ones" — then **DROPPED it from the next hand-off**, substituting trust in a static bundle verification. **The dropped check is precisely what would have caught the `0.0.0+unstamped` dev-server defect.** A verification specified and then silently withdrawn is worse than one never specified: the first creates reliance.
+
+**(c) Catch 121 + Drift 97.** Scoped HANDOFF `2026-07-25-17` to the **built bundle only**, never asking about the surface Trey would actually play on. The gap Claude Code's later check filled — and the **upstream cause of (f)**.
+
+**(d) Catch 122 + Drift 98.** Wrote a hardcoded `clientVersion` filter into the final analysis query **after accepting Claude Code's Catch 98 carry-forward** ("breakdown, not hardcoded filter") in the same arc. It worked only because it ran before HEAD moved — **correct by timing, not by construction**.
+
+**(e) Catch 123 + Drift 99 — RULED COUNTED, reasoning shown.** Canon at decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE (insertion-only, no edit to the landed entry) …" § 8 records the figure verbatim as "**round 11 combats ENDING with the boss at 0 HP: 4 / 11. ⚠ LOWER BOUND, NOT A RATE.**" It was restated in the CF-94 close as "plausibly 4/11 = 36.4%".
+
+**THE COMPETING PRECEDENTS, both verified verbatim this session.** The design-prediction exclusion at decision-log.md 2026-07-21 § "CF-85 ARC DISPOSITION + Q3 COUNTER-SYSTEM VERDICT (a): no mitigation/penetration system (defense = flat HP + heals, offense = flat additive damage); the CF-89-deferral premise VERIFIED TRUE by rea…" § 5, headed "Master-dev clause-1 → attribution scoping prediction: DISPOSITIONED, NO ordinal (drifts +0)", whose own narrowing reads "**Only the categorical design-prediction-vs-state-fact distinction can** confer +0 — neither 'caught pre-propagation' nor 'no propagation teeth' does." Against it, the hedge-stripping mechanism at decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED …" § 7: "**HEDGE-STRIPPING ON INHERITANCE is the aggravating mechanism. A firm false claim accompanied by a check is worse than a soft approximate one, because the firmness is what a downstream reader acts on and the hedge is what would have told them not to.**"
+
+**RULING: COUNTED, and the exclusion does not reach it on its own terms.** The defect is **not** the prediction — predicting was legitimate, and the entry did correctly label the prediction "AS AN EXPECTATION AND NOT A FINDING". The defect is that an **inherited figure carrying an explicit epistemic label was restated without it**. "Plausibly at least 4/11" and "plausibly 4/11" are different claims, and **what was dropped is a STATE FACT about what the data can support, not a forecast** — so the design-prediction exclusion, which turns on the categorical prediction-vs-state-fact line, does not cover it. **The precise shape is labelling one layer while stripping another:** the prediction's status was flagged; the inherited figure's was not. **And the hedge was load-bearing in fact, not merely in principle — the bound held (§ 2 puts boss-reached-0 at ≥ 4/4 of observed round-11 combats) while the point estimate did not (75%, not 36.4%).**
+
+**(f) Catch 124 + Drift 100 — Claude Code.** The HANDOFF `2026-07-25-17` Step 4 block asserted "**CLIENT VERSION THESE RUNS WILL EMIT**" on the strength of a check performed on the **built bundle** — an assertion about *runs* from evidence about a *build*. Self-surfaced in the next phase, **after it had propagated through master-dev to Trey**. The scoping defect at (c) is recorded as the upstream cause and does not excuse it: a hand-off's scope constrains what is checked, not what may be asserted.
+
+**PAIRED DRIFT: MINTED.** The mechanism is **a claim about one surface supported only by evidence from another** — a claim-accuracy defect, squarely the Claude-Code claim-accuracy Topic established at Catch 111 and carrying Catches 116, 117 and 118. **No new Topic; an established one.**
+
+**⚠ FIVE OF SIX ARE MASTER-DEV-SIDE HERE**, inverting the previous entry's ratio, and the sequence (a)→(b)→(c) is one causal chain rather than three independent defects: an unverified build claim, the withdrawal of the check that would have caught it, and a scope that excluded the surface where it mattered. **Recorded as a chain because reading them as three separate slips loses the shape.**
+
+### 10 — NOTHING CLOSED
+**CF-93 stays OPEN**, live scope **rounds 1–10**, round-11 leg CANDIDATE-RESOLVED and HELD (§ 7). **CF-94 stays CLOSED.** **S6 and facet 3 stay HELD.** **No CF opened.**
+
+### Counter
+Light entry (measurement record; no PR, no merge, no code). Ordinal walk live from canon at tip `3853228`, greps run this session with a phantom-higher control on every axis: highest **Catch 118**, **Rule 37**, **Pattern 10**, **Drift 94**, **CF-94** — and `Catch 119` → 0, `Catch 12[0-4]` → 0, `Catch 12[5-9]` → 0, `Drift 9[5-9]` → 0, `Drift 10[0-9]` → 0, `Rule 3[89]` → 0, `CF-9[5-9]` → 0.
+
+Deltas by ID: catches **+6** (Catch 119 § 9(a); Catch 120 § 9(b); Catch 121 § 9(c); Catch 122 § 9(d); Catch 123 § 9(e), RULED COUNTED; Catch 124 § 9(f), Claude-Code-side). Rules **+0** — § 4 and § 6 are Rule 37 APPLICATIONS, not re-mints. Patterns **+0**. Drifts **+6** (Drift 95 → Catch 119; Drift 96 → Catch 120; Drift 97 → Catch 121; Drift 98 → Catch 122; Drift 99 → Catch 123; Drift 100 → Catch 124). Every catch here pairs: (a)–(e) are master-dev Topic-2 process deviations with long-established instance chains, and (f) pairs under the Claude-Code claim-accuracy Topic per the reasoning at § 9(f). Open-CFs **+0** — **NOTHING closed, NOTHING opened**; CF-93 stays OPEN with its scope refined, CF-94 stays CLOSED, S6 and facet 3 stay HELD.
+
+Running line: **118/37/10/94/53 → 124/37/10/100/53** — catches **124** / rules **37** / patterns **10** / drifts **100** / open-CFs **53**.
+
+**ARITHMETIC SHOWN:** catches 118 + 6 = 124 · rules 37 + 0 = 37 · patterns 10 + 0 = 10 · drifts 94 + 6 = 100 · open-CFs 53 + 0 = 53.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **37** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so distinct codified rules stand at **36**. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The **53** is carried forward by arithmetic, unverified by enumeration. The re-enumeration remains unscheduled.
+
+Anchor: docs-only, so **this entry's own docs commit is the counter anchor. There is no artifact anchor** — this entry records a measurement, not a merge.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-93** — the difficulty curve. Stays **OPEN**. **Live scope narrowed to ROUNDS 1–10** (§ 7); the round-11 leg is CANDIDATE-RESOLVED by CF-94 and **HELD not closed** pending ~10 more runs on a stable build. Characterization refined to the § 7 headline. The rounds-1–3 finding is recorded as **AGENCY / LEGIBILITY**, adjacent to CF-89's confusion half, with a CF split CONSIDERED and DECLINED on the ground that it is one mechanism and one fix. Still PROBLEM ONLY.
+
+---
+
 ## 2026-07-25 — CF-94 CLOSED (merge `f6015b0`, PR \#59): CP6's two-guard asymmetric liveness gate SHIPPED — the FIRST sim change since the CF-83 ramp; **closure basis ruled ON MERGE, not on measurement** (unlike CF-87 and CF-89) because the defect is verifiable by test and the ablation matrix proves both guards independently necessary and jointly sufficient; all FIVE canon line-pins RE-PINNED to `f6015b0` — five map to five, NONE collapsed, and the CP6 entry's pins to `008f2f9` REMAIN VALID because `--no-ff` preserved it as an ancestor (verified, both pins live for different purposes); determinism proved by byte-identical double-write with the CLEAN TREE as the stronger result — two regenerations reproduce the COMMITTED fixtures; drift enumerated at 12 distinct fixtures across 14 path entries, stated as COST; TWO RECONCILIATIONS — the `.json` 18-vs-19 figures are NOT a defect (different populations, both prior usages correct) and the 12-changed-vs-11-predicted delta is recorded UNRECONCILED, not reconstructed; Catch 113 + Drift 90 and Catch 114 + Drift 91 (master-dev — the second being **Rule 37's FIRST APPLICATION after codification, against its own author**) + Catch 115 (Claude Code, NO paired drift) + Catch 116 + Drift 92 and Catch 117 + Drift 93 and Catch 118 + Drift 94 (Claude Code; 118 was **surfaced-and-declined by Claude Code, then RULED IN by master-dev** — a `SURFACED, NOT MINTED` item in a LANDED entry is a debt that decays, so it is closed in place) — **FOUR catches against Claude Code, ALL SELF-SURFACED, and the gate defects among them invisible to master-dev by construction: the count reflects DISCLOSURE QUALITY, not degradation**; THREE no-catch rulings with grounds recorded; cardinal-from-recall HELD at five instances with its trigger RESTATED NOT ADVANCED — master-dev's lean was to codify and it DECLINED to advance its own trigger; five technical learnings and a WATCH at FIVE instances, its category renamed from "toolchain false greens" to **silent under-reporting checks** because the fifth is not a toolchain fact, named and NOT minted; CF-93 round-11 RE-MEASURE DUE before CF-93 Phase 2; counter 112/37/10/89/54 → 118/37/10/94/53
 
 **ARTIFACT ANCHOR: merge `f6015b0`** (parents `a00831a` + `5249633`, `--no-ff`, 16 files, +448 −178; PR \#59 closed merged 2026-07-25T20:06:36Z). **COUNTER ANCHOR: this entry's own docs commit.** Docs-only, insertion-only, `decision-log.md` alone. Baseline tip `f6015b0`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards …" carrying **112/37/10/89/54**, read from the file this session.
