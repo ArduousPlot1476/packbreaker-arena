@@ -470,12 +470,45 @@ function runDamageResolution(state: CombatState): void {
   }
 }
 
+/** CF-94 CP4 liveness gate (decision-log.md 2026-07-25 § "CF-94 CUT POINT PLACED at
+ *  CP4 (Route D Phase 1 RATIFIED; docs-only, insertion-only): the predicate is
+ *  CROSS-SIDE, not effect-type …"). An effect originated by a combatant whose CURRENT
+ *  HP is <= 0 resolves only if it does NOT cross to the opponent. Self-side effects
+ *  (heal-self, buff_adjacent) are untouched at either liveness — that asymmetry IS the
+ *  ruling: a 0-HP combatant may not act ON THE OPPONENT, but its triggers still fire
+ *  and it remains a valid heal target until the death check.
+ *
+ *  TWO CALL SITES, both AFTER target resolution so no rng draw is skipped:
+ *    - applyDamage (damage), covering the queued drain AND the inline reaction path
+ *    - resolveEffect case 'apply_status' (opponent-targeted status)
+ *
+ *  EVALUATED AT APPLICATION, NOT ENQUEUE. Top-level damage is queued during the
+ *  cooldown phase while both sides are necessarily still alive (the death check ran
+ *  at the end of the previous tick), so an enqueue-time check never fires and leaves
+ *  the mid-drain kill path open behind a guard that reads as correct. */
+function crossesToOpponentWhileDead(
+  state: CombatState,
+  sourceSide: EntityRef,
+  targetSide: EntityRef,
+): boolean {
+  if (targetSide === sourceSide) return false; // self-side never crosses
+  const sourceCombatant = sourceSide === 'player' ? state.player : state.ghost;
+  return sourceCombatant.hp <= 0;
+}
+
 /** Applies a damage event: HP mutation, event emission, lifesteal, reactions.
  *  Called during damage_resolution drain (for top-level events) and inline
  *  during reaction effect resolution (for reaction events flagged
  *  isReaction=true). The latter case bypasses pendingDamage entirely so the
  *  reaction's damage event lands in events[] immediately after the parent. */
 function applyDamage(state: CombatState, pd: PendingDamage): void {
+  // CF-94 CP4. SKIP THE CALL, do not zero the amount: a suppressed hit did not
+  // happen and must not appear in the replay log. (Zeroing would also close
+  // lifesteal — the `cappedAmount === 0` early return below precedes it — so the
+  // two are outcome-equivalent; they differ only in event emission, and the
+  // no-event form is the honest one.)
+  if (crossesToOpponentWhileDead(state, pd.sourceSide, pd.targetSide)) return;
+
   const target = pd.targetSide === 'player' ? state.player : state.ghost;
   const sourceCombatant = pd.sourceSide === 'player' ? state.player : state.ghost;
   const sourceSideStats = state.sideStats[pd.sourceSide];
@@ -779,6 +812,11 @@ function resolveEffect(
     case 'apply_status': {
       const targetSide = resolveTargetSideForDamage(state, effect.target, sourceSide);
       if (targetSide === null) return;
+      // CF-94 CP4, site 2. AFTER target resolution above, so the random_item rng
+      // draw is never skipped. Closes the adjacency path: a 0-HP combatant whose
+      // weapon fires on_low_health reaches fireAdjacentReactions, and an adjacent
+      // spark-stone / fire-oil would otherwise burn the opponent from the dead.
+      if (crossesToOpponentWhileDead(state, sourceSide, targetSide)) return;
       const targetStatus = targetSide === 'player' ? state.playerStatus : state.ghostStatus;
       // Locked answer 15: recipeBonusPct applies to status stacks BEFORE the
       // silent cap from STATUS_STACK_CAPS. Stun (boolean) ignores stacks per
