@@ -163,7 +163,7 @@ KPIs map directly to the four telemetry goals in § 1.
 ### Goal 4 — Determinism integrity
 
 - **Tick-cap draw rate** = `count(combat_end where endedAtTick == 600) / count(combat_end)`.
-  - Target: < 0.5%. Anything higher means combats aren't resolving — usually a balance bug (insufficient damage), occasionally a sim bug.
+  - Target: < 1%. Anything higher means combats aren't resolving — usually a balance bug (insufficient damage), occasionally a sim bug.
 - **Sim wall-time p95** = client-side timing wrapper around `simulateCombat` calls. Emitted as a custom event `sim_perf` (see § 9 — added if main-thread budget becomes a concern).
   - Target: ≤ 5ms p95. Above this triggers the worker-isolation revisit in `tech-architecture.md` § 5.3.
 

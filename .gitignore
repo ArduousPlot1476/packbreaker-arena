@@ -10,3 +10,6 @@ coverage
 .claude/settings.local.json
 .env
 PLAN-*.md
+.agents/
+.codex/
+scratch/
