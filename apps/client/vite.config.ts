@@ -51,6 +51,25 @@ export default defineConfig({
       ignored: ['!**/node_modules/@packbreaker/**'],
     },
   },
+  // `vite preview` does NOT inherit `server.proxy` — it has its own block. Without
+  // this, a preview build POSTs telemetry into a 404 and emit.ts's throw-safe
+  // swallow (Catch 21 lineage) drops every batch SILENTLY: the game plays perfectly
+  // and records nothing.
+  //
+  // Preview is the ONLY surface that emits a real clientVersion. Vite substitutes
+  // `define` statically at build but neither rewrites the module nor injects a
+  // global in dev, so `typeof __CLIENT_VERSION__` is 'undefined' under `vite dev`
+  // and telemetry falls to the '0.0.0+unstamped' canary — a bucket shared with
+  // every dev session ever run. Playtests whose telemetry must be attributable to a
+  // build therefore run against `vite preview`, not `vite dev`.
+  //
+  // Same 127.0.0.1 rationale as server.proxy above: the Fastify server binds IPv4,
+  // and on Windows 'localhost' resolves to IPv6 ::1 first.
+  preview: {
+    proxy: {
+      '/v1': 'http://127.0.0.1:4000',
+    },
+  },
   // Don't pre-bundle workspace packages — they're TS source, not built libs.
   optimizeDeps: {
     exclude: [
