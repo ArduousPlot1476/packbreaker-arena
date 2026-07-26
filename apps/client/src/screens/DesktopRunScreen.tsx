@@ -96,23 +96,35 @@ export function DesktopRunScreen() {
           <LeftRail />
           {/* Column-stacked so the recipe ladder occupies the vertical slack
               under the bag rather than covering it or displacing the shop.
-              The bag stays fully visible at the 1280×720 baseline. */}
+              minHeight 0 lets this column constrain its children instead of
+              being pushed open by them — without it, a flex item's automatic
+              min-height keeps the panel at full size and the overflow lands on
+              BottomPanel. The bag keeps its natural size (flex 0 0 auto below);
+              the panel is the item that yields. */}
           <div
             className="flex-1 flex flex-col items-center justify-center relative"
-            style={{ background: 'var(--bg-deep)', gap: 10, minWidth: 0, padding: '0 12px' }}
+            style={{
+              background: 'var(--bg-deep)',
+              gap: 8,
+              minWidth: 0,
+              minHeight: 0,
+              padding: '0 12px',
+            }}
           >
-            <BagBoard
-              bag={state.bag}
-              drag={state.drag}
-              hover={state.hover}
-              dimmed={state.combatActive}
-              recipeMatches={recipes}
-              heldCount={scoutedRecipes.length}
-              onCombine={onCombine}
-              combineRejection={combineRejection}
-              containerRef={bagContainerRef}
-              adjacencyReveal="popover"
-            />
+            <div style={{ flex: '0 0 auto' }}>
+              <BagBoard
+                bag={state.bag}
+                drag={state.drag}
+                hover={state.hover}
+                dimmed={state.combatActive}
+                recipeMatches={recipes}
+                heldCount={scoutedRecipes.length}
+                onCombine={onCombine}
+                combineRejection={combineRejection}
+                containerRef={bagContainerRef}
+                adjacencyReveal="popover"
+              />
+            </div>
             <RecipeLadderPanel
               recipes={recipes}
               scoutedRecipes={scoutedRecipes}

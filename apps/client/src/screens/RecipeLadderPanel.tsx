@@ -27,11 +27,26 @@
 // than information, so the ladder names items instead of drawing them. The bag
 // and shop remain the iconographic surfaces.
 //
-// Layout: a 2-column grid, so all 12 rows land without scrolling in the
-// vertical slack under the 528×352 bag at the 1280×720 baseline. The height
-// budget is measured rather than assumed — see ROW_HEIGHT below. The grid
-// scrolls as a safety net, but at the baseline nothing scrolls, and the bag
-// is never covered or pushed off-screen.
+// Layout: a 2-column grid, sized BY FLEX, never by a pixel budget.
+//
+// Three earlier cuts hardcoded a row height (34 -> 30 -> 27) derived by hand
+// from sibling geometry — TopBar, BottomPanel, the bag block — and re-justified
+// in a comment each time. All three were wrong, the last still overflowing its
+// column by 11px, because a constant cannot track siblings it does not observe.
+// That is ONE defect class, not three bugs, which is why the ceiling was bent
+// to kill it structurally rather than take a fourth hand-tuned value.
+//
+// The panel now shrinks (flex 0 1 auto + minHeight 0) and the grid absorbs the
+// shrink (flex 1 1 auto + minHeight 0 + overflowY auto). Rows size to their own
+// content. Two consequences hold WITHOUT arithmetic: the panel can never exceed
+// its column, so it can never paint over BottomPanel; and when the column is
+// generous — as at the 1280x720 baseline — nothing scrolls and all 12 rows
+// show. A shorter viewport degrades to a scrolling grid, not an overflow.
+//
+// Enforced, not eyeballed: scratch/cf95-recipe-ladder/assert.mjs measures
+// columnOverflow / panelOverlapsBottomBar / rows-in-viewport in a real browser
+// and exits non-zero. happy-dom has no layout engine, so a vitest geometry
+// assertion would be vacuously green — which is exactly why it lives there.
 
 import { ITEMS } from '../run/content';
 import { buildRecipeLadder, countByState, type RecipeLadderRow } from '../run/recipeLadder';
@@ -47,15 +62,6 @@ interface RecipeLadderPanelProps {
   /** combineMatchKey of a match the sim rejected for lack of room. */
   rejectedKey?: string | null;
 }
-
-// Measured against a real 1280×720 capture, not assumed. The middle flex row
-// is 720 − 48 TopBar − 32 BottomPanel = 640. The bag block (header + 4×88 grid
-// + footer) measures ~400, and the column gap is 10, leaving ~230 for the whole
-// panel. Panel height = 8 padTop + 22 header + 6 gap + (6 × ROW_HEIGHT + 15
-// grid gaps) + 10 padBottom + 2 border. At ROW_HEIGHT 27 that is 225 — inside
-// the budget. Two earlier values (34, then 30) both overflowed and painted over
-// BottomPanel, which is why this is pinned to a measurement.
-const ROW_HEIGHT = 27;
 
 export function RecipeLadderPanel({
   recipes,
@@ -75,14 +81,20 @@ export function RecipeLadderPanel({
       style={{
         width: '100%',
         maxWidth: 840,
-        padding: '8px 12px 10px',
+        padding: '6px 12px',
         background: 'var(--bg-mid)',
         border: '1px solid var(--border-default)',
         borderRadius: 8,
-        gap: 6,
+        gap: 5,
+        // Shrink before the column overflows. minHeight 0 is the load-bearing
+        // half: a flex item defaults to min-height:auto and refuses to shrink
+        // below its content, which is precisely how a too-tall panel ends up
+        // painting over its sibling instead of scrolling its own grid.
+        flex: '0 1 auto',
+        minHeight: 0,
       }}
     >
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between" style={{ flex: '0 0 auto' }}>
         <div className="flex items-baseline gap-2">
           <div className="label-cap" style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
             RECIPES
@@ -115,11 +127,13 @@ export function RecipeLadderPanel({
         className="grid"
         style={{
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: '3px 10px',
-          maxHeight: ROW_HEIGHT * 6 + 15,
-          overflowY: 'auto',
-          flex: '0 1 auto',
+          gap: '2px 10px',
+          // The grid absorbs whatever shrink the panel takes. No maxHeight — a
+          // pixel cap is the same hardcoded-budget mistake one level down, and
+          // it would clip rows silently instead of scrolling them.
+          flex: '1 1 auto',
           minHeight: 0,
+          overflowY: 'auto',
         }}
       >
         {rows.map((row) => (
@@ -195,7 +209,12 @@ function LadderRow({
       data-state={row.state}
       className="flex items-center"
       style={{
-        minHeight: ROW_HEIGHT,
+        // Rows size to their own content — no shared height constant to keep
+        // in sync with anything else on the screen. The 1px vertical padding is
+        // chrome, not a height budget: it buys the ~11px that lets all 12 rows
+        // sit unscrolled at the baseline. If it ever stops being enough the
+        // grid scrolls (no overflow, no overlap) and the gate's G7 fails —
+        // which is the difference between this and the deleted constant.
         gap: 8,
         padding: '1px 8px',
         borderRadius: 5,
