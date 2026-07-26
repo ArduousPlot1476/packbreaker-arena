@@ -2,9 +2,12 @@
 // (iron-mace included) vs the endReason==='ko' label definition; (b) the
 // throwing-knife heal-back mechanism trace. READ-ONLY.
 
-import { pathToFileURL } from 'node:url'
-const REPO = 'c:/Users/trobbins/OneDrive - Alevio/Documents/packbreaker-arena'
-const load = (p: string) => import(pathToFileURL(`${REPO}/${p}`).href)
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, resolve } from 'node:path'
+// Repo root derived from THIS script's location (scratch/<dir>/<file>.mts), so
+// the probe runs from any checkout, not just the authoring machine (Codex round 1).
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const load = (p: string) => import(pathToFileURL(resolve(REPO, p)).href)
 
 const content = await load('packages/content/src/index.ts')
 const combat = await load('packages/sim/src/combat.ts')

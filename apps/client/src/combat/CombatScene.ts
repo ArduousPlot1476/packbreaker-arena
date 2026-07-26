@@ -487,12 +487,20 @@ export class CombatScene extends Phaser.Scene {
         this.rampActive = true;
         this.headerLabel.setText('— SUDDEN DEATH —');
       }
-      this.updateTiebreakLabel();
     } else if (ev.type === 'status_apply') {
       if (ev.status === 'burn') {
         this.burnStacks[ev.target] = ev.stacks;
       }
     }
+    // CF-93 LEG 1 (B3) — Codex round 1: refresh after EVERY HP-changing event,
+    // not only on ramp_tick. `packages/sim/src/combat.ts`'s round-2 both-alive
+    // guard applies the ramp only while BOTH sides are alive, so an item or
+    // status KO at tick >= RAMP_START_TICK suppresses that tick's ramp events
+    // entirely and no further ramp_tick ever arrives. Refreshing only inside
+    // the ramp_tick branch therefore FROZE the indicator at the previous tick
+    // — through the KO animation and the 480ms settle — and could assert the
+    // eventual LOSER was ahead. Self-gated: no-ops until rampActive is set.
+    this.updateTiebreakLabel();
   }
 
   /** CF-93 LEG 1 (B3): while the ramp is draining both sides at the same
