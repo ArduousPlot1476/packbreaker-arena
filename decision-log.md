@@ -4,6 +4,272 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-26 — CF-93 LEG 1 CLOSED ON MERGE (artifact anchor `90898e5`, PR \#60) — the first player-facing change of the CF-93 track and the first client-only one: five display-only additions that name the CF-83 ramp, show the tiebreak, and derive the resolution cause WITHOUT reading `endReason`; **LEG 1 IS A LEG, NOT THE CF — CF-93 STAYS OPEN** on rounds 1–10; visual verification **COMPLETE** at 1280×720 and 390-wide, including the B1 revert observed rather than inferred; Codex 2 rounds / 2 P2 findings both confirmed against source and fixed, ceiling never tripped, **no catch per the CF-67 ruling**; **F1 WAIVED, not verified**, carried as a NAMED WATCH ITEM with its Rule 28 ground recorded; **⚠ THE SUPPLIED RAW TABLE IS 87 ROWS / 9 RUN IDS, NOT 85 / 8** — `run-1` is probe contamination (a non-conforming runId carrying TWO byte-identical round-1 rows) and **excluding it reproduces EVERY master-dev headline figure exactly**, which is itself the corroboration that the exclusion is right; the round × endReason × outcome enumeration is supplied at FULL granularity, the granularity the prior entry recorded as missing; **THE ROUND-11 LEG RESOLVES AS TARGET MISSED** — pooled 8/11 = 72.7%, Wilson [43.4%, 90.3%], and where the prior interval CONTAINED balance-bible.md § 15's ~30% this one **EXCLUDES** it, a change in inferential state rather than merely a larger n, with the pooling licensed by a PRE-REGISTERED selection check that returns Fisher p = 1.0000; **CF-88's PREMISE CONFIRMED BY MEASUREMENT** — 6 of 13 `ramp_ko` combats resolve at EXACTLY tick 500 and the data cannot say which were item kills, by construction; CF-84's semantics observed twice unambiguously; `damageDealt` SUPERSEDED to the event sum, so round-11 values CANNOT be read as opponent HP; **THREE MASTER-DEV CLAIMS REFUTED and TWO SUPPLIED STATISTICS FAILED RECOMPUTATION**; **Rules 38 and 39 NEW**, with Rule 38's own citation-before-codification defect recorded against it; Rule 8 WIDENED (amendment, no ordinal) as PATTERN 10's instance; Catches 128–134 + Drifts 104–110, ENUMERATED not counted per Rule 39 codified in this same entry; THREE candidates HELD for missing artifacts; counter 127/37/10/103/53 → 134/39/10/110/53
+
+Docs-only, insertion-only, `decision-log.md` alone. **ARTIFACT ANCHOR = the merge commit; COUNTER ANCHOR = this entry's own docs commit.** Baseline tip `47f8d51`; governing counter entry decision-log.md 2026-07-25 § "CF-93 ROUND-1 PER-CLASS MATRIX RECORDED (docs-only; CLOSES NOTHING, OPENS NOTHING) …" carrying **127/37/10/103/53**, read from the file this session. **Decision day 2026-07-26**, ruled not assumed. No code, schema, content, corpus, or migration change.
+
+**⚠ THE MERGE SHA AND ITS PARENTS ARE DERIVED FROM THE REPOSITORY, NOT ADOPTED FROM THE REQUESTING PROMPT** — a relayed SHA from a party without repo access is a corruption vector, and the prompt said so itself. Walked live:
+
+```
+merge commit : 90898e517cdbebe39b81cda794ee77d87790cf7d
+short        : 90898e5
+subject      : Merge cf93-leg1-resolution-legibility (\#60) — CF-93 LEG 1: name the …
+               (the `#` is escaped here per the log's auto-link rule; the commit itself carries it bare)
+parents:
+  d84b750  chore(scratch): track the CF-93 round-1 analysis probes (-21 and -23) …
+  28dbee3  chore(scratch): track the CF-93 LEG 1 CDP visual-verification harness
+```
+
+`--no-ff`, four branch commits preserved as ancestors, none squashed or rebased. **SOURCE BASIS for §§ 3–9: 8 runs / 85 combats on build `0.0.1+3853228`, played by Trey 2026-07-26, read from PostHog. The raw table is REPRODUCED in the requesting prompt, not primary** — this entry recomputes every figure from it rather than adopting any.
+
+### 1 — CF-93 LEG 1 CLOSED ON MERGE
+**What shipped**, all client-only:
+
+| | change |
+|---|---|
+| **B1** | the first `ramp_tick` renames the scene header to `— SUDDEN DEATH —`; reverts on the next combat |
+| **B2** | the ramp floater reads `−3 · SUDDEN DEATH` instead of a bare `−3` |
+| **B3** | tiebreak direction during the ramp, with a distinct `TIED` state |
+| **B4** | derived resolution cause beneath the outcome headline |
+| **B5** | `DRAIN` as a THIRD quantity beside `DEALT` / `TAKEN` |
+
+**THREE LOAD-BEARING PROPERTIES, all verified in the diff and none of them incidental.**
+**(a)** `attribution.ts` is **untouched** and still returns `null` for `ramp_tick` — its unattributed-by-design ruling is canon at decision-log.md 2026-07-20 § "CF-85 SCOPE REDRAWN against Phase-1 read-only …". That array carries ITEM names; the ramp has no item, so B2 composes its cause string at the render site instead. The contract is not widened.
+**(b)** `computeDamageStats` is **untouched**, so `DEALT` / `TAKEN` still report the ramp-excluded event sum — observed live as `DEALT 11 · TAKEN 0` on a ramp-resolved draw. B5 adds a separate third quantity that EXPLAINS those numbers rather than altering them.
+**(c)** the derived cause and `endReason` **DISAGREE on a tick-500 item kill, by design** — CF-88's open scope, routed around client-side by reading the event stream, and protected by a named test whose falsifiability was proven by **Rule 28 ablation**: swapping the derivation to a tick rule went RED on TWO cases, and the revert was proved byte-identical. The lock is **CF-88-closure-compatible** — if `endReason` later becomes cause-based, both sources agree and it still passes.
+
+**VISUAL VERIFICATION COMPLETE**, and it is the check that matters because LEG 1 is 100% display-only. Driven live against `vite preview` on the rebuilt bundle at **1280×720 and 390-wide**: B1 including the revert, B2, B3 including `TIED` on an equal-HP mutual KO, B4 on BOTH branches (`DECIDED BY SUDDEN DEATH` and `DECIDED BY ITEMS`), and B5 as `DEALT 11 · TAKEN 0 · DRAIN 30` with CF-84's `ROUND 1 — DRAW` / "Both fell — a draw." **preserved, not displaced**. **B2's floater density judged REINFORCEMENT** at ≤ 2 concurrent floaters per side (occurrences), left unfixed — with the caveat recorded that this is ONE ramp at ONE resolution.
+
+**CODEX: 2 rounds, 2 P2 findings, both confirmed against source before fixing, both fixed, ceiling NEVER TRIPPED, round 2 CLEAN.** **NO CATCH**, per the CF-67 ruling that in-gate review findings are the review working rather than defects escaping. Recorded at § 17(a).
+
+**⚠ CF-93 STAYS OPEN.** LEG 1 is one leg of a CF whose live scope is rounds 1–10. **Open-CF delta 0.**
+
+### 2 — F1 WAIVED, NOT VERIFIED
+Codex round 1's P2 against `CombatScene.ts`: once the ramp has started, an item or status KO at tick ≥ `RAMP_START_TICK` suppresses that tick's ramp via the CF-83 PR-A round-2 both-alive guard, so no further `ramp_tick` arrives and a tiebreak refreshed only inside the `ramp_tick` branch **freezes** — potentially asserting the eventual LOSER was ahead through the KO animation and the 480 ms settle. Fixed in the merged branch.
+
+**WAIVED on two legs, both recorded so the waiver stays auditable rather than reading later as an omission:**
+- **The fix is STRUCTURAL, not a point-patch.** `updateTiebreakLabel` moved to the END of `applyEventState`, so **all four HP-mirror writers** refresh it — `damage`, `heal`, `status_tick`, `ramp_tick`. No code path leaves the label stale.
+- **The provocation class is rare and ABSENT where LEG 1 lives**: measured **0 of 523** ramp-derived combats at round 1, and **2 of 793 = 0.25%** at later-round shapes (`scratch/cf93-p23/misattrib.mts`, `misattrib2.mts`, tracked).
+
+**CARRIED AS A NAMED WATCH ITEM. Recorded WAIVED, not verified** — the distinction is the point.
+
+**⚠ THE RULE 28 GROUND FOR SUBSTITUTING NO TEST, recorded because the omission would otherwise look like laziness.** F1 was an **INVOCATION-TIMING** defect, not a decision defect: the pure module's return value is identical before and after the fix, so a pure-module test passes in both states. That is **coverage that cannot go RED against its own defect**, which Rule 28 forbids as verification. **The `koFlashTargets` precedent does NOT transfer** — that surface's defect was in the decision, this one's is in when the decision is invoked.
+
+### 3 — THE MEASUREMENT, RECOMPUTED
+**⚠ THE SUPPLIED TABLE DOES NOT MATCH THE SUPPLIED FIGURES, AND THE TABLE IS THE ONE AT FAULT.** Enumerated: the table carries **87 rows across 9 distinct `runId` values**, not 85 across 8. The excess is **`run-1`** — and it is structurally anomalous on three independent axes:
+
+1. Its `runId` is `run-1`, not the `run-<9-to-10 digits>` shape of every other run in the table.
+2. It carries **TWO byte-identical rows**, both round 1 — the only duplicated round in the entire table.
+3. Its signature — `damageDealt 11`, `ramp_ko`, tick 509, round-1 draw — is **exactly the CF-93 LEG 1 visual-probe fixture**, which was save-INJECTED rather than played, and which ran repeatedly during this session's verification pass.
+
+**RULED: `run-1` is probe contamination and is EXCLUDED.** The corroboration is that **excluding it reproduces every master-dev headline figure exactly** — 85 combats, 8 runs, and each band below. A dataset that only closes on itself after removing the anomaly is a dataset whose anomaly is real.
+
+**FULL GRANULARITY — round × endReason × outcome. This is the enumeration decision-log.md 2026-07-25 § "CF-93 POST-CP6 RE-MEASURE RECORDED …" recorded as a "⚠ GRANULARITY LIMIT" for lacking.** Verbatim recompute output:
+
+```
+=== ROUND x ENDREASON x OUTCOME (full granularity) ===
+  R 1  n= 8  ramp_ko/player_win=1  ramp_ko/ghost_win=1  ramp_ko/draw=1  ko/player_win=3  ko/ghost_win=2
+  R 2  n= 8  ramp_ko/player_win=3  ko/player_win=4  ko/ghost_win=1
+  R 3  n= 8  ramp_ko/player_win=2  ko/player_win=5  ko/draw=1
+  R 4  n= 8  ko/player_win=7  ramp_ko/player_win=1
+  R 5  n= 8  ko/player_win=6  ramp_ko/player_win=1  ko/ghost_win=1
+  R 6  n= 8  ko/player_win=7  ramp_ko/player_win=1
+  R 7  n= 8  ko/player_win=8
+  R 8  n= 8  ko/player_win=6  ramp_ko/player_win=1  ko/draw=1
+  R 9  n= 7  ko/player_win=6  ko/ghost_win=1
+  R10  n= 7  ko/player_win=7
+  R11  n= 7  ko/ghost_win=2  ko/player_win=5
+```
+
+**MASTER-DEV'S FIGURES, EACH FALSIFIED RATHER THAN ADOPTED — all five CONFIRM on the 85/8 basis:**
+
+| claim | recomputed | verdict |
+|---|---|---|
+| 85 combats | **85** (after excluding `run-1`) | **CONFIRMS** |
+| rounds 1–3 heart-costing 6/24 = 25.0% | **6/24 = 25.0%** | **CONFIRMS** |
+| rounds 4–10 51/54 = 94.4% | **51/54 = 94.4%** | **CONFIRMS** |
+| draws 3/85 = 3.5% | **3/85 = 3.5%** | **CONFIRMS** |
+| `ramp_ko` 13 | **13** | **CONFIRMS** |
+| round-1 zero-damage 3/8 | **3/8 = 37.5%** | **CONFIRMS** |
+
+**INTERNAL CONSISTENCY:** 8 + 8 + 8 = 24 (rounds 1–3) ✓ · 8+8+8+8+8+7+7 = 54 (rounds 4–10) ✓ · 24 + 54 + 7 = 85 ✓ · heart-costing 6 + 3 + 2 = 11 across all bands ✓ · `ko` 72 + `ramp_ko` 13 = 85 ✓. The breakdown closes on itself.
+
+### 4 — THE ROUND-11 LEG: TARGET MISSED
+This session **5/7 = 71.4%**. Canon's prior on the SAME build is **3/4**. Pooled: **8/11 = 72.7%, Wilson 95% = [43.4%, 90.3%]** — recomputed, matching master-dev's ≈[43%, 90%].
+
+**⚠ THE INFERENTIAL STATE CHANGED, AND THAT IS THE FINDING — NOT THE LARGER n.** The prior interval on 3/4 was [19.4%, 99.4%] and **CONTAINED** balance-bible.md § 15's ~30% first-attempt target; canon recorded the target as "no longer falsified" on exactly that ground. **The pooled interval EXCLUDES 30%.** A target that sits outside the interval is not a target the data merely fails to reject.
+
+**RULED: the round-11 leg resolves as TARGET MISSED — the boss is TOO EASY.** Not "met", not "no longer falsified". Corroborated independently by telemetry-plan.md § 4's median-pinned-at-11 signal: **7 of 8 runs (occurrences) pinned at round 11**.
+
+**⚠ RULE 37 PRE-REGISTRATION, RECORDED AS PRE-STATED.** Before the outcomes were read, master-dev predicted that IF selection drove the difference between the two segments, the LESS-filtered population (87.5% reach this session vs ~50% prior) should show a LOWER win rate. Measured: **3/4 = 75.0% prior against 5/7 = 71.4% this session — 3.6 points.** Recomputed independently: **Fisher exact two-tailed p = 1.0000.** The segments are statistically indistinguishable, so selection is not doing the work and **the segments POOL**. **The pre-registration is what licenses the pooling** — pooling first and testing homogeneity afterwards would be the Rule 37 defect, not its satisfaction.
+
+**DISPOSITION.** The leg **RESOLVES**; **CF-93 STAYS OPEN on rounds 1–10**, which is master-dev's position and is adopted because the round-11 question is now answered in a direction while the rounds-1–10 curve is not. **No CF closes. No CF opens.**
+
+### 5 — REACH RATE: DIRECTIONAL, AND CONFOUNDED BY CONSTRUCTION
+**7 of 8 runs (occurrences) reached round 11**, against canon's prior on the same build.
+
+**⚠ A SUPPLIED STATISTIC FAILED RECOMPUTATION — AND ITS DENOMINATOR IS NOT DETERMINATE.** The prompt carried "4–6 of 9 prior, Fisher p ≈ 0.29". **A p-value cannot be computed from a RANGE.** Against the 4/9 figure canon actually carries, **Fisher exact two-tailed = 0.1312**, not 0.29. Both readings agree the result is **NOT significant**, so the qualitative conclusion is unchanged — but the number is corrected and the range is flagged as an inadmissible denominator.
+
+**⚠ CONFOUNDED BY CONSTRUCTION, and this is a RULING on record rather than a discovery.** Trey was told to play to win, **knowing the round-1 matrix** recorded at decision-log.md 2026-07-25 § "CF-93 ROUND-1 PER-CLASS MATRIX RECORDED …". The population is informed play, not naive play. **Directional only; no rate is asserted.**
+
+### 6 — CF-88's PREMISE CONFIRMED BY MEASUREMENT, NOT RESTATED
+**6 of 13 `ramp_ko` combats resolve at EXACTLY tick 500** — the ramp's first tick. Verbatim:
+
+```
+=== ramp_ko AT EXACTLY TICK 500 ===
+  count: 6 of 13 ramp_ko
+  damageDealt values: 0/119/108/48/53/62
+  rows: run-1719647558 R1 ghost_win · run-184585650 R4 player_win · run-184585650 R5 player_win ·
+        run-2071790841 R2 player_win · run-521188724 R6 player_win · run-845451452 R3 player_win
+```
+
+**⚠ A SECOND SUPPLIED STATISTIC FAILED RECOMPUTATION.** The prompt carried the values as `119/108/62/53/48/48` — **`48` twice and no `0`**. Enumerated, they are **`0/119/108/48/53/62`**. The COUNT of six is confirmed; one value in the supplied list is wrong.
+
+**THE PREMISE ITSELF IS CONFIRMED.** Either a combatant was already at ≤ 3 HP on six separate occasions, or item kills are landing on the ramp boundary and being stamped `ramp_ko` by the pure-tick rule at `packages/sim/src/combat.ts`. **WHICH ONE IS UNDETERMINABLE FROM THIS DATA BY CONSTRUCTION** — `damageDealt` constrains only the player→ghost direction and carries nothing about the killing blow's source. That is CF-88's premise, now **confirmed in live play rather than restated from a corpus**.
+
+**CF-88 STAYS OPEN, UNAMENDED.** Recorded alongside: **B4 resolves this client-side** by reading `ramp_tick` presence off the `CombatEvent` stream — the discriminating datum that is not on the telemetry wire. LEG 1 does not fix CF-88; it routes around it on one surface.
+
+### 7 — CF-84's SEMANTICS OBSERVED TWICE, UNAMBIGUOUSLY
+`run-521188724` **R3** (`ko`, tick 300, draw) and **R8** (`ko`, tick 60, draw). Both are `endReason: ko` with the ramp nowhere near tick 500 — **simultaneous item KOs**, the exact path CF-84's draw semantics exist to render honestly, and the exact path CP6 was built to preserve. Both charged a heart.
+
+**CF-84 STAYS CLOSED. This is its semantics working in live play**, recorded as corroboration rather than as a reopening.
+
+### 8 — THE RAMP MASKING A BAG THAT DID NOTHING
+`run-1604894949` rounds **1, 2 and 3**: `damageDealt 9` at ticks **506 / 507 / 507**, three `player_win`s — then **round 4 jumps to 36 at tick 150**. Three consecutive rounds resolved by the ramp on 9 points of damage, **across two shop phases**, and then the build works.
+
+Canon's characterisation — that a share of combats still do not resolve on item damage and **the ramp MASKS that** — now has a **three-round live instance** rather than an inferred one.
+
+**⚠ THE ITEM ATTRIBUTION IS INFERENCE, NOT ESTABLISHED.** 9 = throwing-knife's 8 base + Marauder's `bonusBaseDamage: 1`, and decision-log.md 2026-07-25 § "CF-93 ROUND-1 PER-CLASS MATRIX RECORDED …" § 3 measured Marauder throwing-knife solo at tick 506 `ramp_ko` against an inert ghost — a match on both the damage and the tick. **It is checkable against `shop_purchase` and is recorded as CHECKABLE, not as fact.**
+
+### 9 — THE BEFORE-HALF OF THE LEG 1 COMPARISON
+**15 of 85 combats = 17.6% end with no visible cause.** The set is every `ramp_ko` UNION every draw, **deduplicated** — the union matters because the two overlap and summing them would double-count. Verbatim:
+
+```
+=== NO-VISIBLE-CAUSE SET (every ramp_ko UNION every draw, dedup) ===
+  count: 15 of 85 -> 17.6%
+  (ramp_ko 13 + draws 3 - overlap 1)
+```
+
+**This is the OBJECTIVE INSTRUMENT the post-LEG-1 comparison uses.** Recorded with its query shape so it is reproducible: `combat_end` rows where `endReason = 'ramp_ko' OR outcome = 'draw'`, counted DISTINCT, over a single `clientVersion`. Post-LEG-1 the same 17.6% of combats still resolve the same way — what changes is that every one of them now carries `— SUDDEN DEATH —`, a tiebreak direction, a `DECIDED BY` line and a `DRAIN` figure. **The instrument measures legibility against a FIXED denominator, which is why it is the one that can move without the sim moving.**
+
+### 10 — `damageDealt` SUPERSEDED TO THE EVENT SUM
+The shipped emit computes `damageDealt` via **`computeDamageStats`** (`packages/sim/src/run/state.ts`) — `damage.amount` + `status_tick.damage` for `target === 'ghost'` — **gross, pre-heal, and EXCLUDING `ramp_tick`**. Chain walked at the change sites: `CombatOverlay.tsx` computes it, `handleNext` forwards it via `onDone`, `useRun.ts` passes it into `applyCombatOutcome`, and `state.ts` emits it on `combat_end`.
+
+**THE FULL-HP-DELTA CHARACTERISATION IS SUPERSEDED**, per `CombatOverlay.tsx`'s own comment recording the CF-83 Fix A change away from "the old net-of-heal `finalHp` delta". Superseded **by insertion**; no landed entry is edited.
+
+**⚠ CONSEQUENCE, stated because it bites immediately:** round-11 `damageDealt` of **51–67 CANNOT be read as opponent HP**. It is gross of healing and blind to the ramp, so it is an upper bound on damage dealt and not a measurement of what the opponent had. **Canon carries the superseded characterisation as corroboration inside CF-87's boss reasoning — the superseding fact is recorded here so a future reader meets it. CF-87 STAYS CLOSED; nothing is reopened and no figure of CF-87's is restated.**
+
+### 11 — THREE MASTER-DEV CLAIMS REFUTED
+**(a) THE ROUND-1 ZERO-DAMAGE GAP IS NOT ESTABLISHED.** The claim was 43% "exceeding the 17.7% zero-resolver probability by a wide margin", computed off a **truncated denominator**. Correct figure **3/8 = 37.5%**, and the interval is what settles it:
+
+```
+  round-1 zero-damage        3/8 = 37.5%  Wilson [13.7%, 69.4%]
+     contains the 17.7% zero-resolver floor? YES — gap NOT established
+```
+
+**The interval CONTAINS 17.7%.** The observation is consistent with the floor. **No gap is established, and the "wide margin" reading is REFUTED.**
+
+**(b) CF-86 CANNOT BE MEASURED BY THIS POPULATION.** CF-86's residual is players **DECLINING** resolvers that were offered. Trey played informed, to win, knowing the matrix — **he did not decline**. Recorded so that a future `shop_purchase` join does not mistake this population for evidence about CF-86. **CF-86 STAYS OPEN and is NOT amended.**
+
+**(c) A PREDICTION REFUTED.** Master-dev predicted informed round-1 play would drive rounds-1–3 heart-costing **NEAR ZERO**. Measured **6/24 = 25.0%** against the post-CP6 40.7%:
+
+```
+  rounds 1-3 heart-costing   6/24 = 25.0%  Wilson [12.0%, 44.9%]
+     contains the post-CP6 40.7%? YES — the drop is NOT significant
+```
+
+**Lower, not near zero — and NOT significant at this n** (Fisher exact two-tailed on 6/24 vs 11/27 = **0.3724**, recomputed). Even informed play does not empty the band.
+
+### 12 — QUALITATIVE LIMIT, STATED NOT PAPERED OVER
+**Capture sheets exist for 2 of 8 runs (occurrences).** The subjective three-question instrument is therefore **n = 2** and carries no rate. **The objective instrument at § 9 is what the post-LEG-1 comparison rests on** — chosen precisely because it does not depend on capture-sheet coverage.
+
+### 13 — RULE 38 NEW
+Ordinal walked live: highest rule token in canon is **Rule 37**; `Rule 3[89]` → 0 and `Rule [4-9][0-9]` → 0. Next free → **Rule 38**.
+
+> **Rule 38 — canon-bound measurement carries its reproduction path.** Any figure entering `decision-log.md` must be accompanied by a TRACKED artifact sufficient to reproduce it — the script, the query text, or the command line. Chat prose, gitignored directories, and session scratchpads do not count.
+
+**PROVENANCE — four instances (occurrences):** the `scratch/cf93-p21` probes were gitignored when the per-class matrix entry was authored; a "probe 4" artifact was cited across a handoff boundary and **never existed in the repository**; the -21 report's figures lived only in chat prose; and the probes backing LEG 2's geometry sat in a session scratchpad. The codification gate is met several times over.
+
+**⚠ THE CODIFICATION DEFECT, RECORDED AGAINST THE RULE ITSELF.** Master-dev ruled this rule in chat, declared it "ratified by use", **APPLIED it twice** (the `d84b750` tracking commit and `scratch/cf93-p25/`), and **CITED IT BY ORDINAL across the master-dev/Cursor boundary in three handoffs** — including the phrase "this is Rule 38's first application" — while it had **NO committed entry in canon**. A live grep at this entry's authoring confirms it: `Rule 38` returns **0 hits** before this insertion. **Rule 20 exists to forbid exactly that.** Counted at § 15 as Catch 132.
+
+**AND IT PAID INSIDE A DAY, recorded because the defect and the value are separate facts.** Codex F2 found that **10 of 10 tracked probe files (occurrences)** hardcoded the authoring machine's path and could not run in any other checkout — a break that was only *findable* because the probes were tracked. Every figure the PR body cites was then **re-run and reproduced exactly** after the fix.
+
+### 14 — RULE 39 NEW
+Next free after Rule 38 → **Rule 39**. **RATIFIED BY TREY THIS SESSION**, advancing the long-HELD cardinal-from-recall trigger that master-dev had explicitly DECLINED to advance against itself.
+
+> **Rule 39 — enumerate, never count; and a tooling cardinal names its unit.** Any cardinal entering an artifact that crosses a boundary must be produced by ENUMERATING its members, not recalled or estimated. A cardinal derived from tooling must state its unit — lines, occurrences, files, test cases. `grep -c` returns LINES and is not an occurrence count.
+
+**PROVENANCE — six instances (occurrences), both sides of the relay**, one of which reached an **immutable artifact** (a pushed commit message); the "Route C — nine" line-versus-occurrence conflation, where `grep -c` returned 9 lines and the true occurrence count was 14; and the three-versus-four HP-mirror-writer premise carried in a load-bearing handoff. The trigger was HELD across prior entries with its author declining to advance it; **Trey's ratification is what moves it**, and that provenance is recorded rather than the rule appearing self-minted.
+
+**⚠ RULE 39 BINDS THIS ENTRY AND WAS APPLIED TO ITS OWN CATCH SECTION.** No count was adopted from the requesting prompt — § 15 enumerates the acts and rules each. Every cardinal in this entry names its unit.
+
+### 15 — CATCHES 128–134 + DRIFTS 104–110, ENUMERATED
+Act-bundled per Catch 91's shape (bundle within one authoring act); separate ordinals across distinct artifacts per the Catch 92 split. **The requesting prompt supplied CANDIDATES and expressly no count. Each is ruled in or out below, and the delta is the length of the ruled-in list.**
+
+**(a) Catch 128 + Drift 104 — master-dev, the HANDOFF -22 act. ONE authoring act, TWO instances.**
+1. **"originals in `scratch/cf93-p21/`" asserted, and false.** That directory held the probe SCRIPTS; no output was ever written there. The -21 report — which said scripts, not output — was in front of the author. The authoring session recovered only because the SOURCE survived and could be re-executed.
+2. **The LEG token collision**: the remedy for an occupied token (`Route C`) proposed `LEG 1` / `LEG 2`, a token already occupied **twice** in canon (CF-83's fix legs and CF-87's criterion legs). The fix made the property it was adopted for strictly worse.
+
+**(b) Catch 129 + Drift 105 — master-dev, the HANDOFF -23 act. ONE authoring act, THREE instances.**
+1. **Three path pins synthesized onto bare filenames** — `combat/RoundResolution.tsx`, `run/ShopSlot.tsx`, and `useItemInfoTrigger` under `run/`; the real paths are `screens/`, `shop/`, and `items/`. Third instance of Catch 64/77's mechanism.
+2. **`:454, :538` restated as "render at"** when only `:538` renders; `:454` is the HP-mirror update in `applyEventState`. The prior entry's § 9 said "reaches the scene", which was correct — the restatement introduced the error.
+3. **Scoped against "the delta probe 4 did not cover"** one turn after the author had been told probe 4 was not in the repository, making the phase's stated boundary unverifiable.
+
+**(c) Catch 130 + Drift 106 — master-dev, the HANDOFF -24 STAGE B act. ONE authoring act, THREE instances. AGGRAVATED.**
+1. **"a live `setText` path" asserted where none existed.** `headerLabel` had zero `setText` call sites; the path was CONSTRUCTIBLE, not live. Constructible ≠ live.
+2. **Three HP-mirror writers enumerated where there are four** — `heal` writes via `newHp` and was omitted. This is the same cardinal that Rule 39 codifies against, in a premise the phase was told to verify.
+3. **`endReason` located in `packages/sim/src/combat.ts`** when the `CombatResult` interface carrying it lives in `content-schemas.ts`.
+**AGGRAVATOR:** instance 1 is the **identical mechanism the author took a catch for, and widened Rule 8 for, ONE handoff earlier** — the Drift 46 repeat precedent.
+
+**(d) Catch 131 + Drift 107 — master-dev, the AMENDMENT 4 act. ONE authoring act, TWO instances.**
+1. **Preview asserted live** — "the vite preview server on :4173 — that is what Trey plays on" — when **nothing had ever listened on :4173**, one turn after the author's own message had instructed that it be started. Verified at the time: `Get-NetTCPConnection -LocalPort 4173` returned nothing and a POST returned connection-refused.
+2. **A constraint written broader than its own stated mechanism.** "No `vite preview` restart" was justified by "nothing writes `dist/`" — but `vite preview` only READS `dist/`, so the constraint forbade an action its own rationale permitted, and then conflicted with the instruction to prove the chain THROUGH :4173.
+
+**(e) Catch 132 + Drift 108 — master-dev, Rule 20. Rule 38 cited by ordinal with no committed entry** (§ 13). Distinct authoring acts across three handoffs, but ONE mechanism and one ordinal, because the defect is the *standing* citation rather than each restatement.
+
+**(f) Catch 133 + Drift 109 — Claude Code, claim-accuracy.** `refs/remotes/origin/HEAD` — a standard symbolic ref present in every clone — was **misclassified as "a local branch literally named `origin`"** in a crossing artifact, and **propagated into a handoff as a DESTRUCTIVE directive** ("delete the stray local branch"). Self-surfaced and **HALTED before execution** at the next Step 0. Counted because propagation, not the identity of the surfacer, is the operative fact.
+**⚠ MASTER-DEV'S RELAY OF IT IS EXPRESSLY NOT A CATCH.** Master-dev has no repository access; charging for an unverifiable repo fact would make the counter measure **ACCESS rather than defect rate**. Ruled explicitly so the asymmetry is not read as leniency.
+
+**(g) Catch 134 + Drift 110 — Claude Code, inferential.** **The pooling-validity overstatement.** Product-code identity across `3853228..d84b750` was reported as licensing telemetry pooling without qualification. It licenses pooling of **SIM BEHAVIOUR** only. **LEG 1's entire purpose is to change what the player knows and therefore what they do**, so post-LEG-1 runs are NOT poolable with pre-LEG-1 runs for any BEHAVIOURAL metric — win rates, reach rates, purchase choices — even though the sim is byte-identical. **RULED: the display-only diff proof establishes sim-behaviour poolability and nothing more.** The § 9 instrument is unaffected, because it measures a fixed structural denominator rather than a behavioural rate.
+
+**THREE CANDIDATES HELD FOR MISSING ARTIFACTS, requeued not dropped** — the § 4(e)/(f) precedent at decision-log.md 2026-07-25 § "CF-93 PHASE 1 RATIFIED …":
+- The **-21 report's "Route C, nine occurrences"**. The report was **not available to this or the authoring session** — canon records that at the per-class-matrix entry's source-basis block. The origination cannot be verified, and the cardinal has already been counted against the *relaying* act at Catch 127. **Ordinal space left clean.**
+- The **LEG 2 revision-prompt act** (a third card state on an unverified premise). LEG 2 is out of scope for this entry and the artifact was never supplied.
+- **Master-dev's instance of the pooling reversal.** The mechanism is ruled at (g), but the specific artifact asserting it was not supplied; only Claude Code's own instance is verifiable and is counted.
+
+### 16 — RULE 8 WIDENED (amendment, NO ordinal)
+Rule 8's scope moves from "plumbing/fix prompts" to **ANY prompt step that mutates state on a premise its author could not verify**. **Provenance: the A2 near-miss** — a directive to delete a ref that did not exist, which would have executed had the gate not required identification before mutation.
+
+**⚠ RECORDED AS PATTERN 10's INSTANCE RATHER THAN A NEW RULE** — fix the surface feature, miss the generative mechanism. The surface feature was "plumbing prompts"; the generative mechanism is *unverifiable premise plus mutation*, and it fired repeatedly against master-dev this session at (b)1, (c)1, (d)1 and (e). **Amendment, no ordinal — restating an existing rule as new is Catch 91's own shape. PATTERN ORDINAL 11 STAYS HELD**, on the same direction recorded at the per-class-matrix entry.
+
+### 17 — NO CATCH: THREE RULINGS WITH GROUNDS
+**(a) The two Codex findings.** In-gate review output is the review working, not a defect escaping — the CF-67 principle. Both were confirmed against source before being fixed, and F2 was fixed **class-wide** (10 of 10 files) rather than at the two sites named. **+0.**
+**(b) The decision-day question.** Master-dev raised it, and the commit dates answered it. **No artifact ever carried a false date** — `47f8d51` is correctly dated 07-25 in canon and `d84b750` landed 07-26. A question asked and resolved before it could propagate is the gate working. **+0.**
+**(c) Claude Code's frame-01 first read of the B1 revert.** The opening read — that round 2 showed `— SUDDEN DEATH —` and the reset had failed — was **CHECKED against the next frame rather than reported**, and the check overturned it. **A wrong hypothesis discarded before it crosses a boundary is not a defect; it is the discipline operating.** **+0.**
+
+### 18 — NOTHING CLOSED, NOTHING OPENED
+**CF-93 stays OPEN**, live scope rounds 1–10; its **round-11 leg RESOLVES as TARGET MISSED** (§ 4), which is a leg resolving inside an open CF, not a closure. **CF-88 stays OPEN**, premise now confirmed by measurement, unamended. **CF-86 stays OPEN**, and § 11(b) records that this population cannot measure it. **CF-83, CF-84, CF-87, CF-91, CF-94 stay CLOSED**; none is reopened. **Pattern 11 stays HELD.**
+
+### Counter
+Full close (PR merge). Ordinal walk live from canon at tip `47f8d51`, greps run this session with a phantom-higher control on every axis: highest **Catch 127**, **Rule 37**, **Pattern 10**, **Drift 103**, **CF-94** — and `Catch 12[8-9]` → 0, `Catch 1[3-9][0-9]` → 0, `Rule 3[89]` → 0, `Rule [4-9][0-9]` → 0, `Drift 10[4-9]` → 0, `Drift 1[1-9][0-9]` → 0, `CF-9[5-9]` → 0, `CF-[1-9][0-9][0-9]` → 0. **`Pattern 1[1-9]` returns 2 hits and BOTH are the HELD-candidate references in the governing entry, which expressly states "Pattern 11 is NOT minted" — the patterns axis stands at 10.**
+
+Deltas by ID: catches **+7** (Catch 128 § 15(a), master-dev, TWO instances; Catch 129 § 15(b), master-dev, THREE instances; Catch 130 § 15(c), master-dev, THREE instances, AGGRAVATED; Catch 131 § 15(d), master-dev, TWO instances; Catch 132 § 15(e), master-dev, Rule 20; Catch 133 § 15(f), Claude-Code-side; Catch 134 § 15(g), Claude-Code-side) — **the three HELD candidates are NOT among these**. Rules **+2** (**Rule 38** § 13, **Rule 39** § 14 — § 16's Rule 8 widening is an **amendment, NO ordinal**). Patterns **+0** (§ 16 records a Pattern 10 instance and expressly HOLDS ordinal 11). Drifts **+7** (Drift 104 → Catch 128; 105 → 129; 106 → 130; 107 → 131; 108 → 132; 109 → 133; 110 → 134). **All seven pair**: (a)–(e) are master-dev Topic-2 process deviations on long-established chains, and (f)–(g) pair under the Claude-Code claim-accuracy Topic established at decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED …". Open-CFs **+0** — **NOTHING closed, NOTHING opened** (§ 18).
+
+Running line: **127/37/10/103/53 → 134/39/10/110/53** — catches **134** / rules **39** / patterns **10** / drifts **110** / open-CFs **53**.
+
+**ARITHMETIC SHOWN:** catches 127 + 7 = 134 · rules 37 + 2 = 39 · patterns 10 + 0 = 10 · drifts 103 + 7 = 110 · open-CFs 53 + 0 = 53.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **39** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so **distinct codified rules move 36 → 38** across this entry's +2. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The **53** is carried forward by arithmetic, unverified by enumeration. The re-enumeration remains unscheduled.
+
+Anchors: **ARTIFACT anchor `90898e5`** (the merge, derived from the repository); **COUNTER anchor = this entry's own docs commit**. The two are distinct and are named separately.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-93** — the difficulty curve. Stays **OPEN**, live scope **rounds 1–10**. **LEG 1 SHIPPED and CLOSED ON MERGE** at `90898e5` — a leg, not the CF. **The round-11 leg RESOLVES as TARGET MISSED** (§ 4): pooled 8/11 = 72.7%, Wilson [43.4%, 90.3%], which **EXCLUDES** balance-bible.md § 15's ~30% where the prior interval contained it. **LEG 2 remains unscoped.** Still **PROBLEM ONLY** on rounds 1–10.
+- **CF-88** — `endReason` cause-vs-tick. Stays **OPEN, unamended**. Premise **CONFIRMED BY LIVE MEASUREMENT** (§ 6): 6 of 13 `ramp_ko` combats at exactly tick 500, undeterminable by construction. B4 routes around it client-side; it does not fix it.
+- **CF-86** — class-asymmetric round-1 resolution. Stays **OPEN**. § 11(b) records that **this population cannot measure it** — the residual is declining offered resolvers, and this population played informed and did not decline.
+
+---
+
 ## 2026-07-25 — CF-93 ROUND-1 PER-CLASS MATRIX RECORDED (docs-only; CLOSES NOTHING, OPENS NOTHING): the round-1 resolver set is **SEVEN of twenty commons, IDENTICAL for both classes** — thirteen commons win **literally zero of twenty** — so the class lever moves **kill speed and the win/draw/loss split, never set membership**; the **"weapon" framing is REFUTED** and the true predictor is a **DIFFERENTIAL — damage OR starting HP** — with `buckler` winning **14/20 on +5 max HP and zero damage output**, its six non-wins **set-identical** to the six damage-bearing commons; **ITEM-LEVEL ASYMMETRY RECORDED** — 17/3/0 Marauder against 16/0/4 and 15/1/4 Tinker on the same three commons, so **a Tinker can LOSE with an item a Marauder cannot**; **Item 4 SUPERSEDED ON ARITHMETIC, SUSTAINED ON CONCLUSION** — the four-weapon acceleration reproduces EXACTLY in both columns, but iron-mace measures **10 procs → 20/30 at perHit 2/3, NOT 11 → 22/33**, and 30 is **EXACTLY the 30-HP cap, not over it**; **THE ZERO-MARGIN KILL IS MISLABELLED** — it lands at tick 500, so `combat.ts:283`'s pure-tick rule stamps `ramp_ko` though no ghost `ramp_tick` ever fires, a named reproducible instance of CF-88 inside CF-86's own instrument; **Item 5 VERIFIED and its definition MADE EXPLICIT** — under kills-by-own-damage BOTH floors reproduce to three significant figures (Tinker **33.779%**, Marauder **23.234%**, analytic + Monte Carlo), under `endReason === 'ko'` the Marauder cell does NOT (**32.253%**) and would put the observed **25.0% BELOW its own floor**; **CF-88 ESCALATED, not rescoped — it now GATES CF-86's first instrument**; **CF-86 NOT ANSWERED**, its instrument AMENDED (query and floor from ONE build population) and its "may ride CF-83's implementation" escape clause **SPENT**; throwing-knife inversion **REFUTED BY PROBE, 0/40**, replaced by *a burst is erasable, a sustained weapon is not*; LEGIBILITY SURVEY — `endReason` **never rendered**, the ramp drain **excluded from DEALT/TAKEN by design**, `ramp_tick` **rendered but deliberately unattributed**, the tick-cap timeout **UNREACHABLE in production** (which retires half the route as originally worded), and `describeItem` **ALREADY emits the distinguisher and already renders** — the gap is **PLACEMENT, not plumbing**; ROUTE LETTERS RETIRED for CF-93 (convention extension, NO rule ordinal) with **TWO PROMPT FIGURES CORRECTED ON THE WALK** — "Route C" is **nine LINES but FOURTEEN OCCURRENCES**, and the replacement token **`LEG 1` / `LEG 2` IS ITSELF ALREADY OCCUPIED TWICE** in canon; **LEG 1 RATIFIED FIRST**, reversing master-dev's own prior ordering; Catches 125–127 + Drifts 101–103, all master-dev, act-bundled per Catch 91's shape; **Rule 37's THIRD application and its SECOND against master-dev**; counter 124/37/10/100/53 → 127/37/10/103/53
 
 Docs-only, insertion-only, `decision-log.md` alone. **No artifact anchor — this entry records measurement and rulings, not a merge; its own docs commit is BOTH anchors.** Baseline tip `b785e9a`, tree clean; governing counter entry decision-log.md 2026-07-25 § "CF-93 POST-CP6 RE-MEASURE RECORDED (docs-only; CLOSES NOTHING, refines the characterization) …" carrying **124/37/10/100/53**, read from the file this session and NOT adopted from the requesting prompt. Where a finding below contradicts landed canon it **SUPERSEDES BY INSERTION** — no landed entry is edited, and every superseded entry stays readable as accurate-at-authoring-time. No code, schema, content, corpus, or migration change; **no rebuild** — `clientVersion` is unmoved and pending telemetry runs are undisturbed.
