@@ -4,6 +4,335 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-25 — CF-93 ROUND-1 PER-CLASS MATRIX RECORDED (docs-only; CLOSES NOTHING, OPENS NOTHING): the round-1 resolver set is **SEVEN of twenty commons, IDENTICAL for both classes** — thirteen commons win **literally zero of twenty** — so the class lever moves **kill speed and the win/draw/loss split, never set membership**; the **"weapon" framing is REFUTED** and the true predictor is a **DIFFERENTIAL — damage OR starting HP** — with `buckler` winning **14/20 on +5 max HP and zero damage output**, its six non-wins **set-identical** to the six damage-bearing commons; **ITEM-LEVEL ASYMMETRY RECORDED** — 17/3/0 Marauder against 16/0/4 and 15/1/4 Tinker on the same three commons, so **a Tinker can LOSE with an item a Marauder cannot**; **Item 4 SUPERSEDED ON ARITHMETIC, SUSTAINED ON CONCLUSION** — the four-weapon acceleration reproduces EXACTLY in both columns, but iron-mace measures **10 procs → 20/30 at perHit 2/3, NOT 11 → 22/33**, and 30 is **EXACTLY the 30-HP cap, not over it**; **THE ZERO-MARGIN KILL IS MISLABELLED** — it lands at tick 500, so `combat.ts:283`'s pure-tick rule stamps `ramp_ko` though no ghost `ramp_tick` ever fires, a named reproducible instance of CF-88 inside CF-86's own instrument; **Item 5 VERIFIED and its definition MADE EXPLICIT** — under kills-by-own-damage BOTH floors reproduce to three significant figures (Tinker **33.779%**, Marauder **23.234%**, analytic + Monte Carlo), under `endReason === 'ko'` the Marauder cell does NOT (**32.253%**) and would put the observed **25.0% BELOW its own floor**; **CF-88 ESCALATED, not rescoped — it now GATES CF-86's first instrument**; **CF-86 NOT ANSWERED**, its instrument AMENDED (query and floor from ONE build population) and its "may ride CF-83's implementation" escape clause **SPENT**; throwing-knife inversion **REFUTED BY PROBE, 0/40**, replaced by *a burst is erasable, a sustained weapon is not*; LEGIBILITY SURVEY — `endReason` **never rendered**, the ramp drain **excluded from DEALT/TAKEN by design**, `ramp_tick` **rendered but deliberately unattributed**, the tick-cap timeout **UNREACHABLE in production** (which retires half the route as originally worded), and `describeItem` **ALREADY emits the distinguisher and already renders** — the gap is **PLACEMENT, not plumbing**; ROUTE LETTERS RETIRED for CF-93 (convention extension, NO rule ordinal) with **TWO PROMPT FIGURES CORRECTED ON THE WALK** — "Route C" is **nine LINES but FOURTEEN OCCURRENCES**, and the replacement token **`LEG 1` / `LEG 2` IS ITSELF ALREADY OCCUPIED TWICE** in canon; **LEG 1 RATIFIED FIRST**, reversing master-dev's own prior ordering; Catches 125–127 + Drifts 101–103, all master-dev, act-bundled per Catch 91's shape; **Rule 37's THIRD application and its SECOND against master-dev**; counter 124/37/10/100/53 → 127/37/10/103/53
+
+Docs-only, insertion-only, `decision-log.md` alone. **No artifact anchor — this entry records measurement and rulings, not a merge; its own docs commit is BOTH anchors.** Baseline tip `b785e9a`, tree clean; governing counter entry decision-log.md 2026-07-25 § "CF-93 POST-CP6 RE-MEASURE RECORDED (docs-only; CLOSES NOTHING, refines the characterization) …" carrying **124/37/10/100/53**, read from the file this session and NOT adopted from the requesting prompt. Where a finding below contradicts landed canon it **SUPERSEDES BY INSERTION** — no landed entry is edited, and every superseded entry stays readable as accurate-at-authoring-time. No code, schema, content, corpus, or migration change; **no rebuild** — `clientVersion` is unmoved and pending telemetry runs are undisturbed.
+
+**⚠ SOURCE BASIS — STATED EXACTLY, BECAUSE IT IS NOT WHAT THE REQUESTING PROMPT ASSUMED.** The prompt named "the HANDOFF 2026-07-25-21 probe report, this session" as the basis and stated its raw output was reproduced there. **That report was NOT available to the authoring session.** What WAS available is the probe source itself — `scratch/cf93-p21/probe123.mts`, `probe3b.mts`, `desc.mts` (gitignored, `.gitignore:15`) — which this session **RE-EXECUTED** under `npx tsx` from `apps/client`, regenerating the raw output firsthand. **Every measured figure in §§ 1–9 is therefore FIRST-HAND OUTPUT, not a transcription of a report's reproduction of it** — a stronger basis than the one asked for, and the raw stdout is reproduced verbatim below rather than summarized. The consequence, recorded rather than papered over: **the report's own prose could not be quoted**, so any framing that existed only in that narrative — including the exact wording of § 9's three survey questions — is **RECONSTRUCTED FROM THE VERIFIED CODE PINS AND LABELLED AS SUCH**, not passed off as quoted. `git status --porcelain` was empty before and after every probe run; the probes load production modules by absolute file URL and write nothing.
+
+### 1 — THE PER-CLASS MATRIX
+**BASIS, stated because the prior session's annotation dropped it (§ 12(a)).** Player = ONE common, all 20 enumerated. Ghost = ONE common, all 20 enumerated, `classId: 'marauder'` and `startingHp: 30` — the round-1 parity derivation at `apps/client/src/combat/ghost.ts:74` (`round % 2 === 1 ? 'marauder' : 'tinker'`) and `BASE_COMBATANT_HP = 30` (`packages/content/src/schemas.ts:1096`). Player `startingHp` = 30 + the item's `maxHpBonus`. **400 combats per class per seed.** `dmg` = the item carries a `damage` effect on any trigger; `pHP` = player starting HP.
+
+**BOTH SEEDS BYTE-IDENTICAL — PROVEN BY HASH, NOT BY EYE.** SHA-256 over the full 20×20 outcome grid: Tinker `3c3f714d619e3921` at seed 12345 and `3c3f714d619e3921` at seed 987654321; Marauder `7eb2ff446f9525bd` and `7eb2ff446f9525bd`. **A working control accompanies the claim** — cross-class comparison at the same seed returns `false`, so the hash is discriminating and not trivially equal.
+
+**RAW STDOUT, VERBATIM.** Supplied in full rather than summarized, because § 12(b) indicts exactly the omission of it.
+
+```
+===== seed=12345  PLAYER CLASS = TINKER =====
+player item      dmg  pHP  WIN  DRAW  LOSS  win%
+apple            -    30   0    15    5     0%
+bandage          -    30   0    15    5     0%
+bread            -    30   0    14    6     0%
+buckler          -    35   14   0     6     70%
+coin-pouch       -    30   0    14    6     0%
+copper-coin      -    30   0    14    6     0%
+hand-axe         YES  30   16   0     4     80%
+healing-herb     -    30   0    15    5     0%
+iron-cap         -    30   0    15    5     0%
+iron-dagger      YES  30   15   1     4     75%
+iron-mace        YES  30   14   1     5     70%
+iron-sword       YES  30   16   0     4     80%
+leather-vest     -    30   0    15    5     0%
+lucky-penny      -    30   0    14    6     0%
+mana-potion      -    30   0    14    6     0%
+spark-stone      -    30   0    14    6     0%
+throwing-knife   YES  30   9    5     6     45%
+whetstone        -    30   0    14    6     0%
+wooden-club      YES  30   16   0     4     80%
+wooden-shield    -    30   0    14    6     0%
+  WIN-BASED resolver set (7): buckler, hand-axe, iron-dagger, iron-mace, iron-sword, throwing-knife, wooden-club
+```
+
+```
+===== seed=12345  PLAYER CLASS = MARAUDER =====
+player item      dmg  pHP  WIN  DRAW  LOSS  win%
+apple            -    30   0    15    5     0%
+bandage          -    30   0    15    5     0%
+bread            -    30   0    14    6     0%
+buckler          -    35   14   0     6     70%
+coin-pouch       -    30   0    14    6     0%
+copper-coin      -    30   0    14    6     0%
+hand-axe         YES  30   16   1     3     80%
+healing-herb     -    30   0    15    5     0%
+iron-cap         -    30   0    15    5     0%
+iron-dagger      YES  30   17   3     0     85%
+iron-mace        YES  30   15   1     4     75%
+iron-sword       YES  30   17   3     0     85%
+leather-vest     -    30   0    15    5     0%
+lucky-penny      -    30   0    14    6     0%
+mana-potion      -    30   0    14    6     0%
+spark-stone      -    30   0    14    6     0%
+throwing-knife   YES  30   9    6     5     45%
+whetstone        -    30   0    14    6     0%
+wooden-club      YES  30   17   3     0     85%
+wooden-shield    -    30   0    14    6     0%
+  WIN-BASED resolver set (7): buckler, hand-axe, iron-dagger, iron-mace, iron-sword, throwing-knife, wooden-club
+```
+
+**THE SET IS CLASS-INVARIANT.** Seven resolvers, thirteen at zero, **the same seven and the same thirteen for both classes**. `buckler, hand-axe, iron-dagger, iron-mace, iron-sword, throwing-knife, wooden-club` win at least once; **`apple, bandage, bread, coin-pouch, copper-coin, healing-herb, iron-cap, leather-vest, lucky-penny, mana-potion, spark-stone, whetstone, wooden-shield` win LITERALLY ZERO of 20 — for either class.** 7 + 13 = 20 ✓. **The class lever moves kill speed and the win/draw/loss split. It never moves set membership.**
+
+**⚠ ITEM-LEVEL ASYMMETRY — A TINKER CAN LOSE WITH AN ITEM A MARAUDER CANNOT.** On the same three commons:
+
+| common | Tinker W/D/L | Marauder W/D/L |
+|---|---|---|
+| `iron-sword` | **16/0/4** | **17/3/0** |
+| `wooden-club` | **16/0/4** | **17/3/0** |
+| `iron-dagger` | **15/1/4** | **17/3/0** |
+
+**Marauder's LOSS column is ZERO on all three; Tinker's is FOUR on all three.** The same item, the same twenty opponents, and one class cannot lose the matchup while the other loses it four times in twenty. This is not a rate difference; it is a difference in which outcomes are reachable at all.
+
+**BUCKLER IS THE SOLE CLASS-INVARIANT RESOLVER, AND THE SOLE COMMON CARRYING `maxHpBonus`.** 14/0/6 for BOTH classes — every other resolver's row differs between the columns. It is the only one of the 20 commons with a non-zero `maxHpBonus` (`packages/content/src/items.ts` `BUCKLER`, `passiveStats: { maxHpBonus: 5 }`, `triggers: []`), a census run live over the registry. **Its six non-wins are SET-IDENTICAL to the six damage-bearing commons** — `hand-axe, iron-dagger, iron-mace, iron-sword, throwing-knife, wooden-club` — verified by set comparison returning `true`, not by inspection. It beats all fourteen non-damage ghosts and loses to all six damage ghosts, with **zero draws in either direction**.
+
+**AND THE MECHANISM IS THE +5 ITSELF, MEASURED WITH ITS MARGIN VISIBLE.** `buckler` solo against an inert ghost: **tick 509, `ramp_ko`, `player_win`, final HP 5 / 0**. The ramp drains both sides at `RAMP_RATE = 3` from `RAMP_START_TICK = 500`; the player ends on exactly the +5 the item supplied. **The surviving margin IS the passive.**
+
+### 2 — THE "WEAPON" FRAMING IS REFUTED; THE PREDICTOR IS A DIFFERENTIAL
+The post-hoc read that round 1 is decided by owning a *weapon* does not survive the matrix. **Six of the seven resolvers carry damage; the seventh carries none at all** and wins 14/20 — a higher win count than `throwing-knife` (9) and equal to `iron-mace` at Tinker (14).
+
+**THE PREDICTOR IS A DIFFERENTIAL — damage OR starting HP.** The ramp drains both sides at an equal rate, so it resolves in favour of whichever side entered with more HP. Anything that creates an asymmetry resolves the combat; anything that does not, cannot. Damage is one such lever. `maxHpBonus` is another, and it is the ONLY non-damage lever present among the 20 commons.
+
+**⚠ THE FRAMING SURVIVED ONLY BECAUSE THE COUNTEREXAMPLE WAS NEVER BOUGHT.** `buckler` was not purchased in the 21 observed runs. A hypothesis whose sole refuting item is absent from the sample is not confirmed by that sample — it is **untested-because-unchosen**. The matrix is the first observation that could distinguish the two framings, and it distinguishes them against the weapon read.
+
+### 3 — ITEM 4 SUPERSEDED ON ARITHMETIC, SUSTAINED ON CONCLUSION
+Governing text: decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED (ghost-HP-curve leg DROPPED as un-reaching + delete-at-M2; shared-sim post-tick ramp RETAINED) …" Item 4. **That entry is NOT edited. This supersedes by insertion, and only on the arithmetic.**
+
+**(a) THE ACCELERATION REPRODUCES EXACTLY — ALL FOUR, BOTH COLUMNS.** Item 4 claimed `iron-sword 400→300, iron-dagger 450→300, wooden-club 360→300, hand-axe 400→320`. Measured solo against an inert ghost, `endedAtTick / endReason / outcome`:
+
+```
+item             tinker(tick/endReason/out)         marauder(tick/endReason/out)
+iron-sword       400/ko/player_win                  300/ko/player_win
+iron-dagger      450/ko/player_win                  300/ko/player_win
+wooden-club      360/ko/player_win                  300/ko/player_win
+hand-axe         400/ko/player_win                  320/ko/player_win
+iron-mace        503/ramp_ko/player_win             500/ramp_ko/player_win
+throwing-knife   507/ramp_ko/player_win             506/ramp_ko/player_win
+buckler          509/ramp_ko/player_win             509/ramp_ko/player_win
+```
+
+**Eight of eight figures match.** Recorded as VERIFIED, not merely consistent.
+
+**(b) ⚠ THE IRON-MACE ARITHMETIC DOES NOT.** Item 4 claimed "iron-mace 22 → 33 damage **over the cap**." Measured:
+
+```
+tinker    procs<500=9 dmg<500=18  | allProcs=10 dmgTotal=20  | perHit=2  | ticks=50,100,150...500
+marauder  procs<500=9 dmg<500=27  | allProcs=10 dmgTotal=30  | perHit=3  | ticks=50,100,150...500
+```
+
+**TEN procs, not eleven. 20 / 30 total, not 22 / 33.** Per-hit is 2 (Tinker) and 3 (Marauder) — the `+1` from `packages/content/src/classes.ts:31` (`bonusBaseDamage: 1`), added per damage effect at `packages/sim/src/combat.ts:781` (`const finalAmount = baseAmount + buffSum + state.sideStats[sourceSide].bonusBaseDamage`). **And 30 is not "over the cap" — it is EXACTLY the 30-HP cap.** The margin is zero, not three.
+
+**(c) THE CONCLUSION SURVIVES INTACT.** Marauder's passive **does** promote `iron-mace` to a solo kill and Tinker's does not: 30 ≥ 30 reaches zero HP, 20 does not. The kills-by-own-damage sets measure **Tinker 4** (`hand-axe, iron-dagger, iron-sword, wooden-club`) against **Marauder 5** (the same four **plus `iron-mace`**). **Item 4's "adds a fifth solo-resolver" is TRUE.** It is true with zero margin rather than three, and § 4 is what that zero margin costs.
+
+### 4 — THE ZERO-MARGIN KILL IS MISLABELLED
+Marauder's `iron-mace` tenth proc lands at **tick 500**, which is `RAMP_START_TICK` exactly. `packages/sim/src/combat.ts:283` labels by tick and by nothing else:
+
+> `const endReason: EndReason = state.tick >= RAMP_START_TICK ? 'ramp_ko' : 'ko';`
+
+So the combat is stamped **`ramp_ko`** — while the ghost died to **30 points of item damage** and **no ghost `ramp_tick` event fires at all**, confirmed by the discriminating test that the kills-by-own-damage set is built on (`outcome === 'player_win' && !events.some(e => e.type === 'ramp_tick' && e.target === 'ghost')`, which `iron-mace` PASSES for Marauder).
+
+**This is CF-88's defect with a named, reproducible, single-item instance.** Not a 16-combat aggregate inferred from a corpus, but one item, one class, one tick: **killed by its own damage, labelled as killed by the ramp.** The ramp was skipped that tick and still got the credit.
+
+### 5 — ITEM 5 VERIFIED, AND ITS DEFINITION MADE EXPLICIT
+Item 5 of the same 2026-07-19 entry recorded "Marauder 23.2% vs 25.0% (at the floor); Tinker 33.8% vs 70.0% — a ~36-point residual." **The floors reproduce. The definition they rest on was never stated, and it is load-bearing.**
+
+**(a) UNDER KILLS-BY-OWN-DAMAGE — BOTH REPRODUCE TO THREE SIGNIFICANT FIGURES.**
+
+```
+[tinker] set(4)=hand-axe,iron-dagger,iron-sword,wooden-club
+   poolPts=1230 resolverPts=240
+   ANALYTIC = 33.779%   MONTE CARLO n=200000 = 33.890%
+   Item 5 = 33.8% -> REPRODUCES
+[marauder] set(5)=hand-axe,iron-dagger,iron-mace,iron-sword,wooden-club
+   poolPts=1185 resolverPts=300
+   ANALYTIC = 23.234%   MONTE CARLO n=200000 = 23.195%
+   Item 5 = 23.2% -> REPRODUCES
+```
+
+The Monte Carlo draws from the shipped `generateShop` over 200,000 seeds and agrees with the closed form to **0.111 pt and 0.039 pt**. **The probability model is with-replacement weighted draw, and it is the shipped generator's behaviour, measured — not assumed** (§ 12(a)).
+
+**(b) UNDER `endReason === 'ko'` THE MARAUDER CELL DOES NOT.** That label test drops `iron-mace` from the Marauder set — for exactly the § 4 reason — leaving four items and `poolPts=1185 resolverPts=240`:
+
+```
+   ANALYTIC P(zero resolver in 5 slots) = 32.253%
+   Item 5 floor = 23.2%  -> DOES NOT REPRODUCE
+```
+
+**(c) THE CONSEQUENCE, STATED PLAINLY.** Item 5's observed Marauder stall is **25.0%**. An `endReason`-based resolver test yields a floor of **32.253%**. **25.0% < 32.253% — the observation would sit BELOW its own floor.** A floor an observation falls beneath is not a floor; it is a mis-specified statistic. **Canon's Item 5 was computed on kills-by-own-damage, and this entry makes that explicit so no later citation recomputes it off the label and reports an impossibility.** The 23.2% cell is the one that was "at the floor" — and it is at the floor of the RIGHT floor.
+
+### 6 — CF-88 ESCALATED, NOT RESCOPED
+**CF-88's premise is already CONFIRMED** at decision-log.md 2026-07-25 § "CF-93 PHASE 1 RATIFIED (read-only characterization; docs-only, NO artifact — the CF-89 / CF-87 measurement-close precedent) …" § 11: `endReason` cannot separate the populations because it is a pure function of tick, and the discriminating datum — `ramp_tick` presence in the `CombatEvent` log — **is not on the telemetry wire at all**. **Nothing about that scope changes here and CF-88 is NOT amended.**
+
+**WHAT THIS ENTRY ADDS IS PRIORITY, NOT SCOPE: CF-88 now GATES CF-86's FIRST INSTRUMENT.** CF-86's named first instrument is a PostHog query (§ 7). Telemetry carries the **label** and not the cause. § 4 exhibits a round-1 combat, on a common that is in the shop pool, which that query would count as ramp-decided when it was item-decided. **A CF-86 query run before CF-88 lands does not merely lose precision — it miscounts in the direction that inflates the very residual CF-86 exists to size.**
+
+**CF-88 stays OPEN.** No scope change, no amendment, no closure. It has acquired a dependent.
+
+### 7 — CF-86 IS NOT ANSWERED
+**ITS SCOPE, QUOTED VERBATIM** from decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED …" Item 15:
+
+> CF-86 scope: the Tinker side of item 5's decomposition — the ~36-point stall residual above the zero-resolver floor. First instrument: a round-1 purchase-by-class query against existing PostHog data. May ride CF-83's implementation rather than queue separately if the shared-sim ramp closes it. OPEN.
+
+**(a) THE MATRIX IS NOT THAT INSTRUMENT AND CONTAINS ZERO PURCHASE DATA.** It enumerates all 20 commons uniformly and never consults a shop, a price, a gold balance, or a purchase. CF-86's residual is *players declining resolvers that were offered* — a quantity about **choice**. Nothing in §§ 1–5 observes a choice. **The matrix constrains what the floor IS; it says nothing about what players did above it.**
+
+**(b) ⚠ THE RULE 37 CORRECTION — THE RESIDUAL CANNOT BE RECOMPUTED BY SUBSTITUTING THE NEW RESOLVER SET.** Item 5's **70.0%** Tinker stall is a **PRE-RAMP** observation: measured in the 2026-07-19 entry, while the shared-sim ramp did not merge until **`32558e7` on 2026-07-20** (decision-log.md 2026-07-20 § "CF-83 RAMP + CF-84 DRAW SEMANTICS CLOSED (PR-A merged `32558e7`) …"). **`buckler`'s 70% does not exist pre-ramp.** `buckler` has `triggers: []` and zero damage output; every one of its 14 wins is a `ramp_ko` (§ 1: tick 509). Before the ramp there is no `ramp_ko` — the only terminator for a damage-less bag is `MAX_COMBAT_TICKS`, which returns `outcome: 'draw'`. **A zero-damage item could not win a single round-1 combat pre-ramp.**
+
+Substituting the post-ramp seven-item resolver set into the pre-ramp 70.0% observation would compute a residual across **two populations produced by different mechanisms** — precisely what **Rule 37** forbids: *"A summary statistic may not carry a conclusion about a population that is not homogeneous with respect to the claim … segment before concluding from an aggregate whose members are produced by different mechanisms."*
+
+**RULED: Item 5's ~36 points STAND AS MEASURED, on the pre-ramp population they were measured on. Post-ramp survival of that residual is UNMEASURED — not smaller, not larger, UNMEASURED.**
+
+**(c) INSTRUMENT AMENDED.** CF-86's first instrument must draw its **query and its floor from the SAME BUILD POPULATION**. A post-ramp query against a pre-ramp floor, or the reverse, reproduces (b)'s defect in the measurement rather than in the reasoning.
+
+**(d) THE ESCAPE CLAUSE IS SPENT.** Item 15 permitted CF-86 to "ride CF-83's implementation rather than queue separately **if the shared-sim ramp closes it**." **The ramp shipped at `32558e7` and the residual was never re-tested.** The condition was never evaluated, so the clause cannot be treated as discharged — it is exhausted. **CF-86 needs its own instrument and its own measurement.**
+
+**(e) ⚠ WHETSTONE — THE VERIFIED PAIR ONLY, AND THE EXTENSION IS EXPRESSLY REFUSED.** Two facts, both measured: `whetstone` is the **sole common carrying `classAffinity: 'tinker'`** (live census over the registry: 1 of 20 commons; the twelve further affinity-carrying items are all uncommon-or-above and therefore outside round 1's `RARITY_GATE_BY_ROUND[0] = 'common'` gate), and it wins **0 / draws 14 / loses 6** for a Tinker. **NOTHING IS EXTENDED TO balance-bible.md § 5's affinity TAGS.** Conflating § 5's tags with the shipped `item.classAffinity` field is **Catch 78's mechanism** verbatim, and any claim about the tags requires a content-side walk this entry did not perform. **Recorded as a boundary, not as a finding.**
+
+**CF-86 stays OPEN.**
+
+### 8 — THE THROWING-KNIFE INVERSION IS REFUTED BY PROBE
+The hypothesis: a partial damage burst could be WORSE than no damage at all, by waking a ghost's healing that a full-HP suppression would otherwise have kept idle.
+
+**MEASURED: 0 INVERSIONS IN 40.** Twenty ghosts × two classes, each compared against two controls (`copper-coin`, a zero-damage item, and an EMPTY bag). **`INVERSIONS (0): (none)`** for both classes. `throwing-knife` never ranks below both controls. In one cell it ranks **above** them — Marauder `throwing-knife` vs a `throwing-knife` ghost draws where both controls lose.
+
+**THE MECHANISM IS STRUCTURALLY IMPOSSIBLE, NOT MERELY UNOBSERVED.** Both `on_round_start` triggers resolve at tick 0 before any drain, in order, and `packages/sim/src/combat.ts:814` (`if (actualGain <= 0) return;`) suppresses a zero-gain heal — so a full-HP ghost's round-start heal emits nothing whether or not the knife is present. The tick-0 trace:
+
+```
+{"tick":0,"type":"combat_start","playerHp":30,"ghostHp":30}
+{"tick":0,"type":"item_trigger","source":{"side":"player","placementId":"p0"},"trigger":"on_round_start"}
+{"tick":0,"type":"item_trigger","source":{"side":"ghost","placementId":"p0"},"trigger":"on_round_start"}
+{"tick":0,"type":"damage","source":{"side":"player","placementId":"p0"},"target":"ghost","amount":9,"remainingHp":21}
+```
+
+The ghost's `apple` trigger fires and produces **no heal event** — suppressed at full HP — and the knife's damage lands after it. **The burst cannot enable a heal that the suppression rule already allowed.**
+
+**REPLACEMENT FINDING: A BURST IS ERASABLE, A SUSTAINED WEAPON IS NOT.** Against the five healing ghosts the knife's single burst is fully repaid before the ramp; against a non-healing ghost it is not:
+
+```
+ghost=apple         outcome=draw        tick=509  ghostHeals=5   healedTotal=9 ghostHpJustBeforeRamp=30
+ghost=bandage       outcome=draw        tick=509  ghostHeals=1   healedTotal=8 ghostHpJustBeforeRamp=21
+ghost=healing-herb  outcome=draw        tick=509  ghostHeals=3   healedTotal=9 ghostHpJustBeforeRamp=30
+ghost=iron-cap      outcome=draw        tick=509  ghostHeals=1   healedTotal=9 ghostHpJustBeforeRamp=21
+ghost=leather-vest  outcome=draw        tick=509  ghostHeals=5   healedTotal=9 ghostHpJustBeforeRamp=30
+ghost=copper-coin   outcome=player_win  tick=506  ghostHeals=0   healedTotal=0 ghostHpJustBeforeRamp=21
+```
+
+**And the matrix shows the same asymmetry from the other side**, which is why the thirteen zero-win commons split 15-draw from 14-draw: the separating opponent is `throwing-knife` exactly. A healing player item (`apple`) DRAWS against the knife ghost; an inert one (`copper-coin`) LOSES to it. **Sustained output beats erasure; a one-shot does not.**
+
+### 9 — THE LEGIBILITY SURVEY
+**⚠ RECONSTRUCTED, AND LABELLED.** The three questions below are **this session's**, derived from the verified code pins; the originating report's own wording was unavailable (see the source-basis block). **The four surfaces and every pin are first-hand.** The questions: **(Q1) can the player see WHY the combat ended? (Q2) can the player see WHAT their own item did? (Q3) can the player distinguish an item-decided outcome from a ramp-decided one?**
+
+| surface | Q1 why it ended | Q2 what my item did | Q3 item- vs ramp-decided |
+|---|---|---|---|
+| `endReason` | **NEVER RENDERED** | n/a | **no — and it could not answer it anyway** |
+| DEALT / TAKEN totals | no | partly — gross item damage only | **no, by design** |
+| combat scene events | partly | yes for items | **no — deliberately unattributed** |
+| tick-cap timeout | **UNREACHABLE** | n/a | **n/a** |
+
+**(a) `endReason` IS NEVER RENDERED.** Its only non-test occurrence in the client is `apps/client/src/run/useRun.ts:1096`, passing it into `simRun.applyCombatOutcome` — the telemetry path. A repo-wide grep returns that one line and test fixtures; **zero render sites.** The field the whole CF-88 question turns on is invisible to the player entirely.
+
+**(b) THE RAMP DRAIN IS EXCLUDED FROM DEALT / TAKEN BY DESIGN, AND THE RESULT IS HONEST BUT TRACELESS.** `apps/client/src/combat/CombatOverlay.tsx:224`, verbatim in context: the totals use the sim's shared `computeDamageStats`, "the SAME definition `round_end` telemetry uses, so display and telemetry can't disagree. **This excludes the source-less CF-83 ramp drain (a `ramp_tick`, not a damage event), so a ramp-resolved draw honestly reports 0 / 0**." **The 0/0 is correct and it is also the entire report.** A player who lost a heart to a combat nobody won sees two zeros and no third number explaining them. **This is not a defect to fix in place — it is the LEGIBILITY GAP stated exactly.**
+
+**(c) `ramp_tick` IS RENDERED, AND DELIBERATELY UNATTRIBUTED.** It reaches the scene (`apps/client/src/combat/CombatScene.ts:454` and `:538`) and resolves against the affected side (`anchorResolution.ts:46`, `ramp_tick: 'target'`). But `attribution.ts:16` records it "stays UNATTRIBUTED **by design** — the CF-83 resolution ramp is" environmental, and `:93` repeats it. **The drain is visible as an effect and unnamed as a cause.** The player sees HP fall with nothing to blame.
+
+**(d) ⚠ THE `MAX_COMBAT_TICKS` TIMEOUT IS UNREACHABLE IN PRODUCTION — AND THIS RETIRES HALF THE ROUTE AS ORIGINALLY WORDED.** `packages/sim/src/combat.ts:300-305`, verbatim:
+
+> `// Tick cap reached without a death. Draw at MAX_COMBAT_TICKS (synthetic tick).`
+> `// UNREACHABLE while the ramp holds HP_max <= RAMP_RATE * (MAX_COMBAT_TICKS -`
+> `// RAMP_START_TICK) — see the invariant in combat-ramp.test.ts — but retained`
+> `// defensively and for replaying pre-ramp fixtures. endReason 'timeout'.`
+
+**The invariant holds with three orders of headroom at round 1:** `RAMP_RATE × (MAX_COMBAT_TICKS − RAMP_START_TICK)` = 3 × (600 − 500) = **300**, against a round-1 `HP_max` of **35**. **Any legibility work scoped to "explain the timeout draw" has no production instance to explain.** The reachable draw is the ramp-resolved one at § 9(b), and it is a different thing needing a different sentence. **Recorded so the route is re-worded before it is built, not after.**
+
+**(e) `describeItem` ALREADY EMITS THE DISTINGUISHER, AND ALREADY RENDERS. THE GAP IS PLACEMENT, NOT PLUMBING.** Live output:
+
+```
+buckler          ["+5 max HP"]
+iron-sword       ["Every 5s — 4 dmg to enemy"]
+throwing-knife   ["Round start — 8 dmg to enemy"]
+copper-coin      ["+1 gold per round"]
+apple            ["Round start — heal 5","Every 6s — heal 2"]
+```
+
+**"+5 max HP" versus "Every 5s — 4 dmg" versus "Round start — 8 dmg" is exactly § 2's differential, already in words.** It renders through `apps/client/src/items/ItemInfoPopover.tsx`, which is mounted at `apps/client/src/bag/DraggableItem.tsx` and `apps/client/src/shop/ShopSlot.tsx`. **Nothing needs building. The text exists, the component exists, and both are already wired to the shop.** What is absent is the text being present at the moment of choice without a deliberate hover.
+
+**(f) `blurb: ''` IS A DEAD FIELD ACROSS ALL 45 ITEMS — HELD AS A LEG 2 RIDE-ALONG, NO CF.** `apps/client/src/run/content.ts:129` hardcodes `blurb: ''` inside `adaptItem`, which runs for every item in the registry ("All 45 canonical items adapted to `ItemDef`"). Measured: **45 items, 0 with a non-empty `blurb`.** The field is declared at `apps/client/src/run/types.ts:71` and a repo-wide grep for any **reader** returns **zero non-test hits**. **A typed, populated-with-empty-string, never-read field.** It is the natural carrier for the § 9(e) text and is **HELD as a ride-along on LEG 2. NO CF OPENED** — it is inert, player-invisible, and opening an ordinal for a dead string would spend backlog on a field the LEG 2 work either uses or deletes.
+
+### 10 — ROUTE LETTERS RETIRED FOR CF-93
+The CF-93 track drops route letters. Its options are named **LEG 1 / LEG 2 / RESOLVER GUARANTEE / TIE-COST / RAMP EXEMPTION**. **Convention extension. NO RULE ORDINAL** — restating naming hygiene as a rule would be Catch 91's own shape.
+
+**(a) THE COLLISION THAT MOTIVATES IT — AND ⚠ THE PROMPT'S CARDINAL IS CORRECTED ON THE WALK.** "Route C" in canon is the **REFUTED CF-94 liveness candidate**, recorded RED at decision-log.md 2026-07-25 § "CF-94 CP6 RATIFIED, CP4's PLACEMENT SUPERSEDED (docs-only, insertion-only): the cut point moves from ONE application-time gate to TWO guards …" in the candidate matrix (`| **Route C** (over-firing) | closed | closed | **2 RED** | `draw` | **RED** — `expected 'ko' to be 'ramp_ko'` |`). **The requesting prompt carried "nine occurrences." Nine is the LINE count; the OCCURRENCE count is FOURTEEN** — `grep -c` → 9, `grep -o | wc -l` → 14. Both figures are stated because they measure different things and only one of them was asked for. **A CF-93 "Route C" would collide with a refuted CF-94 candidate at fourteen sites, not nine.**
+
+**(b) ⚠ AND THE REPLACEMENT TOKEN IS ITSELF ALREADY OCCUPIED — TWICE. SURFACED, NOT OVERRULED.** `LEG 1` / `LEG 2` already carry two distinct prior referents in canon: **CF-83's two-leg fix** (decision-log.md 2026-07-19 § "CF-83 FIX DIRECTION CORRECTED …" Item 3 — "(leg 1) invert the ghost-HP curve … **LEG 1 DROPPED**"), and **CF-87's two-legged closure criterion** (decision-log.md 2026-07-25 § "CF-87 CLOSED on MEASUREMENT (both legs of the § 10 criterion MET …" — "Leg 1 — MET", "Leg 2 — MET"). **The retirement therefore swaps a token with one prior referent for a token with two.** The convention is master-dev's ratified call and is **adopted, not overruled** — but it is adopted with a **MANDATORY NAMESPACE: every use in the CF-93 track reads `CF-93 LEG 1` / `CF-93 LEG 2`, never the bare token.** Recorded because a naming fix that silently worsens the property it was adopted for is the kind of thing that is only visible at the moment of adoption.
+
+**(c) THE PATTERN CANDIDATE — NAMED AT THREE INSTANCES, DELIBERATELY NOT MINTED.** **Unnamespaced-token reuse across CFs: a short label is coined inside one CF's scope, and a later CF reuses the bare token for an unrelated referent, so canon-wide search returns both and a reader cannot tell which is meant.** Instances:
+
+1. **`Route C`** — CF-94's refuted liveness candidate, against the route letters the CF-93 track was about to use (§ 10(a)).
+2. **`LEG 1` / `LEG 2`** — CF-83's fix legs AND CF-87's criterion legs, two referents already, now a third proposed (§ 10(b)).
+3. **`PR-A` / `PR-B`** — CF-68 (30 occurrences), CF-85, CF-89, and the CF-83/CF-84 close (whose header reads "PR-A merged `32558e7`") each carry their own.
+
+**The codification bar is MET on instance count — and the ordinal is HELD ANYWAY, by direction.** **Pattern 11 is NOT minted.** Recorded so the hold reads as a decision with the evidence already gathered, not as a shortfall; whoever mints it inherits three instances and does not re-derive them. **Patterns stay at 10.**
+
+### 11 — LEG 1 RATIFIED FIRST, REVERSING MASTER-DEV'S OWN PRIOR ORDERING
+**CF-93 LEG 1 goes first.** This **reverses master-dev's earlier ordering**, and the reversal is recorded with its ground rather than applied silently.
+
+**THE GROUND: twenty stat lines do not rank themselves.** § 1 is a matrix in which seven of twenty commons resolve and thirteen resolve never — and § 9(e) shows the game already **tells** the player what each item does. What it does not do is tell them **which of those twenty sentences matters**. Surfacing more text into an unranked list adds twenty lines to a screen that already has twenty. **LEG 1 is what makes LEG 2 readable**; run in the other order, LEG 2's text lands in a place the player has no basis for reading.
+
+**BOTH LEGS ARE CLIENT-ONLY AND DISPLAY-ONLY. NO SIM CHANGE, NO CONTENT CHANGE.** § 9(e) is the evidence: the distinguisher already exists in `describeItem` and already renders through `ItemInfoPopover` at both the shop and bag mounts. **Scoping and implementation of either leg are EXPRESSLY OUT OF THIS ENTRY** — what is ratified here is the ORDER and the client-only/display-only boundary, nothing more.
+
+### 12 — CATCHES 125–127 + DRIFTS 101–103
+All master-dev, all Class A / Rule 30, **act-bundled per Catch 91's shape** (bundle within a single authoring act; separate ordinals across distinct artifacts, per the Catch 92 split). **THE MARKED-CLAIM EXCLUSION DOES NOT APPLY** — it was proposed and **REJECTED** at decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED: § 9's HP-predicate claim SUPERSEDED as FALSE …", on the ground that marking a claim IS routing it to a gate and the exclusion would make countability depend on the author's own annotation choice.
+
+**(a) Catch 125 + Drift 101 — the CARRIED SESSION-BLOCK act. ONE authoring act, SIX instances bundled.**
+
+1. **The probability MODEL was wrong — without-replacement.** The shipped generator draws **with replacement** by weight; § 5(a)'s closed form on that model tracks a 200,000-seed Monte Carlo of the real `generateShop` to **0.111 pt and 0.039 pt**. A without-replacement model does not describe the code.
+2. **CF-56 asserted as a 3-way fork, against canon's TWO-way.** CF-56 was opened at decision-log.md 2026-07-05 § "M1.5e PR 1 CLOSED (client authority flip — sim sole writer for gold/rerollCount/bag/shop/trophy; CF 37 registry threaded; CF 56 opened)" on exactly two options: **"cursor-coupled vs round+reroll-keyed generation."** *(CF-56's substance is out of scope here; only the arity claim is ruled.)*
+3. **"cannot influence" is FALSE, and it PROPAGATED.** `buckler` is armour, costs **3 gold** (`RARITY_DEFAULT_COST.common`), is inside round 1's rarity gate, and **decides the ramp tiebreak 14 times in 20** on the +5 alone. The claim landed in canon at decision-log.md 2026-07-25 § "CF-93 POST-CP6 RE-MEASURE RECORDED …" § 4 ("At 4–11 gold the player has no armour, cannot influence a ramp tiebreak"). **SUPERSEDED BY INSERTION here, not edited there** — and counted, because propagation and not the identity of the surfacer is the operative fact.
+4. **CF-86 described as "substantially answered," and its instrument misdescribed.** § 7 shows it is answered on no leg: the matrix carries zero purchase data, the residual cannot be recomputed across the ramp boundary, and its named instrument is a PostHog query that CF-88 now gates.
+5. **The class basis was dropped from the session report's own annotation** — the ghost's class, HP and parity derivation, which are the difference between a reproducible matrix and four hundred unlabelled outcomes. Restored at § 1 from the code.
+6. **Rule 35 staleness overstated as blocking a Claude Code phase.** Rule 35 remediation is **master-dev-side** — canon states it directly: "**REMEDIATION IS MASTER-DEV-SIDE:** full-file replace from HEAD, diff the replacement, no spot-patch" (decision-log.md 2026-07-23 § "CF-89 CLOSED on MEASUREMENT, not on a merge (artifact anchor `3e35f40`, already in canon) …"). A pending re-upload does not gate a repo-side read or append, and this entry is the demonstration.
+
+**(b) Catch 126 + Drift 102 — the RE-MEASURE-ENTRY authoring act. SEPARATE ordinal per the Catch 92 split. THREE instances.**
+
+1. **An unnamed, MIXED test procedure.** Two supplied p-values were Fisher and one silently was not; the landed entry recomputed it (0.0917 Fisher against the supplied 0.064 = uncorrected χ²) and named the test. **The defect indicted here is the mixing without naming**, which is what made a recomputation necessary to detect it.
+2. **Raw output was never supplied, so § 1 could not be enumerated as the DoD required.** The landed entry recorded the consequence itself as a **"⚠ GRANULARITY LIMIT"** — band-level data where an 11-row round × endReason × outcome enumeration was called for. **This entry supplies its own raw stdout verbatim (§§ 1, 3, 5, 8, 9) on that precedent.**
+3. **"Six runs won round 10" is underivable from the data supplied alongside it.** The landed entry flagged it — "**not derivable from § 1's band-level breakdown** … carried as supplied" — which is the gate working; the defect is upstream, in supplying a cardinal and a dataset that cannot produce it.
+
+**(c) Catch 127 + Drift 103 — THIS SESSION'S master-dev turn. SEPARATE ordinal. THREE instances.**
+
+1. **"Route C is ratified" asserted as canon state, with the qualifier available and dropped.** The turn had "NOT YET IN CANON" available to it and did not use it. Canon's every "Route C" is CF-94's **REFUTED** candidate (§ 10(a)) — so the assertion is not merely unqualified, it is opposite in sign to what canon records.
+2. **The label collision itself**, at fourteen occurrences rather than the nine carried (§ 10(a)) — and the replacement token already twice-occupied (§ 10(b)).
+3. **A RULE 37 VIOLATION: a post-ramp resolver set compared against a pre-ramp observation** (§ 7(b)). **This is Rule 37's THIRD application and its SECOND against master-dev.** The first was decision-log.md 2026-07-25 § "CF-94 CLOSED (merge `f6015b0`, PR \#59) …" § 6(b), which canon records as "landing against the author who codified it"; the second was decision-log.md 2026-07-25 § "CF-93 POST-CP6 RE-MEASURE RECORDED …" § 6, against a reading of Clause 2 rather than against a party.
+
+**⚠ A NUMBERING COLLISION IN THE RULE 37 CHAIN, SURFACED NOT RESOLVED.** A third landed text also claims a first application: decision-log.md 2026-07-25 § "CF-94 PHASE 1b SURVEYED …" reads "**RULE 37 HONOURED — its first application, one entry after codification.**" It is reconcilable — that entry **honoured** the rule in its own reporting, while § 6(b) **applied** it against a claim — but the two words collide in canon and the chain above adopts the numbering the **most recent** counter-bearing entry established. **Recorded, not ruled.** If the honoured/applied distinction is the intended one it should be stated once, in master-dev's words, rather than inferred by each later reader.
+
+### 13 — SURFACED, NOT RULED
+**For master-dev at close, recorded so it does not decay rather than left to a chat turn.**
+
+**(a) AN UNLOCATED ARTIFACT CITED AS A SOURCE — Catch 103's shape, and NOT minted here.** The probe report cited **"the session report"** as the origin of the class-basis annotation (§ 12(a)(5)) without naming where that artifact lives. A `grep -rn` over the repository for it returns nothing, because it is not in the repository. **If it is a Cursor-side topic or a memory file, that is exactly Catch 103's mechanism** — "a citation the receiving party cannot check is not a citation" — which was ruled against Claude Code at decision-log.md 2026-07-25 § "CF-93 PHASE 1 RATIFIED …" § 4(d). **STATE THE LOCATION.** No ordinal is minted: the shape is confirmed but the artifact is unavailable to this session, and minting against a document nobody can produce would repeat the defect rather than record it. **Held, requeued, not dropped.**
+
+**(b) AND THE SAME GAP ONE LEVEL UP.** The HANDOFF 2026-07-25-21 probe report itself was **not available to this session** (source-basis block). It was recoverable only because the probe SOURCE survived in `scratch/cf93-p21/` and was re-runnable. **Had the scripts been cleaned up, this entry could not have been written at all.** If probe reports are to be cited as canon source basis, they need a location canon can reach.
+
+### 14 — NOTHING CLOSED, NOTHING OPENED
+**CF-86 stays OPEN** — not answered, instrument amended, escape clause spent (§ 7). **CF-88 stays OPEN** — premise unchanged, priority escalated, now gating CF-86's first instrument (§ 6). **CF-93 stays OPEN**, live scope **rounds 1–10** unchanged. **CF-83, CF-84, CF-87, CF-91, CF-94 stay CLOSED and none is reopened.** **S6 and facet 3 stay HELD.** **Pattern 11 is HELD, not minted** (§ 10(c)).
+
+### Counter
+Light entry (measurement + rulings record; no PR, no merge, no code). Ordinal walk live from canon at tip `b785e9a`, greps run this session with a phantom-higher control on every axis: highest **Catch 124**, **Rule 37**, **Pattern 10**, **Drift 100**, **CF-94** — and `Catch 12[5-9]` → 0, `Catch 1[3-9][0-9]` → 0, `Rule 3[89]` → 0, `Rule [4-9][0-9]` → 0, `Pattern 1[1-9]` → 0, `Pattern [2-9][0-9]` → 0, `Drift 10[1-9]` → 0, `Drift 1[1-9][0-9]` → 0, `CF-9[5-9]` → 0, `CF-[1-9][0-9][0-9]` → 0.
+
+Deltas by ID: catches **+3** (Catch 125 § 12(a), master-dev, SIX instances under one ordinal; Catch 126 § 12(b), master-dev, SEPARATE authoring act, THREE instances; Catch 127 § 12(c), master-dev, SEPARATE authoring act, THREE instances). Rules **+0** — § 10 is a **CONVENTION EXTENSION, no ordinal**, and § 12(c)(3) is a Rule 37 **APPLICATION**, not a re-mint. Patterns **+0** — § 10(c) names a candidate at three instances and expressly **HOLDS ordinal 11**. Drifts **+3** (Drift 101 → Catch 125; Drift 102 → Catch 126; Drift 103 → Catch 127). **All three pair**: each is a master-dev Topic-2 process deviation on a long-established instance chain. Open-CFs **+0** — **NOTHING closed, NOTHING opened** (§ 14).
+
+Running line: **124/37/10/100/53 → 127/37/10/103/53** — catches **127** / rules **37** / patterns **10** / drifts **103** / open-CFs **53**.
+
+**ARITHMETIC SHOWN:** catches 124 + 3 = 127 · rules 37 + 0 = 37 · patterns 10 + 0 = 10 · drifts 100 + 3 = 103 · open-CFs 53 + 0 = 53.
+
+**THE SUPPLIED PROJECTION SURVIVED FALSIFICATION — AND WAS NOT USED TO PRODUCE THE RESULT.** The requesting prompt carried a PROJECTION of **127/37/10/103/53**. The walk above was run from the tip's own running line and the delta lists were enumerated by ID before the projection was compared. **They agree.** Recorded this way because a projection that matches is a prediction that survived, not a baseline that was adopted — and the distinction is the whole reason the walk is run.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **37** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot in the rules ledger and the conversion "distinct rules = highest rule ordinal reached − 1", so distinct codified rules stand at **36**. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. The **53** is carried forward by arithmetic, unverified by enumeration. The re-enumeration remains unscheduled.
+
+Anchor: docs-only, so **this entry's own docs commit is BOTH the counter anchor and the entry anchor. There is no artifact anchor** — this entry records measurement and rulings, not a merge.
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-86** — class-asymmetric round-1 resolution. Stays **OPEN**. **NOT answered** (§ 7). Scope UNCHANGED and re-quoted verbatim from Item 15. First instrument **AMENDED** — query and floor must come from the same build population — and now **GATED on CF-88** (§ 6). The "may ride CF-83's implementation" clause is **SPENT**: the ramp shipped at `32558e7`, the condition was never evaluated, the residual is untested. Its ~36 points **stand as measured on the pre-ramp population**; post-ramp survival is **UNMEASURED**.
+- **CF-88** — `endReason` cause-vs-tick. Stays **OPEN**, **scope UNCHANGED, premise UNCHANGED, NOT amended**. **ESCALATED**: it now gates CF-86's first instrument, and § 4 supplies its first single-item reproducible instance (Marauder `iron-mace`, killed by 30 points of own damage at tick 500, stamped `ramp_ko`, no ghost `ramp_tick`).
+- **CF-93** — the difficulty curve. Stays **OPEN**, live scope **rounds 1–10**, unchanged. Route letters **RETIRED** in favour of `CF-93 LEG 1` / `CF-93 LEG 2` / RESOLVER GUARANTEE / TIE-COST / RAMP EXEMPTION, namespaced per § 10(b). **CF-93 LEG 1 ratified FIRST** (§ 11); both legs client-only and display-only; scoping and implementation expressly out of this entry. Still **PROBLEM ONLY**.
+
+---
+
 ## 2026-07-25 — CF-93 POST-CP6 RE-MEASURE RECORDED (docs-only; CLOSES NOTHING, refines the characterization): on build `0.0.1+3853228`, 9 runs / 76 combats — **round 11 moves 9.1% → 75% (3/4), Fisher two-tailed p = 0.0330**, and balance-bible.md § 15's ~30% target is **no longer falsified** because the Clopper-Pearson interval [19.4%, 99.4%] CONTAINS it, recorded with BOTH honest limits including a **SURVIVOR BIAS the baseline does not share** (4 of 9 runs reached the boss versus 11 of 12); **THE UNLOSABLE BAND CRACKED** — rounds 4–10 were 76/76 across the entire pre-CP6 population and are now 43/45, NOT significant (Fisher p = 0.1364) but CATEGORICAL, something that had never happened has now happened twice with an identified mechanism; **ROUNDS 1–3 REGRESSED** 80.6% → 59.3% with ramp-decided falling hardest 58.3% → 33.3%, which is **CP6's ratified SYMMETRY visible in live data** — the player also lost its 0-HP resurrection, so ramp ties that were survivable now stand and `state.ts:1037` charges a heart; the surviving round-11 draw is **CP6 WORKING** — it cannot be the resurrection path and is necessarily the PRESERVED simultaneous-queue mutual KO, so the path that should be gone is gone and the path that should remain remains; Clause 2 lands **IN BAND at 18.1% but RULE 37 FORBIDS reading it as MET** because its sub-bands are 40.7% and 4.4%, an order of magnitude apart; **⚠ ONE SUPPLIED STATISTIC FAILED RECOMPUTATION** — the rounds-1–3 p-value is **0.0917 by Fisher, not 0.064**, which is uncorrected χ²; the recomputation wins and the test is named; Catches 119–124 + Drifts 95–100, with § 9(e) RULED COUNTED against the design-prediction exclusion on that precedent's own narrowing; **CF-93 stays OPEN, live scope ROUNDS 1–10**, its round-11 leg CANDIDATE-RESOLVED by CF-94 but HELD not closed; counter 118/37/10/94/53 → 124/37/10/100/53
 
 Docs-only, insertion-only, `decision-log.md` alone. **No artifact anchor — this entry's own docs commit is the counter anchor.** Baseline tip `3853228`; governing counter entry decision-log.md 2026-07-25 § "CF-94 CLOSED (merge `f6015b0`, PR \#59): CP6's two-guard asymmetric liveness gate SHIPPED — the FIRST sim change since the CF-83 ramp …" carrying **118/37/10/94/53**, read from the file this session. Every baseline figure below was read FROM CANON, not from the requesting prompt; every statistic was RECOMPUTED from § 1's breakdown.
