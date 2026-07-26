@@ -12,4 +12,14 @@ coverage
 PLAN-*.md
 .agents/
 .codex/
-scratch/
+
+# scratch/ is untracked working space. Two CF-93 analysis-probe directories are
+# deliberately TRACKED so the measurements in decision-log.md 2026-07-25 § the
+# CF-93 round-1 per-class matrix entry stay reproducible — that entry could only
+# be authored because the -21 probe SOURCE survived. `scratch/*` (contents), not
+# `scratch/` (the directory): git cannot re-include a child of an excluded dir.
+# These are ANALYSIS SCRIPTS, not tests — outside every package's src, so they
+# enter no lint / typecheck / vitest gate and are excluded from Rule 13.
+scratch/*
+!scratch/cf93-p21/
+!scratch/cf93-p23/
