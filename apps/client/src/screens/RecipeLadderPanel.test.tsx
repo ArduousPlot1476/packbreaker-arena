@@ -112,6 +112,27 @@ describe('RecipeLadderPanel', () => {
     expect(queryByText('COMBINE')).toBeNull();
   });
 
+  it('names every recipe INPUT in text, not only the output (Codex round 1, P2)', () => {
+    // The panel exists to teach which inputs a recipe needs. An earlier cut
+    // drew inputs as RarityFrame glyphs at size 18 — a 4px content box under an
+    // 8px gem — and named only the output, so that fact was unreadable on
+    // desktop. Inputs must be recoverable as text on every rung.
+    const { container, getByText } = render(
+      <RecipeLadderPanel recipes={[]} scoutedRecipes={[]} onCombine={() => {}} />,
+    );
+    // A 2-input recipe and a 3-input capstone, both on the KNOWN rung.
+    expect(getByText('Iron Sword + Iron Dagger → Steel Sword')).toBeInTheDocument();
+    expect(
+      getByText("Greatsword + Warhammer + Vampire Fang → Berserker's Greataxe"),
+    ).toBeInTheDocument();
+    // No row is icon-only: every one of the 12 carries an input→output line.
+    const rows = Array.from(container.querySelectorAll('[data-testid^="ladder-row-"]'));
+    expect(rows).toHaveLength(12);
+    for (const row of rows) {
+      expect(row.textContent).toContain('→');
+    }
+  });
+
   it('tallies the three rungs in the header', () => {
     const { getByText } = render(
       <RecipeLadderPanel

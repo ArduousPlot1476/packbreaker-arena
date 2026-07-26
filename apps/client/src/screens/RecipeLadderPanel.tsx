@@ -16,15 +16,24 @@
 //   chip fill      filled           outlined         absent
 //   name weight    700              600              500
 //
+// Rows are TEXT, not icon glyphs — Codex round 1 (P2). An earlier cut rendered
+// each input through RarityFrame at size 18, which is unusable: the component
+// applies a fixed 6px pad inside a 1px border (RarityFrame.tsx:66), leaving a
+// 4px content box, and its gem floor is Math.max(8, …) (RarityFrame.tsx:38), so
+// an 8px gem sat on top of an 18px frame. The inputs were unidentifiable, and
+// the rows named only the OUTPUT — so the one fact this panel exists to teach,
+// which inputs a recipe needs, appeared nowhere on desktop. RarityFrame is
+// built for 42-88px bag cells and shop cards; below ~40px it emits noise rather
+// than information, so the ladder names items instead of drawing them. The bag
+// and shop remain the iconographic surfaces.
+//
 // Layout: a 2-column grid, so all 12 rows land without scrolling in the
 // vertical slack under the 528×352 bag at the 1280×720 baseline. The height
 // budget is measured rather than assumed — see ROW_HEIGHT below. The grid
 // scrolls as a safety net, but at the baseline nothing scrolls, and the bag
 // is never covered or pushed off-screen.
 
-import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ITEMS } from '../run/content';
-import { ICONS } from '../icons/icons';
 import { buildRecipeLadder, countByState, type RecipeLadderRow } from '../run/recipeLadder';
 import type { Recipe, RecipeMatch } from '../run/types';
 import { combineMatchKey } from '../run/recipes';
@@ -171,7 +180,8 @@ function LadderRow({
   rejected: boolean;
 }) {
   const p = PRESENTATION[row.state];
-  const outDef = ITEMS[row.output];
+  const outputName = ITEMS[row.output]?.name ?? String(row.output);
+  const inputNames = row.inputs.map((id) => ITEMS[id]?.name ?? String(id)).join(' + ');
 
   return (
     <div
@@ -194,8 +204,6 @@ function LadderRow({
         opacity: row.state === 'known' ? 0.72 : 1,
       }}
     >
-      <RecipeGlyphs inputs={row.inputs} output={row.output} />
-
       <div className="flex-1" style={{ minWidth: 0 }}>
         <div
           style={{
@@ -210,18 +218,22 @@ function LadderRow({
         >
           {row.name}
         </div>
+        {/* Codex round 1 (P2): the inputs MUST be named in text. The row
+            previously carried icon glyphs plus the output name, so the one
+            thing a player needs from this panel — which inputs a recipe
+            requires — appeared nowhere on desktop. */}
         <div
-          className="label-cap"
           style={{
-            fontSize: 8,
+            fontSize: 9,
             color: 'var(--text-muted)',
             lineHeight: 1.2,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}
+          title={`${inputNames} → ${outputName}`}
         >
-          {outDef?.name ?? String(row.output)}
+          {inputNames} → {outputName}
         </div>
       </div>
 
@@ -261,48 +273,6 @@ function LadderRow({
           {p.statusWord}
         </div>
       )}
-    </div>
-  );
-}
-
-/** input icons → output icon. Language-independent and the fastest read of
- *  "what turns into what" at 11px. */
-function RecipeGlyphs({
-  inputs,
-  output,
-}: {
-  inputs: ReadonlyArray<RecipeLadderRow['output']>;
-  output: RecipeLadderRow['output'];
-}) {
-  const outDef = ITEMS[output];
-  const OutIcon = ICONS[output] ?? ICONS['copper-coin'];
-
-  return (
-    <div className="flex items-center" style={{ gap: 2 }}>
-      {inputs.map((id, i) => {
-        const def = ITEMS[id];
-        const Icon = ICONS[id] ?? ICONS['copper-coin'];
-        return (
-          <div key={`${id}:${i}`} className="flex items-center" style={{ gap: 2 }}>
-            {i > 0 && (
-              <span style={{ fontSize: 8, color: 'var(--text-muted)', lineHeight: 1 }}>+</span>
-            )}
-            <RarityFrame rarity={def?.rarity ?? 'common'} w={1} h={1} size={18}>
-              <ItemIcon>
-                <Icon />
-              </ItemIcon>
-            </RarityFrame>
-          </div>
-        );
-      })}
-      <span style={{ fontSize: 9, color: 'var(--text-muted)', lineHeight: 1, margin: '0 1px' }}>
-        →
-      </span>
-      <RarityFrame rarity={outDef?.rarity ?? 'common'} w={1} h={1} size={20}>
-        <ItemIcon>
-          <OutIcon />
-        </ItemIcon>
-      </RarityFrame>
     </div>
   );
 }
