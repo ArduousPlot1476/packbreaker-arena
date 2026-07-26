@@ -1,10 +1,13 @@
 // HANDOFF 2026-07-25-21 — probes 1/2/3. READ-ONLY: loads production modules by
 // absolute file URL, writes nothing. scratch/ is gitignored (.gitignore:15).
 
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { dirname, resolve } from 'node:path'
 
-const REPO = 'c:/Users/trobbins/OneDrive - Alevio/Documents/packbreaker-arena'
-const load = (p: string) => import(pathToFileURL(`${REPO}/${p}`).href)
+// Repo root derived from THIS script's location (scratch/<dir>/<file>.mts), so
+// the probe runs from any checkout, not just the authoring machine (Codex round 1).
+const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
+const load = (p: string) => import(pathToFileURL(resolve(REPO, p)).href)
 
 const content = await load('packages/content/src/index.ts')
 const combat = await load('packages/sim/src/combat.ts')
