@@ -40,6 +40,15 @@ interface BagBoardProps {
    */
   combineRejection?: string | null;
   /**
+   * Number of recipes whose inputs the player OWNS but has not placed
+   * contiguously (scoutRecipes output length). Drives the footer's
+   * remedy line: with nothing ready, the footer used to dead-end at
+   * "NO RECIPES READY", which reports a state without naming the rule
+   * that would change it. Optional; omit to fall back to the generic
+   * remedy copy.
+   */
+  heldCount?: number;
+  /**
    * Compact mode (mobile): hides the BAG header + items-placed footer
    * rows so the bag fits in 240px (4 × 52px cells + 32px padding).
    * Default `false` (desktop layout).
@@ -80,6 +89,7 @@ export function BagBoard({
   recipeMatches,
   onCombine,
   combineRejection,
+  heldCount = 0,
   compact = false,
   containerRef,
   readOnly = false,
@@ -248,12 +258,20 @@ export function BagBoard({
             {bag.length} ITEM{bag.length === 1 ? '' : 'S'} PLACED
           </div>
           <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+            {/* Three-rung footer mirroring the recipe ladder. The old
+                terminal 'NO RECIPES READY' reported a dead end; both
+                non-ready branches now name the action that changes the
+                state (place the inputs so they touch). */}
             {recipeMatches.length > 0 ? (
               <span style={{ color: 'var(--r-legendary)' }}>
                 {recipeMatches.length} RECIPE READY
               </span>
+            ) : heldCount > 0 ? (
+              <span style={{ color: 'var(--accent)' }}>
+                {heldCount} HELD — PLACE INPUTS ADJACENT
+              </span>
             ) : (
-              'NO RECIPES READY'
+              'PLACE RECIPE INPUTS ADJACENT TO COMBINE'
             )}
           </div>
         </div>

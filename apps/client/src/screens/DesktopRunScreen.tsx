@@ -20,6 +20,7 @@ import { BottomPanel } from '../hud/BottomPanel';
 import { ShopPanel } from '../shop/ShopPanel';
 import { useRunContext } from '../run/RunContext';
 import { RelicOfferModal } from '../run/RelicOfferModal';
+import { RecipeLadderPanel } from './RecipeLadderPanel';
 
 function DragPreview({ itemId, rot }: { itemId: ItemId; rot: number }) {
   const def = ITEMS[itemId];
@@ -56,6 +57,7 @@ export function DesktopRunScreen() {
   const {
     state,
     recipes,
+    scoutedRecipes,
     combineRejection,
     handleDragStart,
     handleDragOver,
@@ -92,9 +94,12 @@ export function DesktopRunScreen() {
         <TopBar state={state.state} />
         <div className="flex flex-1 relative" style={{ minHeight: 0 }}>
           <LeftRail />
+          {/* Column-stacked so the recipe ladder occupies the vertical slack
+              under the bag rather than covering it or displacing the shop.
+              The bag stays fully visible at the 1280×720 baseline. */}
           <div
-            className="flex-1 flex items-center justify-center relative"
-            style={{ background: 'var(--bg-deep)' }}
+            className="flex-1 flex flex-col items-center justify-center relative"
+            style={{ background: 'var(--bg-deep)', gap: 10, minWidth: 0, padding: '0 12px' }}
           >
             <BagBoard
               bag={state.bag}
@@ -102,10 +107,17 @@ export function DesktopRunScreen() {
               hover={state.hover}
               dimmed={state.combatActive}
               recipeMatches={recipes}
+              heldCount={scoutedRecipes.length}
               onCombine={onCombine}
               combineRejection={combineRejection}
               containerRef={bagContainerRef}
               adjacencyReveal="popover"
+            />
+            <RecipeLadderPanel
+              recipes={recipes}
+              scoutedRecipes={scoutedRecipes}
+              onCombine={onCombine}
+              rejectedKey={combineRejection}
             />
           </div>
           <ShopPanel

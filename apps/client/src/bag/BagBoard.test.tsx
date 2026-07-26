@@ -242,3 +242,44 @@ describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above,
     expect(screen.queryByTestId('adjacency-effect-label')).toBeNull();
   });
 });
+
+// The bag footer's recipe line used to terminate at 'NO RECIPES READY',
+// reporting a dead end without naming the rule that would change it. It now
+// mirrors the recipe ladder's three rungs, and both non-ready branches name
+// the action (place the inputs adjacent).
+describe('BagBoard — footer recipe line carries a remedy, not a dead end', () => {
+  function renderFooter(props: { recipeMatches?: never[]; heldCount?: number }) {
+    return render(
+      <DndContext>
+        <BagBoard
+          bag={TEST_BAG}
+          drag={null}
+          hover={null}
+          dimmed={false}
+          recipeMatches={[]}
+          onCombine={vi.fn()}
+          {...props}
+        />
+      </DndContext>,
+    );
+  }
+
+  it('with nothing ready and nothing held, names the action instead of the dead end', () => {
+    const { getByText, queryByText } = renderFooter({});
+    expect(getByText('PLACE RECIPE INPUTS ADJACENT TO COMBINE')).toBeInTheDocument();
+    expect(queryByText('NO RECIPES READY')).toBeNull();
+  });
+
+  it('with inputs owned but apart, reports the held count AND the action', () => {
+    const { getByText, queryByText } = renderFooter({ heldCount: 2 });
+    expect(getByText('2 HELD — PLACE INPUTS ADJACENT')).toBeInTheDocument();
+    expect(queryByText('NO RECIPES READY')).toBeNull();
+  });
+
+  it('omitting heldCount falls back to the generic remedy rather than crashing', () => {
+    // Mobile and the read-only ghost-bag reveal both mount BagBoard without
+    // the prop; the default must be the remedy copy, never a stray "0 HELD".
+    const { getByText } = renderFooter({});
+    expect(getByText('PLACE RECIPE INPUTS ADJACENT TO COMBINE')).toBeInTheDocument();
+  });
+});

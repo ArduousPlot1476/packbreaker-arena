@@ -1,5 +1,8 @@
 // Mobile [Crafting] tab content. Per Trey's decision-4 ratification +
-// the M1.3.4a §7 scouting addition, the tab now renders TWO sections:
+// the M1.3.4a §7 scouting addition, plus the M2 recipe-ladder work, the
+// tab renders THREE sections — the same KNOWN → HELD → READY ladder the
+// desktop panel carries (screens/RecipeLadderPanel), ordered most-
+// actionable-first because this surface is a tab, not an always-on panel:
 //
 //   READY TO CRAFT — recipes whose inputs are already 4-edge-adjacent
 //     in the bag. Each row is a tappable COMBINE target. Mirrors (does
@@ -13,6 +16,10 @@
 //     row to appear in the top section. M3 hint-system surfaces "tap
 //     to auto-rearrange" affordance over this list.
 //
+//   OTHER RECIPES — everything else the player has not yet gathered the
+//     inputs for. Quietest, last, and collapses to nothing once every
+//     recipe has been reached, so it never displaces the actionable rows.
+//
 // Empty state (top section): "No recipes ready. Place items adjacent
 // to see combinations." (Trey-ratified copy.)
 
@@ -20,6 +27,7 @@ import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { ITEMS } from '../../../run/content';
 import { ICONS } from '../../../icons/icons';
 import { combineMatchKey, type RecipeMatch } from '../../../run/recipes';
+import { buildRecipeLadder } from '../../../run/recipeLadder';
 import type { Recipe } from '../../../run/types';
 
 interface CraftingTabProps {
@@ -52,6 +60,7 @@ export function CraftingTab({
     >
       <ReadySection recipes={recipes} onCombine={onCombine} rejectedKey={rejectedKey} />
       <ScoutedSection recipes={scoutedRecipes} />
+      <KnownSection recipes={recipes} scoutedRecipes={scoutedRecipes} />
     </div>
   );
 }
@@ -278,6 +287,69 @@ function ScoutedSection({ recipes }: { recipes: Recipe[] }) {
         })}
         </div>
       )}
+    </div>
+  );
+}
+
+/** The third rung: recipes the player does NOT yet hold the inputs for.
+ *  Desktop gained an always-visible all-12 ladder (screens/RecipeLadderPanel);
+ *  this is its mobile counterpart. It sits LAST and is the quietest section,
+ *  so it never displaces READY or AVAILABLE — and the tab already scrolls
+ *  (`overflow: auto` on the container), so the extra rows cost no layout at
+ *  390-wide. Compact rows: no icons, one line per recipe. */
+function KnownSection({
+  recipes,
+  scoutedRecipes,
+}: {
+  recipes: RecipeMatch[];
+  scoutedRecipes: Recipe[];
+}) {
+  const known = buildRecipeLadder(recipes, scoutedRecipes).filter((r) => r.state === 'known');
+  if (known.length === 0) return null;
+
+  return (
+    <div className="flex flex-col" style={{ gap: 8 }}>
+      <div className="flex items-baseline gap-2">
+        <div className="label-cap" style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+          OTHER RECIPES
+        </div>
+        <div className="label-cap tnum" style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+          {known.length}
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        {known.map((r) => {
+          const outDef = ITEMS[r.output];
+          const inputNames = r.inputs.map((id) => ITEMS[id]?.name ?? String(id)).join(' + ');
+          return (
+            <div
+              key={r.recipeId}
+              className="flex items-center gap-2"
+              style={{
+                padding: '6px 8px',
+                borderRadius: 6,
+                background: 'var(--surface)',
+                opacity: 0.7,
+                minWidth: 0,
+              }}
+            >
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {inputNames} → {outDef?.name ?? String(r.output)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
