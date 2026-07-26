@@ -23,3 +23,9 @@ PLAN-*.md
 scratch/*
 !scratch/cf93-p21/
 !scratch/cf93-p23/
+!scratch/cf93-p25/
+# cf93-p25 tracks the CDP visual-verification harness SCRIPTS only. Its captured
+# PNGs are deliberately NOT tracked — they are large, regenerable by re-running
+# the harness, and Rule 38 asks for the reproduction path, not the output.
+scratch/cf93-p25/*.png
+scratch/cf93-p25/chrome-profile/
