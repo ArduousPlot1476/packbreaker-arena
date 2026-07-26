@@ -51,6 +51,7 @@ import {
 import { computeBagLayout } from '../bag/layout';
 import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
+import { computeRampDrain, deriveResolutionCause } from './resolutionCause';
 import { opponentForRound } from './opponentForRound';
 
 // Event types that mean "the player needs to see this combat play out."
@@ -227,6 +228,19 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   const { damageDealt, damageTaken } = result
     ? computeDamageStats(result.events)
     : { damageDealt: 0, damageTaken: 0 };
+
+  // CF-93 LEG 1 (B4 + B5): the two figures above are honest and, on a
+  // ramp-resolved draw, are both zero — which explains nothing to the player
+  // who just lost a heart. These two derivations add the missing third
+  // quantity and the missing cause WITHOUT touching computeDamageStats and
+  // WITHOUT reading endReason (see combat/resolutionCause.ts for why the
+  // derived cause and endReason are expected to disagree — that is CF-88).
+  const resolutionCause = result
+    ? deriveResolutionCause(result.events, result.outcome)
+    : null;
+  const rampDrain = result
+    ? computeRampDrain(result.events)
+    : { player: 0, ghost: 0 };
 
   // Zero-content fast-skip — see decision-log 2026-05-04 + the Codex P1
   // amendment block in the same entry. Predicate checks event CONTENT,
@@ -433,6 +447,9 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
           hearts={heartsPost}
           maxHearts={ctx.state.state.maxHearts}
           onNext={handleNext}
+          // CF-93 LEG 1: derived cause (B4) + the player's ramp drain (B5).
+          resolutionCause={resolutionCause}
+          rampDrainTaken={rampDrain.player}
           // CF-85 Surface 2b: the ghost build this combat ACTUALLY fought
           // (post-combat reveal — gdd.md §14's pre-combat restriction N/A).
           opponentBuild={{ classLabel: ghostClassLabel, bagItems: ghostBagItems }}

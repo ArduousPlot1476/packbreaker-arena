@@ -238,6 +238,15 @@ export class CombatScene extends Phaser.Scene {
   private ghostRefs!: PortraitRefs;
   private headerLabel!: Phaser.GameObjects.Text;
 
+  // CF-93 LEG 1: resolution legibility. `rampActive` latches on the first
+  // ramp_tick of a combat and drives BOTH the header rename (B1) and the
+  // tiebreak indicator (B3). Reset in init() alongside every other mutable
+  // field; createCombatGame builds a fresh Phaser.Game per combat, so the
+  // header is also rebuilt as '— COMBAT —' by create() on the next one —
+  // the reset is belt-and-braces against an in-place scene restart.
+  private rampActive = false;
+  private tiebreakLabel!: Phaser.GameObjects.Text;
+
   constructor() {
     super({ key: CombatScene.KEY });
   }
@@ -264,6 +273,7 @@ export class CombatScene extends Phaser.Scene {
     this.playerHp = data.initialPlayerHp;
     this.ghostHp = data.initialGhostHp;
     this.burnStacks = { player: 0, ghost: 0 };
+    this.rampActive = false;
   }
 
   preload(): void {
@@ -291,6 +301,21 @@ export class CombatScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0);
     this.headerLabel.setLetterSpacing(4);
+
+    // CF-93 LEG 1 (B3): tiebreak direction. Sits directly under the header,
+    // hidden until the ramp engages. Same Text treatment as headerLabel
+    // (Inter 600, letter-spacing 4, centred) so the two read as one block.
+    // Colour is assigned per state at render time, NOT here.
+    this.tiebreakLabel = this.add
+      .text(width * 0.5, 50, '', {
+        fontFamily: 'Inter, sans-serif',
+        fontStyle: '600',
+        fontSize: '11px',
+        color: PALETTE_HEX.textSecondary,
+      })
+      .setOrigin(0.5, 0);
+    this.tiebreakLabel.setLetterSpacing(4);
+    this.tiebreakLabel.setVisible(false);
 
     // CF 31: dev-mode pause/step keybindings. Literal-gated so Vite DCE
     // folds the entire block out of production. Space toggles pause;
@@ -455,11 +480,54 @@ export class CombatScene extends Phaser.Scene {
       // CF-83 resolution ramp: authoritative remainingHp drives the HP bar.
       if (ev.target === 'player') this.playerHp = ev.remainingHp;
       else this.ghostHp = ev.remainingHp;
+      // CF-93 LEG 1 (B1): the first ramp_tick of a combat NAMES the ramp.
+      // Before this, HP fell on both sides with nothing on screen saying
+      // why — the drain is source-less, so no floater could attribute it.
+      if (!this.rampActive) {
+        this.rampActive = true;
+        this.headerLabel.setText('— SUDDEN DEATH —');
+      }
+      this.updateTiebreakLabel();
     } else if (ev.type === 'status_apply') {
       if (ev.status === 'burn') {
         this.burnStacks[ev.target] = ev.stacks;
       }
     }
+  }
+
+  /** CF-93 LEG 1 (B3): while the ramp is draining both sides at the same
+   *  rate, the side that entered with more HP outlives the other — so
+   *  "who is ahead" IS the HP comparison, and it is the only lever the
+   *  player has at round 1 (a +5 maxHpBonus decides it with zero damage).
+   *  Reads the two authoritative mirrors and renders a direction. Derives
+   *  NO game state and feeds nothing back — outcome comes from the sim.
+   *
+   *  The TIED branch is NOT decorative: an equal-HP ramp is CF-84's
+   *  simultaneous mutual KO, which is reachable and is the case where the
+   *  player loses a heart to a combat nobody won. It gets its own state
+   *  rather than collapsing into one of the two directions.
+   *
+   *  Colours reuse the SAME three tokens RoundResolution assigns to
+   *  VICTORY / DRAW / DEFEAT, so the in-combat indicator and the
+   *  post-combat header cannot tell different stories. */
+  private updateTiebreakLabel(): void {
+    if (!this.rampActive) return;
+    const delta = this.playerHp - this.ghostHp;
+    let text: string;
+    let color: string;
+    if (delta > 0) {
+      text = 'YOU AHEAD +' + String(delta);
+      color = PALETTE_HEX.rarityUncommon;
+    } else if (delta < 0) {
+      text = 'GHOST AHEAD +' + String(-delta);
+      color = PALETTE_HEX.lifeRed;
+    } else {
+      text = 'TIED';
+      color = PALETTE_HEX.textSecondary;
+    }
+    this.tiebreakLabel.setText(text);
+    this.tiebreakLabel.setColor(color);
+    this.tiebreakLabel.setVisible(true);
   }
 
   /** CF-85 Surface 1: `label` is the attributed item name for this event
@@ -542,7 +610,16 @@ export class CombatScene extends Phaser.Scene {
       // the ramp's "sudden death" drain reads on-screen (item 6).
       const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
       if (anchors.target) {
-        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount), PALETTE_HEX.lifeRed, true);
+        // CF-93 LEG 1 (B2): a bare '−3' at the portrait reads as damage from
+        // nowhere — every OTHER numeric floater in this scene names its cause
+        // after a ' · ' separator, so an unnamed one reads as a missing name
+        // rather than as an absent source. The suffix is composed HERE, at the
+        // render site, and is NOT an item attribution: attribution.ts still
+        // returns null for ramp_tick and is untouched (its unattributed-by-
+        // design ruling is canon, decision-log.md 2026-07-20 § "CF-85 SCOPE
+        // REDRAWN against Phase-1 read-only …"). The label array carries ITEM
+        // names; the ramp has no item, so its cause is named by the scene.
+        this.spawnFloaterAt(anchors.target.x, anchors.target.y, '−' + String(ev.amount) + ' · SUDDEN DEATH', PALETTE_HEX.lifeRed, true);
         this.spawnParticleBurstAt(anchors.target.x, anchors.target.y, TEX.squareStatus, 3);
       }
     } else if (ev.type === 'item_trigger') {

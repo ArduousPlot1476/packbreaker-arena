@@ -18,6 +18,7 @@ import { DndContext } from '@dnd-kit/core';
 import { CellSizeProvider } from '../bag/CellSize';
 import { BagBoard } from '../bag/BagBoard';
 import type { BagItem } from '../run/types';
+import type { ResolutionCause } from '../combat/resolutionCause';
 import { CoinGlyph } from '../icons/icons';
 
 /** Reveal cell size: 6 cols × 40px + BagBoard's 32px padding = 272px,
@@ -41,6 +42,18 @@ interface RoundResolutionProps {
     classLabel: string;
     bagItems: BagItem[];
   };
+  /** CF-93 LEG 1 (B4): what actually decided the combat, DERIVED from
+   *  ramp_tick presence against the losing side (combat/resolutionCause.ts).
+   *  Deliberately NOT `endReason` — that field is tick-derived and mislabels
+   *  a tick-500 item kill as ramp-driven (CF-88, open). Optional: omitting it
+   *  renders the pre-LEG-1 panel unchanged. */
+  resolutionCause?: ResolutionCause | null;
+  /** CF-93 LEG 1 (B5): total CF-83 ramp drain taken by the PLAYER, summed
+   *  client-side. A THIRD quantity beside DEALT/TAKEN, never folded into
+   *  them — computeDamageStats excludes the ramp by design and is unchanged,
+   *  so DEALT/TAKEN still read 0/0 on a ramp-resolved draw and this line is
+   *  what explains those two zeros. */
+  rampDrainTaken?: number;
 }
 
 export function RoundResolution({
@@ -54,6 +67,8 @@ export function RoundResolution({
   maxHearts,
   onNext,
   opponentBuild,
+  resolutionCause,
+  rampDrainTaken = 0,
 }: RoundResolutionProps) {
   const [showBuild, setShowBuild] = useState(false);
   const isWin = outcome === 'win';
@@ -95,6 +110,25 @@ export function RoundResolution({
       <div className="heading-tight" style={{ fontSize: 32, marginBottom: 16 }}>
         {headline}
       </div>
+      {/* CF-93 LEG 1 (B4): the DERIVED cause, beneath the outcome headline
+          and subordinate to it — the headline still owns the outcome and
+          CF-84's honest-draw wording above is untouched. Says WHY, where
+          before the panel said only WHAT. */}
+      {resolutionCause != null && (
+        <div
+          className="label-cap"
+          style={{
+            fontSize: 9,
+            color: 'var(--text-secondary)',
+            marginTop: -10,
+            marginBottom: 16,
+          }}
+        >
+          {resolutionCause === 'ramp'
+            ? 'DECIDED BY SUDDEN DEATH'
+            : 'DECIDED BY ITEMS'}
+        </div>
+      )}
       <div className="flex items-center justify-center gap-6 mb-5">
         <div>
           <div className="label-cap" style={{ fontSize: 9, color: 'var(--text-secondary)' }}>
@@ -153,6 +187,19 @@ export function RoundResolution({
         <span className="tnum">
           TAKEN <span style={{ color: 'var(--life-stroke)' }}>{damageTaken}</span>
         </span>
+        {/* CF-93 LEG 1 (B5): a THIRD named quantity, never folded into the
+            two above. DEALT/TAKEN come from the sim's computeDamageStats,
+            which excludes the source-less ramp BY DESIGN so display and
+            round_end telemetry share one definition — that function is
+            unmodified and those two still read 0 / 0 on a ramp-resolved
+            draw. DRAIN is what makes those zeros legible instead of
+            inexplicable. Rendered only when the ramp actually engaged, so
+            an item-decided round is not given a permanent zero to parse. */}
+        {rampDrainTaken > 0 && (
+          <span className="tnum">
+            DRAIN <span style={{ color: 'var(--life-stroke)' }}>{rampDrainTaken}</span>
+          </span>
+        )}
       </div>
       {opponentBuild && (
         <div style={{ marginBottom: 16 }}>
