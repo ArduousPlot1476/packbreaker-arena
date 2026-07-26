@@ -66,6 +66,7 @@ export function RecipeLadderPanel({
   const rows = buildRecipeLadder(recipes, scoutedRecipes);
   const readyCount = countByState(rows, 'ready');
   const heldCount = countByState(rows, 'held');
+  const knownCount = countByState(rows, 'known');
 
   return (
     <div
@@ -101,7 +102,12 @@ export function RecipeLadderPanel({
             {heldCount} HELD
           </span>
           {' · '}
-          <span>{rows.length} KNOWN</span>
+          {/* Codex round 2 (P2): the rungs are mutually exclusive, so this must
+              be the KNOWN rung's own count, not the row total. Showing
+              `rows.length` here rendered "1 READY · 1 HELD · 12 KNOWN" over a
+              ladder holding 10 known rows — three buckets summing to 14 of 12.
+              The three counts now sum to the row total by construction. */}
+          <span>{knownCount} KNOWN</span>
         </div>
       </div>
 

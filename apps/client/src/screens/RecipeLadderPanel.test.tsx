@@ -133,8 +133,14 @@ describe('RecipeLadderPanel', () => {
     }
   });
 
-  it('tallies the three rungs in the header', () => {
-    const { getByText } = render(
+  it('tallies the three rungs so they sum to the rendered rows (Codex round 2, P2)', () => {
+    // The rungs are mutually exclusive, so the header must count the KNOWN
+    // rung, not the row total. An earlier cut printed `rows.length` here and
+    // rendered "1 READY · 1 HELD · 12 KNOWN" over a ladder holding 10 known
+    // rows — and the FIRST version of this test asserted '12 KNOWN', pinning
+    // the defect in place. The sum invariant below is what makes that class of
+    // mistake impossible to re-assert.
+    const { container, getByText } = render(
       <RecipeLadderPanel
         recipes={[STEEL_MATCH]}
         scoutedRecipes={[SALVE_RECIPE]}
@@ -143,6 +149,20 @@ describe('RecipeLadderPanel', () => {
     );
     expect(getByText('1 READY')).toBeInTheDocument();
     expect(getByText('1 HELD')).toBeInTheDocument();
+    expect(getByText('10 KNOWN')).toBeInTheDocument();
+
+    const rendered = container.querySelectorAll('[data-testid^="ladder-row-"]').length;
+    const tally = (label: string) =>
+      Number(/^(\d+)/.exec(getByText(new RegExp(`^\\d+ ${label}$`)).textContent!)![1]);
+    expect(tally('READY') + tally('HELD') + tally('KNOWN')).toBe(rendered);
+  });
+
+  it('tallies correctly on a fresh run, where every rung but KNOWN is empty', () => {
+    const { getByText } = render(
+      <RecipeLadderPanel recipes={[]} scoutedRecipes={[]} onCombine={() => {}} />,
+    );
+    expect(getByText('0 READY')).toBeInTheDocument();
+    expect(getByText('0 HELD')).toBeInTheDocument();
     expect(getByText('12 KNOWN')).toBeInTheDocument();
   });
 });
