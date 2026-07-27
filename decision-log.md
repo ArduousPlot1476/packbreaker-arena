@@ -4,6 +4,123 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-27 — CF-95 OPENED AND CLOSED ON MERGE (artifact anchor `570f491`, PR \#61) — the desktop recipe ladder: KNOWN / HELD / READY, so recipe contiguity is teachable on the primary surface instead of discoverable only by accident; client-only, display-only, **ZERO diff under `packages/sim`, `packages/content`, `content-schemas.ts`**; **Codex FOUR ROUNDS / 3 P2 findings**, all three on `RecipeLadderPanel.tsx`, **ceiling BENT AT 3 on structural grounds** so the 4-finding meta-audit never triggered, round 4 **CLEAN on `a79055c7`** confirmed from BOTH poll surfaces; **the round-3 finding was PARTLY REFUTED BY MEASUREMENT** — Codex's "forced to scroll" claim was false (grid `scrollHeight 177 === clientHeight 177`, 12/12 rows in viewport) and its 155px derivation mistook the bag grid's BOTTOM COORDINATE (432) for `BagBoard`'s HEIGHT, while what was real is smaller and different: an **11px column overflow painting over `BottomPanel`**, fixed structurally by DELETING the hand-tuned `ROW_HEIGHT` (34 → 30 → 27, never converging) rather than giving it a fourth value; **THE VERIFICATION BLIND SPOT IS THE DURABLE FINDING** — all three findings were already PRESENT in evidence reported as verification and none was caught by it, because a probe that prints a contradiction and exits 0 is a REPORT, not a GATE; **CF-96 OPENED** (telemetry provenance, one mechanism / two symptoms); citation corrected to `concept-brief.md:20`, NOT `:21`; **NO catches, NO drifts, NO new rules**; counter 134/39/10/110/53 → 134/39/10/110/54
+
+Client-only, display-only. **ARTIFACT ANCHOR = the merge commit `570f491`; COUNTER ANCHOR = this entry's own docs commit.** The two are distinct and are named separately. Governing counter entry: decision-log.md 2026-07-26 § "CF-93 LEG 1 CLOSED ON MERGE (artifact anchor `90898e5`, PR \#60) …" carrying **134/39/10/110/53**, read from the file this session. **Decision day 2026-07-27**, the day the merge landed (`merged_at 2026-07-27T18:08:35Z`, read from the GitHub API) and the day this close was ratified in master-dev review. No schema, content, corpus, or migration change.
+
+**⚠ THE MERGE SHA AND ITS PARENTS ARE DERIVED FROM THE REPOSITORY, NOT ADOPTED FROM THE REQUESTING PROMPT.** Walked live:
+
+```
+merge commit : 570f491241309beda0b065cac0924a4ae50fc502
+short        : 570f491
+subject      : Merge cf95-recipe-ladder-legibility (\#61) — desktop recipe ladder: KNOWN / HELD / READY, …
+               (the `#` is escaped here per the log's auto-link rule; the commit itself carries it bare)
+parents:
+  ba64a17  docs(decision-log): CF-93 LEG 1 CLOSED ON MERGE (90898e5, PR \#60) …
+  a79055c  fix(client): Codex round 3 — flex-driven panel sizing, and a gate that measures it
+```
+
+`--no-ff`, four branch commits preserved as ancestors, none squashed or rebased; local branch deleted with `-d` (`Deleted branch cf95-recipe-ladder-legibility (was a79055c)`), never `-D`.
+
+### 1 — WHAT SHIPPED
+Desktop was blind to a predicate it already computed. `scoutedRecipes` has been derived in `useRun` since M1.3.4a (`apps/client/src/run/useRun.ts:385-389`) but was consumed **only** by the mobile Crafting tab (`MobileRunScreen.tsx:156` → `CraftingTab.tsx:54`). `DesktopRunScreen` never destructured it, so a desktop player could hold `iron-sword` + `iron-dagger` for a whole run and never learn that placing them edge-to-edge yields a `steel-sword`.
+
+| rung | meaning |
+|---|---|
+| **KNOWN** | all 12 recipes, always visible, inputs and output named in text. Muted. |
+| **HELD** | input multiset owned, placements **not** contiguous. Emphasised. |
+| **READY** | held **and** contiguous. Mirrors `RecipeGlow`, affords COMBINE. |
+
+**Predicate ownership is unchanged.** `run/recipeLadder.ts` derives nothing itself: `ready` comes from `detectRecipes` (multiset + BFS connectivity), `held` from `scoutRecipes` (multiset only) — the same two accessors mobile already consumed. Contiguity stays owned by the detector; the new module only classifies and orders. The panel header states the rule outright whether or not the player holds anything: *"Inputs must sit edge-to-edge in the bag to combine."*
+
+### 2 — CODEX: FOUR ROUNDS, 3 P2, CEILING BENT AT 3
+| round | reviewed SHA | finding | disposition |
+|---|---|---|---|
+| 1 | `176f345` | P2 — rows named recipe and output but **not INPUTS**: `size={18}` on `RarityFrame` leaves a 6×6px content area | **DoD failure, not a nit.** Fixed `ae59af1` |
+| 2 | `ae59af1` | P2 — header printed `rows.length` for KNOWN → **"12 KNOWN" over 10 known rows** | Fixed `997fd56` |
+| 3 | `997fd56` | P2 — "forced to scroll", final rows below the fold | **PARTLY REFUTED** (§ 3). Fixed `a79055c` |
+| 4 | `a79055c` | **none — CLEAN** | Round closed |
+
+**Round 1's mechanism, verified against source rather than relayed:** `RarityFrame.tsx:66` applies `padding: 6` per side and `:38` floors the corner gem at `Math.max(8, Math.round(size * 0.14))`, so at `size={18}` the 6×6px content area is *smaller than the 8px gem overlaying it*; the component's tests exercise it at 42px and 88px. The fix names inputs in text and removes the inline `RecipeGlyphs` renderer — **an inline renderer inside `RecipeLadderPanel.tsx`, removed at `ae59af1`; it was never a standalone file, and the branch's net diff adds and deletes no such file.**
+
+**Round 2's defect had been PINNED BY ITS OWN TEST** — the suite ASSERTED the row total, so the test protected the contradiction. Replaced with a sum invariant, now also enforced in the browser gate as `C2`/`C3`.
+
+**Ceiling BENT AT 3 by ruling, on structural grounds** — three findings, one class: the panel not doing what it claims, with a hardcoded pixel budget as the recurring cause. The 4-finding meta-audit was therefore never reached.
+
+**Round 4 confirmed from BOTH poll surfaces**, per the clean-pass signature: `/pulls/61/reviews` carries **no** review after the 2026-07-26T22:52:31Z trigger (its three reviews sit on the superseded SHAs above), while `/issues/61/comments` carries comment id **5085788618** from `chatgpt-codex-connector[bot]` at 2026-07-26T22:55:12Z, verbatim:
+
+```
+Codex Review: Didn't find any major issues. Hooray!
+
+**Reviewed commit:** `a79055c736`
+```
+
+`a79055c736` is the head SHA's prefix — the stale-SHA guard passes. **No fifth trigger was posted**: the tip already carried an answer, and a second `@codex review` on an answered SHA only burns a round.
+
+### 3 — THE ROUND-3 FINDING, PARTLY REFUTED BY MEASUREMENT
+Codex derived ~155px of remaining grid space against 177px required and concluded the grid "is forced to scroll" with "final recipe rows below the fold". Measured at `997fd56`: **`gridScrolls` false, `scrollHeight 177 === clientHeight 177`, 12 of 12 rows fully in viewport, 32px of slack below the last row.** Its arithmetic mistook the bag grid's **bottom coordinate** (432) for `BagBoard`'s **height**.
+
+What was real is smaller and different: **`columnOverflow` 11** — the panel's bottom padding painted over `BottomPanel`'s top edge. The pre-fix source is unambiguous on the cause: `997fd56` carried `const ROW_HEIGHT = 27` and `maxHeight: ROW_HEIGHT * 6 + 15` = **177**, a constant hand-derived from sibling geometry and tuned **34 → 30 → 27**, each value re-justified in a comment and the last still 11px over. **A constant cannot track siblings it does not observe**, so the fix deletes the constant instead of taking a fourth value.
+
+Sizing is now flex-driven end to end: the centre column takes `minHeight: 0`, the bag keeps its natural size (`flex 0 0 auto`), the panel yields (`flex 0 1 auto` + `minHeight: 0`), and the grid absorbs the shrink (`flex 1 1 auto` + `minHeight: 0` + `overflowY: auto`) with no `maxHeight` cap. `min-height: 0` is the load-bearing half — a flex item defaults to `min-height: auto` and refuses to shrink below its content. Two properties now hold **without arithmetic**: the panel can never exceed its column, and a short viewport degrades to a scrolling grid rather than an overflow.
+
+### 4 — THE VERIFICATION BLIND SPOT (the durable finding)
+**All three findings were PRESENT in evidence that had been reported as verification, and none was caught by it.** The round-2 tally rendered `1 READY · 1 HELD · 12 KNOWN` over 10 known rows and the probe **printed that string twice while exiting 0**. "`BottomPanel` unobstructed" was asserted off a screenshot and was wrong **by 11px in every capture**. Measurement caught the geometry; eyeballing missed the semantics.
+
+**A probe that prints a contradiction and exits 0 is a REPORT, not a GATE.** `scratch/cf95-recipe-ladder/assert.mjs` is the gate: it measures, it CHECKS, and it exits non-zero — panel-fits-column, `BottomPanel`-unobstructed, all-12-rendered, rows-in-viewport, no-grid-clipping, header-tally-sums-to-rows, per-rung-tally-matches-DOM, rule-line-present.
+
+Geometry assertions live in the browser gate rather than vitest **deliberately**: happy-dom has no layout engine, so `getBoundingClientRect` is all zeros there and a panel-fits-column test would be **vacuously green**. Only a real browser can falsify it, so that is where the assertion goes; vitest instead guards the structural contract that made the overflow possible (flex and `minHeight` set, no `maxHeight` or height constant anywhere in the panel's chain). **Falsifiability was proven per Rule 28 before the fix landed** — against `997fd56`: GATE RED, exit 1, `G3 columnOverflow=11` and `G4 panelOverlapsBottomBar=11`; and against `ae59af1` with the round-2 tally defect restored to that file alone: `C2 FAIL "1+1+12=14 vs rowsRendered=12"`, `C3 FAIL header known=12 vs rendered known=10`.
+
+### 5 — CITATION CORRECTION
+The design citation is **`concept-brief.md:20`** — *"**Mastery from synergy, not fidelity.** Item interactions and bag arrangement carry the depth."* — **NOT `:21`**, which is *"Async respects player time."* The wrong line propagated through a survey, a prompt, and a PR body before being corrected. Verified by reading the file this session.
+
+### 6 — GATES, POST-MERGE ON `main`
+`turbo run typecheck --force` → `Tasks: 10 successful, 10 total`. `pnpm -r run test` → **exit 0**:
+
+```
+packages/content  31 passed (31)
+packages/ui-kit   37 passed (37)
+packages/sim     557 passed | 1 skipped (558)
+apps/server      122 passed | 24 skipped (146)
+apps/client      752 passed | 15 skipped (767)
+```
+
+Browser gate at 1280×720 — `GATE GREEN — 11/11 checks passed`, `MEASURED: columnOverflow=0 panelOverlapsBottomBar=0 gridScrollHidden=0`, header tally `1+1+10=12` matching the rendered rungs. Mobile non-regression at 390×844 — `GATE GREEN — 4/4 checks passed`, three sections present, no horizontal overflow. **`git diff --stat main...HEAD -- packages/sim packages/content content-schemas.ts` returned EMPTY**, verified before merge.
+
+### 7 — CF-95 OPENED AND CLOSED
+**CF-95 — recipe contiguity untaught on the primary surface.** Desktop was blind to `scoutedRecipes` (`useRun.ts:385-389`), which reached only `MobileRunScreen.tsx:156` → `CraftingTab.tsx:54`; `RecipeGlow` fires only once inputs are *already* adjacent, so it confirms an accident rather than teaching a rule, and the bag footer rendered a terminal `NO RECIPES READY` — a state report with no remedy. **CLOSED by this PR**: the KNOWN / HELD / READY ladder ships the teaching surface, and both non-ready footer branches now name the action. **Opened and closed in the same entry** — the closure gate's "open at tip" test is inapplicable by construction, and is recorded as such rather than waved through; net contribution to the open-CF axis is **0**.
+
+### 8 — CF-96 OPENED
+**CF-96 — telemetry provenance: one mechanism, two symptoms.** (i) CDP visual-probe runs emit `run_start`→`run_end` into the live PostHog dataset — the `run-1` fixture self-identified by signature at decision-log.md 2026-07-26 § "CF-93 LEG 1 CLOSED ON MERGE (artifact anchor `90898e5`, PR \#60) …" — so timestamp-bounded queries over a playtest population are **not idempotent**. (ii) `clientVersion` does **not** uniquely identify a canon state, the stamp deriving from build-time `git rev-parse --short HEAD` (`apps/client/vite.config.ts:19`, consumed at `:28`), so a build predating docs-only commits labels behaviour by the wrong commit.
+
+**Recorded because it is the shape the fix should take: THIS probe run did not contaminate.** The harness blocks telemetry at the browser before the first navigation — `Network.setBlockedURLs` on `*/v1/telemetry/*`, `http://127.0.0.1:4000/*`, `http://localhost:4000/*` — installed ahead of navigation rather than assumed absent. Remediation is **OUT OF SCOPE** here and unscheduled. New CF number walked from canon: highest existing **CF-94**, so CF-95 and CF-96 are the next two in sequence.
+
+### 9 — NOTHING ELSE CLOSED, NOTHING ELSE OPENED
+**CF-93 stays OPEN**, live scope rounds 1–10, LEG 2 still unscoped. **CF-88 stays OPEN**. **CF-86 stays OPEN**. **CF-83, CF-84, CF-87, CF-91, CF-94 stay CLOSED**; none is reopened. **Pattern 11 stays HELD, not minted.** Round-11 boss disposition stays **HELD** pending the LEG 1 AFTER population. No difficulty-touching change; no new probe or telemetry work.
+
+### Counter
+Full close (PR merge). Ordinal walk live from canon, greps run this session with a phantom-higher control on every axis: highest **Catch 134**, **Rule 39**, **Pattern 10**, **Drift 110**, **CF-94** — and `Catch 13[5-9]` → 0, `Catch 1[4-9][0-9]` → 0, `Rule 4[0-9]` → 0, `Drift 11[1-9]` → 0, `Drift 1[2-9][0-9]` → 0, `CF-9[5-9]` → 0, `CF-[1-9][0-9][0-9]` → 0. **`Pattern 1[1-9]` returns 4 hits, up from the 2 the governing entry recorded, and ALL FOUR are HELD-candidate references, not a minting** — two are the governing entry's own "Pattern 11 stays HELD" line and its counter rider, and the two originals expressly state "**Pattern 11 is NOT minted** … Patterns stay at 10" and "Pattern 11 is HELD, not minted". **The patterns axis stands at 10.**
+
+| axis | baseline | delta | total |
+|---|---|---|---|
+| catches | 134 | **+0** | **134** |
+| rules | 39 | **+0** | **39** |
+| patterns | 10 | **+0** | **10** |
+| drifts | 110 | **+0** | **110** |
+| open-CFs | 53 | **+1** | **54** |
+
+Deltas by ID: catches **+0** (none — no process deviation charged this cycle, either side). Rules **+0**. Patterns **+0**. Drifts **+0**. CFs **opened: CF-95, CF-96** (2); **closed: CF-95** (1); **net open-CFs +1**.
+
+Running line: **134/39/10/110/53 → 134/39/10/110/54** — catches **134** / rules **39** / patterns **10** / drifts **110** / open-CFs **54**.
+
+**ARITHMETIC SHOWN:** catches 134 + 0 = 134 · rules 39 + 0 = 39 · patterns 10 + 0 = 10 · drifts 110 + 0 = 110 · open-CFs 53 + 2 opened − 1 closed = 54.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **39** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot, so distinct codified rules stand at **38** and are unmoved by this entry's +0. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. **The 54 is carried forward by arithmetic, unverified by enumeration**, and this entry does NOT re-enumerate — the delta-only form follows the nearest same-weight precedent rather than manufacturing a 54-item list that cannot be verified. **The re-enumeration remains unscheduled.**
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-95** — recipe contiguity untaught on the primary surface. **OPENED and CLOSED in this entry** at `570f491`. Net **0** on the axis.
+- **CF-96** — telemetry provenance (probe emissions are not idempotent; `clientVersion` does not identify a canon state). **OPENED**, remediation unscheduled and out of scope. Net **+1**.
+
 ## 2026-07-26 — CF-93 LEG 1 CLOSED ON MERGE (artifact anchor `90898e5`, PR \#60) — the first player-facing change of the CF-93 track and the first client-only one: five display-only additions that name the CF-83 ramp, show the tiebreak, and derive the resolution cause WITHOUT reading `endReason`; **LEG 1 IS A LEG, NOT THE CF — CF-93 STAYS OPEN** on rounds 1–10; visual verification **COMPLETE** at 1280×720 and 390-wide, including the B1 revert observed rather than inferred; Codex 2 rounds / 2 P2 findings both confirmed against source and fixed, ceiling never tripped, **no catch per the CF-67 ruling**; **F1 WAIVED, not verified**, carried as a NAMED WATCH ITEM with its Rule 28 ground recorded; **⚠ THE SUPPLIED RAW TABLE IS 87 ROWS / 9 RUN IDS, NOT 85 / 8** — `run-1` is probe contamination (a non-conforming runId carrying TWO byte-identical round-1 rows) and **excluding it reproduces EVERY master-dev headline figure exactly**, which is itself the corroboration that the exclusion is right; the round × endReason × outcome enumeration is supplied at FULL granularity, the granularity the prior entry recorded as missing; **THE ROUND-11 LEG RESOLVES AS TARGET MISSED** — pooled 8/11 = 72.7%, Wilson [43.4%, 90.3%], and where the prior interval CONTAINED balance-bible.md § 15's ~30% this one **EXCLUDES** it, a change in inferential state rather than merely a larger n, with the pooling licensed by a PRE-REGISTERED selection check that returns Fisher p = 1.0000; **CF-88's PREMISE CONFIRMED BY MEASUREMENT** — 6 of 13 `ramp_ko` combats resolve at EXACTLY tick 500 and the data cannot say which were item kills, by construction; CF-84's semantics observed twice unambiguously; `damageDealt` SUPERSEDED to the event sum, so round-11 values CANNOT be read as opponent HP; **THREE MASTER-DEV CLAIMS REFUTED and TWO SUPPLIED STATISTICS FAILED RECOMPUTATION**; **Rules 38 and 39 NEW**, with Rule 38's own citation-before-codification defect recorded against it; Rule 8 WIDENED (amendment, no ordinal) as PATTERN 10's instance; Catches 128–134 + Drifts 104–110, ENUMERATED not counted per Rule 39 codified in this same entry; THREE candidates HELD for missing artifacts; counter 127/37/10/103/53 → 134/39/10/110/53
 
 Docs-only, insertion-only, `decision-log.md` alone. **ARTIFACT ANCHOR = the merge commit; COUNTER ANCHOR = this entry's own docs commit.** Baseline tip `47f8d51`; governing counter entry decision-log.md 2026-07-25 § "CF-93 ROUND-1 PER-CLASS MATRIX RECORDED (docs-only; CLOSES NOTHING, OPENS NOTHING) …" carrying **127/37/10/103/53**, read from the file this session. **Decision day 2026-07-26**, ruled not assumed. No code, schema, content, corpus, or migration change.
