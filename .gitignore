@@ -24,8 +24,15 @@ scratch/*
 !scratch/cf93-p21/
 !scratch/cf93-p23/
 !scratch/cf93-p25/
+!scratch/cf95-recipe-ladder/
 # cf93-p25 tracks the CDP visual-verification harness SCRIPTS only. Its captured
 # PNGs are deliberately NOT tracked — they are large, regenerable by re-running
 # the harness, and Rule 38 asks for the reproduction path, not the output.
 scratch/cf93-p25/*.png
 scratch/cf93-p25/chrome-profile/
+# cf95-recipe-ladder is the recipe-ladder visual harness; same rule — scripts
+# tracked, captures and the browser profile not. Its driver reuses cf93-p25's
+# cdp.mjs rather than duplicating it, so that directory is a hard dependency.
+scratch/cf95-recipe-ladder/*.png
+scratch/cf95-recipe-ladder/*.json
+scratch/cf95-recipe-ladder/chrome-profile/
