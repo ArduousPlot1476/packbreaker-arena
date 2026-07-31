@@ -85,7 +85,23 @@ const WOODEN_CLUB = defineItem('wooden-club', {
   shape: SHAPE_1x2_V,
   tags: ['weapon'],
   triggers: [
-    { type: 'on_cooldown', cooldownTicks: 60, effects: [{ type: 'damage', amount: 5, target: 'opponent' }] },
+    {
+      type: 'on_cooldown',
+      cooldownTicks: 60,
+      effects: [
+        { type: 'damage', amount: 5, target: 'opponent' },
+        // Commons adjacency rebalance: an echo aura on the slowest common
+        // weapon. trigger_chance_pct is consumed in the GENERIC trigger-fire
+        // path (combat.ts:703, after the effects loop), so it reaches every
+        // trigger type — 14 of the 15 [weapon] items deal damage, incl.
+        // throwing-knife (on_round_start) and vampire-fang (on_hit), not just
+        // the on_cooldown ones. Re-application is a no-op (combat.ts:878-886)
+        // and durationTicks is omitted → -1, full combat (:888), so the aura
+        // applies once at the host's first fire (tick 60) and never stacks.
+        // Rung: Rare rune-pedestal is +20%, Epic master-alchemists-kit +30%.
+        { type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 10, matchTags: ['weapon'] },
+      ],
+    },
   ],
 });
 
@@ -300,8 +316,25 @@ const BANDAGE = defineItem('bandage', {
     {
       type: 'on_low_health',
       thresholdPct: 50,
+      // NOTE: REDUNDANT with the sim's built-in one-shot — on_low_health gates
+      // on TriggerEntry.lowHealthFired (triggers.ts:48-49, :116-117, :141-142),
+      // so this cap can never bind. berserkers-greataxe carries the same
+      // redundant pair. LEFT AS-IS deliberately: removing it would be a diff on
+      // a field this leg froze.
       maxTriggersPerCombat: 1,
-      effects: [{ type: 'heal', amount: 8, target: 'self' }],
+      effects: [
+        { type: 'heal', amount: 8, target: 'self' },
+        // Commons adjacency rebalance: a comeback aura arriving exactly when
+        // the owner is losing. Fires once, post-threshold
+        // (floor((hp*100)/startingHp) < 50, strict — combat.ts:400-401), and
+        // persists to end of combat (durationTicks omitted → -1, :888).
+        // Magnitude is the COMMON rung of the shipped damage-aura ladder:
+        // +1 common (whetstone) · +2 rare (forge-anvil) · +3 epic
+        // (berserkers-greataxe). Conditionality is repaid as TIMING value, not
+        // as magnitude — pricing that discount would need a below-50%
+        // frequency this project cannot currently measure.
+        { type: 'buff_adjacent', stat: 'damage', amount: 1, matchTags: ['weapon'] },
+      ],
     },
   ],
 });

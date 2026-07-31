@@ -137,7 +137,7 @@ Format: `id` Name — shape · tags · cost · trigger summary · *intent*
 **Weapons (6)**
 - `iron-sword` Iron Sword — 1×2 V · `weapon, metal` · 3g · `on_cooldown(50): damage(4, opp)` · *Anchor item. Vanilla baseline. ~10 DPC.*
 - `iron-dagger` Iron Dagger — 1×1 · `weapon, metal` · 3g · `on_cooldown(30): damage(2, opp)` · *Fast and small. Best with on_hit synergies.*
-- `wooden-club` Wooden Club — 1×2 V · `weapon` · 3g · `on_cooldown(60): damage(5, opp)` · *Slow, heavy single hits.*
+- `wooden-club` Wooden Club — 1×2 V · `weapon` · 3g · `on_cooldown(60): damage(5, opp), buff_adjacent(trigger_chance_pct, +10, weapon adjacents only, full combat)` · *Slow, heavy single hits, and an echo aura for the weapons beside it. Commons adjacency rebalance.*
 - `hand-axe` Hand Axe — 1×1 · `weapon, metal` · 3g · `on_cooldown(40): damage(3, opp)` · *Mid-cost, mid-tempo. The most "average" weapon.*
 - `iron-mace` Iron Mace — 2×1 H · `weapon, metal` · 3g · `on_cooldown(50): damage(2, opp), apply_status(stun, 1 stack, opp)` · *Damage is anemic; the stun is the value. Cell-expensive, requires planning.*
 - `throwing-knife` Throwing Knife — 1×1 · `weapon, metal` · 3g · `on_round_start: damage(8, opp)` · *Burst opener. Does nothing after tick 0.*
@@ -162,7 +162,28 @@ Format: `id` Name — shape · tags · cost · trigger summary · *intent*
 **Synergy / utility (3)**
 - `whetstone` Whetstone — 1×1 · `tool, metal` · 3g · `on_adjacent_trigger(matchTags: [weapon]): buff_adjacent(damage, +1, weapon adjacents only, full combat)` · *Tinker-favored. Each adjacent weapon gets +1 dmg. Synergy seed.*
 - `spark-stone` Spark Stone — 1×1 · `tool, fire` · 3g · `on_adjacent_trigger(matchTags: [weapon]): apply_status(burn, 1 stack, opp)` · *Ignites adjacent weapons. Recipe input.*
-- `bandage` Bandage — 1×1 · `consumable` · 3g · `on_low_health: heal(8, self)` (consumed — single use per combat) · *Higher-threshold panic heal than Iron Cap.*
+- `bandage` Bandage — 1×1 · `consumable` · 3g · `on_low_health: heal(8, self), buff_adjacent(damage, +1, weapon adjacents only, full combat)` (single use per combat) · *Higher-threshold panic heal than Iron Cap, plus a comeback aura that arrives exactly when you are losing. Commons adjacency rebalance.*
+
+**⚠ THE BUCKET LABELS ARE ABOUT ROLE, NOT ABOUT ADJACENCY.** Re-derived from the
+registry rather than from these headings, the commons carrying a cross-item
+mechanic (`buff_adjacent` effect **or** `on_adjacent_trigger` trigger) are:
+
+| item | bucket it lives in | mechanic |
+|---|---|---|
+| `mana-potion` | Consumables | `buff_adjacent(cooldown_pct, −15)` |
+| `whetstone` | Synergy / utility | `on_adjacent_trigger` → `buff_adjacent(damage, +1)` |
+| `spark-stone` | Synergy / utility | `on_adjacent_trigger` → `apply_status(burn)` |
+| `wooden-club` | **Weapons** | `buff_adjacent(trigger_chance_pct, +10)` |
+| `bandage` | Synergy / utility | `buff_adjacent(damage, +1)` |
+
+**5 of 20**, spanning **three** functional buckets. The set and the
+"Synergy / utility" heading are NOT the same thing and never were: before the
+rebalance the bucket held `bandage`, which had no cross-item mechanic at all,
+while `mana-potion` — whose own intent line reads "Adjacency catalyst" — sat
+under Consumables. Anyone counting adjacency density must derive it from
+`triggers`/`effects`, not from these headings. Density is otherwise
+UNDOCUMENTED in this file: § 1 budgets power by rarity and sets pick-rate
+guardrails, but states no target for how many items carry cross-item mechanics.
 
 ---
 
