@@ -4,6 +4,147 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-07-31 — SHOP-CARD ADJACENCY MARK SHIPPED ON MERGE (artifact anchor `d8395f8`, PR \#62) — the shop card face now carries a BINARY cross-item-mechanic flag, so adjacency stops being a thing you learn only by opening a popover you had no reason to open; client-only, display-only, **ZERO diff under `packages/sim`, `packages/content`, `content-schemas.ts`**; **CLOSES NOTHING, OPENS NOTHING — counter UNCHANGED at 134/39/10/110/54**; **Codex ONE ROUND, ZERO FINDINGS**, clean on `fad339483d` confirmed from BOTH poll surfaces (empty `/pulls` reviews + issue comment 5145607510, the documented clean-pass signature) so the ceiling was never approached and no meta-audit applies; **THE COLOR WAS FORCED, NOT CHOSEN, AND THAT IS THE REUSABLE FINDING** — THREE tokens in visual-direction.md § 2 share a hex EXACTLY with a rarity token (`accent` == `rarity-rare` `#3B82F6`, `text-secondary` == `rarity-common` `#94A3B8`, `coin-gold` == `rarity-legendary` `#F59E0B`), so emitting one IS emitting a rarity color, and with `life-red` + `arcane-cyan` reserved by that document and `text-muted` measuring 3.30:1 on `--surface`, `--text-primary` at 14.22:1 was the ONLY survivor — the mark is ACHROMATIC by arithmetic, which yields the boundary **RARITY OWNS HUE, ADJACENCY OWNS SHAPE AND POSITION** and makes greyscale survival STRUCTURAL rather than lucky; the predicate needs BOTH limbs and the registry proves it (an effect-only test misses `spark-stone`/`fire-oil`, a trigger-only test misses `mana-potion`/`stamina-tonic`/`berserkers-greataxe`), selecting EXACTLY 10 of 45 pinned BY NAME not by count; **side-band placement REJECTED ON MEASUREMENT** — the bands collapse from 25px to **4px at 2×2**, which is 3 of the 10 target items; the bag-chip leak concern was REAL and is **DISPROVED STRUCTURALLY**, not assumed; **Rule 39 restated by example — 17 assertions, not the 16 a line-grep reports**, because one line carried two occurrences; **NO catches, NO drifts, NO new rules**; ONE pattern candidate recorded **HELD, not minted** — patterns stay at 10; counter 134/39/10/110/54 → 134/39/10/110/54
+
+Client-only, display-only. **ARTIFACT ANCHOR = the merge commit `d8395f8`; COUNTER ANCHOR = this entry's own docs commit.** The two are distinct and are named separately. Governing counter entry: decision-log.md 2026-07-27 § "CF-95 OPENED AND CLOSED ON MERGE (artifact anchor `570f491`, PR \#61) …" carrying **134/39/10/110/54**, read from the file this session. **Decision day 2026-07-31**, the day the merge landed (`merged_at 2026-07-31T17:26:28Z`, read from the GitHub API) and the day it was authorised in master-dev review. No schema, content, corpus, or migration change.
+
+**⚠ THE MERGE SHA AND ITS PARENTS ARE DERIVED FROM THE REPOSITORY, NOT ADOPTED FROM THE REQUESTING PROMPT.** Walked live:
+
+```
+merge commit : d8395f83229bddad6c49dd10176e0e7e7f8e1467
+short        : d8395f8
+subject      : Merge cf95b-shop-adjacency-mark (\#62) — shop-card adjacency mark: one relation, …
+               (the `#` is escaped here per the log's auto-link rule; the commit itself carries it bare)
+parents:
+  bcda5bb  Merge rule38-analytics-query — tracked LEG 1 population query + AFTER capture sheet …
+  fad3394  fix(client): lead the effect clause with the effect, not the target set
+```
+
+`--no-ff`, two branch commits preserved as ancestors, none squashed or rebased; local branch deleted with `-d` (`Deleted branch cf95b-shop-adjacency-mark (was fad3394)`), never `-D`.
+
+### 1 — WHAT SHIPPED
+A **binary** mark on the desktop shop card: *this item has a cross-item mechanic*. One shape, one color, identical on all ten — not a magnitude, not a verdict, not a second rarity channel. It answers the gap the prior survey isolated: `describeItem` already emits correct text naming the spatial condition for 10/10 adjacency items, and that text already renders on the shop card, but only behind an `onClick` toggle (`useItemInfoTrigger.ts:65`) the player has no reason to fire. **The gap was never authoring; it was that the card face never advertised it.**
+
+The stakes are the rarity spread: adjacency is an **epic-tier concept in a commons-heavy opening** — 3 of 20 commons against 3 of 4 epics — so it is least visible in a player's first hours.
+
+### 2 — THE PREDICATE, AND WHY BOTH LIMBS ARE LOAD-BEARING
+`apps/client/src/items/hasAdjacencyMechanic.ts`: qualify on **`some trigger is on_adjacent_trigger`** OR **`some effect is buff_adjacent`**. Neither limb alone suffices, and the shipped registry — not intuition — is what proves it:
+
+| a predicate using only… | silently misses | because |
+|---|---|---|
+| effects | `spark-stone`, `fire-oil` | they REACT to a neighbour but emit `apply_status` at the **opponent** |
+| triggers | `mana-potion`, `stamina-tonic`, `berserkers-greataxe` | they EMIT `buff_adjacent` from a **non-adjacency** host (`on_round_start` / `on_low_health`) |
+
+Selects **exactly 10 of 45**, asserted **BY NAME** rather than by count — a count passes even when membership is wrong in two compensating ways. Each limb carries its own named test so a regression says WHICH broke.
+
+**⚠ THE PREDICATE READS THE CANONICAL ITEM, NOT `def`.** `ShopSlot`'s `ITEMS` comes from `run/content.ts`, whose `adaptItem` **strips `triggers`**. A card wired to `def` type-checks, renders, and silently marks NOTHING — a defect invisible to review and to a green test suite. `ShopSlotAdjacency.test.tsx` exists solely to catch it on the real surface.
+
+### 3 — THE COLOR IS FORCED, AND THIS IS THE REUSABLE FINDING
+This is the part worth carrying forward past this PR: **three palette tokens ARE rarity hexes.**
+
+| token | hex | disqualifier |
+|---|---|---|
+| `accent` | `#3B82F6` | **identical** to `rarity-rare` |
+| `text-secondary` | `#94A3B8` | **identical** to `rarity-common` |
+| `coin-gold` | `#F59E0B` | **identical** to `rarity-legendary` |
+| `life-red` | `#EF4444` | reserved by visual-direction.md — "hearts and damage indicators only" |
+| `arcane-cyan` | `#06B6D4` | reserved — "Mana Potion body fill only", and Mana Potion is one of the ten |
+| `text-muted` | `#64748B` | **3.30:1** on `--surface` — too low for an 8px glyph |
+| **`text-primary`** | **`#F0F4FA`** | **14.22:1** — the only survivor |
+
+Contrast computed this session, not estimated. The consequence generalises beyond this mark: **any future card-face signal that reaches for a chromatic token is reaching for a rarity color unless it checks the hex first.** The resulting boundary — **rarity owns hue; adjacency owns shape and position** — is cleaner than the constraint that was specified, and it makes greyscale survival structural: strip all color and the mark is still the only concave glyph on the card.
+
+### 4 — PLACEMENT, MEASURED NOT ASSUMED
+`RarityFrame`'s **bottom-left**, 3px/3px, diagonally opposite the rarity gem, sized `Math.max(8, round(size * 0.14))` — **the gem's OWN formula, reused rather than re-derived**, so the two corners cannot drift and no second hand-tuned constant enters the file. That constraint is not stylistic: this repo has already paid for a hand-tuned constant that never converged (decision-log.md 2026-07-27 § "CF-95 OPENED AND CLOSED ON MERGE (artifact anchor `570f491`, PR \#61) …", `ROW_HEIGHT` 34 → 30 → 27).
+
+**A side-band placement was REJECTED ON MEASUREMENT.** The bands beside the centred icon frame are 25px at 1×1 but collapse to **(92 − 84) / 2 = 4px at 2×2** — and the 2×2 items are `forge-anvil`, `berserkers-greataxe`, `master-alchemists-kit`, i.e. **3 of the 10 the mark exists to serve, and the three highest-impact ones**. Corner placement is indifferent to footprint; a test pins that a 2×2 receives the same 8px mark as a 1×1.
+
+**SHAPE** is a von Neumann neighbourhood — a centre cell with four ORTHOGONAL arms, depicting the relation itself (sim adjacency is orthogonal edge-sharing, never diagonal). All five rarity gems are CONVEX; this is the only glyph on the card with concave corner notches, cut deep (3.5 of 12 units) to survive the binding 8px render. Asserted against all five gem paths, not eyeballed.
+
+### 5 — VOCABULARY AND GRAMMAR, DISTINGUISHED
+`describeItem` effect clauses now read **`+1 dmg to adjacent weapons`**. Two changes, deliberately kept separate:
+
+**(a) VOCABULARY** — `nearby` → `adjacent`. One relation had three words; the trigger condition already said "adjacent", and "nearby" is the loosest, admitting a diagonal or within-radius reading the rule forbids. It matters most for the three items whose host trigger is NOT `on_adjacent_trigger`, where the effect clause is the ONLY place the spatial condition appears at all.
+
+**(b) GRAMMAR** — the clause leads with the effect and trails the target set. The old order stacked three nouns (`adjacent weapon items`) directly after the trigger's own "adjacent weapon", making a reader parse the phrase twice and decide whether the two sets were the same. **They are, and the sentence never said so** — and three stacked nouns is the worst possible shape for the 92px card inner width. This did NOT reopen the vocabulary ruling: "adjacent" still appears in both clauses; it stopped carrying a redundant head noun.
+
+**The recipe ladder's "edge-to-edge" DELIBERATELY STAYS** — that is BFS connectivity over an input cluster, a different relation from pairwise adjacency. A test asserts it never appears in `describeItem` output.
+
+`cooldown_pct` keeps sign-aware wording (`15% faster cooldown to adjacent items`) because the underlying sign is counterintuitive — a POSITIVE amount LENGTHENS the cooldown — so a bare signed percent would read as its own opposite.
+
+**⚠ ONE RESIDUAL, RECORDED NOT HIDDEN.** `resonance-crystal` still repeats its target set (`+1 dmg to adjacent items, 10% faster cooldown to adjacent items`) because `describeTrigger` composes effect clauses independently and each names its own target. Collapsing a shared target across sibling effects changes that composition contract — a larger change than a grammar fix, and deliberately not smuggled into one.
+
+### 6 — THE BAG-CHIP CONCERN WAS REAL AND IS DISPROVED STRUCTURALLY
+The concern was specific and correct to raise: `adjacencyReveal.ts:122` falls back to `describeEffect`, which is where the changed strings live, and `adjacencyReveal.test.ts` asserts chip labels are **value+unit ONLY, never the rule sentence**. A leak would have broken that contract silently.
+
+It cannot leak, and the reason is structural rather than incidental: `compactLabel`'s `if (effect.type === 'buff_adjacent')` switches over **all three** `BuffableStat` members and **every arm RETURNS**, so control never reaches the fallback for a `buff_adjacent` effect. The fallback serves class-3 only (`apply_status` at the opponent). `adjacencyRevealVocabulary.test.ts` pins this against a LIVE reveal and carries a **non-vacuity guard**, so it cannot pass by producing zero labels — the failure mode that would make the whole check theatre.
+
+### 7 — RULE 39, RESTATED BY EXAMPLE
+The `nearby` → `adjacent` migration touched **17 assertions, not the 16 a line-grep reports**: one line carried two occurrences. Rule 39 says enumerate, never count, and `grep -c` returns LINES. The instance is recorded because it arrived unprompted, in ordinary work, on the very axis the rule names.
+
+The subsequent grammar migration (19 replacements) ran through a script that **asserts a hit count per mapping and REFUSES TO WRITE on a miss**. It aborted once on a real mismatch — an em-dash where the source carried an arrow — and wrote nothing. A bulk edit that cannot half-apply is the shape this codebase should prefer.
+
+### 8 — VERIFICATION
+**Rule 28 falsifiability proven BEFORE the work was trusted**, by ablating the shop wiring and one `describeItem` string:
+
+```
+GATE RED — 12 failures
+  8 × ShopSlotAdjacency          (the wiring regression)
+  3 × describeItem.test.ts       (the strings)
+  1 × adjacencyRevealVocabulary
+```
+
+The negative cases (`does NOT mark iron-sword`) correctly stayed GREEN under ablation — a test that fails in both directions proves nothing. Restored; working tree byte-identical to the commit; **45/45 green**.
+
+Gates, post-merge on `main`: `turbo run typecheck --force` → `Tasks: 10 successful, 10 total`; `turbo run lint --force` → `Tasks: 7 successful, 7 total`; `pnpm -r run test` → **exit 0**:
+
+```
+packages/content  31 passed (31)
+packages/ui-kit   49 passed (49)
+packages/sim     557 passed | 1 skipped (558)
+apps/server      122 passed | 24 skipped (146)
+apps/client      776 passed | 15 skipped (791)
+```
+
+**`packages/sim` is UNCHANGED at 557** — the zero-sim-impact claim measured, not asserted. And `git diff --stat main...HEAD -- packages/sim packages/content content-schemas.ts` returned **EMPTY** before the merge. Scope: **13 files changed, +596 / −23** — recounted live, and NOT the 18 that adding the two commits' file counts would suggest, since the second commit's 5 files are a subset of the first's 13.
+
+### 9 — CODEX: ONE ROUND, ZERO FINDINGS
+Round 1 fired by a fresh TOP-LEVEL `@codex review` comment (never a reply — a reply can spawn a task run) at 2026-07-31T17:14:13Z, answered at 17:17:20Z, ~3 minutes:
+
+```
+Codex Review: Didn't find any major issues. You're on a roll.
+**Reviewed commit:** `fad339483d`
+```
+
+`fad339483d` is the head SHA prefix — the stale-SHA guard passes. **Confirmed from BOTH surfaces**: `/issues/62/comments` carries comment `5145607510`; `/pulls/62/reviews` returns **count 0**. Empty reviews + a clean issue comment IS the documented clean-pass signature, not a missed review, which is why both were polled. **Zero findings, so the 4-finding ceiling was never approached and no meta-audit applies.** No second trigger posted — a second `@codex review` on an answered SHA only burns a round. **NO CATCH** per the CF-67 ruling (and none would apply regardless: there were no findings).
+
+### 10 — HELD CANDIDATE, NOT MINTED
+**"A palette token that shares a hex with a semantic token IS that semantic token."** The shape is structurally generic (it governs every future card-face signal, not just this one), the discipline is low-burden (compare hexes before choosing a token), and the upcoming surface is predictable (mechanism markers, the commons rebalance's own signals). But **this is the FIRST instance**, and the codification gate requires a second across two distinct PRs or an explicit bend. **Recorded as a HELD CANDIDATE with no ordinal.** Held-candidate label space is separate from the codified ordinal space; nothing is renumbered. Whoever mints it inherits this instance and does not re-derive it.
+
+### 11 — NOTHING CLOSED, NOTHING OPENED
+**CF-96 stays OPEN** (telemetry provenance) — untouched here. **CF-93 stays OPEN**, live scope rounds 1–10, LEG 2 still unscoped. **CF-88 stays OPEN**. **CF-86 stays OPEN**. **CF-83, CF-84, CF-87, CF-91, CF-94, CF-95 stay CLOSED**; none is reopened. **Pattern 11 stays HELD, not minted.** The LEG 1 AFTER play did not run, so the round-11 boss disposition stays **HELD** and `tooling/analytics/leg1-population.sql` remains **UNEXECUTED** with its banner intact.
+
+### Counter
+Full close (PR merge). Ordinal walk live from canon, greps run this session with a phantom-higher control on every axis: highest **Catch 134**, **Rule 39**, **Pattern 10**, **Drift 110**, **CF-96** — and `Catch 13[5-9]` → 0, `Catch 1[4-9][0-9]` → 0, `Rule 4[0-9]` → 0, `Drift 11[1-9]` → 0, `Drift 1[2-9][0-9]` → 0, `CF-9[7-9]` → 0, `CF-[1-9][0-9][0-9]` → 0. **`Pattern 1[1-9]` returns 8 hits, up from the 4 the governing entry recorded, and ALL EIGHT are HELD-candidate references or counter riders quoting their own grep — none is a minting**: four are "stays HELD / is NOT minted" rulings and four are the two most recent counter blocks restating the grep result. **The patterns axis stands at 10.**
+
+| axis | baseline | delta | total |
+|---|---|---|---|
+| catches | 134 | **+0** | **134** |
+| rules | 39 | **+0** | **39** |
+| patterns | 10 | **+0** | **10** |
+| drifts | 110 | **+0** | **110** |
+| open-CFs | 54 | **+0** | **54** |
+
+Deltas by ID: catches **+0** (none — Codex returned zero findings, and no process deviation is charged on either side). Rules **+0**. Patterns **+0** (§ 10 records a HELD candidate and expressly mints no ordinal). Drifts **+0**. CFs **opened: none · closed: none** — this ships an improvement inside no CF's scope.
+
+Running line: **134/39/10/110/54 → 134/39/10/110/54** — catches **134** / rules **39** / patterns **10** / drifts **110** / open-CFs **54**.
+
+**ARITHMETIC SHOWN:** catches 134 + 0 = 134 · rules 39 + 0 = 39 · patterns 10 + 0 = 10 · drifts 110 + 0 = 110 · open-CFs 54 + 0 = 54. **The counter is UNCHANGED, and that is the correct outcome, not an omission** — a PR that ships a feature without opening or closing a CF moves no axis.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **39** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot, so distinct codified rules stand at **38**, unmoved by this entry's +0. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. **The 54 is carried forward by arithmetic, unverified by enumeration**, and this entry does NOT re-enumerate. **The re-enumeration remains unscheduled.**
+
+Open-CF touch: **NONE**. No CF opened, none closed, and the remaining backlog is carried unchanged.
+
 ## 2026-07-27 — CF-95 OPENED AND CLOSED ON MERGE (artifact anchor `570f491`, PR \#61) — the desktop recipe ladder: KNOWN / HELD / READY, so recipe contiguity is teachable on the primary surface instead of discoverable only by accident; client-only, display-only, **ZERO diff under `packages/sim`, `packages/content`, `content-schemas.ts`**; **Codex FOUR ROUNDS / 3 P2 findings**, all three on `RecipeLadderPanel.tsx`, **ceiling BENT AT 3 on structural grounds** so the 4-finding meta-audit never triggered, round 4 **CLEAN on `a79055c7`** confirmed from BOTH poll surfaces; **the round-3 finding was PARTLY REFUTED BY MEASUREMENT** — Codex's "forced to scroll" claim was false (grid `scrollHeight 177 === clientHeight 177`, 12/12 rows in viewport) and its 155px derivation mistook the bag grid's BOTTOM COORDINATE (432) for `BagBoard`'s HEIGHT, while what was real is smaller and different: an **11px column overflow painting over `BottomPanel`**, fixed structurally by DELETING the hand-tuned `ROW_HEIGHT` (34 → 30 → 27, never converging) rather than giving it a fourth value; **THE VERIFICATION BLIND SPOT IS THE DURABLE FINDING** — all three findings were already PRESENT in evidence reported as verification and none was caught by it, because a probe that prints a contradiction and exits 0 is a REPORT, not a GATE; **CF-96 OPENED** (telemetry provenance, one mechanism / two symptoms); citation corrected to `concept-brief.md:20`, NOT `:21`; **NO catches, NO drifts, NO new rules**; counter 134/39/10/110/53 → 134/39/10/110/54
 
 Client-only, display-only. **ARTIFACT ANCHOR = the merge commit `570f491`; COUNTER ANCHOR = this entry's own docs commit.** The two are distinct and are named separately. Governing counter entry: decision-log.md 2026-07-26 § "CF-93 LEG 1 CLOSED ON MERGE (artifact anchor `90898e5`, PR \#60) …" carrying **134/39/10/110/53**, read from the file this session. **Decision day 2026-07-27**, the day the merge landed (`merged_at 2026-07-27T18:08:35Z`, read from the GitHub API) and the day this close was ratified in master-dev review. No schema, content, corpus, or migration change.
