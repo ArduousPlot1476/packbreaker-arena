@@ -46,7 +46,7 @@ describe('describeItem — trigger variants (real items)', () => {
 
   it('on_adjacent_trigger with matchTags (whetstone)', () => {
     expect(describeItem(getItem('whetstone' as ItemId))).toEqual([
-      'When an adjacent weapon triggers — adjacent weapon items +1 dmg',
+      'When an adjacent weapon triggers — +1 dmg to adjacent weapons',
     ]);
   });
 
@@ -107,9 +107,9 @@ describe('describeItem — effect variants', () => {
     expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Round start — +2 gold']);
   });
 
-  it('buff_adjacent damage → "adjacent [tags ]items +N dmg" (resonance-crystal, two effects)', () => {
+  it('buff_adjacent damage → "+N dmg to adjacent [tags]" (resonance-crystal, two effects)', () => {
     expect(describeItem(getItem('resonance-crystal' as ItemId))).toEqual([
-      'When an adjacent item triggers — adjacent items +1 dmg, adjacent items fire 10% faster',
+      'When an adjacent item triggers — +1 dmg to adjacent items, 10% faster cooldown to adjacent items',
     ]);
   });
 
@@ -126,17 +126,17 @@ describe('describeItem — effect variants', () => {
 describe('describeItem — buff_adjacent cooldown_pct sign (counterintuitive)', () => {
   it('NEGATIVE amount = faster (all shipped items; mana-potion −15)', () => {
     expect(describeItem(getItem('mana-potion' as ItemId))).toEqual([
-      'Round start — adjacent items fire 15% faster',
+      'Round start — 15% faster cooldown to adjacent items',
     ]);
     expect(
       describeEffect({ type: 'buff_adjacent', stat: 'cooldown_pct', amount: -25 }),
-    ).toBe('adjacent items fire 25% faster');
+    ).toBe('25% faster cooldown to adjacent items');
   });
 
   it('POSITIVE amount = slower (synthetic — no shipped item does this)', () => {
     expect(
       describeEffect({ type: 'buff_adjacent', stat: 'cooldown_pct', amount: 20 }),
-    ).toBe('adjacent items fire 20% slower');
+    ).toBe('20% slower cooldown to adjacent items');
   });
 
   it('zero amount is omitted', () => {
@@ -150,21 +150,21 @@ describe('describeItem — trigger_chance_pct echo copy (CF 58)', () => {
   it('effect-level: trigger_chance_pct buff renders its chance copy', () => {
     expect(
       describeEffect({ type: 'buff_adjacent', stat: 'trigger_chance_pct', amount: 30 }),
-    ).toBe('adjacent items +30% trigger chance');
+    ).toBe('+30% trigger chance to adjacent items');
   });
 
   it('Master Alchemist’s Kit keeps its poison line AND gains the proc-buff line', () => {
     const lines = describeItem(getItem('master-alchemists-kit' as ItemId));
     expect(lines).toEqual([
       'Round start — poison 3 to enemy',
-      'When an adjacent consumable/gem triggers — adjacent consumable/gem items +30% trigger chance',
+      'When an adjacent consumable/gem triggers — +30% trigger chance to adjacent consumables/gems',
     ]);
   });
 
   it('Rune Pedestal now describes its buff (no longer a structural tag fallback)', () => {
     const lines = describeItem(getItem('rune-pedestal' as ItemId));
     expect(lines).toEqual([
-      'When an adjacent gem/consumable triggers — adjacent gem/consumable items +20% trigger chance',
+      'When an adjacent gem/consumable triggers — +20% trigger chance to adjacent gems/consumables',
     ]);
   });
 });
@@ -195,7 +195,7 @@ describe('describeItem — dual-trigger epic (berserkers-greataxe)', () => {
   it('on_cooldown damage + on_low_health adjacency buff', () => {
     expect(describeItem(getItem('berserkers-greataxe' as ItemId))).toEqual([
       'Every 5s — 14 dmg to enemy',
-      'Below 50% HP — adjacent items +3 dmg (once)',
+      'Below 50% HP — +3 dmg to adjacent items (once)',
     ]);
   });
 });
@@ -225,7 +225,7 @@ describe('describeItem — coverage: all 45 shipped items produce non-empty outp
   // content/tag change that alters any of these is caught.
   it('Rune Pedestal renders its echo buff (CF 58); the 4 gold items render real income copy (CF 59)', () => {
     expect(describeItem(getItem('rune-pedestal' as ItemId))).toEqual([
-      'When an adjacent gem/consumable triggers — adjacent gem/consumable items +20% trigger chance',
+      'When an adjacent gem/consumable triggers — +20% trigger chance to adjacent gems/consumables',
     ]);
     expect(describeItem(getItem('lucky-penny' as ItemId))).toEqual(['Round start — +2 gold']);
     expect(describeItem(getItem('copper-coin' as ItemId))).toEqual(['+1 gold per round']);

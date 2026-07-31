@@ -59,8 +59,8 @@ describe('adjacencyReveal — chip labels never carry the rule sentence', () => 
 
   it('no label contains the describeItem rule wording, old or new', () => {
     for (const label of allLabels()) {
-      expect(label).not.toContain('adjacent items');
-      expect(label).not.toContain('adjacent weapon items');
+      expect(label).not.toContain('to adjacent');
+      expect(label).not.toContain('adjacent weapons');
       expect(label).not.toContain('nearby');
       // and stays value+unit shaped
       expect(label.length).toBeLessThan(32);
@@ -69,8 +69,9 @@ describe('adjacencyReveal — chip labels never carry the rule sentence', () => 
 
   it('buff_adjacent labels come from compactLabel, not describeEffect', () => {
     // compactLabel's own wording for a damage buff is "+N dmg" — describeEffect
-    // would have produced "adjacent weapon items +N dmg". Asserting the SHORT
-    // form is what distinguishes the two code paths.
+    // would have produced "+N dmg to adjacent weapons". The two now SHARE a
+    // prefix, so asserting the short form must be anchored at both ends: a
+    // `startsWith` check would pass on the rule sentence too.
     const labels = allLabels();
     expect(labels.some((l) => /^[+-]?\d+ dmg$/.test(l))).toBe(true);
   });
@@ -81,7 +82,7 @@ describe('describeItem vocabulary — the popover DOES say adjacent', () => {
     const { describeItem } = await import('../items/describeItem');
     const lines = describeItem(getItem('whetstone' as ItemId));
     expect(lines).toEqual([
-      'When an adjacent weapon triggers — adjacent weapon items +1 dmg',
+      'When an adjacent weapon triggers — +1 dmg to adjacent weapons',
     ]);
     // The trigger condition already said "adjacent"; the effect clause now
     // agrees instead of saying "nearby".

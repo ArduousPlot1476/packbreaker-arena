@@ -193,7 +193,7 @@ describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above,
       [bagItem('sword', 'iron-sword', 0, 0), bagItem('whet', 'whetstone', 1, 0)],
       'Whetstone',
     );
-    expect(countOf(text, 'When an adjacent weapon triggers — adjacent weapon items +1 dmg')).toBe(1);
+    expect(countOf(text, 'When an adjacent weapon triggers — +1 dmg to adjacent weapons')).toBe(1);
     expect(text).toContain('4 → 5');
   });
 
@@ -202,7 +202,7 @@ describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above,
       [bagItem('whet', 'whetstone', 0, 0), bagItem('fang', 'vampire-fang', 1, 0)],
       'Whetstone',
     );
-    expect(countOf(text, 'When an adjacent weapon triggers — adjacent weapon items +1 dmg')).toBe(1);
+    expect(countOf(text, 'When an adjacent weapon triggers — +1 dmg to adjacent weapons')).toBe(1);
     expect(text).toContain('No adjacent items affected');
   });
 
@@ -211,7 +211,7 @@ describe('BagBoard — ADJACENCY restates no rule text (fix round 2: rule above,
       [bagItem('axe', 'berserkers-greataxe', 0, 0), bagItem('sword', 'iron-sword', 2, 0)],
       "Berserker's Greataxe",
     );
-    expect(countOf(text, 'Below 50% HP — adjacent items +3 dmg')).toBe(1);
+    expect(countOf(text, 'Below 50% HP — +3 dmg to adjacent items')).toBe(1);
     expect(screen.getByTestId('adjacency-qualifier').textContent).toBe('if triggered');
     expect(screen.getByTestId('adjacency-row-class2').textContent).toContain('Iron Sword');
   });

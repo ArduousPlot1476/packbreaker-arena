@@ -36,13 +36,13 @@ describe('ItemInfoPopover', () => {
     render(<Harness itemId="rune-pedestal" />);
     const popover = screen.getByTestId('item-info-popover');
     expect(popover).toHaveTextContent('Rune Pedestal');
-    expect(popover).toHaveTextContent('adjacent gem/consumable items +20% trigger chance');
+    expect(popover).toHaveTextContent('+20% trigger chance to adjacent gems/consumables');
   });
 
   it('keeps real effects AND renders the proc-buff line (Master Alchemist’s Kit, CF 58)', () => {
     render(<Harness itemId="master-alchemists-kit" />);
     const popover = screen.getByTestId('item-info-popover');
     expect(popover).toHaveTextContent('poison 3 to enemy');
-    expect(popover).toHaveTextContent('adjacent consumable/gem items +30% trigger chance');
+    expect(popover).toHaveTextContent('+30% trigger chance to adjacent consumables/gems');
   });
 });
