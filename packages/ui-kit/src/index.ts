@@ -6,6 +6,7 @@
 
 export { RarityFrame } from './RarityFrame';
 export { RarityGem, RARITY_GEM_SHAPE } from './RarityGem';
+export { AdjacencyMark } from './AdjacencyMark';
 export { ItemIcon } from './ItemIcon';
 export { Popover, type PopoverProps } from './Popover';
 export { RARITY, type RarityKey, type RarityDef } from './rarity';

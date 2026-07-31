@@ -15,6 +15,9 @@ import { useRef } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { ItemIcon, RarityFrame } from '@packbreaker/ui-kit';
 import { RARITY } from '@packbreaker/ui-kit';
+import { ITEMS as CONTENT_ITEMS } from '@packbreaker/content';
+import type { Item } from '@packbreaker/content';
+import { hasAdjacencyMechanic } from '../items/hasAdjacencyMechanic';
 import { ITEMS } from '../run/content';
 import { ItemInfoPopover } from '../items/ItemInfoPopover';
 import { INSPECT_TRIGGER_STYLE, useItemInfoTrigger } from '../items/useItemInfoTrigger';
@@ -85,11 +88,19 @@ export function ShopSlot({
   const def = ITEMS[slot.itemId];
   const r = RARITY[def.rarity];
   const Icon = ICONS[def.id] ?? ICONS['copper-coin'];
+  // CF-95b: the adjacency flag is read from the CANONICAL item, not `def` —
+  // run/content.ts adaptItem strips `triggers`, so `def` cannot answer this
+  // and would silently mark nothing. Undefined-safe like ItemInfoPopover:154:
+  // every shipped id resolves, but a shop slot must never throw on lookup.
+  const canonical: Item | undefined = (
+    CONTENT_ITEMS as Readonly<Record<string, Item | undefined>>
+  )[slot.itemId];
+  const adjacency = canonical ? hasAdjacencyMechanic(canonical) : false;
 
   const cardInner = (
     <>
       <div className="flex items-center justify-center mb-2">
-        <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={42}>
+        <RarityFrame rarity={def.rarity} w={def.w} h={def.h} size={42} adjacency={adjacency}>
           <ItemIcon>
             <Icon />
           </ItemIcon>

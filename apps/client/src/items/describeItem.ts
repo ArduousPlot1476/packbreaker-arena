@@ -75,18 +75,45 @@ function targetWord(target: TargetSelector): string {
   }
 }
 
+// CF-95b VOCABULARY: these lines say "adjacent", not "nearby". One spatial
+// relation had acquired three words — the trigger condition already said
+// "adjacent" (triggerCondition below), these effect clauses said "nearby", and
+// "nearby" is the loosest of the three: it admits a diagonal or within-radius
+// reading that the rule does not allow (sim adjacency is orthogonal
+// edge-sharing). It matters most for mana-potion / stamina-tonic /
+// berserkers-greataxe, whose host trigger is NOT on_adjacent_trigger, so the
+// effect clause is the ONLY place the spatial condition appears at all.
+//
+// The recipe ladder's "Inputs must sit edge-to-edge" is deliberately NOT
+// unified into this: that is BFS connectivity over a whole input cluster, a
+// different relation from the pairwise adjacency described here.
+//
+// GRAMMAR (same leg): the clause leads with the EFFECT and trails the target
+// set — "+1 dmg to adjacent weapons", not "adjacent weapon items +1 dmg". The
+// old order stacked three nouns ("adjacent weapon items") directly after the
+// trigger's own "adjacent weapon", so a reader parsed the phrase twice and had
+// to decide whether the two sets were the same. They are. Leading with the
+// value says what changes first, and the trailing "to adjacent …" names the
+// set once, in the same word the trigger condition uses. This is a grammar
+// change, not a vocabulary one — "adjacent" still appears in both clauses; it
+// just stops carrying a redundant head noun.
 function describeBuffAdjacent(
   effect: Extract<Effect, { type: 'buff_adjacent' }>,
 ): string | null {
-  const tagPart =
+  // The tag BECOMES the noun ("adjacent weapons") instead of modifying one
+  // ("adjacent weapon items"). Untagged buffs keep the generic head noun.
+  // Only weapon / gem / consumable appear in shipped matchTags, all of which
+  // pluralize regularly; a future irregular tag would want a lookup here
+  // rather than the naive +s.
+  const targetNoun =
     effect.matchTags && effect.matchTags.length > 0
-      ? `${effect.matchTags.join('/')} `
-      : '';
+      ? effect.matchTags.map((tag) => `${tag}s`).join('/')
+      : 'items';
   let line: string | null;
   const stat: BuffableStat = effect.stat;
   switch (stat) {
     case 'damage':
-      line = `nearby ${tagPart}items +${effect.amount} dmg`;
+      line = `+${effect.amount} dmg to adjacent ${targetNoun}`;
       break;
     case 'cooldown_pct': {
       if (effect.amount === 0) {
@@ -94,15 +121,18 @@ function describeBuffAdjacent(
         break;
       }
       // Sign-aware: negative = faster (all shipped items), positive = slower.
+      // The direction is kept in the copy because the underlying sign is
+      // counterintuitive (a POSITIVE amount lengthens the cooldown), so
+      // rendering a bare signed percent would read as its own opposite.
       const pct = Math.abs(effect.amount);
       const dir = effect.amount < 0 ? 'faster' : 'slower';
-      line = `nearby ${tagPart}items fire ${pct}% ${dir}`;
+      line = `${pct}% ${dir} cooldown to adjacent ${targetNoun}`;
       break;
     }
     case 'trigger_chance_pct':
       // CF 58: real echo buff — a % chance the adjacent item's trigger effects
       // resolve a second time. Composed like the other buff_adjacent cases.
-      line = `nearby ${tagPart}items +${effect.amount}% trigger chance`;
+      line = `+${effect.amount}% trigger chance to adjacent ${targetNoun}`;
       break;
     default:
       return assertNever(stat);
