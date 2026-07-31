@@ -75,6 +75,18 @@ function targetWord(target: TargetSelector): string {
   }
 }
 
+// CF-95b VOCABULARY: these lines say "adjacent", not "nearby". One spatial
+// relation had acquired three words — the trigger condition already said
+// "adjacent" (triggerCondition below), these effect clauses said "nearby", and
+// "nearby" is the loosest of the three: it admits a diagonal or within-radius
+// reading that the rule does not allow (sim adjacency is orthogonal
+// edge-sharing). It matters most for mana-potion / stamina-tonic /
+// berserkers-greataxe, whose host trigger is NOT on_adjacent_trigger, so the
+// effect clause is the ONLY place the spatial condition appears at all.
+//
+// The recipe ladder's "Inputs must sit edge-to-edge" is deliberately NOT
+// unified into this: that is BFS connectivity over a whole input cluster, a
+// different relation from the pairwise adjacency described here.
 function describeBuffAdjacent(
   effect: Extract<Effect, { type: 'buff_adjacent' }>,
 ): string | null {
@@ -86,7 +98,7 @@ function describeBuffAdjacent(
   const stat: BuffableStat = effect.stat;
   switch (stat) {
     case 'damage':
-      line = `nearby ${tagPart}items +${effect.amount} dmg`;
+      line = `adjacent ${tagPart}items +${effect.amount} dmg`;
       break;
     case 'cooldown_pct': {
       if (effect.amount === 0) {
@@ -96,13 +108,13 @@ function describeBuffAdjacent(
       // Sign-aware: negative = faster (all shipped items), positive = slower.
       const pct = Math.abs(effect.amount);
       const dir = effect.amount < 0 ? 'faster' : 'slower';
-      line = `nearby ${tagPart}items fire ${pct}% ${dir}`;
+      line = `adjacent ${tagPart}items fire ${pct}% ${dir}`;
       break;
     }
     case 'trigger_chance_pct':
       // CF 58: real echo buff — a % chance the adjacent item's trigger effects
       // resolve a second time. Composed like the other buff_adjacent cases.
-      line = `nearby ${tagPart}items +${effect.amount}% trigger chance`;
+      line = `adjacent ${tagPart}items +${effect.amount}% trigger chance`;
       break;
     default:
       return assertNever(stat);
