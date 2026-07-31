@@ -6,7 +6,7 @@
 // passes even when the membership is wrong in two compensating ways.
 
 import { describe, expect, it } from 'vitest';
-import { ITEMS } from '@packbreaker/content';
+import { ITEMS, RARITY_POOL_WEIGHT } from '@packbreaker/content';
 import type { Item, ItemId } from '@packbreaker/content';
 import { hasAdjacencyMechanic } from './hasAdjacencyMechanic';
 
@@ -92,15 +92,42 @@ describe('hasAdjacencyMechanic — rarity spread (the reason the mark exists)', 
     expect(byRarity).toEqual({ common: 5, uncommon: 2, rare: 2, epic: 3 });
   });
 
-  it('the shop-encounter rate follows from the count, not from vibes', () => {
+  it('the shop-encounter rate is WEIGHTED, per class — a uniform 5/20 is a number nobody experiences', () => {
+    // Codex round 1 (P2), confirmed: `generateShop` does not draw uniformly.
+    // buildPool applies +50% weight to own-affinity items and −25% to
+    // other-class ones (shop.ts:35-68, balance-bible.md § 14), and `whetstone`
+    // — the ONLY common carrying a classAffinity — is itself an adjacency item.
+    // So the affinity rule biases the adjacency rate directly, in opposite
+    // directions per class. A uniform 5/20 splits the difference and matches
+    // neither, and would stay green if the affinity weighting changed.
     const commons = Object.values(ITEMS as Readonly<Record<string, Item>>).filter(
       (i) => i.rarity === 'common',
     );
-    const withAdj = commons.filter(hasAdjacencyMechanic).length;
     expect(commons).toHaveLength(20);
-    expect(withAdj).toBe(5);
-    // Rounds 1–3 are gated to commons, 5 slots drawn with replacement.
-    const pAtLeastOne = 1 - Math.pow((commons.length - withAdj) / commons.length, 5);
-    expect(pAtLeastOne).toBeCloseTo(0.7627, 4);
+    expect(commons.filter(hasAdjacencyMechanic)).toHaveLength(5);
+
+    const rate = (classId: string): number => {
+      const weights = commons.map((it) => {
+        const base = RARITY_POOL_WEIGHT.common;
+        const w =
+          it.classAffinity === classId
+            ? Math.floor((base * 150) / 100)
+            : it.classAffinity !== null
+              ? Math.floor((base * 75) / 100)
+              : base;
+        return { w, adj: hasAdjacencyMechanic(it) };
+      });
+      const total = weights.reduce((s, e) => s + e.w, 0);
+      const pSlot = weights.filter((e) => e.adj).reduce((s, e) => s + e.w, 0) / total;
+      return 1 - Math.pow(1 - pSlot, 5); // 5 slots, drawn with replacement
+    };
+
+    // Rounds 1–3 are gated to commons (RARITY_GATE_BY_ROUND), so the whole
+    // pool is these 20 and the class split is the only asymmetry.
+    expect(rate('tinker')).toBeCloseTo(0.7903, 4);
+    expect(rate('marauder')).toBeCloseTo(0.7473, 4);
+    // and both sit above the pre-rebalance rate, which is the point of the leg
+    expect(rate('tinker')).toBeGreaterThan(0.556);
+    expect(rate('marauder')).toBeGreaterThan(0.556);
   });
 });
