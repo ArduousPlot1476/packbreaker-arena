@@ -4,6 +4,175 @@ Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or so
 
 ---
 
+## 2026-08-01 — COMMONS ADJACENCY REBALANCE SHIPPED ON MERGE (artifact anchor `01da2f8`, PR \#63) — two `buff_adjacent` auras take commons **3/20 → 5/20**, so adjacency stops being an epic-tier concept in the rounds that teach the game; **CF-97 OPENED** (broadly-scoped clauses advertise relationships the sim cannot perform); **THE SHOP RATE IS PER CLASS AND THERE WAS NEVER A SINGLE NUMBER** — tinker 60.78% → **79.03%**, marauder 52.75% → **74.73%**, because `whetstone` is the ONLY common carrying a `classAffinity` and is ITSELF an adjacency item, so the ±50/−25 pool weighting biases the adjacency rate specifically and in OPPOSITE directions per class (the 76.3% and 83% figures this leg was scoped around are both artifacts — 83% assumed three clauses that all did something, 76.3% assumed a uniform draw); **TWO OF THE THREE RULED CLAUSES WERE DROPPED ON DERIVATION, NOT SHIPPED WEAKER** — `hand-axe` because `whetstone` prices a +1 `[weapon]` damage aura at one FULL common budget and `hand-axe` already spends its own (dpc 9, above `iron-sword`'s 8 at the same 3g), and `leather-vest` because it is PROVABLY INERT: `cooldown_pct` has exactly ONE consumer in the sim and of 8 `[armor]` items exactly one has an `on_cooldown` trigger — itself — which `buff_adjacent` never targets; **THE PRINCIPLE, worth more than either clause: A TAG-SCOPED CLAUSE'S VALUE IS THE COUNT OF TAGGED ITEMS THAT *CONSUME* THE STAT, NOT THE COUNT OF TAGGED ITEMS**; **THE MAGNITUDE LADDER now reads Common +1 · Rare +2 · Epic +3** with conditionality repaid as TIMING, not magnitude, so the next damage aura reads its rung off this line; **THE ATTRIBUTABILITY SANCTION IS PROVEN, NOT ASSERTED** — 82 RED / 142 GREEN before regenerating, direction 1 clean at ZERO red-without-a-changed-item, direction 2's 72 green split (a) 13 host-never-fired / (b) 59 fired-into-nothing / (c) **0**, regeneration then touching EXACTLY the 82-fixture red set verified element-wise, and a byte-identical double-write across 231 files; **THE GATE RESOLVED ITS OWN FALSE POSITIVES** — two bucket-(c) candidates both proved artifacts of a coarse query that credited PRESENT as ADJACENT and matched `on_low_health` on either side; **TRAJECTORY CHANGE NAMED NOT ABSORBED** — 80 of 82 are terminal-line-only, `007-greedy-1007` and `017-greedy-1017` moved action streams because those seeds survived a round longer, and Codex's "the precedent preserves every action byte" claim is REFUTED by decision-log.md 2026-07-19 § "CF-64 CLOSED …" where a ratified regeneration was trajectory-wide across 41 fixtures; **Codex THREE ROUNDS / FIVE findings, ceiling TRIPPED at 4 → a meta-audit ran INSTEAD of a fourth patch** and returned the reusable half: reactive hosts are STRUCTURALLY IMMUNE to the onset gap, which evaporated 8 of my own 10 first-pass flags; **NO catches, NO drifts, NO new rules, NO new patterns**; counter 134/39/10/110/54 → 134/39/10/110/55
+
+Content + client, display-and-balance. **ARTIFACT ANCHOR = the merge commit `01da2f8`; COUNTER ANCHOR = this entry's own docs commit.** Governing counter entry: decision-log.md 2026-07-31 § "SHOP-CARD ADJACENCY MARK SHIPPED ON MERGE (artifact anchor `d8395f8`, PR \#62) …" carrying **134/39/10/110/54**, read from the file this session. **Decision day 2026-08-01**, the day the merge landed (`merged_at 2026-08-01T00:25:30Z`, read from the GitHub API); the ratification was typed in the same session, which was still 2026-07-31 in the author's local zone — the UTC merge date governs, per the precedent set at 2026-07-31 § "SHOP-CARD ADJACENCY MARK SHIPPED …". No schema or migration change; `check-schemas-sync` OK (`content-schemas.ts` and `packages/content/src/schemas.ts` byte-identical).
+
+**⚠ THE MERGE SHA AND ITS PARENTS ARE DERIVED FROM THE REPOSITORY, NOT ADOPTED FROM THE REQUESTING PROMPT.** Walked live:
+
+```
+merge commit : 01da2f88a9cc7cb541b0a4c35ecd4435df8aefd7
+short        : 01da2f8
+subject      : Merge commons-adjacency-rebalance (\#63) — commons adjacency rebalance: 3/20 to 5/20, …
+               (the `#` is escaped here per the log's auto-link rule; the commit itself carries it bare)
+parents:
+  3ca53a9  docs(decision-log): SHOP-CARD ADJACENCY MARK SHIPPED ON MERGE (d8395f8, PR \#62) …
+  99b0439  fix(client): weight the BEFORE baseline too — there was never one pre-rebalance number
+```
+
+`--no-ff`, three branch commits preserved as ancestors (`06c959c` → `2ed6e0a` → `99b0439`), none squashed or rebased; local branch deleted with `-d` (`Deleted branch commons-adjacency-rebalance (was 99b0439)`), never `-D`.
+
+### 1 — WHAT SHIPPED
+Two clauses, **effect field only**:
+
+| item | host | clause | live / eligible |
+|---|---|---|---|
+| `wooden-club` | `on_cooldown(60)` | `buff_adjacent(trigger_chance_pct, +10, [weapon])` | **13 / 14** |
+| `bandage` | `on_low_health(50)` | `buff_adjacent(damage, +1, [weapon])` | **13 / 15** |
+
+Commons **3/20 → 5/20**. Rounds 1–3 are gated to commons (`RARITY_GATE_BY_ROUND`), so this is exactly the window where the mechanic was least visible: it was an **epic-tier concept in a commons-heavy opening**, 3 of 20 commons against 3 of 4 epics.
+
+### 2 — THE SHOP RATE IS PER CLASS, AND BOTH SCOPING FIGURES WERE ARTIFACTS
+| class | before | after |
+|---|---|---|
+| tinker | 60.78% | **79.03%** |
+| marauder | 52.75% | **74.73%** |
+
+`generateShop` does not draw uniformly: `buildPool` applies +50% own-affinity and −25% other-class weighting (`packages/sim/src/run/shop.ts:35-68`, the balance-bible § 14 three-tier model). That would be immaterial here but for one coincidence that makes it load-bearing — **`whetstone` is the only common carrying a `classAffinity` AND is itself one of the five adjacency commons**, so the affinity rule biases the *adjacency* rate specifically, upward for tinker and downward for marauder.
+
+Two figures this leg was scoped around are therefore both wrong, for different reasons, and both are recorded rather than quietly replaced. **83%** assumed SIX commons — three clauses that all did something; two did not survive derivation. **76.3%** assumed a uniform draw; it sits between the two real rates and is a number **no player experiences**. Caught by Codex round 1 and round 2 respectively (§ 8).
+
+### 3 — TWO CLAUSES DROPPED ON DERIVATION
+**`hand-axe` — ~2× the commons budget, with no in-scope lever.** `whetstone` prices a `+1 [weapon]` damage aura at one FULL common budget: it is a 3g common whose ENTIRE item is that clause, base dpc 0. `hand-axe` already spends its budget on `damage(3)` — dpc 9, above `iron-sword`'s 8 at the same cost. Adding whetstone's whole clause on top lands ~2.0 against § 1's "exceed by ≥30% → nerf candidate". Every fix is a cost change or a base nerf, both different sanctions.
+
+**`leather-vest` — PROVABLY INERT, not merely weak.** `cooldown_pct` has exactly ONE consumer in the sim (`packages/sim/src/combat.ts:431`, inside the `on_cooldown` branch). Of the **8 `[armor]` items**, exactly **one** has an `on_cooldown` trigger — `leather-vest` itself — and `buff_adjacent` never targets self. At § 1's own 12s window it moves **zero fires**: `applyPct(60,−10) = 54`, and `floor(120/60) == floor(120/54) == 2`. Shipping it would have put a card-face mark and a `describeItem` line on an effect the sim never performs — the CF-57 `add_gold` failure class, **one leg after shipping the mark that makes it visible**.
+
+**THE PRINCIPLE:** *a tag-scoped clause's value is the count of tagged items that **CONSUME** the stat, not the count of tagged items.* `[armor]` is 8 items and **1** `cooldown_pct` consumer; `[weapon]` is 15 items and **13**.
+
+### 4 — THE MAGNITUDE LADDER, AND WHY `bandage` IS +1
+**Common +1** (`whetstone`, `bandage`) · **Rare +2** (`forge-anvil`) · **Epic +3** (`berserkers-greataxe`). Conditionality is repaid as **TIMING** value, not magnitude — the ladder is not sorted by conditionality, since whetstone's +1 and forge-anvil's +2 are both unconditional, so the rung difference is magnitude alone.
+
+**`bandage` at +2 was rejected, and the sharpest reason is not budget arithmetic:** pricing a conditional discount requires a below-50%-HP frequency **this project cannot currently measure**. `tooling/analytics/leg1-population.sql` is UNEXECUTED with its banner intact, because the LEG 1 AFTER play never ran. +1 requires no such assumption.
+
+**A PREMISE WAS ALSO CORRECTED.** The task stated bandage is "zero-dpc, so the clause is its entire combat contribution". Zero-*dpc* is true; the conclusion is not — balance-bible.md § 1 converts explicitly, *"1 HP healed ≈ 1 HP of damage prevented ≈ 1 unit of damage dealt"*, so `bandage`'s `heal(8)` is **~8 damage-equivalent already spent** against a ~6 common budget. Its peer `iron-cap` heals **10** at the same 3g, same host, same 50% threshold. Bandage had headroom, not a full clause of it.
+
+### 5 — THE ATTRIBUTABILITY SANCTION, PROVEN
+The re-baseline was bought by the effect-only constraint and is earned only by this gate. Corpus run **BEFORE** regenerating: **82 RED / 142 GREEN** of 224.
+
+```
+DIRECTION 1  RED with no changed item placed          : 0    (clean)
+DIRECTION 2  GREEN with a changed item placed         : 72
+   (a) host never fired (threshold / cooldown unmet)  : 13
+   (b) fired into nothing — no adjacent [weapon]      : 59
+   (c) adjacent [weapon] AND host fired, still green  : 0    (the halt condition)
+```
+
+Regeneration then touched **exactly** the red set — 82 files modified, set equality with the 82 RED fixtures verified **element-wise**, which is a third independent confirmation of attribution. **Byte-identical double-write**: two consecutive regenerations, all **231** tracked files under `fixtures/runs` SHA-256 identical.
+
+**FROZEN and proven untouched registry-wide:** `rarity`, `cost`, `classAffinity`, `shape`, `passiveStats`, id set (45 → 45, element-wise identical). `cost` and `artId` are DERIVED by `defineItem` from `rarity` (`packages/content/src/items.ts:45`), so freezing rarity freezes them. This matters because `buy_item` records a **`slotIndex`, not an item id** (`packages/sim/src/run/actions.ts:38`) and shop weight reads `rarity`/`classAffinity` — drift there re-rolls what every recorded purchase resolves to and forfeits the sanction.
+
+### 6 — THE GATE RESOLVED ITS OWN FALSE POSITIVES (the reusable half)
+Two bucket-(c) candidates surfaced from a coarse first pass and **BOTH proved artifacts of the query, not of the change**. The coarse pass credited **PRESENT** as **ADJACENT**, and matched `on_low_health` on **either side**:
+
+- `013-greedy-1013` r3 — bandage IS beside `hand-axe`, but the only `on_low_health` fire in that combat was **player-side at tick 240**; **zero ghost-side**, so the ghost's bandage never crossed 50%.
+- `134-hoarder-1134` r3 — `wooden-club`'s neighbours are `bandage` and `copper-coin`, **no adjacent weapon at all**; the pair flagged was `bandage~wooden-club`, naming the club as the NEIGHBOUR.
+
+The precise pass filters by side and by item. **A containment query is not a gate until it distinguishes the thing present from the thing that acted.**
+
+### 7 — TRAJECTORY CHANGE, NAMED NOT ABSORBED
+**80 of 82 regenerated fixtures are terminal-line-only** (action streams byte-identical). Exactly **two** moved their action stream, both because the aura let those seeds survive a round LONGER — direction uniform-longer, never shorter; a mixed set would have been a real finding:
+
+```
+007-greedy-1007   58 -> 60 action lines    9 -> 10 combats
+017-greedy-1017   58 -> 60 action lines   10 -> 11 combats   (reaches the boss round)
+```
+
+Codex's claim that the documented precedent "preserves every action byte" is **REFUTED** by decision-log.md 2026-07-19 § "CF-64 CLOSED …", whose ratified regeneration is recorded as *"trajectory-wide, not terminal-only: changed hunks span the action stream (`buy_item`, `advance_phase`) AND the `perRoundCombatEvents` result line"* across **41** fixtures. The "zero trajectory change" phrasing elsewhere in canon is a NARROWER rule gating hand-re-baseline eligibility, not a prohibition on trajectory change. Codex's remedy was also unavailable: there is no terminal-only regeneration mode, and hand-freezing actions would encode a run the strategies would never produce for that seed — fabrication, not preservation.
+
+**RULING RATIONALE, recorded because the sanction was ratified against an implicitly terminal-only picture and 2 fixtures broke it:** attributability is the ratified axis, and two seeds surviving a round longer IS the buff working. A +1 `[weapon]` aura that changed no survival outcome anywhere in 224 fixtures would be evidence of INERTNESS — the exact failure that dropped `hand-axe` and `leather-vest`.
+
+**RATIFICATION ORDERING.** `packages/sim/test/fixtures/runs/README.md` requires a decision-log ratification before regeneration. The sanction was ratified in-prompt; **canon carries it HERE**. Entry-follows-merge matches the CF-83 and CF-64 precedents.
+
+### 8 — CODEX: THREE ROUNDS, FIVE FINDINGS, CEILING TRIPPED AT 4
+| round | SHA | finding | disposition |
+|---|---|---|---|
+| 1 | `06c959c` | **P1** fixture action streams changed | observation CONFIRMED, precedent claim REFUTED, **ruled covered** (§ 7) |
+| 1 | `06c959c` | **P2** uniform 5/20 encounter rate | CONFIRMED, reproduced to the digit, **fixed** `2ed6e0a` |
+| 2 | `2ed6e0a` | **P2** `throwing-knife` can never consume the club aura | CONFIRMED, **ruled ACCEPTED AND DOCUMENTED**, not patched (§ 9) |
+| 2 | `2ed6e0a` | **P2** BEFORE baseline still uniform | CONFIRMED, **fixed** `99b0439` |
+| 3 | `99b0439` | **P2** the test re-implements the weighting instead of calling it | CONFIRMED, **ruled TERMINAL**, folded into CF-97 (§ 11) |
+
+**The ceiling tripped at finding 4 and a META-AUDIT ran instead of a fourth patch.** Findings 2, 3 and 4 shared one cause — *a relationship asserted without checking the consuming side can receive it* — at the tag-weight level (2, 4) and the timing level (3). Each point-fix was correct and left the next instance of the class standing.
+
+### 9 — THE META-AUDIT: THE (clause × eligible target) MATRIX
+11 `buff_adjacent` clauses across 10 items. The three consumer sites are the **complete** set, from `git grep -n "sumActiveBuffs("`:
+
+| stat | consumer | target requirement |
+|---|---|---|
+| `cooldown_pct` | `combat.ts:431` | must have an `on_cooldown` trigger |
+| `trigger_chance_pct` | `combat.ts:703` | any trigger |
+| `damage` | `combat.ts:775` | must have a damage-bearing effect |
+
+**⚠ REACTIVE HOSTS ARE STRUCTURALLY IMMUNE TO THE ONSET GAP, and this evaporated 8 of my own 10 first-pass flags.** `combat.ts:679-687` ("Locked answer 7"): `on_adjacent_trigger` fires BEFORE the originating trigger's effects resolve — the comment names the case, *"Whetstone's damage buff applies in time for the originating Iron Sword's damage event to be queued at base+1 on the very first fire."* So a reactive host's buff lands on its own provoker before that provoker's effects and before the echo check at `:703`. A tick-0-only target therefore CONSUMES a reactive host's buff, because its own fire is what summons it. **Only NON-reactive hosts have a true onset gap.**
+
+**All INERT-TIMING pairs registry-wide are 3, all → `throwing-knife`, all on non-reactive hosts:** `wooden-club` (this leg), `bandage` (this leg), and **`berserkers-greataxe` (pre-existing Epic)**. F3's disposition is ACCEPTED AND DOCUMENTED: no remedy exists that is not scope-expanding — no tag expresses "fires more than once", moving the host changes the ruled clause, and suppressing the target from the reveal would be a renderer deriving a fact about the sim (CF-88's shape).
+
+**No clause anywhere specifies `durationTicks`** — all 11 resolve `?? -1` = full combat (`combat.ts:888`), and `decrementBuffs` skips `-1` (`:645`). **Onset is the only timing question; no window check is needed.**
+
+**A5 — four items are exclusively `on_round_start`:** `throwing-knife`, `mana-potion`, `lucky-penny`, `stamina-tonic`. Only `throwing-knife` is weapon-tagged, which is why it is the only one that surfaces. The other three escape only because every clause that could reach them is reactive-hosted — **contingent on the current registry, not structural**.
+
+### 10 — balance-bible § 6 BUCKETS RE-DERIVED
+The `**Synergy / utility (3)**` heading held `bandage` (which had no cross-item mechanic) and EXCLUDED `mana-potion`, whose own intent line reads *"Adjacency catalyst"*. Re-derived from the POST-change registry and added as an explicit table: **5 of 20**, spanning **three** functional buckets, with a note that the headings are about ROLE and that density is otherwise **undocumented** in that file — § 1 budgets power by rarity and sets pick-rate guardrails but states no target for how many items carry cross-item mechanics.
+
+### 11 — CF-97 OPENED
+**CF-97 — broadly-scoped `buff_adjacent` clauses generate large inert edge sets, and the reveal and popover advertise relationships the sim cannot perform.** This is the CF-57 class at ROSTER scale. Evidence from § 9's matrix: `berserkers-greataxe` is **14 live of 44 eligible** (29 INERT-STAT + 1 INERT-TIMING) — a shipped Epic capstone with 30 inert edges, so **the class predates this rebalance**; the two untagged `cooldown_pct` clauses (`mana-potion`, `stamina-tonic`) carry **25 inert each**; `resonance-crystal`'s damage clause carries **28**.
+
+The general form: **`matchTags` is a TAG filter, not a CAPABILITY filter.** `damage` and `cooldown_pct` have narrow consumer sets, so broad clauses generate large inert sets *by construction*. Round 3's finding is folded in here rather than patched on this branch: a test that re-implements production weighting cannot detect production changing, which is the same shape one level up — and closing it properly means exporting a sim pool helper, a new API surface that deserves its own ruling rather than a fifth incremental patch. **Remediation is OUT OF SCOPE here and unscheduled.** New CF number walked from canon: highest existing **CF-96**, so CF-97 is next in sequence.
+
+### 12 — NOTES
+`hasAdjacencyMechanic.test.ts` **failed on this change BY DESIGN** — it asserts the adjacency set BY NAME, so a registry change must be acknowledged rather than sliding through a count that still sums. Updated 10 → 12 and it now derives the shop rate from the registry.
+
+**The `healing-salve` near-miss:** the `bandage` edit initially matched TWO items — `healing-salve` (uncommon, out of scope) carries a byte-identical `on_low_health` / `heal(8)` / `maxTriggersPerCombat: 1` block. The edit tool's uniqueness guard refused the ambiguous match and stopped an out-of-scope change.
+
+`bandage`'s `maxTriggersPerCombat: 1` is now **REDUNDANT** with the sim's built-in one-shot — `on_low_health` gates on `TriggerEntry.lowHealthFired` (`packages/sim/src/triggers.ts:48-49`, `:116-117`, `:141-142`), the same shape `berserkers-greataxe` already carries. **LEFT AS-IS** and annotated: removing it would be a diff on a field this leg froze.
+
+**⚠ SIM'S TEST COUNT DID NOT MOVE: 557 → 557.** The determinism suite's count is driven by the FIXTURE COUNT (224, unchanged), not by fixture contents — 82 fixtures changed bytes without changing how many tests exist. Client moved 773 → 778.
+
+Gates, post-merge on `main`: `turbo run typecheck --force` → `Tasks: 10 successful, 10 total`; `turbo run lint --force` → `Tasks: 7 successful, 7 total`; `check-schemas-sync` → OK; `pnpm -r run test` → **exit 0**:
+
+```
+packages/content  31 passed (31)
+packages/ui-kit   49 passed (49)
+packages/sim     557 passed | 1 skipped (558)
+apps/server      122 passed | 24 skipped (146)
+apps/client      778 passed | 15 skipped (793)
+```
+
+### 13 — NOTHING ELSE CLOSED
+**CF-96 stays OPEN** (telemetry provenance). **CF-93 stays OPEN**, rounds 1–10, LEG 2 unscoped. **CF-88 stays OPEN**. **CF-86 stays OPEN**. **CF-83, CF-84, CF-87, CF-91, CF-94, CF-95 stay CLOSED**; none is reopened. **Pattern 11 stays HELD, not minted.** Round-11 boss disposition stays **HELD** pending the LEG 1 AFTER population, which did not run — `leg1-population.sql` remains UNEXECUTED with its banner intact.
+
+### Counter
+Full close (PR merge). Ordinal walk live from canon, greps run this session with a phantom-higher control on every axis: highest **Catch 134**, **Rule 39**, **Pattern 10**, **Drift 110**, **CF-96** — and `Catch 13[5-9]` → 0, `Catch 1[4-9][0-9]` → 0, `Rule 4[0-9]` → 0, `Drift 11[1-9]` → 0, `Drift 1[2-9][0-9]` → 0, `CF-97`…`CF-101` → 0, `CF-1[0-9][0-9]` → 0, `CF-[2-9][0-9][0-9]` → 0. **A POSITIVE CONTROL WAS RUN ON THE CF AXIS BEFORE TRUSTING ITS SILENCE** — `CF-96` → 8 hits, `CF-95` → 10, `CF-94` → 90, so the pattern demonstrably matches and the zero above CF-96 is absence, not a broken grep. **`Pattern 1[1-9]` returns 9 hits across 7 lines (one line carries three), and ALL NINE are HELD rulings or counter riders quoting their own grep — none is a minting. The patterns axis stands at 10.**
+
+| axis | baseline | delta | total |
+|---|---|---|---|
+| catches | 134 | **+0** | **134** |
+| rules | 39 | **+0** | **39** |
+| patterns | 10 | **+0** | **10** |
+| drifts | 110 | **+0** | **110** |
+| open-CFs | 54 | **+1** | **55** |
+
+Deltas by ID: catches **+0** (none — Codex pre-merge CODE findings take no catch per the CF-67 ruling, and no process deviation is charged on either side). Rules **+0**. Patterns **+0**. Drifts **+0**. CFs **opened: CF-97** (1); **closed: none** (0); **net open-CFs +1**.
+
+Running line: **134/39/10/110/54 → 134/39/10/110/55** — catches **134** / rules **39** / patterns **10** / drifts **110** / open-CFs **55**.
+
+**ARITHMETIC SHOWN:** catches 134 + 0 = 134 · rules 39 + 0 = 39 · patterns 10 + 0 = 10 · drifts 110 + 0 = 110 · open-CFs 54 + 1 = 55.
+
+**COUNTER-INTEGRITY RIDERS, both restated.** (i) The rules field **39** is the **HIGHEST RULE ORDINAL REACHED**, not a distinct count — canon records a permanently vacant slot, so distinct codified rules stand at **38**, unmoved by this entry's +0. (ii) The **open-CF axis cannot be verified by a grep-walk** — the last full canonical re-enumeration is decision-log.md 2026-05-23 § "M1.5c PR 2 CLOSED + **M1.5c MILESTONE CLOSED** (server `/v1/telemetry/batch` endpoint; CF 49 closure; 1-Codex-P2 cycle under-ceiling)" at 40 open CFs, and every entry since carries the backlog by delta. **The 55 is carried forward by arithmetic, unverified by enumeration**, and this entry does NOT re-enumerate. **The re-enumeration remains unscheduled.**
+
+Open-CF touch (delta only; the remaining backlog is carried unchanged):
+- **CF-97** — broadly-scoped `buff_adjacent` clauses generate large inert edge sets; the reveal and popover advertise relationships the sim cannot perform. **OPENED**, remediation unscheduled and out of scope. Net **+1**.
+
 ## 2026-07-31 — SHOP-CARD ADJACENCY MARK SHIPPED ON MERGE (artifact anchor `d8395f8`, PR \#62) — the shop card face now carries a BINARY cross-item-mechanic flag, so adjacency stops being a thing you learn only by opening a popover you had no reason to open; client-only, display-only, **ZERO diff under `packages/sim`, `packages/content`, `content-schemas.ts`**; **CLOSES NOTHING, OPENS NOTHING — counter UNCHANGED at 134/39/10/110/54**; **Codex ONE ROUND, ZERO FINDINGS**, clean on `fad339483d` confirmed from BOTH poll surfaces (empty `/pulls` reviews + issue comment 5145607510, the documented clean-pass signature) so the ceiling was never approached and no meta-audit applies; **THE COLOR WAS FORCED, NOT CHOSEN, AND THAT IS THE REUSABLE FINDING** — THREE tokens in visual-direction.md § 2 share a hex EXACTLY with a rarity token (`accent` == `rarity-rare` `#3B82F6`, `text-secondary` == `rarity-common` `#94A3B8`, `coin-gold` == `rarity-legendary` `#F59E0B`), so emitting one IS emitting a rarity color, and with `life-red` + `arcane-cyan` reserved by that document and `text-muted` measuring 3.30:1 on `--surface`, `--text-primary` at 14.22:1 was the ONLY survivor — the mark is ACHROMATIC by arithmetic, which yields the boundary **RARITY OWNS HUE, ADJACENCY OWNS SHAPE AND POSITION** and makes greyscale survival STRUCTURAL rather than lucky; the predicate needs BOTH limbs and the registry proves it (an effect-only test misses `spark-stone`/`fire-oil`, a trigger-only test misses `mana-potion`/`stamina-tonic`/`berserkers-greataxe`), selecting EXACTLY 10 of 45 pinned BY NAME not by count; **side-band placement REJECTED ON MEASUREMENT** — the bands collapse from 25px to **4px at 2×2**, which is 3 of the 10 target items; the bag-chip leak concern was REAL and is **DISPROVED STRUCTURALLY**, not assumed; **Rule 39 restated by example — 17 assertions, not the 16 a line-grep reports**, because one line carried two occurrences; **NO catches, NO drifts, NO new rules**; ONE pattern candidate recorded **HELD, not minted** — patterns stay at 10; counter 134/39/10/110/54 → 134/39/10/110/54
 
 Client-only, display-only. **ARTIFACT ANCHOR = the merge commit `d8395f8`; COUNTER ANCHOR = this entry's own docs commit.** The two are distinct and are named separately. Governing counter entry: decision-log.md 2026-07-27 § "CF-95 OPENED AND CLOSED ON MERGE (artifact anchor `570f491`, PR \#61) …" carrying **134/39/10/110/54**, read from the file this session. **Decision day 2026-07-31**, the day the merge landed (`merged_at 2026-07-31T17:26:28Z`, read from the GitHub API) and the day it was authorised in master-dev review. No schema, content, corpus, or migration change.
