@@ -126,8 +126,45 @@ describe('hasAdjacencyMechanic — rarity spread (the reason the mark exists)', 
     // pool is these 20 and the class split is the only asymmetry.
     expect(rate('tinker')).toBeCloseTo(0.7903, 4);
     expect(rate('marauder')).toBeCloseTo(0.7473, 4);
-    // and both sit above the pre-rebalance rate, which is the point of the leg
-    expect(rate('tinker')).toBeGreaterThan(0.556);
-    expect(rate('marauder')).toBeGreaterThan(0.556);
+  });
+
+  it('the BEFORE baseline is weighted too — there was never a single pre-rebalance number', () => {
+    // Codex round 2 (P2), confirmed. The first fix weighted the AFTER rate and
+    // left the BEFORE rate uniform at 55.6%, which is the same defect one line
+    // down. `whetstone` is affinity-weighted AND was one of the original three,
+    // so the pre-rebalance rate splits by class exactly as the post rate does:
+    // tinker 60.78% (ABOVE uniform), marauder 52.75% (BELOW it). Asserting
+    // `> 0.556` would therefore have let a tinker regression to, say, 58% pass
+    // as an improvement while it was actually a loss against 60.78%.
+    const OLD_SET = new Set(['mana-potion', 'whetstone', 'spark-stone']);
+    const commons = Object.values(ITEMS as Readonly<Record<string, Item>>).filter(
+      (i) => i.rarity === 'common',
+    );
+
+    const rateOf = (classId: string, member: (it: Item) => boolean): number => {
+      const weights = commons.map((it) => {
+        const base = RARITY_POOL_WEIGHT.common;
+        const w =
+          it.classAffinity === classId
+            ? Math.floor((base * 150) / 100)
+            : it.classAffinity !== null
+              ? Math.floor((base * 75) / 100)
+              : base;
+        return { w, hit: member(it) };
+      });
+      const total = weights.reduce((s, e) => s + e.w, 0);
+      const pSlot = weights.filter((e) => e.hit).reduce((s, e) => s + e.w, 0) / total;
+      return 1 - Math.pow(1 - pSlot, 5);
+    };
+
+    const before = (c: string) => rateOf(c, (it) => OLD_SET.has(String(it.id)));
+    const after = (c: string) => rateOf(c, hasAdjacencyMechanic);
+
+    expect(before('tinker')).toBeCloseTo(0.6078, 4);
+    expect(before('marauder')).toBeCloseTo(0.5275, 4);
+
+    // The claim the leg actually makes, per class, against its OWN baseline.
+    expect(after('tinker')).toBeGreaterThan(before('tinker'));
+    expect(after('marauder')).toBeGreaterThan(before('marauder'));
   });
 });
