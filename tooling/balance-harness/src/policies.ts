@@ -33,7 +33,7 @@ import {
   STRATEGIES,
   type StrategyName,
 } from '../../../packages/sim/test/determinism/strategies.ts';
-import { fitsAnywhere } from './bagfit.ts';
+import { fitsAnywhere, GREEDY_BUY_ROTATIONS } from './bagfit.ts';
 
 export interface PolicyContext {
   readonly ctrl: RunController;
@@ -160,10 +160,21 @@ function rarityRank(itemId: string): number {
  *  unanswerable — the number was a property of the policy. A human sells a
  *  Common and buys the Epic; this policy is the floor of that competence.
  *
- *  IT IS A STRICT SUPERSET of resolver-first: same opening, same greedy
- *  delegation, one added clause. So `sell-to-fit` minus `resolver-first` is
- *  exactly the value of being able to sell, which is the ablation the late-game
- *  question needs.
+ *  IT IS A SUPERSET of resolver-first — same opening, same greedy delegation —
+ *  but it now adds TWO clauses, not one, and the ablation must be described
+ *  that way rather than as "the value of selling":
+ *
+ *    1. it buys items that fit only ROTATED, which every corpus buy gate
+ *       refuses (rotation 0 only) and the instrument counts as live because a
+ *       human can rotate;
+ *    2. it sells to make room.
+ *
+ *  Both are floor competence — a player model that cannot rotate an item is not
+ *  a player model — so lumping them is fine for "what does a competent player
+ *  experience" and wrong for attributing a delta to selling alone. The
+ *  rotation clause was added after the sell clause and moved the late-game
+ *  numbers; the measured effect of each is in CHANGELOG.md rather than guessed
+ *  at here.
  *
  *  TERMINATION. Sell candidates are restricted to placements of STRICTLY lower
  *  rarity than the target, so each sell shrinks that set by one and the clear
@@ -180,14 +191,27 @@ function sellToFitPolicy(seed: SimSeed): Policy {
    *  unreachable. */
   let clearingFor: ItemId | null = null;
   let sellsThisClear = 0;
-  /** Targets abandoned this run — never re-attempted, so a target that cannot
-   *  be cleared cannot re-trigger the loop every tick. */
-  const abandoned = new Set<string>();
+  /** Targets abandoned, so a target that cannot be cleared for cannot re-trigger
+   *  the clear loop on every tick.
+   *
+   *  ROUND lifetime, not run lifetime. It was run-scoped, which blacklisted an
+   *  item for the rest of the run because it was unclearable once — but the bag
+   *  is rearranged every round, so a round-8 refusal says nothing about round 10.
+   *  A permanent blacklist makes this policy *weaker* than the competent player
+   *  it is supposed to model, which biases the late-game numbers downward. */
+  let abandoned = new Set<string>();
+  let abandonedForRound = -1;
 
   return {
     name: 'sell-to-fit',
     decide({ ctrl, pending }) {
       const state = ctrl.getState();
+
+      // The clear-loop blacklist is per round; see `abandoned`.
+      if (state.currentRound !== abandonedForRound) {
+        abandoned = new Set();
+        abandonedForRound = state.currentRound;
+      }
 
       // Placement first, always — greedy owns it, and a pending item means the
       // buy already happened.
@@ -216,7 +240,64 @@ function sellToFitPolicy(seed: SimSeed): Policy {
           }
         }
 
-        // ── the added clause: clear room for the best offer that won't fit ──
+        // ── added clause 1: buy what fits ONLY ROTATED ────────────────────
+        //
+        // Every corpus strategy's buy gate is
+        // `findFirstValidPlacement(bag, itemId, [0])` — rotation 0 only, at
+        // strategies.ts:263 and eleven sibling lines — while their PLACEMENT
+        // calls take the all-four default. So they rotate what they already own
+        // and refuse to buy anything that would need rotating.
+        //
+        // That opened a hole between the instrument and the policy: 12 of 45
+        // items are non-square (iron-sword, spear, warhammer, chainmail,
+        // ember-brand, ...), `countLiveOffers` counts a rotated fit as live
+        // because a human can rotate — the client's DraggableItem does — and
+        // NOBODY bought it. The report said "a live offer was there" while the
+        // competent model walked past it, worst in a nearly-full bag, which is
+        // exactly the late game under study.
+        //
+        // Buying it here rather than widening greedy's gate keeps
+        // strategies.ts untouched — it is a fixture input.
+        //
+        // BEST rarity, not first slot. Taking the first slot index measured
+        // WORSE than leaving the hole open — round-11 win 33.6% -> 31.2% and
+        // runs won 219 -> 194 — because an indiscriminate extra purchase spends
+        // cells the late game cannot spare, and every correction after it pays
+        // the 50% sell recovery. Selecting by rarity matches how this policy
+        // already picks a clear-target, and keeps "competent" from meaning
+        // merely "busier".
+        {
+          let best: { slot: number; rank: number } | null = null;
+          for (let i = 0; i < state.shop.slots.length; i++) {
+            if (state.shop.purchased.includes(i)) continue;
+            const id = state.shop.slots[i];
+            if (id === undefined) continue;
+            const key = String(id);
+            if (SHOP_POOL_ITEMS[key] === undefined) continue;
+            if (costOf(key) > state.gold) continue;
+            const fitsRotated = fitsAnywhere(state.bag, id as ItemId, SHOP_POOL_ITEMS as never);
+            // Only the gap: greedy already buys anything that fits upright.
+            if (!fitsRotated) continue;
+            if (
+              fitsAnywhere(
+                state.bag,
+                id as ItemId,
+                SHOP_POOL_ITEMS as never,
+                undefined,
+                GREEDY_BUY_ROTATIONS,
+              )
+            ) {
+              continue;
+            }
+            const rank = rarityRank(key);
+            if (best === null || rank > best.rank) best = { slot: i, rank };
+          }
+          if (best !== null) {
+            return { kind: 'action', action: { type: 'buy_item', slotIndex: best.slot } };
+          }
+        }
+
+        // ── added clause 2: clear room for the best offer that won't fit ──
 
         // Drop a stale target: bought, rerolled away, or no longer affordable.
         if (clearingFor !== null) {

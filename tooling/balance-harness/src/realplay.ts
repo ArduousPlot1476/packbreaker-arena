@@ -8,12 +8,21 @@
 //
 //   surface          corpus                        real play
 //   ---------------  ----------------------------  ------------------------------
-//   ghost items      [2,2,3,3,4,4,5,5,6,6]         [1,1,2,3,4,5,5,6,7,8,5]
-//   ghost HP         bag-derived (maxHpBonus sum)  30 + floor((round-1)/2)*2
+//   ghost items      [2,2,3,3,4,4,5,5,6,6]         [1,1,2,4,6,8,10,12,13,14,5]
+//   ghost HP         bag-derived (maxHpBonus sum)  20 + (round-1)*2
 //   ghost/shop pool  all 45 ITEMS                  44 SHOP_OFFER_ITEMS (CF 66)
-//   round-11 boss    neutral, NO mutators, ~67 HP  Forge Tyrant, 50 HP, +2, +15%
+//   round-11 boss    neutral, NO mutators, ~67 HP  Forge Tyrant, 45 HP, +1, +15%
 //   combat seed      fresh rng per round           the RUN seed, every round
 //   mid relic        never granted                 always offered at round 6
+//
+// THE REAL-PLAY COLUMN IS DERIVED, NOT DECLARED. Every value in it comes from a
+// module this file imports, so it moves when the game moves — but the table is
+// prose and does NOT. Three of these six rows were stale when audited on
+// 2026-08-05: two ghost rows had described the pre-2026-08-05 curve since that
+// tuning landed, and the boss row the pre-retune numbers. A table whose whole
+// job is to argue "the corpus and real play are two different games" was
+// describing a third game that exists nowhere. Re-read it against ghost.ts and
+// contracts.ts whenever either changes.
 //
 // Canon already names this (decision-log 2026-07-25): "fixture drift is a poor
 // proxy for real-play impact". A harness on the corpus path would measure a game

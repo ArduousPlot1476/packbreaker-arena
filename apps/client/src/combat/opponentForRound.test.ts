@@ -1,7 +1,7 @@
 // CF-87 route (D) — the shared round-opponent chokepoint.
 //
 // Proves: round 11 fights the balance-bible.md § 15 Forge Tyrant configuration
-// (bag / 50 HP / conquerors-crown relic / Tyrant's Wrath mutators), rounds 1–10
+// (bag / 45 HP / conquerors-crown relic / Tyrant's Wrath mutators), rounds 1–10
 // stay byte-identical to the procedural generator, the intent panel and the
 // fight are one derivation, and the boss's damageBonus / lifesteal / relic
 // stats demonstrably reach the sim.

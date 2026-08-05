@@ -4,7 +4,8 @@
 //   - 'neutral'              — vanilla contract, DEFAULT_RULESET, isDaily: false.
 //   - 'forge-tyrant-boss'    — boss-only mutator for round 11. Carries the
 //                              Tyrant's Wrath aura values (balance-bible.md
-//                              § 15: hp 50, +2 dmg, +15% lifesteal). Used by
+//                              § 15: hp 45, +1 dmg, +15% lifesteal — retuned
+//                              2026-08-05, see FORGE_TYRANT_RULESET). Used by
 //                              the run controller when round 11 begins (M1.5).
 //   - 'daily-placeholder'    — empty-mutator daily slot. Confirms the type
 //                              plumbing for the M1.5 daily contract pipeline.
@@ -27,11 +28,20 @@ const NEUTRAL: Contract = {
 /** Tyrant's Wrath, retuned 2026-08-05 against balance-bible.md § 15's ~30%
  *  first-attempt win target.
  *
- *  MEASURED, not argued. The shipped 50 / +2 / +15% put the boss at 18.9% under
- *  the balance harness's competent player model (`sell-to-fit`, 652 round-11
- *  combats) and 8.9% under the weaker one. 45 / +1 / +15% puts them at 33.6% and
- *  18.5% — on target for an average build, and still under § 15's "<10% for an
- *  incoherent build" only for bots that never sell.
+ *  MEASURED, not argued. Both arms measured on the SAME population under the
+ *  SAME policies (n=800 seeds; 627 and 605 round-11 combats), with the old boss
+ *  reproduced through the harness's --boss-hp / --boss-damage sweep flags rather
+ *  than from an older report — a stale baseline would fold the harness's own
+ *  changes into the boss delta:
+ *
+ *              50 / +2 / +15%     45 / +1 / +15%
+ *    sell-to-fit      15.5%             31.9%
+ *    resolver-first    8.9%             18.5%
+ *
+ *  `sell-to-fit` buys a weapon, rotates, and sells a Common to make room for an
+ *  Epic — § 15's "average build", and it lands on the ~30% target.
+ *  `resolver-first` never sells and arrives with a stale bag; 18.5% is the right
+ *  shape for that.
  *
  *  WHY THESE TWO FIELDS AND NOT THE OTHERS. Three configurations reached ~30%:
  *  damage 0 at 50 HP (32.9%), damage 2 at 50 HP with lifesteal 0 (32.6%), and
@@ -44,8 +54,8 @@ const NEUTRAL: Contract = {
  *  WHAT THIS DOES NOT FIX, stated so nobody re-measures it hoping otherwise: the
  *  round-11 fight still ends at a median tick ~60 against 100-210 everywhere
  *  else — two seconds of playback for the climax of a run. That is NOT reachable
- *  from here. The boss's total bonusBaseDamage is +7, and only 2 of it was ever
- *  this mutator: Marauder's class passive is +1 and `conquerors-crown` is +4
+ *  from here. The boss's total bonusBaseDamage is +6 and this mutator owns only
+ *  1 of it: Marauder's class passive is +1 and `conquerors-crown` is +4
  *  (packages/content/src/relics.ts:113). Boss HP does not touch it either —
  *  swept 40/45/50/70/85/100 and medianTicks never left 60-61, because the median
  *  round-11 combat is the PLAYER dying, and boss HP does not change how fast

@@ -55,12 +55,17 @@ the corpus path and real play are two different games:
 
 | | corpus | real play |
 |---|---|---|
-| ghost items | `[2,2,3,3,4,4,5,5,6,6]` | `[1,1,2,3,4,5,5,6,7,8,5]` |
-| ghost HP | bag-derived | `30 + floor((round−1)/2)*2` |
+| ghost items | `[2,2,3,3,4,4,5,5,6,6]` | `[1,1,2,4,6,8,10,12,13,14,5]` |
+| ghost HP | bag-derived | `20 + (round−1)*2` |
 | ghost / shop pool | all 45 `ITEMS` | 44 `SHOP_OFFER_ITEMS` |
-| round-11 boss | neutral, no mutators, ~67 HP | Forge Tyrant, 50 HP, +2 dmg, +15% |
+| round-11 boss | neutral, no mutators, ~67 HP | Forge Tyrant, 45 HP, +1 dmg, +15% |
 | combat seed | fresh per round | the run seed, every round |
 | mid relic | never granted | always offered at round 6 |
+
+The right-hand column is **derived** — every value comes from a module the
+harness imports, so the behaviour moves when the game moves. This table does
+not. Three of these six rows were stale when audited on 2026-08-05. Re-read it
+against `ghost.ts` and `contracts.ts` whenever either changes.
 
 A harness on the corpus path would measure a game nobody plays. So the driver in
 `src/realplay.ts` mirrors `useRun.ts`'s ordering and **imports** the client's own
@@ -130,21 +135,33 @@ Two are the harness's own, and they form a ladder:
 - **`resolver-first`** — buys a damage source when one is affordable and it
   doesn't own one, then plays greedily. The floor of someone who understands that
   you need a weapon.
-- **`sell-to-fit`** — a strict superset: same opening, same greedy delegation,
-  plus the one move greedy structurally cannot make. Greedy refuses to buy
-  anything that doesn't already fit, and only sells to place an item it has
-  *already bought*, so a full bag is an absorbing state — no buy, therefore no
-  sell, therefore no buy. `sell-to-fit` sells a strictly-lower-rarity placement
-  to make room (never its last resolver). It is the floor of competent late-game
-  play.
+- **`sell-to-fit`** — a superset that adds the two moves greedy structurally
+  cannot make:
+  - **rotating.** Every corpus buy gate is rotation-0-only
+    (`findFirstValidPlacement(bag, id, [0])`), while their *placement* calls take
+    the all-four default — so they rotate what they own and refuse to buy
+    anything that needs rotating. 12 of 45 items are non-square, so the
+    instrument counted rotated fits as live offers that no policy would ever
+    take.
+  - **selling.** Greedy only sells to place an item it has *already bought*, so
+    a full bag is an absorbing state — no buy, therefore no sell, therefore no
+    buy.
 
-Because the second is a superset of the first, `sell-to-fit` minus
-`resolver-first` on an identical population isolates exactly what being able to
-sell is worth. Measured over 600 runs: round-11 win **8.4% → 17.3%**, round-11
-purchases 0.17 → 2.19, gold left on the table 39.6 → 19.7, runs won 20 → 43.
+Measured over 1600 runs on an identical population, `sell-to-fit` against
+`resolver-first`: round-11 win **18.5% → 31.9%**, round-11 purchases 0.15 →
+2.20, gold left on the table 39.4 → 22.4, runs won 112 → 200.
 
-**That delta is why the sample point mattered.** Tuning the boss against the
-8.4% figure would have over-corrected by roughly a factor of two.
+**That gap is why the sample point mattered.** Before the instrument was
+repaired the same comparison read 8.4%, and tuning the boss against *that* would
+have over-corrected by roughly a factor of two.
+
+One measured caution, because it cuts against the obvious reading: taking
+*every* placeable offer is **not** optimal. Buying the rotated-fit item lowered
+round-11 win 33.6% → 31.9% and runs won 219 → 200, because cells are the binding
+late-game constraint and every correction pays the 50% sell recovery. The clause
+stays because the instrument must not credit an offer no policy can take — but
+"competent" here means capable, not optimal, and these are a floor rather than a
+ceiling.
 
 **Report both — or all three.** They diverge sharply: after the 2026-08-05
 early-game work the median run reached 4/11 under the full corpus set and 10/11

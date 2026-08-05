@@ -354,7 +354,12 @@ Note the aura is the *smallest* of the three damage terms. The boss's total `bon
 
 ### Difficulty target
 
-**MEASURED AND RETUNED 2026-08-05.** The ~30% target was measurable but had never been measured. Under the offline balance harness driving the real-play path, the shipped 50 HP / +2 damage / +15% lifesteal produced **18.9%** against a competent player model (`sell-to-fit`, 652 round-11 combats) and **8.9%** against a weaker one that never sells. Retuned to **45 / +1 / +15%**, the same populations measure **33.6%** and **18.5%**.
+**MEASURED AND RETUNED 2026-08-05.** The ~30% target was measurable but had never been measured. Under the offline balance harness driving the real-play path, both arms measured on the same population and the same policies (n=800 seeds; 627 and 605 round-11 combats), with the old boss reproduced through the harness's sweep flags rather than read from an older report:
+
+| | 50 / +2 / +15% | **45 / +1 / +15%** |
+|---|---|---|
+| `sell-to-fit` (competent: buys a weapon, rotates, sells to make room) | 15.5% | **31.9%** |
+| `resolver-first` (never sells, arrives with a stale bag) | 8.9% | **18.5%** |
 
 Three configurations reached ~30% in the sweep: damage 0 at 50 HP (32.9%), damage 2 at 50 HP with lifesteal 0 (32.6%), and 45/+1/+15 (31.1% at that seed count). The first guts the named aura on its own damage axis; the second was the worst on the draw canary, pushing round-11 draws 7.8% → 10.5% by making more fights close enough to end in a mutual sudden-death. The chosen split keeps all three aura components alive and costs +0.1pt of overall draw rate.
 

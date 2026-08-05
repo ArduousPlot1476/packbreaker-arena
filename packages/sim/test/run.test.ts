@@ -767,7 +767,7 @@ describe('replayCombat', () => {
 // ─── Boss round (FORGE_TYRANT) ───────────────────────────────────
 
 describe('boss round', () => {
-  it('FORGE_TYRANT pre-built ghost (50 HP, post-mutator) plays as round 11 opponent', () => {
+  it('FORGE_TYRANT pre-built ghost (45 HP, post-mutator) plays as round 11 opponent', () => {
     // Drive controller to round 11 with a sustainable bag.
     const knife = defineTestItem('test-knife', [
       { type: 'on_round_start', effects: [{ type: 'damage', amount: 100, target: 'opponent' }] },

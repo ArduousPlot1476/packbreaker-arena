@@ -11,10 +11,23 @@ Format: `- **YYYY-MM-DD** — <what shipped>. <why, in a sentence>. <watch-out, 
 
 ---
 
+- **2026-08-05** — Review meta-audit on the above. Four review findings, three of them in
+  code written that day, tripped the finding ceiling; a read-only audit of the whole surface
+  then found **eight more**. The instructive one: every corpus strategy's *buy* gate is
+  rotation-0-only while its *placement* calls use all four rotations, so no policy ever
+  bought an item that fits only rotated — **12 of 45 items are non-square** — while the
+  repaired instrument correctly counted those as live offers, because a human can rotate.
+  Also: the harness's own header table, whose whole job is to argue the corpus and real-play
+  paths are different games, had **three of its six real-play rows stale** and was describing
+  a third game that exists nowhere. *Watch:* taking every placeable offer measured **worse**,
+  not better — round-11 win 33.6% → 31.9% — because cells are the binding late-game
+  constraint and every correction pays the 50% sell recovery. The clause stays, since the
+  instrument must not credit an offer no policy can take, but "competent" here means capable,
+  not optimal.
 - **2026-08-05** — Boss retuned 50/+2/+15% → **45/+1/+15%**. `balance-bible.md` §15 has
   asked for a ~30% first-attempt win rate since M0 and it had never been measured; measured,
-  the shipped numbers gave **18.9%** against a competent player model and **8.9%** against a
-  weaker one. Now 33.6% and 18.5%, and runs that end in victory roughly double. **Zero
+  the shipped numbers gave **15.5%** against a competent player model and **8.9%** against a
+  weaker one. Now 31.9% and 18.5%, and runs that end in victory roughly double. **Zero
   fixture re-baseline, proved not assumed** — all 224 `.jsonl` run `contractId: "neutral"`,
   so the boss mutators are never exercised; determinism passed unchanged at 231/231 with no
   fixture file touched. *Watch:* the round-11 fight still ends at median tick ~60 against

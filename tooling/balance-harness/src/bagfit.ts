@@ -22,7 +22,15 @@ import type {
   Rotation,
 } from '@packbreaker/content';
 
-const ROTATIONS: ReadonlyArray<Rotation> = [0, 90, 180, 270];
+export const ALL_ROTATIONS: ReadonlyArray<Rotation> = [0, 90, 180, 270];
+
+/** What every corpus strategy's BUY gate accepts, and only its buy gate:
+ *  `findFirstValidPlacement(bag, itemId, [0])` at strategies.ts:263 and eleven
+ *  sibling lines. Their PLACEMENT calls take the all-four default, so the
+ *  strategies rotate items they already own and refuse to buy items that would
+ *  need rotating. Exported so a policy can ask "would greedy refuse this?"
+ *  rather than hard-coding the answer. */
+export const GREEDY_BUY_ROTATIONS: ReadonlyArray<Rotation> = [0];
 
 /** Cells currently occupied, keyed "row:col". */
 function occupiedCells(
@@ -57,11 +65,12 @@ export function fitsAnywhere(
   itemId: ItemId,
   items: Readonly<Record<ItemId, Item>>,
   exclude?: PlacementId,
+  rotations: ReadonlyArray<Rotation> = ALL_ROTATIONS,
 ): boolean {
   const { width, height } = bag.dimensions;
   const occupied = occupiedCells(bag, items, exclude);
 
-  for (const rotation of ROTATIONS) {
+  for (const rotation of rotations) {
     for (let row = 0; row < height; row++) {
       for (let col = 0; col < width; col++) {
         const candidate: BagPlacement = {
