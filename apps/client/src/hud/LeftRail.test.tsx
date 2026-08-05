@@ -207,7 +207,7 @@ describe('LeftRail — CF-85 real opponent intent (Surface 2a) + real run-goal h
   });
 
   it('never renders more than 2 marquee silhouettes (gdd.md §14: never the full bag pre-combat)', () => {
-    // Round 9 ghost carries 4 items (ITEM_COUNT_BY_ROUND) — the panel must not show them all.
+    // Round 9 ghost carries 7 items (ITEM_COUNT_BY_ROUND) — the panel must not show them all.
     const state = makeRunStateFixture({ round: 9 });
     const { container } = mountWithState(state);
     expect(
