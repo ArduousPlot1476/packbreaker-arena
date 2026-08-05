@@ -1,10 +1,15 @@
 ---
 name: codex-cycle
-description: Use after pushing a remediation commit to a PR under Codex review — deciding whether to re-request review, polling for Codex's response, classifying findings, and tracking the 4-finding ceiling. Triggers include "push landed, re-request codex," "did codex respond yet," "check codex findings," "should this trip the ceiling," "is this the 4th finding," or any point where the next move might be either "just fix it" or "this needs a meta-audit." Also covers the initial trigger: on the PAT path Codex review is never automatic, so an explicit `@codex review` comment fires round 1 immediately after PR open.
+description: Use on PRs that touch packages/sim or apps/server — requesting Codex review, polling for its response, classifying findings, and tracking the 4-finding ceiling. Triggers include "push landed, re-request codex," "did codex respond yet," "check codex findings," "should this trip the ceiling," "is this the 4th finding," or any point where the next move might be either "just fix it" or "this needs a meta-audit." Also covers the initial trigger: on the PAT path Codex review is never automatic, so an explicit `@codex review` comment fires round 1 immediately after PR open. Do NOT use for client-only, content-only, art, or copy PRs — those ship without review.
 allowed-tools: Bash(curl:*), Bash(git rev-parse:*), Bash(git log:*), Read, Grep
 ---
 
 # codex-cycle
+
+**Scope (2026-08-04).** This cycle runs on PRs touching `packages/sim` or
+`apps/server` only — the tiers where a silent bug is expensive and hard to
+observe. Client, content, art, and copy PRs merge on CI green without a review
+round. If a PR touches both tiers, it is in scope.
 
 Codex (`chatgpt-codex-connector[bot]`) documents three triggers — PR opened
 for review, draft marked ready, and a top-level `@codex review` comment — but

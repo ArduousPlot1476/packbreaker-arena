@@ -1,6 +1,17 @@
 # Decision Log
 
-Append-only. Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or source.]`
+> **CLOSED 2026-08-04. This file is history and is no longer appended to.**
+>
+> It records how the sim, the schemas, the determinism corpus, and the content came to be
+> shaped the way they are, and it remains the right place to look when you need to know
+> *why* something is the way it is. Entries below are accurate as of the date they carry.
+>
+> Ongoing work is recorded as one line per merge in `CHANGELOG.md`, and planned work in
+> `roadmap.md`. The counter carried in these entries (catches / rules / patterns / drifts /
+> open-CFs) is not maintained. The open-CF total was carried forward by arithmetic and
+> unverified by enumeration since 2026-05-23 — do not treat it as a work list.
+
+Newest at top. Format: `YYYY-MM-DD — [decision]. [Rationale or source.]`
 
 ---
 
