@@ -33,6 +33,7 @@ import type {
 import type { Rng } from '@packbreaker/sim';
 import { createRng, effectiveItemCost, generateShop as simGenerateShop } from '@packbreaker/sim';
 import { SHOP_OFFER_ITEMS, SHOP_POOL_ITEMS } from './content';
+import { isResolver, resolverIds } from './resolvers';
 import type { BagItem, ItemId, ShopSlot } from './types';
 
 /** Re-exported from sim so UI affordability state and the reducer's
@@ -86,6 +87,61 @@ export function shopSeedFor(baseSeed: SimSeed, round: number, rerollCount: numbe
   return (((baseSeed >>> 0) + round * SHOP_REROLL_STRIDE + rerollCount) >>> 0) as SimSeed;
 }
 
+/** Rounds that carry the guaranteed-resolver rule. Rounds 1–3 are the
+ *  common-gated opening, and the whole stall lives there: measured across 1880
+ *  combats, rounds 1–3 are 60.6% / 48.9% / 31.9% INERT (neither side dealt any
+ *  item damage), and rounds 4+ are 0–1.4%. By round 4 the player owns enough
+ *  items that the pool's 70% dud rate stops mattering. */
+const RESOLVER_GUARANTEE_ROUNDS = 3;
+
+/** Ensures an early shop always offers at least one item that can actually end a
+ *  fight.
+ *
+ *  THE PROBLEM THIS SOLVES. 14 of 20 Commons deal no damage at all, and two more
+ *  (`iron-mace`, `throwing-knife`) deal too little to kill 30 HP — so only 4 of
+ *  20 can win round 1. With 4 gold buying one item, a player could be offered
+ *  five duds and have no legal way to win. The fight then stalls at 30 vs 30
+ *  until sudden death kills both, which scores as a DRAW and still costs a heart.
+ *  Two of those plus a loss is a dead run, which is why the median run reached
+ *  round 3 of 11.
+ *
+ *  THIS IS NOT A HANDOUT. It guarantees the OPTION, not the outcome: the player
+ *  still has to spend gold on the weapon instead of the shield, and ignoring it
+ *  still loses. It converts round 1 from a lottery into a decision.
+ *
+ *  Raising gold was measured and rejected first — drawing k items from a 70%-dud
+ *  pool leaves P(no damage) = 0.7^k, so the guardrail needs k ≈ 13 in round 1.
+ *  At 2.5× gold, round-1 inertness only fell 60.6% → 49.2%. The pool is the
+ *  bottleneck, and only the pool can fix it.
+ *
+ *  Client-side by construction: this is the shop the player actually sees
+ *  (useRun overrides the sim's own roll with this one), so the 224-fixture
+ *  determinism corpus — which runs the sim's roll — is untouched. */
+function guaranteeResolver(
+  slots: ReadonlyArray<ItemId>,
+  round: number,
+  rng: Rng,
+): ReadonlyArray<ItemId> {
+  if (round > RESOLVER_GUARANTEE_ROUNDS) return slots;
+  if (slots.some((id) => isResolver(SHOP_OFFER_ITEMS[id]!))) return slots;
+
+  const candidates = resolverIds(SHOP_OFFER_ITEMS).filter(
+    // Rarity-gate the substitute to what the round would legitimately offer, or
+    // the guarantee smuggles a Rare into a common-only round.
+    (id) => SHOP_OFFER_ITEMS[id]!.rarity === 'common',
+  );
+  if (candidates.length === 0) return slots; // unreachable with shipped content
+
+  // Both picks consume the SAME rng the shop was rolled from, so the result
+  // stays a pure function of (seed, round, rerollCount) and a given seed
+  // reproduces exactly.
+  const pick = candidates[rng.nextInt(0, candidates.length - 1)]!;
+  const slotIndex = rng.nextInt(0, slots.length - 1);
+  const out = [...slots];
+  out[slotIndex] = pick as ItemId;
+  return out;
+}
+
 /** Generates a shop for (round, classId, ruleset, seed). The sim returns
  *  a canonical ShopState (`{ slots: ItemId[], purchased: number[],
  *  rerollsThisRound }`); the client adapter wraps slots in client ShopSlot
@@ -106,7 +162,8 @@ export function generateShop(
 ): ShopSlot[] {
   const rng = createRng(shopSeedFor(baseSeed, round, rerollCount));
   const shopState = simGenerateShop(round, classId, ruleset.shopSize, rng, SHOP_OFFER_ITEMS);
-  return shopState.slots.map((itemId, i) => ({
+  const slots = guaranteeResolver(shopState.slots, round, rng);
+  return slots.map((itemId, i) => ({
     uid: `${uidPrefix}${i}`,
     itemId: itemId as ItemId,
     // Placeholder-quality effective cost (default itemCostDelta): this path's

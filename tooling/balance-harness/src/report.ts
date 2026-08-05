@@ -23,12 +23,19 @@ export interface Report {
     readonly seeds: number;
     readonly policies: ReadonlyArray<string>;
     readonly runs: number;
+    /** Ruleset knobs this report was swept with. Part of the population's
+     *  identity: two reports run under different rules are not comparable, and
+     *  formatDiff refuses rather than producing a plausible-looking delta. */
+    readonly overrides: Readonly<Record<string, number>>;
+    readonly label: string | null;
     readonly elapsedMs: number;
   };
   readonly perRound: ReadonlyArray<RoundAgg>;
   readonly overall: {
     readonly combats: number;
     readonly drawRatePct: number;
+    readonly inertRatePct: number;
+    readonly drawsInertPct: number;
     readonly endReasons: Readonly<Record<string, number>>;
     readonly medianRoundsReached: number;
     readonly outcomes: Readonly<Record<string, number>>;
@@ -56,6 +63,19 @@ export interface RoundAgg {
   readonly meanPlaybackSec: number;
   readonly meanLiveOffers: number;
   readonly emptyRoundPct: number;
+  /** Items the bot actually bought this round, and gold it was still holding at
+   *  combat. Together these say whether a gold change reached the bag at all —
+   *  raising income does nothing if the policy never spends it. */
+  readonly meanPurchases: number;
+  readonly meanGoldHeld: number;
+  readonly meanBagCells: number;
+  /** Combats where NEITHER side dealt a single point of item damage. The cause
+   *  of the draw band, not a restatement of it. */
+  readonly inertPct: number;
+  /** Of the draws in this round, how many were inert stalls. Separates "nobody
+   *  could kill anybody" from "the ramp erased a real lead" — two different
+   *  problems needing two different fixes. */
+  readonly drawsInertPct: number;
 }
 
 function median(xs: number[]): number {
@@ -81,22 +101,39 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
   for (let round = 1; round <= maxRound; round++) {
     const rs = runs.flatMap((run) => run.rounds.filter((r) => r.round === round));
     if (rs.length === 0) continue;
+    const draws = rs.filter((r) => r.outcome === 'draw');
     perRound.push({
       round,
       combats: rs.length,
       winPct: pct(rs.filter((r) => r.outcome === 'player_win').length, rs.length),
-      drawPct: pct(rs.filter((r) => r.outcome === 'draw').length, rs.length),
+      drawPct: pct(draws.length, rs.length),
       lossPct: pct(rs.filter((r) => r.outcome === 'ghost_win').length, rs.length),
+      inertPct: pct(rs.filter((r) => r.bothSidesInert).length, rs.length),
+      drawsInertPct: pct(draws.filter((r) => r.bothSidesInert).length, draws.length),
       medianTicks: median(rs.map((r) => r.endedAtTick)),
       meanPlaybackSec:
         Math.round((rs.reduce((a, r) => a + r.playbackMs, 0) / rs.length / 1000) * 10) / 10,
       meanLiveOffers:
         Math.round((rs.reduce((a, r) => a + r.liveOffers, 0) / rs.length) * 10) / 10,
       emptyRoundPct: pct(rs.filter(isEmptyRound).length, rs.length),
+      meanPurchases:
+        Math.round(
+          (rs.reduce(
+            (a, r) => a + Object.values(r.purchasesByRarity).reduce((x, y) => x + y, 0),
+            0,
+          ) /
+            rs.length) *
+            100,
+        ) / 100,
+      meanGoldHeld:
+        Math.round((rs.reduce((a, r) => a + r.goldHeldAtCombat, 0) / rs.length) * 10) / 10,
+      meanBagCells:
+        Math.round((rs.reduce((a, r) => a + r.bagCellsUsed, 0) / rs.length) * 10) / 10,
     });
   }
 
   const allRounds = runs.flatMap((r) => r.rounds);
+  const allDraws = allRounds.filter((r) => r.outcome === 'draw');
   const endReasons: Record<string, number> = {};
   for (const r of allRounds) endReasons[r.endReason] = (endReasons[r.endReason] ?? 0) + 1;
   const outcomes: Record<string, number> = {};
@@ -129,7 +166,9 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
     perRound,
     overall: {
       combats: allRounds.length,
-      drawRatePct: pct(allRounds.filter((r) => r.outcome === 'draw').length, allRounds.length),
+      drawRatePct: pct(allDraws.length, allRounds.length),
+      inertRatePct: pct(allRounds.filter((r) => r.bothSidesInert).length, allRounds.length),
+      drawsInertPct: pct(allDraws.filter((r) => r.bothSidesInert).length, allDraws.length),
       endReasons,
       medianRoundsReached: median(runs.map((r) => r.roundsReached)),
       outcomes,
@@ -158,28 +197,46 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
 
 export function formatReport(r: Report): string {
   const L: string[] = [];
-  L.push(`BALANCE REPORT  ${r.meta.gitSha}`);
+  L.push(`BALANCE REPORT  ${r.meta.gitSha}${r.meta.label === null ? '' : `  [${r.meta.label}]`}`);
   L.push(
     `${r.meta.runs} runs · ${r.meta.seeds} seeds × 2 classes × ${r.meta.policies.length} policies · ${(r.meta.elapsedMs / 1000).toFixed(1)}s`,
   );
   L.push(`policies: ${r.meta.policies.join(', ')}`);
+  const ov = Object.entries(r.meta.overrides ?? {});
+  L.push(
+    ov.length === 0
+      ? 'ruleset:  SHIPPED (no overrides)'
+      : `ruleset:  OVERRIDDEN — ${ov.map(([k, v]) => `${k}=${v}`).join(' ')}`,
+  );
   L.push('');
   L.push('[EXACT] per round');
-  L.push('  rd   n     win%    draw%   loss%   medTick  playSec  offers  empty%');
+  L.push(
+    '  rd   n     win%    draw%   loss%   inert%  medTick  playSec  bought  gold  cells  empty%',
+  );
   for (const a of r.perRound) {
     L.push(
       `  ${String(a.round).padStart(2)}  ${String(a.combats).padStart(4)}  ` +
         `${a.winPct.toFixed(1).padStart(6)}  ${a.drawPct.toFixed(1).padStart(6)}  ` +
-        `${a.lossPct.toFixed(1).padStart(6)}  ${String(a.medianTicks).padStart(7)}  ` +
-        `${a.meanPlaybackSec.toFixed(1).padStart(7)}  ${a.meanLiveOffers.toFixed(1).padStart(6)}  ` +
+        `${a.lossPct.toFixed(1).padStart(6)}  ${a.inertPct.toFixed(1).padStart(6)}  ` +
+        `${String(a.medianTicks).padStart(7)}  ` +
+        `${a.meanPlaybackSec.toFixed(1).padStart(7)}  ${a.meanPurchases.toFixed(2).padStart(6)}  ` +
+        `${a.meanGoldHeld.toFixed(1).padStart(4)}  ${a.meanBagCells.toFixed(1).padStart(5)}  ` +
         `${a.emptyRoundPct.toFixed(1).padStart(6)}`,
     );
   }
+  L.push('  inert% = neither side dealt ANY item damage (ramp drain excluded)');
+  L.push('  bought = items bought THIS round · gold = gold still held at combat');
   L.push('');
   L.push('[EXACT] overall');
   L.push(`  combats                 ${r.overall.combats}`);
   L.push(
     `  draw rate               ${r.overall.drawRatePct}%   (balance-bible section 2 guardrail: <1%)`,
+  );
+  L.push(
+    `  inert combats           ${r.overall.inertRatePct}%   (neither side dealt any item damage)`,
+  );
+  L.push(
+    `  ...of draws, inert      ${r.overall.drawsInertPct}%   (rest are the ramp erasing a real lead)`,
   );
   L.push(`  endReason               ${JSON.stringify(r.overall.endReasons)}`);
   L.push(`  median rounds reached   ${r.overall.medianRoundsReached} / 11`);
@@ -214,14 +271,21 @@ export function formatReport(r: Report): string {
 export function formatDiff(before: Report, after: Report): string {
   const L: string[] = [];
   L.push(`DIFF  ${before.meta.gitSha} -> ${after.meta.gitSha}`);
+  const ovKey = (r: Report) =>
+    Object.entries(r.meta.overrides ?? {})
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ');
   if (
     before.meta.seeds !== after.meta.seeds ||
-    before.meta.policies.join(',') !== after.meta.policies.join(',')
+    before.meta.policies.join(',') !== after.meta.policies.join(',') ||
+    ovKey(before) !== ovKey(after)
   ) {
     L.push('');
     L.push('REFUSING TO DIFF: the two reports were produced over different');
     L.push(`populations (seeds ${before.meta.seeds} vs ${after.meta.seeds},`);
-    L.push(`policies ${before.meta.policies.join(',')} vs ${after.meta.policies.join(',')}).`);
+    L.push(`policies ${before.meta.policies.join(',')} vs ${after.meta.policies.join(',')},`);
+    L.push(`ruleset [${ovKey(before) || 'shipped'}] vs [${ovKey(after) || 'shipped'}]).`);
     L.push('A delta across different populations is not a measurement.');
     return L.join('\n');
   }

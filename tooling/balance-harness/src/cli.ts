@@ -10,7 +10,7 @@
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { execSync } from 'node:child_process';
-import { ClassId, RelicId, SimSeed } from '@packbreaker/content';
+import { ClassId, DEFAULT_RULESET, RelicId, SimSeed, type Ruleset } from '@packbreaker/content';
 import { adaptStrategy, POLICY_NAMES } from './policies.ts';
 import { runOne, type RunRecord } from './realplay.ts';
 import { aggregate, formatReport, formatDiff, type Report } from './report.ts';
@@ -20,7 +20,30 @@ interface Args {
   policies: string[];
   out: string | null;
   baseline: string | null;
+  /** Ruleset field overrides, applied on top of DEFAULT_RULESET. Sweep knobs —
+   *  they let a grid ask "what if hearts were 5" without editing
+   *  packages/content, which the determinism corpus is pinned to.
+   *
+   *  Typed as numbers rather than Partial<Ruleset> because every exposed flag
+   *  maps to a numeric field; `bagDimensions` and `mutators` are deliberately
+   *  not sweepable from the CLI. */
+  overrides: Record<string, number>;
+  label: string | null;
 }
+
+/** CLI flag → DEFAULT_RULESET field. Only the economy knobs the sweep needs are
+ *  exposed; `bossRound` is deliberately absent because it has zero sim consumers
+ *  (the boss round is a literal 11 in three places), so a flag for it would be a
+ *  control that silently does nothing. */
+const RULESET_FLAGS = {
+  '--hearts': 'startingHearts',
+  '--gold': 'baseGoldPerRound',
+  '--gold-step': 'goldStepRounds',
+  '--gold-step-amount': 'goldStepAmount',
+  '--shop': 'shopSize',
+  '--reroll-start': 'rerollCostStart',
+  '--win-bonus': 'winBonusGold',
+} as const satisfies Record<string, keyof Ruleset>;
 
 function parseArgs(argv: string[]): Args {
   const get = (flag: string): string | null => {
@@ -36,7 +59,23 @@ function parseArgs(argv: string[]): Args {
       throw new Error(`unknown policy "${p}" — known: ${POLICY_NAMES.join(', ')}`);
     }
   }
-  return { seeds, policies, out: get('--out'), baseline: get('--baseline') };
+  const overrides: Record<string, number> = {};
+  for (const [flag, field] of Object.entries(RULESET_FLAGS)) {
+    const raw = get(flag);
+    if (raw === null) continue;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 0) throw new Error(`${flag} must be a non-negative integer`);
+    overrides[field] = n;
+  }
+
+  return {
+    seeds,
+    policies,
+    out: get('--out'),
+    baseline: get('--baseline'),
+    overrides,
+    label: get('--label'),
+  };
 }
 
 function gitSha(): string {
@@ -66,6 +105,13 @@ function main(): void {
     return;
   }
 
+  // Undefined when no flag was passed, so the default path is byte-identical to
+  // not having the feature — the override never reaches createRun at all.
+  const hasOverrides = Object.keys(args.overrides).length > 0;
+  const rulesetOverride: Ruleset | undefined = hasOverrides
+    ? { ...DEFAULT_RULESET, ...args.overrides }
+    : undefined;
+
   const runs: RunRecord[] = [];
   const t0 = Date.now();
   for (const policyName of args.policies) {
@@ -80,6 +126,7 @@ function main(): void {
             classId,
             startingRelicId: relic,
             policy: adaptStrategy(policyName as never, seed),
+            rulesetOverride,
           }),
         );
       }
@@ -90,6 +137,11 @@ function main(): void {
     gitSha: gitSha(),
     seeds: args.seeds,
     policies: args.policies,
+    // Recorded so a later diff can refuse to compare a swept report against a
+    // baseline run under different rules — otherwise the delta silently mixes
+    // "the change I made" with "the knobs I forgot I'd set".
+    overrides: args.overrides,
+    label: args.label,
     elapsedMs: Date.now() - t0,
   });
 

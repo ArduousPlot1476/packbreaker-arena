@@ -130,6 +130,19 @@ export interface CreateRunInput {
   /** Test-injection escape hatch — overrides RECIPES for combine detection.
    *  Defaults to RECIPES. */
   readonly recipesRegistry?: ReadonlyArray<Recipe>;
+  /** Test-injection escape hatch — overrides the CONTRACT'S ruleset before
+   *  composeRuleset folds in class + relic modifiers. Same shape and same
+   *  purpose as itemsRegistry / recipesRegistry above: it exists so an offline
+   *  harness can sweep economy numbers (startingHearts, the gold curve, shopSize)
+   *  across hundreds of runs WITHOUT editing packages/content between them, which
+   *  would otherwise mean mutating a file the determinism corpus is pinned to
+   *  just to ask a question.
+   *
+   *  Production never passes it, and no fixture passes it, so the default path
+   *  is byte-identical to before this field existed — this is additive and
+   *  corpus-neutral by construction. It is NOT a gameplay feature: a contract
+   *  that wants different rules ships its own ruleset (see CONTRACTS). */
+  readonly rulesetOverride?: Ruleset;
   /** Optional callback for telemetry events. Sim never imports telemetry —
    *  the M1.5 client wires PostHog through this. */
   readonly onTelemetryEvent?: (event: TelemetryEvent) => void;
@@ -313,8 +326,16 @@ class RunControllerImpl implements RunController {
   private lastCombatResult: CombatResult | null = null;
 
   constructor(input: CreateRunInput, restoreFrom?: SerializedRunState) {
-    const contract = CONTRACTS[input.contractId];
-    if (!contract) throw new Error(`Unknown contractId: ${String(input.contractId)}`);
+    const baseContract = CONTRACTS[input.contractId];
+    if (!baseContract) throw new Error(`Unknown contractId: ${String(input.contractId)}`);
+    // rulesetOverride replaces the contract's ruleset only; contract identity,
+    // name and mutators are untouched, so the boss mutator path and every
+    // contract-id-keyed lookup behave exactly as before. Absent (production and
+    // every fixture) this is the identity operation.
+    const contract: Contract =
+      input.rulesetOverride === undefined
+        ? baseContract
+        : { ...baseContract, ruleset: input.rulesetOverride };
     this.contract = contract;
     this.contractId = input.contractId;
     this.classId = input.classId;
