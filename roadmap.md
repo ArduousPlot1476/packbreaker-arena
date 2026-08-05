@@ -20,9 +20,11 @@ economy, async ghost storage and matchmaking, and a portal build.
 | Title / settings screen | Do not exist. The app boots straight into class select. |
 | Audio | None at all — no library, no files, no mute. |
 | Desktop layout | Fixed 1280×720, centred. A 1440p monitor shows a letterboxed island. |
-| Difficulty curve | Rounds 4–10 measured 76 combats / 76 player wins / zero losses; round 11 is a wall. A first correction landed 2026-08-04. |
-| Run length | Median 4.92 min against a 12–20 min design target. |
-| Draw rate | ~5–8% against a <1% guardrail (much improved by the CF-83 ramp, still over). |
+| Difficulty curve | Rounds 4–10 fixed (2026-08-04) and the round-11 wall retuned to §15's ~30% (2026-08-05). Remaining: rounds 1–2 are unlosable — 0 losses in 3,200 combats — kept deliberately as an onboarding ramp and owned by Stage 5. |
+| Late-game decisions | **The real remaining gap.** Rounds 10–11 are 65%/79% *bag-blocked* — the player can afford something and nothing fits. 24 fixed cells, two gold sinks (buy, reroll), no expansion, and a 50%-lossy sell as the only churn. Recipes are the designed cell sink and fire 0.6×/run against 12 authored. |
+| Run length | Median 4.92 min against a 12–20 min design target. Combat playback is 43 s/run exact; the rest is arrange time and remains uncalibrated (CF 62 blocks the telemetry fit). |
+| Draw rate | 3.4–3.7% against a <1% guardrail. **0% inert** — every draw is the ramp erasing a real lead. Deferred with the arithmetic in `CHANGELOG.md`; the fix is a sim change costing 200 fixtures. |
+| Class balance | Gap 11.1 pts against a ≤8 guardrail, and it is an **economy** gap — Marauder's `bonusGoldOnWin` is a 3× multiplier on win income. Widens to 13.3 under competent play. Batched with the late-game economy re-baseline. |
 | Meta progression | None. Trophies never accumulate for anonymous players and no cumulative total is rendered anywhere. |
 | Onboarding | The `gdd.md` §15 tutorial is specced, flagged in persistence, and has no surfaces. |
 | Ghosts | Procedurally generated client-side. No server storage, no submission, no queue. |
@@ -71,6 +73,24 @@ scaffolding (`packages/sim/test/determinism/strategies.ts` has six player polici
 statistics turns tuning from a weeks-long telemetry round-trip into a minutes-long loop.
 It must drive the **real-play** path, not the corpus path — those are two different games
 (different ghost curves, different boss, different shop RNG, different combat seeding).
+
+### Next lever, named from measurement (2026-08-05)
+
+The late game is the remaining Stage 2 gap, and the candidates are not equally priced:
+
+1. **Recipes as the cell sink — do this first.** A combine is the only mechanism in the game
+   that frees cells *and* raises power (2–3 placements → 1). It fires 0.6×/run against 12
+   authored recipes, so the sink never opens; it is also the only lever that revives Tinker,
+   whose `recipeBonusPct` is conditional on a combine having happened and floors to **+0** on
+   any base under 10, and whose `firstRecipeFreeAction` has zero consumers repo-wide. A
+   shop-side recipe-input guarantee mirroring `guaranteeResolver` is **client-only, zero
+   fixture cost** — the same seam that shipped the early-game fix.
+2. **The gold curve — measured non-responsive.** At `--win-bonus 6` the player reaches round
+   11 holding 87 gold and buying 0.00 items. More money does not buy space. 224 + 6 fixtures.
+3. **`bagDimensions` — the direct fix and the most expensive.** A ruleset field, but
+   `apps/client/src/bag/layout.ts` derives `BAG_COLS`/`BAG_ROWS` from `DEFAULT_RULESET` at
+   module scope, and `combat-ramp.test.ts:194`'s termination invariant explicitly breaks past
+   32 cells (`30 + 15 + 32*8 = 301 > 300`), so growing the bag re-derives the ramp window.
 
 ---
 
