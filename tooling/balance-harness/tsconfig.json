@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@packbreaker/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // rootDir is the REPO ROOT, not this package. The harness deliberately
+    // imports client-tier source from outside its own tree (see
+    // src/realplay.ts), and the inherited library.json rootDir would reject
+    // exactly the imports that are the point. Nothing is emitted, so the only
+    // job rootDir has here is to contain every file in the program.
+    "rootDir": "../..",
+    // The harness imports client-tier modules by relative path (see
+    // src/realplay.ts for why), and those are .tsx-adjacent TS source rather
+    // than a built dist. allowImportingTsExtensions keeps the imports explicit
+    // about what they are.
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "reports"]
+}
