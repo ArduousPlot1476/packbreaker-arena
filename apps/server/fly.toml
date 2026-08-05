@@ -1,0 +1,37 @@
+# Fly.io app config for the Packbreaker API.
+#
+# Deploy from the REPO ROOT, not this directory — the Dockerfile copies workspace
+# packages, so the build context has to be the whole monorepo:
+#
+#   fly deploy --config apps/server/fly.toml --dockerfile apps/server/Dockerfile .
+#
+# Secrets are set once with `fly secrets set`, never committed:
+#   DATABASE_URL       Neon connection string
+#   CLERK_SECRET_KEY   Clerk backend key
+#   POSTHOG_PROJECT_KEY / POSTHOG_HOST   optional; telemetry forwarding no-ops without them
+#
+# app = "" is intentional: `fly launch` fills it in with the name you choose, and
+# hardcoding one here would make the config wrong for anyone else's account.
+app = ""
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "4000"
+  NODE_ENV = "production"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # The client degrades gracefully when the API is unreachable (auth is optional
+  # and telemetry failures are swallowed), so scaling to zero costs a cold start
+  # on the first save, not a broken game.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

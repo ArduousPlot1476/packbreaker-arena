@@ -9,6 +9,8 @@ coverage
 .DS_Store
 .claude/settings.local.json
 .env
+# Vercel project link — machine/account specific, written by `vercel link`.
+.vercel
 PLAN-*.md
 .agents/
 .codex/
