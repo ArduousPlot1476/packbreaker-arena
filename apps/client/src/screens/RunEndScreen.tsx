@@ -14,11 +14,29 @@
 // arithmetic. The breadcrumb walks state.state.history; everything
 // else reads ClientRunState fields populated by applySimSnapshot.
 
+import { DndContext } from '@dnd-kit/core';
 import { CLASSES, ITEMS, RELICS } from '@packbreaker/content';
 import type { RunOutcome } from '@packbreaker/content';
-import { HeartGlyph } from '../icons/icons';
+import { cssVar, rgba, type PaletteKey } from '@packbreaker/ui-kit';
+import { BagBoard } from '../bag/BagBoard';
+import { CellSizeProvider } from '../bag/CellSize';
+import { CoinGlyph, HeartGlyph } from '../icons/icons';
 import { useRunContext } from '../run/RunContext';
 import { useViewport } from '../run/useViewport';
+
+/** Build-snapshot cell size. Matches RoundResolution's opponent reveal so the
+ *  two read-only boards are the same object at the same scale. */
+const SNAPSHOT_CELL_PX = 40;
+
+/** Outcome accent. Amber for a win (the coin / legendary signal register),
+ *  life-red for elimination, muted secondary for an abandon — all locked tokens.
+ *  The values this screen used before (#f5b942 / #e85c5c / #8a9bb0) were
+ *  off-palette approximations of exactly these three. */
+const OUTCOME_ACCENT: Readonly<Record<Exclude<RunOutcome, 'in_progress'>, PaletteKey>> = {
+  won: 'coinFill',
+  eliminated: 'lifeRed',
+  abandoned: 'textSecondary',
+};
 
 export interface RunEndScreenProps {
   /** Primary CTA — restart immediately with the same class + starter relic
@@ -64,8 +82,10 @@ function RelicSlotCard({ relicName, tierLabel, testId }: RelicSlotProps) {
       data-empty={isEmpty ? 'true' : 'false'}
       className="runend-relic"
       style={{
-        border: isEmpty ? '1px dashed #353535' : '1px solid var(--border, #444)',
-        background: isEmpty ? 'var(--bg-card-2, #232323)' : 'var(--bg-card, #2a2a2a)',
+        border: isEmpty
+          ? `1px dashed ${cssVar('borderDefault')}`
+          : `1px solid ${cssVar('borderDefault')}`,
+        background: isEmpty ? 'transparent' : cssVar('surface'),
         opacity: isEmpty ? 0.6 : 1,
         borderRadius: 8,
         padding: '16px 14px 14px',
@@ -81,7 +101,7 @@ function RelicSlotCard({ relicName, tierLabel, testId }: RelicSlotProps) {
         style={{
           fontSize: 14,
           fontWeight: isEmpty ? 500 : 600,
-          color: isEmpty ? '#6a6a6a' : '#fff',
+          color: isEmpty ? cssVar('textMuted') : cssVar('textPrimary'),
           textAlign: 'center',
           maxWidth: '100%',
           // Mobile ellipsis per Phase 2 clarification (6); harmless on
@@ -94,13 +114,8 @@ function RelicSlotCard({ relicName, tierLabel, testId }: RelicSlotProps) {
         {relicName ?? '—'}
       </div>
       <div
-        style={{
-          fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-          fontSize: 9,
-          letterSpacing: '0.16em',
-          color: '#6a6a6a',
-          textTransform: 'uppercase',
-        }}
+        className="label-cap"
+        style={{ fontSize: 9, letterSpacing: '0.16em', color: cssVar('textMuted') }}
       >
         {tierLabel}
       </div>
@@ -119,9 +134,9 @@ function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
   const isDraw = outcome === 'draw';
   const dotStyle = isWin
     ? {
-        background: 'rgba(245, 185, 66, 0.16)',
-        border: '1px solid #f5b942',
-        color: '#f5b942',
+        background: rgba('coinFill', 0.16),
+        border: `1px solid ${cssVar('coinFill')}`,
+        color: cssVar('coinFill'),
       }
     : isDraw
       ? {
@@ -130,23 +145,22 @@ function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
           // var(--text-secondary)) rather than the loss red — the run-end strip
           // now matches the resolution overlay's honest-draw semantics. Economy
           // is UNCHANGED (a draw still cost a heart); this is display only.
-          background: 'rgba(138, 155, 176, 0.14)',
-          border: '1px solid var(--text-secondary, #8a9bb0)',
-          color: 'var(--text-secondary, #8a9bb0)',
+          background: rgba('textSecondary', 0.14),
+          border: `1px solid ${cssVar('textSecondary')}`,
+          color: cssVar('textSecondary'),
         }
       : isLoss
         ? {
             // Hatched fill via repeating linear gradient — color-independent
             // differentiation per design board.
-            backgroundImage:
-              'repeating-linear-gradient(45deg, rgba(232, 92, 92, 0.18) 0 2px, transparent 2px 5px)',
-            border: '1px solid #e85c5c',
-            color: '#e85c5c',
+            backgroundImage: `repeating-linear-gradient(45deg, ${rgba('lifeRed', 0.18)} 0 2px, transparent 2px 5px)`,
+            border: `1px solid ${cssVar('lifeRed')}`,
+            color: cssVar('lifeRed'),
           }
         : {
             background: 'transparent',
-            border: '1px dashed #3a3a3a',
-            color: '#6a6a6a',
+            border: `1px dashed ${cssVar('borderDefault')}`,
+            color: cssVar('textMuted'),
           };
   const label = isWin ? 'W' : isDraw ? 'D' : isLoss ? 'L' : '·';
   return (
@@ -156,6 +170,7 @@ function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}
     >
       <div
+        className="tnum"
         style={{
           width: '100%',
           aspectRatio: '1 / 1',
@@ -164,7 +179,6 @@ function BreadcrumbPip({ round, outcome }: BreadcrumbPipProps) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
           fontSize: 12,
           fontWeight: 700,
           ...dotStyle,
@@ -192,8 +206,7 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
   const label = OUTCOME_LABELS[outcome];
   const glyph = OUTCOME_GLYPHS[outcome];
   const subCopy = runEndSubCopy(outcome, state.state.round);
-  const accentColor =
-    outcome === 'won' ? '#f5b942' : outcome === 'eliminated' ? '#e85c5c' : '#8a9bb0';
+  const accentColor = cssVar(OUTCOME_ACCENT[outcome]);
   const labelStyle =
     outcome === 'won'
       ? { letterSpacing: '0.18em', fontWeight: 800 as const, fontStyle: 'normal' as const }
@@ -248,9 +261,11 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
       style={{
         width: '100%',
         minHeight: '100vh',
-        background: 'var(--bg-deep, #1a1a1a)',
-        color: '#fff',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
+        background: cssVar('bgDeep'),
+        color: cssVar('textPrimary'),
+        // Font deliberately unset — inherits Inter from html/body (index.css).
+        // This screen used to pin a system stack here, which made the biggest
+        // type in the game the only type not in the locked face.
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -290,12 +305,11 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
         </div>
         <div
           data-testid="runend-sub"
+          className="label-cap"
           style={{
-            fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
             fontSize: isMobile ? 10 : 11,
             letterSpacing: isMobile ? '0.18em' : '0.22em',
-            color: '#9a9a9a',
-            textTransform: 'uppercase',
+            color: cssVar('textSecondary'),
             marginTop: 6,
           }}
         >
@@ -312,21 +326,21 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           gap: isMobile ? 14 : 28,
           margin: isMobile ? '4px 0 20px' : '4px 0 28px',
           padding: isMobile ? '12px 14px' : '14px 28px',
-          border: '1px solid #333',
+          border: `1px solid ${cssVar('borderDefault')}`,
           borderRadius: 8,
-          background: 'rgba(255,255,255,0.015)',
+          background: cssVar('bgMid'),
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: isMobile ? 0 : 96 }}>
-          <span style={metaKeyStyle}>Class</span>
+          <span className="label-cap" style={metaKeyStyle}>Class</span>
           <span data-testid="runend-class" style={metaValueStyle(isMobile)}>{className}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: isMobile ? 0 : 96 }}>
-          <span style={metaKeyStyle}>Round</span>
+          <span className="label-cap" style={metaKeyStyle}>Round</span>
           <span data-testid="runend-round" style={metaValueStyle(isMobile)}>{state.state.round} / {totalRounds}</span>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: isMobile ? 0 : 96 }}>
-          <span style={metaKeyStyle}>Hearts</span>
+          <span className="label-cap" style={metaKeyStyle}>Hearts</span>
           <span
             data-testid="runend-hearts"
             data-hearts-filled={hearts}
@@ -345,7 +359,7 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
       {/* relic loadout */}
       <div style={{ width: '100%', marginBottom: 24 }}>
         <div style={{ marginBottom: 10 }}>
-          <span style={sectionLabelStyle}>Relic loadout</span>
+          <span className="label-cap" style={sectionLabelStyle}>Relic loadout</span>
         </div>
         <div
           data-testid="runend-relics"
@@ -361,6 +375,45 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
         </div>
       </div>
 
+      {/* Final bag — the "build snapshot" gdd.md § 14.6 asks for. Until now this
+          screen listed relic NAMES as text and never showed the thing the player
+          actually spent the run building.
+
+          Same renderer as the player board and as RoundResolution's opponent
+          reveal (BagBoard in readOnly mode inside an inert DndContext), so the
+          board the player stares at all run is the board they see at the end —
+          no second, subtly-different rendering to keep in sync. This is also
+          the artifact a shareable run card will need. */}
+      {state.bag.length > 0 && (
+        <div style={{ width: '100%', marginBottom: 24 }}>
+          <div style={{ marginBottom: 10 }}>
+            <span className="label-cap" style={sectionLabelStyle}>
+              Final build
+            </span>
+          </div>
+          <div
+            data-testid="runend-build"
+            data-item-count={state.bag.length}
+            style={{ display: 'flex', justifyContent: 'center' }}
+          >
+            <DndContext sensors={[]}>
+              <CellSizeProvider value={SNAPSHOT_CELL_PX}>
+                <BagBoard
+                  bag={state.bag}
+                  drag={null}
+                  hover={null}
+                  dimmed={false}
+                  recipeMatches={[]}
+                  onCombine={() => {}}
+                  compact
+                  readOnly
+                />
+              </CellSizeProvider>
+            </DndContext>
+          </div>
+        </div>
+      )}
+
       {/* boss reward item — CF-67 conditional 9th field. Shown ONLY when the
           Legendary leg of the boss-win offer was chosen (bossRewardItemId set);
           mirrors the Boss-relic-name display above for legibility parity. No
@@ -370,13 +423,14 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
       {state.state.bossRewardItemId !== null && (
         <div style={{ width: '100%', marginBottom: 24 }}>
           <div style={{ marginBottom: 10 }}>
-            <span style={sectionLabelStyle}>Reward</span>
+            <span className="label-cap" style={sectionLabelStyle}>Reward</span>
           </div>
           <div
             data-testid="runend-reward"
             style={{
-              border: '1px solid var(--border, #444)',
-              background: 'var(--bg-card, #2a2a2a)',
+              border: `1px solid ${cssVar('rLegendary')}`,
+              background: cssVar('surface'),
+              boxShadow: `inset 0 0 14px ${rgba('rLegendary', 0.22)}`,
               borderRadius: 8,
               padding: '16px 14px 14px',
               display: 'flex',
@@ -387,18 +441,18 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           >
             <div
               data-testid="runend-reward-name"
-              style={{ fontSize: 14, fontWeight: 600, color: '#fff', textAlign: 'center' }}
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: cssVar('textPrimary'),
+                textAlign: 'center',
+              }}
             >
               {ITEMS[state.state.bossRewardItemId]?.name ?? '—'}
             </div>
             <div
-              style={{
-                fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-                fontSize: 9,
-                letterSpacing: '0.16em',
-                color: '#6a6a6a',
-                textTransform: 'uppercase',
-              }}
+              className="label-cap"
+              style={{ fontSize: 9, letterSpacing: '0.16em', color: cssVar('rLegendary') }}
             >
               Legendary
             </div>
@@ -409,7 +463,7 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
       {/* per-round breadcrumb */}
       <div style={{ width: '100%', marginBottom: 24 }}>
         <div style={{ marginBottom: 10 }}>
-          <span style={sectionLabelStyle}>Per-round breakdown</span>
+          <span className="label-cap" style={sectionLabelStyle}>Per-round breakdown</span>
         </div>
         <div
           data-testid="runend-breadcrumb"
@@ -428,19 +482,24 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
       {/* gold + trophy stats */}
       <div style={{ display: 'flex', gap: 14, width: '100%', marginBottom: 24 }}>
         <div style={statCardStyle(isMobile)}>
+          {/* The real coin glyph, not a "◆" stand-in — it is the same mark the
+              top bar carries all run, so the final number reads as the same
+              currency the player was watching. */}
           <div
             style={{
               ...statIconStyle(isMobile),
-              background: 'rgba(245, 185, 66, 0.1)',
-              color: '#f5b942',
-              border: '1px solid rgba(245, 185, 66, 0.35)',
+              background: rgba('coinFill', 0.1),
+              border: `1px solid ${rgba('coinFill', 0.35)}`,
+              padding: isMobile ? 7 : 9,
             }}
           >
-            ◆
+            <CoinGlyph />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={metaKeyStyle}>Final gold</span>
-            <span data-testid="runend-gold" style={statValueStyle(isMobile)}>
+            <span className="label-cap" style={metaKeyStyle}>
+              Final gold
+            </span>
+            <span data-testid="runend-gold" className="tnum" style={statValueStyle(isMobile)}>
               {state.state.gold.toLocaleString()}
             </span>
           </div>
@@ -449,16 +508,18 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           <div
             style={{
               ...statIconStyle(isMobile),
-              background: 'rgba(180, 200, 220, 0.06)',
-              color: '#d4dde6',
-              border: '1px solid rgba(200, 215, 230, 0.25)',
+              background: rgba('accent', 0.08),
+              color: cssVar('accent'),
+              border: `1px solid ${rgba('accent', 0.3)}`,
             }}
           >
-            ♚
+            ◆
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={metaKeyStyle}>Trophy value</span>
-            <span data-testid="runend-trophy" style={statValueStyle(isMobile)}>
+            <span className="label-cap" style={metaKeyStyle}>
+              Trophy value
+            </span>
+            <span data-testid="runend-trophy" className="tnum" style={statValueStyle(isMobile)}>
               {state.state.trophy.toLocaleString()}
             </span>
           </div>
@@ -479,23 +540,28 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           width: '100%',
         }}
       >
+        {/* Primary CTA uses --accent, the ratified primary-action token that
+            every other CTA in the game uses (Continue, Next Round, Begin Run).
+            It was amber here, which read as the gold/legendary signal rather
+            than as an action. */}
         <button
           data-testid="runend-playagain-cta"
           type="button"
           onClick={onPlayAgain}
+          className="hover-lift focus-ring ease-snap label-cap"
           style={{
             appearance: 'none',
             border: 'none',
-            background: '#f5b942',
-            color: '#1a1a1a',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+            background: cssVar('accent'),
+            color: cssVar('textPrimary'),
+            font: 'inherit',
             fontSize: isMobile ? 15 : 16,
             fontWeight: 700,
             letterSpacing: '0.08em',
             padding: isMobile ? '14px 0' : '14px 56px',
             borderRadius: 8,
             cursor: 'pointer',
-            textTransform: 'uppercase',
+            boxShadow: `0 6px 20px ${rgba('accent', 0.28)}`,
             width: isMobile ? '100%' : undefined,
           }}
         >
@@ -505,12 +571,13 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
           data-testid="runend-restart-cta"
           type="button"
           onClick={onRestart}
+          className="hover-lift focus-ring ease-snap"
           style={{
             appearance: 'none',
             border: 'none',
             background: 'transparent',
-            color: '#9a9a9a',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
+            color: cssVar('textSecondary'),
+            font: 'inherit',
             fontSize: isMobile ? 13 : 14,
             fontWeight: 600,
             letterSpacing: '0.04em',
@@ -526,37 +593,37 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
   );
 }
 
+// Label styles pair with the `label-cap` class (uppercase + 600 weight) at the
+// call sites; only size, tracking and color live here. The monospace face these
+// used to pin appeared nowhere else in the game and nowhere in
+// visual-direction.md § 4, which locks Inter.
 const metaKeyStyle = {
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontSize: 10,
   letterSpacing: '0.16em',
-  color: '#6a6a6a',
-  textTransform: 'uppercase' as const,
+  color: cssVar('textMuted'),
 };
 
 function metaValueStyle(isMobile: boolean) {
   return {
     fontSize: isMobile ? 15 : 18,
     fontWeight: 600 as const,
-    color: '#fff',
+    color: cssVar('textPrimary'),
     letterSpacing: '0.02em',
   };
 }
 
 const sectionLabelStyle = {
-  fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
   fontSize: 10,
   letterSpacing: '0.18em',
-  color: '#6a6a6a',
-  textTransform: 'uppercase' as const,
+  color: cssVar('textMuted'),
 };
 
 function statCardStyle(isMobile: boolean) {
   return {
     flex: 1,
-    border: '1px solid var(--border, #444)',
+    border: `1px solid ${cssVar('borderDefault')}`,
     borderRadius: 8,
-    background: 'var(--bg-card, #2a2a2a)',
+    background: cssVar('surface'),
     padding: isMobile ? '12px 14px' : '14px 18px',
     display: 'flex',
     alignItems: 'center',
@@ -581,7 +648,7 @@ function statValueStyle(isMobile: boolean) {
   return {
     fontSize: isMobile ? 18 : 22,
     fontWeight: 700 as const,
-    color: '#fff',
+    color: cssVar('textPrimary'),
     letterSpacing: '0.01em',
     fontVariantNumeric: 'tabular-nums' as const,
   };

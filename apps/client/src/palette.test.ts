@@ -14,8 +14,8 @@
 // what comes back is the compiled output, not the source this test is pinning.
 // `import.meta.url` is not a file: URL under vitest, hence process.cwd() — the
 // client package root, both for `vitest run` here and for the turbo test task.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CSS_VAR, PALETTE, PALETTE_INT, hexToInt, rgba, type PaletteKey } from '@packbreaker/ui-kit';
 
@@ -68,6 +68,80 @@ describe('locked palette — visual-direction.md § 3 constraints', () => {
 
   it.each(keys)('%s is a well-formed 6-digit uppercase hex', (key) => {
     expect(PALETTE[key]).toMatch(/^#[0-9A-F]{6}$/);
+  });
+});
+
+describe('no client source references an undeclared CSS custom property', () => {
+  // This is the guard that would have caught the RunEndScreen defect directly.
+  // That screen referenced `var(--bg-card, #2a2a2a)`, `var(--bg-card-2, #232323)`
+  // and `var(--border, #444)` — three custom properties that DO NOT EXIST. Every
+  // one silently fell through to its neutral-grey fallback, so the biggest screen
+  // in the game rendered charcoal while the rest of the app rendered navy, and
+  // nothing failed. A `var()` with a fallback cannot fail loudly at runtime; it
+  // has to be caught here.
+
+  // A hand-rolled walk rather than fs.globSync: globSync landed in Node 22 and
+  // .nvmrc pins Node 20, which is also what CI runs — so globSync would
+  // typecheck against @types/node here and then throw in CI.
+  function walk(dir: string, acc: string[] = []): string[] {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) walk(full, acc);
+      else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) acc.push(full);
+    }
+    return acc;
+  }
+
+  const files = walk(resolve(process.cwd(), 'src'));
+
+  /** Comments discuss `var(--bg-card)` by name when documenting the bug that
+   *  motivated this check, so scanning them would report the prose as an
+   *  offender. Strip them first. */
+  function stripComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  }
+
+  /** Every `var(--name)` in a file. Template-interpolated names — `var(--r-${r})`
+   *  — are skipped here (the trailing `${` gives them away) and covered by the
+   *  rarity assertion below instead. */
+  function referencedVars(source: string): string[] {
+    const out: string[] = [];
+    for (const m of stripComments(source).matchAll(/var\(\s*(--[a-zA-Z0-9-]+)(.?)/g)) {
+      if (m[2] === '$') continue;
+      out.push(m[1]!);
+    }
+    return out;
+  }
+
+  const declaredNames = new Set(declared.keys());
+
+  function relative(file: string): string {
+    const norm = file.replace(/\\/g, '/');
+    const i = norm.lastIndexOf('/src/');
+    return i === -1 ? norm : norm.slice(i + 1);
+  }
+
+  it('finds client source files to scan (guard against a vacuous pass)', () => {
+    expect(files.length).toBeGreaterThan(50);
+  });
+
+  it('every referenced custom property is declared in index.css', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = readFileSync(file, 'utf-8');
+      for (const name of referencedVars(source)) {
+        if (!declaredNames.has(name)) offenders.push(`${relative(file)}: ${name}`);
+      }
+    }
+    expect([...new Set(offenders)].sort()).toEqual([]);
+  });
+
+  it('the five interpolated --r-<rarity> names all resolve', () => {
+    // `var(--r-${rarity})` is built at runtime from a RarityKey, so the static
+    // scan above skips it. Assert the full set exists instead.
+    for (const r of ['common', 'uncommon', 'rare', 'epic', 'legendary']) {
+      expect(declaredNames.has(`--r-${r}`)).toBe(true);
+    }
   });
 });
 

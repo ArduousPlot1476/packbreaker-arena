@@ -37,7 +37,7 @@ function SignInAffordanceInner() {
           fontWeight: 600,
           color: 'var(--text-secondary)',
           background: 'transparent',
-          border: '1px solid var(--border, rgba(255,255,255,0.16))',
+          border: '1px solid var(--border-default)',
           borderRadius: 8,
           padding: '6px 14px',
           cursor: 'pointer',
