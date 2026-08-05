@@ -7,13 +7,45 @@ play → wait for PostHog → analyse) into a loop measured in seconds.
 pnpm balance -- --seeds 60                                  # all policies
 pnpm balance -- --seeds 200 --policies greedy,hoarder
 pnpm balance -- --seeds 60 --out reports/after.json
-pnpm balance -- --seeds 60 --baseline reports/before.json --out reports/after.json
 ```
 
-360 runs / ~1900 combats takes about 2 seconds.
+`--seeds` defaults to 100, and a run is `seeds × 2 classes × policies`, so the
+bare default is 1400 runs. Roughly 2 seconds per 360 runs.
 
 *(`pnpm` isn't on PATH on the dev box — use `corepack pnpm run sim -- …` from
 this directory, or put a `pnpm.cmd` → `corepack pnpm` shim on PATH.)*
+
+### Diffing two reports
+
+`--baseline` does **not** run a sweep. It reads two reports that already exist
+and prints the delta, so a before/after is three commands, not one:
+
+```sh
+pnpm balance -- --seeds 200 --out reports/before.json     # on the old code
+#   ... make the change ...
+pnpm balance -- --seeds 200 --out reports/after.json      # on the new code
+pnpm balance -- --baseline reports/before.json --out reports/after.json
+```
+
+`formatDiff` refuses to compare reports built over different populations —
+different `--seeds`, `--policies`, or sweep overrides. Keep them identical.
+
+### Sweep knobs — measurement without a content edit
+
+Economy: `--hearts --gold --gold-step --gold-step-amount --shop --reroll-start
+--win-bonus`, folded onto `DEFAULT_RULESET` and injected via `CreateRunInput`'s
+`rulesetOverride`. Boss: `--boss-hp --boss-damage --boss-lifesteal`, applied to
+the `forge-tyrant-boss` `boss_only` mutator at the harness boundary (the shipped
+`opponentForRound` reads `CONTRACTS` directly and takes no parameter).
+
+Both are measurement-only and cost nothing. **Landing** a number is where the
+prices differ, and they differ enormously — the boss mutator fields are free
+(all 224 `.jsonl` fixtures run `contractId: "neutral"`, so the corpus never
+exercises them), while any ruleset or class change re-baselines the corpus.
+
+Unknown flags are a hard error. `--policy` (singular) used to be silently
+ignored and quietly ran all six policies, which is how a number that looks like
+the player model turns out not to be one.
 
 ## It drives the real-play path, not the corpus path
 
@@ -59,8 +91,25 @@ Playback seconds are not modelled — `playbackMs` replays the client's own
 fast-forward. It is the same function the Phaser scene runs.
 
 **`empty rounds`** is the pacing instrument: rounds presenting at most one
-affordable-and-placeable offer and no ready recipe. The player spent time and
+affordable-and-placeable offer and no recipe decision. The player spent time and
 made no decision. No telemetry, no calibration, no wall clock required.
+
+**`bag-blocked rounds`** is its discriminator: the player could afford something
+and *nothing fit*. When `blocked%` tracks `empty%` — as it does in rounds 9–11 —
+the late game is short of space, not short of money, and no economy lever will
+touch it.
+
+> **The sample point is the whole point, and it was wrong until 2026-08-05.**
+> Both inputs to `empty rounds` were measured at Continue, i.e. *after* the
+> player had spent. That inverted the metric: buying three items scored the round
+> EMPTY (you were down to 1 gold by then), and *combining* a recipe erased the
+> evidence that one had been available. Measured on `f381637`, rounds 1–5 read
+> 100% empty while the bot bought 1.0–2.5 items a round, and round 11 read 4%
+> empty holding 39 gold with a full bag. Repaired, the same population reads 0.0%
+> empty in rounds 1–6 and 50/77/91% in rounds 9/10/11. `countLiveOffers` also
+> never checked placeability at all despite its docstring claiming it did, and
+> used the raw `item.cost` rather than `effectiveItemCost`. Three defects, all in
+> the direction of hiding the late game.
 
 **`[POLICY-RELATIVE]`** — facts about the *bot*. `greedy` buys the first
 affordable slot; `hoarder` buys max rarity. `balance-bible.md` §16's 2% / 35%
@@ -71,20 +120,36 @@ a fixed policy across two revisions.
 
 ## Which policy is the player model
 
-Five of the six come from the fixture corpus and their own header says they "are
-heuristic and aim for path coverage, not realism". They buy by slot index or by
-rarity — never by what an item *does*. Measured, they buy 0.6 items in round 1
+Five of the seven come from the fixture corpus and their own header says they
+"are heuristic and aim for path coverage, not realism". They buy by slot index or
+by rarity — never by what an item *does*. Measured, they buy 0.6 items in round 1
 and will walk past a weapon.
 
-`resolver-first` is the harness's own, and it is the closest thing to a player:
-it buys a damage source when one is affordable and it doesn't own one, then plays
-greedily. Use it for "what does a person experience"; use the other five for
-coverage and for deltas.
+Two are the harness's own, and they form a ladder:
 
-**Report both.** They diverge sharply — after the 2026-08-05 early-game work the
-median run reached 4/11 under the full policy set and 10/11 under
-`resolver-first`, because most of the corpus bots decline to buy anything. Citing
-only one is how a balance claim becomes wrong.
+- **`resolver-first`** — buys a damage source when one is affordable and it
+  doesn't own one, then plays greedily. The floor of someone who understands that
+  you need a weapon.
+- **`sell-to-fit`** — a strict superset: same opening, same greedy delegation,
+  plus the one move greedy structurally cannot make. Greedy refuses to buy
+  anything that doesn't already fit, and only sells to place an item it has
+  *already bought*, so a full bag is an absorbing state — no buy, therefore no
+  sell, therefore no buy. `sell-to-fit` sells a strictly-lower-rarity placement
+  to make room (never its last resolver). It is the floor of competent late-game
+  play.
+
+Because the second is a superset of the first, `sell-to-fit` minus
+`resolver-first` on an identical population isolates exactly what being able to
+sell is worth. Measured over 600 runs: round-11 win **8.4% → 17.3%**, round-11
+purchases 0.17 → 2.19, gold left on the table 39.6 → 19.7, runs won 20 → 43.
+
+**That delta is why the sample point mattered.** Tuning the boss against the
+8.4% figure would have over-corrected by roughly a factor of two.
+
+**Report both — or all three.** They diverge sharply: after the 2026-08-05
+early-game work the median run reached 4/11 under the full corpus set and 10/11
+under `resolver-first`, because most of the corpus bots decline to buy anything.
+Citing only one is how a balance claim becomes wrong.
 
 ## Validation
 

@@ -20,13 +20,20 @@
 
 import type { RunController, RunControllerAction } from '@packbreaker/sim';
 import { composeRuleset, createRng, effectiveItemCost, type Rng } from '@packbreaker/sim';
-import { CONTRACTS, type SimSeed } from '@packbreaker/content';
+import {
+  CONTRACTS,
+  type ItemId,
+  type PlacementId,
+  type Rarity,
+  type SimSeed,
+} from '@packbreaker/content';
 import { isResolver } from '../../../apps/client/src/run/resolvers.ts';
 import { SHOP_POOL_ITEMS } from '../../../apps/client/src/run/content.ts';
 import {
   STRATEGIES,
   type StrategyName,
 } from '../../../packages/sim/test/determinism/strategies.ts';
+import { fitsAnywhere } from './bagfit.ts';
 
 export interface PolicyContext {
   readonly ctrl: RunController;
@@ -56,6 +63,7 @@ export const POLICY_NAMES: ReadonlyArray<string> = [
   'reroll-burner',
   'random-legal',
   'resolver-first',
+  'sell-to-fit',
 ];
 
 /** Buys a weapon when it can, then plays greedily.
@@ -121,10 +129,187 @@ function resolverFirstPolicy(seed: SimSeed): Policy {
   };
 }
 
+const RARITY_ORDER: Readonly<Record<Rarity, number>> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  epic: 3,
+  legendary: 4,
+};
+
+function rarityRank(itemId: string): number {
+  const item = SHOP_POOL_ITEMS[itemId];
+  return item === undefined ? -1 : (RARITY_ORDER[item.rarity] ?? -1);
+}
+
+/** `resolver-first`, plus the one late-game move it cannot make: selling.
+ *
+ *  WHY THIS EXISTS. `resolver-first` delegates everything except the opening
+ *  weapon buy to `greedy`, and greedy's buy gate is:
+ *
+ *      if (findFirstValidPlacement(state.bag, itemId, [0]) === null) continue;
+ *
+ *  — it refuses to buy anything that does not ALREADY fit, at rotation 0 only.
+ *  Its sell branch fires only for an item already PENDING from a buy. So a full
+ *  bag is an ABSORBING STATE: no buy, therefore no sell, therefore no buy.
+ *  Measured on f381637 under resolver-first, the bag reaches 23.9 of 24 cells by
+ *  round 11, purchases fall to 0.16/round, and gold climbs to 39 unspent. Under
+ *  a 6x win bonus it is starker: 24.0/24 cells, 0.00 purchases, 87 gold.
+ *
+ *  That made the question "does the late game run out of decisions?"
+ *  unanswerable — the number was a property of the policy. A human sells a
+ *  Common and buys the Epic; this policy is the floor of that competence.
+ *
+ *  IT IS A STRICT SUPERSET of resolver-first: same opening, same greedy
+ *  delegation, one added clause. So `sell-to-fit` minus `resolver-first` is
+ *  exactly the value of being able to sell, which is the ablation the late-game
+ *  question needs.
+ *
+ *  TERMINATION. Sell candidates are restricted to placements of STRICTLY lower
+ *  rarity than the target, so each sell shrinks that set by one and the clear
+ *  loop is bounded by the bag's placement count. The explicit guard below is a
+ *  backstop, not the argument. The policy also refuses to sell its last resolver
+ *  — clearing space by disarming yourself is not competent play, and it would
+ *  hand the opening clause a fight it already won. */
+function sellToFitPolicy(seed: SimSeed): Policy {
+  const greedy = STRATEGIES.greedy;
+  const rng: Rng = createRng(seed);
+
+  /** The offer we are currently making room for, and how many sells we have
+   *  spent on it. Reset when the target is bought, vanishes, or proves
+   *  unreachable. */
+  let clearingFor: ItemId | null = null;
+  let sellsThisClear = 0;
+  /** Targets abandoned this run — never re-attempted, so a target that cannot
+   *  be cleared cannot re-trigger the loop every tick. */
+  const abandoned = new Set<string>();
+
+  return {
+    name: 'sell-to-fit',
+    decide({ ctrl, pending }) {
+      const state = ctrl.getState();
+
+      // Placement first, always — greedy owns it, and a pending item means the
+      // buy already happened.
+      if (pending.length === 0) {
+        const itemCostDelta = state.derived.itemCostDelta;
+        const costOf = (id: string): number =>
+          effectiveItemCost(
+            SHOP_POOL_ITEMS[id]!,
+            itemCostDelta,
+            state.ruleset.itemCostMultiplierBp,
+          );
+
+        // ── resolver-first's opening clause, unchanged ────────────────────
+        const ownsResolver = state.bag.placements.some((p) =>
+          isResolver(SHOP_POOL_ITEMS[String(p.itemId)]!),
+        );
+        if (!ownsResolver) {
+          for (let i = 0; i < state.shop.slots.length; i++) {
+            if (state.shop.purchased.includes(i)) continue;
+            const id = state.shop.slots[i];
+            if (id === undefined) continue;
+            const item = SHOP_POOL_ITEMS[String(id)];
+            if (item === undefined || !isResolver(item)) continue;
+            if (costOf(String(id)) > state.gold) continue;
+            return { kind: 'action', action: { type: 'buy_item', slotIndex: i } };
+          }
+        }
+
+        // ── the added clause: clear room for the best offer that won't fit ──
+
+        // Drop a stale target: bought, rerolled away, or no longer affordable.
+        if (clearingFor !== null) {
+          const stillOffered = state.shop.slots.some(
+            (id, i) => id === clearingFor && !state.shop.purchased.includes(i),
+          );
+          if (!stillOffered || costOf(String(clearingFor)) > state.gold) {
+            clearingFor = null;
+            sellsThisClear = 0;
+          }
+        }
+
+        // If the target now fits, take it. This buy is OURS rather than
+        // greedy's on purpose: greedy takes the first affordable slot, which
+        // could be a Common dropped straight into the cell we just cleared,
+        // leaving the target still unfitting and the clear loop live forever.
+        if (clearingFor !== null && fitsAnywhere(state.bag, clearingFor, SHOP_POOL_ITEMS as never)) {
+          const slotIndex = state.shop.slots.findIndex(
+            (id, i) => id === clearingFor && !state.shop.purchased.includes(i),
+          );
+          if (slotIndex >= 0) {
+            clearingFor = null;
+            sellsThisClear = 0;
+            return { kind: 'action', action: { type: 'buy_item', slotIndex } };
+          }
+        }
+
+        // Pick a target: the highest-rarity affordable offer that does not fit.
+        if (clearingFor === null) {
+          let best: { id: ItemId; rank: number } | null = null;
+          for (let i = 0; i < state.shop.slots.length; i++) {
+            if (state.shop.purchased.includes(i)) continue;
+            const id = state.shop.slots[i];
+            if (id === undefined) continue;
+            const key = String(id);
+            if (abandoned.has(key)) continue;
+            if (SHOP_POOL_ITEMS[key] === undefined) continue;
+            if (costOf(key) > state.gold) continue;
+            if (fitsAnywhere(state.bag, id as ItemId, SHOP_POOL_ITEMS as never)) continue;
+            const rank = rarityRank(key);
+            if (best === null || rank > best.rank) best = { id: id as ItemId, rank };
+          }
+          if (best !== null) {
+            clearingFor = best.id;
+            sellsThisClear = 0;
+          }
+        }
+
+        // Sell the cheapest thing strictly worse than the target.
+        if (clearingFor !== null) {
+          const targetRank = rarityRank(String(clearingFor));
+          const resolverCount = state.bag.placements.filter((p) =>
+            isResolver(SHOP_POOL_ITEMS[String(p.itemId)]!),
+          ).length;
+
+          let victim: { id: PlacementId; rank: number } | null = null;
+          for (const p of state.bag.placements) {
+            const key = String(p.itemId);
+            const rank = rarityRank(key);
+            if (rank < 0 || rank >= targetRank) continue;
+            // Never disarm: keep at least one fight-ending item.
+            if (resolverCount <= 1 && isResolver(SHOP_POOL_ITEMS[key]!)) continue;
+            if (victim === null || rank < victim.rank) {
+              victim = { id: p.placementId, rank };
+            }
+          }
+
+          if (victim !== null && sellsThisClear < state.bag.placements.length) {
+            sellsThisClear++;
+            return { kind: 'action', action: { type: 'sell_item', placementId: victim.id } };
+          }
+          // Nothing left worth selling — give up on this target for the run.
+          abandoned.add(String(clearingFor));
+          clearingFor = null;
+          sellsThisClear = 0;
+        }
+      }
+
+      const action = greedy({ ctrl, rng, pending: pending as never } as never);
+      if (action === null) return { kind: 'stop' };
+      if (action.type === 'start_combat' || action.type === 'start_combat_from_ghost_build') {
+        return { kind: 'fight' };
+      }
+      return { kind: 'action', action };
+    },
+  };
+}
+
 /** Wraps a corpus strategy. Each policy instance owns its own rng stream, seeded
  *  off the run seed so a sweep is reproducible. */
 export function adaptStrategy(name: string, seed: SimSeed): Policy {
   if (name === 'resolver-first') return resolverFirstPolicy(seed);
+  if (name === 'sell-to-fit') return sellToFitPolicy(seed);
   return adaptCorpusStrategy(name as StrategyName, seed);
 }
 

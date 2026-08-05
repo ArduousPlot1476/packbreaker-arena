@@ -41,6 +41,9 @@ export interface Report {
     readonly outcomes: Readonly<Record<string, number>>;
     readonly meanPlaybackSecPerRun: number;
     readonly meanEmptyRoundsPerRun: number;
+    /** Rounds per run where the player could afford something and nothing fit.
+     *  The late-game wall as a run-level figure. */
+    readonly meanBagBlockedRoundsPerRun: number;
     readonly classWinRatePct: Readonly<Record<string, number>>;
     readonly recipesCompletedPerRun: number;
   };
@@ -61,14 +64,32 @@ export interface RoundAgg {
   readonly lossPct: number;
   readonly medianTicks: number;
   readonly meanPlaybackSec: number;
+  /** Affordable-and-placeable offers AT SHOP ENTRY — see RoundRecord.liveOffers
+   *  for why the sample point is the whole point. */
   readonly meanLiveOffers: number;
   readonly emptyRoundPct: number;
+  /** The same count at Continue, after spending. Unspent capacity, not the
+   *  pacing signal. Late rounds where this stays high while meanPurchases is
+   *  near zero are the saturation signature: money on the table, nowhere to put
+   *  what it buys. */
+  readonly meanResidualOffers: number;
   /** Items the bot actually bought this round, and gold it was still holding at
    *  combat. Together these say whether a gold change reached the bag at all —
    *  raising income does nothing if the policy never spends it. */
   readonly meanPurchases: number;
   readonly meanGoldHeld: number;
+  /** Gold actually SPENT this round (round-start gold + income already credited,
+   *  minus what survived to combat, floored at 0). `meanGoldHeld` alone cannot
+   *  distinguish "earned nothing" from "spent it all". */
+  readonly meanGoldSpent: number;
   readonly meanBagCells: number;
+  /** Purchases split by rarity — computed per round all along and thrown away by
+   *  the aggregator until now. This is how a late-game lever proves it moved the
+   *  BUILD and not just the ledger. */
+  readonly purchasesByRarity: Readonly<Record<string, number>>;
+  /** Rounds where the bag could not fit ANY affordable offer. The late-game wall,
+   *  measured directly rather than inferred from gold. */
+  readonly bagBlockedPct: number;
   /** Combats where NEITHER side dealt a single point of item damage. The cause
    *  of the draw band, not a restatement of it. */
   readonly inertPct: number;
@@ -88,10 +109,39 @@ function median(xs: number[]): number {
 const pct = (n: number, d: number): number => (d === 0 ? 0 : Math.round((n / d) * 1000) / 10);
 
 /** A round that presented at most one affordable-and-placeable offer and no
- *  ready recipe. The player spent time and made no decision. This is the pacing
- *  instrument — no telemetry, no calibration, no wall clock. */
-function isEmptyRound(r: { liveOffers: number; readyRecipes: number }): boolean {
-  return r.liveOffers <= 1 && r.readyRecipes === 0;
+ *  recipe decision. The player spent time and made no decision. This is the
+ *  pacing instrument — no telemetry, no calibration, no wall clock.
+ *
+ *  BOTH INPUTS WERE SAMPLED AT THE WRONG MOMENT until 2026-08-05, which inverted
+ *  the metric. `liveOffers` was counted at Continue, i.e. after the player had
+ *  spent, so buying three items made the round score EMPTY; and `readyRecipes`
+ *  was counted there too, so COMBINING a recipe erased the evidence that one was
+ *  available. Both now sample at shop entry (`hadRecipeDecision` additionally
+ *  ORs in the combine). See RoundRecord for the measurements that exposed it. */
+function isEmptyRound(r: { liveOffers: number; hadRecipeDecision: boolean }): boolean {
+  return r.liveOffers <= 1 && !r.hadRecipeDecision;
+}
+
+/** The bag said no while the wallet said yes. Distinguishes the late-game wall
+ *  from simply being broke — two problems with opposite fixes. */
+function isBagBlocked(r: { liveOffers: number; affordableOffers: number }): boolean {
+  return r.affordableOffers > 0 && r.liveOffers === 0;
+}
+
+const mean = (xs: number[], places = 1): number => {
+  if (xs.length === 0) return 0;
+  const f = 10 ** places;
+  return Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * f) / f;
+};
+
+function sumRarities(
+  maps: ReadonlyArray<Readonly<Record<string, number>>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of maps) {
+    for (const [k, v] of Object.entries(m)) out[k] = (out[k] ?? 0) + v;
+  }
+  return out;
 }
 
 export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>): Report {
@@ -113,22 +163,22 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
       medianTicks: median(rs.map((r) => r.endedAtTick)),
       meanPlaybackSec:
         Math.round((rs.reduce((a, r) => a + r.playbackMs, 0) / rs.length / 1000) * 10) / 10,
-      meanLiveOffers:
-        Math.round((rs.reduce((a, r) => a + r.liveOffers, 0) / rs.length) * 10) / 10,
+      meanLiveOffers: mean(rs.map((r) => r.liveOffers)),
       emptyRoundPct: pct(rs.filter(isEmptyRound).length, rs.length),
-      meanPurchases:
-        Math.round(
-          (rs.reduce(
-            (a, r) => a + Object.values(r.purchasesByRarity).reduce((x, y) => x + y, 0),
-            0,
-          ) /
-            rs.length) *
-            100,
-        ) / 100,
-      meanGoldHeld:
-        Math.round((rs.reduce((a, r) => a + r.goldHeldAtCombat, 0) / rs.length) * 10) / 10,
-      meanBagCells:
-        Math.round((rs.reduce((a, r) => a + r.bagCellsUsed, 0) / rs.length) * 10) / 10,
+      meanResidualOffers: mean(rs.map((r) => r.residualOffers)),
+      meanPurchases: mean(
+        rs.map((r) => Object.values(r.purchasesByRarity).reduce((x, y) => x + y, 0)),
+        2,
+      ),
+      meanGoldHeld: mean(rs.map((r) => r.goldHeldAtCombat)),
+      // Floored at 0: sell_item credits gold mid-round, so a round that sold more
+      // than it spent would otherwise report negative spend and read as income.
+      meanGoldSpent: mean(
+        rs.map((r) => Math.max(0, r.goldAtRoundStart - r.goldHeldAtCombat)),
+      ),
+      meanBagCells: mean(rs.map((r) => r.bagCellsUsed)),
+      purchasesByRarity: sumRarities(rs.map((r) => r.purchasesByRarity)),
+      bagBlockedPct: pct(rs.filter(isBagBlocked).length, rs.length),
     });
   }
 
@@ -179,12 +229,8 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
             1000) *
             10,
         ) / 10,
-      meanEmptyRoundsPerRun:
-        Math.round(
-          (runs.reduce((a, r) => a + r.rounds.filter(isEmptyRound).length, 0) /
-            Math.max(1, runs.length)) *
-            10,
-        ) / 10,
+      meanEmptyRoundsPerRun: mean(runs.map((r) => r.rounds.filter(isEmptyRound).length)),
+      meanBagBlockedRoundsPerRun: mean(runs.map((r) => r.rounds.filter(isBagBlocked).length)),
       classWinRatePct,
       recipesCompletedPerRun:
         Math.round(
@@ -211,7 +257,7 @@ export function formatReport(r: Report): string {
   L.push('');
   L.push('[EXACT] per round');
   L.push(
-    '  rd   n     win%    draw%   loss%   inert%  medTick  playSec  bought  gold  cells  empty%',
+    '  rd   n     win%    draw%   loss%   inert%  medTick  playSec  offers  empty%  bought  spent  gold  cells  blocked%',
   );
   for (const a of r.perRound) {
     L.push(
@@ -219,13 +265,30 @@ export function formatReport(r: Report): string {
         `${a.winPct.toFixed(1).padStart(6)}  ${a.drawPct.toFixed(1).padStart(6)}  ` +
         `${a.lossPct.toFixed(1).padStart(6)}  ${a.inertPct.toFixed(1).padStart(6)}  ` +
         `${String(a.medianTicks).padStart(7)}  ` +
-        `${a.meanPlaybackSec.toFixed(1).padStart(7)}  ${a.meanPurchases.toFixed(2).padStart(6)}  ` +
+        `${a.meanPlaybackSec.toFixed(1).padStart(7)}  ` +
+        `${a.meanLiveOffers.toFixed(1).padStart(6)}  ${a.emptyRoundPct.toFixed(1).padStart(6)}  ` +
+        `${a.meanPurchases.toFixed(2).padStart(6)}  ${a.meanGoldSpent.toFixed(1).padStart(5)}  ` +
         `${a.meanGoldHeld.toFixed(1).padStart(4)}  ${a.meanBagCells.toFixed(1).padStart(5)}  ` +
-        `${a.emptyRoundPct.toFixed(1).padStart(6)}`,
+        `${a.bagBlockedPct.toFixed(1).padStart(8)}`,
     );
   }
-  L.push('  inert% = neither side dealt ANY item damage (ramp drain excluded)');
-  L.push('  bought = items bought THIS round · gold = gold still held at combat');
+  L.push('  inert%   = neither side dealt ANY item damage (ramp drain excluded)');
+  L.push('  offers   = affordable AND placeable AT SHOP ENTRY, before the bot spends');
+  L.push('  empty%   = rounds with <=1 such offer and no recipe decision all round');
+  L.push('  spent    = gold actually spent · gold = gold still held at combat');
+  L.push('  blocked% = something affordable was on offer and NOTHING fit the bag');
+  L.push('');
+  L.push('[EXACT] purchases by rarity, per round');
+  L.push('  rd   common  uncommon  rare  epic  legendary   residual-offers');
+  for (const a of r.perRound) {
+    const g = (k: string) => String(a.purchasesByRarity[k] ?? 0);
+    L.push(
+      `  ${String(a.round).padStart(2)}  ${g('common').padStart(6)}  ${g('uncommon').padStart(8)}  ` +
+        `${g('rare').padStart(4)}  ${g('epic').padStart(4)}  ${g('legendary').padStart(9)}   ` +
+        `${a.meanResidualOffers.toFixed(1).padStart(15)}`,
+    );
+  }
+  L.push('  residual-offers = still affordable AND placeable at Continue (unspent capacity)');
   L.push('');
   L.push('[EXACT] overall');
   L.push(`  combats                 ${r.overall.combats}`);
@@ -243,7 +306,10 @@ export function formatReport(r: Report): string {
   L.push(`  run outcomes            ${JSON.stringify(r.overall.outcomes)}`);
   L.push(`  playback sec / run      ${r.overall.meanPlaybackSecPerRun}   (combat only, exact)`);
   L.push(
-    `  EMPTY ROUNDS / run      ${r.overall.meanEmptyRoundsPerRun}   (<=1 live offer, no ready recipe)`,
+    `  EMPTY ROUNDS / run      ${r.overall.meanEmptyRoundsPerRun}   (<=1 offer at SHOP ENTRY, no recipe decision)`,
+  );
+  L.push(
+    `  BAG-BLOCKED ROUNDS/run  ${r.overall.meanBagBlockedRoundsPerRun}   (could afford something, nothing fit)`,
   );
   L.push(`  recipes / run           ${r.overall.recipesCompletedPerRun}`);
   const gap = Object.values(r.overall.classWinRatePct);
