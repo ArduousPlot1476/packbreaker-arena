@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Packbreaker Arena mark. The bag is the puzzle (concept-brief.md north
+       star), so the mark IS a bag cell grid: a 2x2 of slots with one filled.
+       Vector-flat, no gradient, no text — it has to survive a 16px browser tab,
+       which is the same silhouette discipline visual-direction.md § 11 applies
+       to item icons.
+
+       Colors are the locked palette: bg-deep #0B0F1A, border-default #2D3854,
+       accent #3B82F6, rarity-legendary #F59E0B. -->
+  <rect width="64" height="64" rx="14" fill="#0B0F1A"/>
+  <rect x="8" y="8" width="48" height="48" rx="8" fill="none" stroke="#2D3854" stroke-width="3"/>
+  <!-- Filled slot: the item you placed. Accent, so the mark reads as "action". -->
+  <rect x="14" y="14" width="16" height="16" rx="3" fill="#3B82F6"/>
+  <!-- Second filled slot, diagonally opposite and amber: two items, adjacent
+       corners — the synergy the whole game is about, at the smallest possible
+       scale. -->
+  <rect x="34" y="34" width="16" height="16" rx="3" fill="#F59E0B"/>
+  <!-- Empty slots stay as outline only, so the grid reads as a grid rather than
+       as four blocks. -->
+  <rect x="34" y="14" width="16" height="16" rx="3" fill="none" stroke="#2D3854" stroke-width="2.5"/>
+  <rect x="14" y="34" width="16" height="16" rx="3" fill="none" stroke="#2D3854" stroke-width="2.5"/>
+</svg>
