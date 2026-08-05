@@ -2,7 +2,7 @@
 // land in M2 when the server stores per-(round, trophy_band) builds.
 //
 // The template scales item count + rarity-gate with round so combat
-// difficulty grows monotonically: round 1 → 1 item, round 11+ → 5 items.
+// difficulty grows monotonically: round 1 → 1 item, round 10 → 8 items.
 // Items are drawn from the shop-offer subset (apps/client/src/run/content
 // SHOP_OFFER_ITEMS — the iconned set minus boss-reward-only exclusions, CF 66)
 // so the ghost build stays visually coherent with the items the player sees in
@@ -41,8 +41,31 @@ const RARITY_ORDER: ReadonlyArray<Rarity> = [
   'legendary',
 ];
 
-// 11 entries: 1 → 5 items, scaling roughly linearly. Rounds 12+ clamp to 5.
-const ITEM_COUNT_BY_ROUND: ReadonlyArray<number> = [1, 1, 2, 2, 2, 3, 3, 4, 4, 5, 5];
+// 11 entries: 1 → 8 items across rounds 1–10. Rounds 12+ clamp to 5 (see the
+// `?? 5` fallback below) — structurally unreachable at maxRounds = 11.
+//
+// CF-93, rounds-4–10 item-count lift. NOT "CF-93 LEG 2" — that token is
+// ratified client-only AND DISPLAY-ONLY (decision-log.md 2026-07-25 § 11,
+// "BOTH LEGS ARE CLIENT-ONLY AND DISPLAY-ONLY"), and this is a difficulty
+// change. Rounds 4–10 were measured
+// 51/54 = 94.4% player-win with ZERO draws and ZERO ramp-decided losses
+// (decision-log.md 2026-07-26 § "CF-93 LEG 1 CLOSED ON MERGE …" § 3, the
+// full round × endReason × outcome enumeration). The band was not a curve
+// that flattened — it was a HARD CAP: the ghost stopped at 5 items while the
+// player is bounded only by the 24-cell bag. Round 10 now carries 8; rounds
+// 4–9 are linear-interpolated (round-half-up) between the UNCHANGED round-3
+// value and that endpoint, so the ramp is monotonically non-decreasing.
+//
+// Rounds 1–3 and round 11 are FROZEN and pinned by literal in ghost.test.ts:
+//   - rounds 1–3 are CF-93's separate leg (the stall band; losable, not fair)
+//   - round 11 is the balance-bible.md § 15 boss, which opponentForRound.ts:68
+//     branches to BEFORE reaching this table — the entry is generator-only
+//
+// The single flat step (rounds 6→7 both 5) is an arithmetic consequence of
+// distributing +6 over 7 rounds, not a design choice; it happens to land on
+// the round where RARITY_GATE_BY_ROUND opens 'rare', so that round's step-up
+// arrives as rarity rather than count.
+const ITEM_COUNT_BY_ROUND: ReadonlyArray<number> = [1, 1, 2, 3, 4, 5, 5, 6, 7, 8, 5];
 
 // Reroll-stride offset for ghost seeds. We reuse shopSeedFor's stride
 // formula with a sentinel value (7 × 65521) far above realistic reroll

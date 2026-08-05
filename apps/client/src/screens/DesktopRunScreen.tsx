@@ -12,6 +12,8 @@ import { BagBoard } from '../bag/BagBoard';
 import { cellPx } from '../bag/layout';
 import { ITEMS } from '../run/content';
 import type { ItemId } from '../run/types';
+import type { DragState } from '../bag/types';
+import { DESIGN_H, DESIGN_W, DesignScaleFrame, useDesignScale } from './DesignScale';
 import { LazyCombatOverlay } from '../combat/LazyCombatOverlay';
 import { ICONS } from '../icons/icons';
 import { TopBar } from '../hud/TopBar';
@@ -87,10 +89,21 @@ export function DesktopRunScreen() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div
-        className="flex flex-col"
-        style={{ width: 1280, height: 720, margin: '0 auto', position: 'relative' }}
-      >
+      {/* The 1280×720 frame is preserved exactly — it is the coordinate space
+          every layout constant in this tree is authored against — and scaled to
+          fit the viewport. Previously this div was `width: 1280, height: 720,
+          margin: '0 auto'`, so a 1440p monitor showed a small letterboxed island
+          and a sub-1280 window clipped.
+
+          DragOverlay goes in `overlay`, OUTSIDE the transform: dnd-kit positions
+          the preview from pointer coordinates, which are screen space, so inside
+          the scaled frame it would be transformed a second time and lag the
+          cursor by the scale factor. */}
+      <DesignScaleFrame overlay={<ScaledDragOverlay drag={state.drag} />}>
+        <div
+          className="flex flex-col"
+          style={{ width: DESIGN_W, height: DESIGN_H, position: 'relative' }}
+        >
         <TopBar state={state.state} />
         <div className="flex flex-1 relative" style={{ minHeight: 0 }}>
           <LeftRail />
@@ -147,12 +160,28 @@ export function DesktopRunScreen() {
             />
           )}
         </div>
-        <BottomPanel state={state.state} />
-        <RelicOfferModal />
-      </div>
-      <DragOverlay dropAnimation={null}>
-        {state.drag ? <DragPreview itemId={state.drag.itemId} rot={state.drag.rot} /> : null}
-      </DragOverlay>
+          <BottomPanel state={state.state} />
+          <RelicOfferModal />
+        </div>
+      </DesignScaleFrame>
     </DndContext>
+  );
+}
+
+/** DragOverlay lives outside the scaled frame in true screen space, so the
+ *  preview must be scaled to match the cells it is being dragged over — the bag
+ *  renders an 88px cell at 88 × scale on screen. Reads the scale from context,
+ *  which means it MUST be rendered inside DesignScaleFrame's provider; it is,
+ *  via the `overlay` slot. */
+function ScaledDragOverlay({ drag }: { drag: DragState | null }) {
+  const scale = useDesignScale();
+  return (
+    <DragOverlay dropAnimation={null}>
+      {drag ? (
+        <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+          <DragPreview itemId={drag.itemId} rot={drag.rot} />
+        </div>
+      ) : null}
+    </DragOverlay>
   );
 }

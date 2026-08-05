@@ -1,110 +1,134 @@
-Roadmap  
-Current state  
-M0 — Foundation. No code. Drafting canonical docs.  
-Current sprint
+# Roadmap
 
- concept-brief.md v0  
- roadmap.md v0  
- gdd.md v0  
- balance-bible.md v0  
- tech-architecture.md v0 — resolves Phaser vs PixiJS, monorepo layout, sim contract  
- visual-direction.md v0 — 3 directions, pick 1  
- content-schemas.ts v0 — Item, Class, Recipe, Contract, Run, GhostBuild  
- telemetry-plan.md v0  
- decision-log.md initialized
+## Current state — M2, mid-milestone (2026-08-04)
 
-M0 exits when all nine canonical files are approved.  
-Milestones  
-M0 — Foundation  
-Goal: Approved docs. Zero code.  
-Effort: 5–8 working days at peer-review pace.  
-Exit criteria: All nine canonical files locked. Visual direction picked. Sim contract decided.  
-M1 — Graybox prototype (4–6 weeks)  
-Goal: One playable run end-to-end, deterministic, internal-only.  
-In scope:
+M0 (docs) and M1 (graybox prototype) are **closed**. M1's exit gate closed 2026-07-13: 10+
+crash-free solo runs, item pick-rate spread visible, runs bounded.
 
-Drag/drop bag, shop, sell, reroll  
-Deterministic combat package (shared sim)  
-2 classes, \~45 items, 12 recipes, 3 status effects, 1 boss  
-Replay log  
-1 daily contract pipeline  
-Telemetry hooks per telemetry-plan.md  
-Placeholder art only
+M2 — **Public web demo** — is in progress. Account persistence largely shipped (Clerk auth,
+`player_saves`, per-round trophy sync, daily-contract endpoint) and the mobile 390-wide
+layout is built. The rest of M2's scope is untouched: refined art, a cosmetic trophy
+economy, async ghost storage and matchmaking, and a portal build.
 
-Exit criteria: Trey completes 10+ crash-free solo runs (self-cert testing path, ratified 2026-07-12 — see decision-log.md). Item pick-rate spread visible in dashboard. Runs resolve in a bounded, non-degenerate wall-clock range (graybox sanity check; true 12–20 min pacing validation deferred to M2 — see decision-log.md 2026-07-13).  
+**The game has never been deployed.** Fixing that is the first thing on the list below.
 
-**Current sprint (2026-07-12).** The M1 exit-gate playtest is now **live** — testing path ratified as solo self-cert (Trey completes 10+ crash-free solo runs; see decision-log.md 2026-07-12 § M1-exit-gate testing path: solo self-cert). The M1 dashboard exit-gate is already **CLOSED** (see decision-log.md 2026-07-07 § M1 dashboard exit-gate CLOSED — D1/D2 built in PostHog, Rule 19 minted). Active work continues on backlog alongside the solo exit-gate runs.
+### Honest gaps between what's built and what M2 needs
 
-M1.5e — Authority Migration (CF 34, +CF 37)  
-Unwind Amendment A's client/sim bifurcation. gold+bag-together (sellItem bag-coupling forces single unit), bounded first PR, slice-sequenced after that. Re-handles ratified amendments B-F3 (restore-bag-init) and E-F9 (placementCounter collision-avoidance) sim-side. Phase 1 must lead with Amendment A rationale (see decision-log.md 2026-05-13 § M1.5a PR 2 Phase 1 design halt-gate ratified — Q2 Amendment A) before unwind is locked.  
+| | State |
+|---|---|
+| Deployment | None. The game has never been hosted anywhere. |
+| Title / settings screen | Do not exist. The app boots straight into class select. |
+| Audio | None at all — no library, no files, no mute. |
+| Desktop layout | Fixed 1280×720, centred. A 1440p monitor shows a letterboxed island. |
+| Difficulty curve | Rounds 4–10 measured 76 combats / 76 player wins / zero losses; round 11 is a wall. A first correction landed 2026-08-04. |
+| Run length | Median 4.92 min against a 12–20 min design target. |
+| Draw rate | ~5–8% against a <1% guardrail (much improved by the CF-83 ramp, still over). |
+| Meta progression | None. Trophies never accumulate for anonymous players and no cumulative total is rendered anywhere. |
+| Onboarding | The `gdd.md` §15 tutorial is specced, flagged in persistence, and has no surfaces. |
+| Ghosts | Procedurally generated client-side. No server storage, no submission, no queue. |
 
-M2 — Public web demo (10–12 weeks)  
-Goal: Public browser build, portal-ready.  
-In scope:
+---
 
-Refined art in approved direction  
-Ranked trophies (cosmetic-only economy)  
-Ghost battle queue (async)  
-Account persistence (auth, save, ghost build storage)  
-Mobile vertical layout (390-wide)  
-Portal build (CrazyGames or Itch first)
+## How we work now
 
-Exit criteria: Success metrics in concept-brief.md § Success metrics hit over 200+ sessions.  
-M3 — Feature-complete alpha (18–24 weeks)  
-Goal: Live-ops-ready product.  
-In scope:
+Stages, not phase-gates. Each stage ends in a merged, playable build that is visibly
+better than the one before it. Nothing is internal-only.
 
-Seasonal relics  
-Alt bag shapes  
-Limited-time mutators  
-Friend ghosts / clan rosters  
-Cosmetic store  
-Live-ops calendar
+**Kept, because it is real safety:** the Vitest suites (783 client / 557 sim), the CI gate
+(lint → typecheck → test → build), the 224-fixture `.jsonl` determinism corpus, and the
+`check-schemas-sync` byte-identity gate between `content-schemas.ts` and
+`packages/content/src/schemas.ts`.
 
-Exit criteria: 4 weeks of live content cadence shipped without regressions. D30 ≥ 6%.  
-Kill lists  
-M1 — do NOT build
+**Kept, scoped:** automated code review on PRs touching `packages/sim` or `apps/server`,
+where a silent bug is expensive. UI, content, art, and copy ship without it.
 
-Auth or account system (local save only)  
-Ranked ladder UI  
-Multiple bag shapes  
-More than 2 classes  
-Final art, custom VFX, music  
-Mobile-specific layout  
-Friend systems, chat, social  
-Cosmetic store, monetization surfaces  
-Native wrappers, Electron, mobile apps  
-Real-time anything
+**Retired:** per-merge decision-log essays, the catch/rule/pattern/drift counter, the
+Phase 1 / 2 / 2.5 / 3a / 3b halt-gate sequence, and CF numbering as a work-tracking
+system. `decision-log.md` stays as history and stops growing; `CHANGELOG.md` carries one
+line per merge.
 
-M2 — do NOT build
+The open-CF backlog (55, carried by arithmetic and unverified by enumeration since
+2026-05-23) is not re-enumerated. Items that block M2 are named in the stages below.
 
-Seasonal content beyond launch set  
-Mutators or alt rules  
-Clans, friends, chat  
-Native ports  
-Editor / UGC tools  
-More than 1 daily contract type
+---
 
-M3 — do NOT build
+## The stages to the M2 demo
 
-Real-time PvP  
-3D  
-Native wrappers (still web-first)  
-Heavy narrative content  
-New genres bolted on (no card-battler mode, no MMO layer, no city builder side-quest)
+| | Stage | Outcome a player would notice |
+|---|---|---|
+| 1 | Make it a real product you can open | Title screen, fills any monitor, one consistent look, **live at a URL** |
+| 2 | Make the run worth playing | No unlosable rounds, draws under guardrail, runs longer than 5 min |
+| 3 | Make it feel good | Sound, and every action responds |
+| 4 | Make you come back | Trophies that accumulate, a rank ladder, then the daily run |
+| 5 | Make it teachable | A stranger wins a round without being told anything |
+| 6 | Make it deep | More items, recipes, relics, a second boss, refined relic art |
+| 7 | Make it social | Real player ghosts, stored and matched |
+| 8 | Ship it | itch.io build, perf budget met, metrics gate open |
 
-Open risks  
-RiskSeverityOwner docStatusRenderer choice (Phaser vs PixiJS) shapes sim boundaryMediumtech-architecture.mdOpen — decide in M0Determinism across client/server (RNG, float drift)Hightech-architecture.md § Simulation contractOpen — decide in M0Mobile bag readability at 390-wideHighgdd.md § UI flow \+ visual-direction.mdOpen — test in M1Time-to-first-fun \> 4 min sinks D1Highgdd.md § OnboardingTracked in telemetry from M1Async match quality with small early player baseMediumSeed ghost pool: internal builds \+ bot variantsOpen — design in M2 planItem meta collapses to one dominant buildMediumbalance-bible.md § Pick-rate guardrailsContinuous — telemetry-drivenBrowser perf on mid-tier mobileMediumtech-architecture.md § Performance budgetOpen — measure in M1  
-Open decisions (block dependent work)
+Stage 2 leads with an **offline balance harness** — most of it already exists as fixture
+scaffolding (`packages/sim/test/determinism/strategies.ts` has six player policies;
+`generate.ts` already drives full runs and tallies coverage). Repointing it at balance
+statistics turns tuning from a weeks-long telemetry round-trip into a minutes-long loop.
+It must drive the **real-play** path, not the corpus path — those are two different games
+(different ghost curves, different boss, different shop RNG, different combat seeding).
 
-Renderer: Phaser vs PixiJS. Blocks tech-architecture.md and all rendering code.  
-Monorepo tool: pnpm workspaces vs Turbo vs Nx. Blocks repo scaffold.  
-Visual direction: whimsical / dark-roguelite / clean-esports. Blocks all UI mockups.  
-Sim package boundary: pure TS lib vs worker-isolated execution. Blocks combat code.
+---
 
-Replanning triggers  
+## Milestones
+
+### M0 — Foundation — **CLOSED**
+Goal: approved docs, zero code. Exit: all nine canonical files locked, visual direction
+picked, sim contract decided.
+
+### M1 — Graybox prototype — **CLOSED 2026-07-13**
+Goal: one playable run end-to-end, deterministic, internal-only.
+Shipped: drag/drop bag, shop/sell/reroll, deterministic combat package, 2 classes, 45
+items, 12 recipes, 12 relics, 3 status effects, 1 boss, replay log, telemetry hooks,
+placeholder art.
+Exit met: 10+ crash-free solo runs (self-cert path ratified 2026-07-12), pick-rate spread
+visible, runs bounded. True 12–20 min pacing validation was deferred to M2 and is Stage 2
+above.
+
+### M2 — Public web demo — **IN PROGRESS**
+Goal: public browser build, portal-ready.
+In scope: refined art in the approved direction · ranked trophies (cosmetic-only economy) ·
+ghost battle queue (async) · account persistence (auth, save, ghost build storage) · mobile
+vertical layout (390-wide) · portal build (itch.io first, then CrazyGames).
+Exit: `concept-brief.md` § Success metrics hit over 200+ sessions.
+
+### M3 — Feature-complete alpha
+Goal: live-ops-ready product.
+In scope: seasonal relics · alt bag shapes · limited-time mutators · friend ghosts / clan
+rosters · cosmetic store · live-ops calendar.
+Exit: 4 weeks of live content cadence shipped without regressions. D30 ≥ 6%.
+
+---
+
+## Kill lists
+
+**M2 — do NOT build:** seasonal content beyond the launch set · mutators or alt rules
+beyond one daily contract type · clans, friends, chat · native ports · editor / UGC tools.
+
+**M3 — do NOT build:** real-time PvP · 3D · native wrappers (still web-first) · heavy
+narrative content · new genres bolted on.
+
+---
+
+## Open risks
+
+| Risk | Severity | Where it's tracked |
+|---|---|---|
+| Time-to-first-fun > 4 min sinks D1 | High | Stage 5 (tutorial). Currently unmeasurable — the onboarding funnel has no emit sites. |
+| Item meta collapses to one dominant build | Medium | Stage 2 harness makes the §16 pick-rate guardrails offline-checkable. |
+| Async match quality with a small early player base | Medium | Stage 7. Bot fallback stays as the empty-bucket path. |
+| Browser perf on mid-tier mobile | Medium | Stage 8, against `tech-architecture.md` §10. |
+| Telemetry provenance corrupts the 200-session gate | High | CF 96. Probe runs emit into the live dataset and `clientVersion` doesn't uniquely identify a build. Must be fixed before the gate opens. |
+
+---
+
+## Replanning triggers
+
 Replan the active milestone if any of:
-
-Two consecutive playtest cohorts miss the milestone's success metric.  
-A pillar is violated to ship a feature.  
-Effort on a single deliverable slips \> 50%.  
+- Two consecutive playtest cohorts miss the milestone's success metric.
+- A pillar is violated to ship a feature.
+- Effort on a single deliverable slips > 50%.

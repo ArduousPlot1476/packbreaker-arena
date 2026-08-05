@@ -1,8 +1,12 @@
 // Rarity tokens — locked palette per visual-direction.md § 3 and dual-coding
 // per § 1 (color AND corner gem shape; color-blind safety is non-negotiable).
 // Moved from apps/client/src/data.local.ts as part of M1.3.2's partial
-// dissolution of data.local.ts. Full dissolution still M1.3.4 with sim
-// integration.
+// dissolution of data.local.ts.
+//
+// Colors are DERIVED from ./palette — never re-typed here. This file owns the
+// per-rarity presentation (label, gem glyph, glow ramp); palette.ts owns hue.
+
+import { PALETTE } from './palette';
 
 export type RarityKey = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
@@ -29,7 +33,7 @@ export interface RarityDef {
 
 export const RARITY: Record<RarityKey, RarityDef> = {
   common: {
-    color: '#94A3B8',
+    color: PALETTE.rCommon,
     label: 'COMMON',
     gem: '◆',
     glow: 'glow-common',
@@ -37,7 +41,7 @@ export const RARITY: Record<RarityKey, RarityDef> = {
     glowBlur: 10,
   },
   uncommon: {
-    color: '#22C55E',
+    color: PALETTE.rUncommon,
     label: 'UNCOMMON',
     gem: '■',
     glow: 'glow-uncommon',
@@ -45,7 +49,7 @@ export const RARITY: Record<RarityKey, RarityDef> = {
     glowBlur: 13,
   },
   rare: {
-    color: '#3B82F6',
+    color: PALETTE.rRare,
     label: 'RARE',
     gem: '▲',
     glow: 'glow-rare',
@@ -53,7 +57,7 @@ export const RARITY: Record<RarityKey, RarityDef> = {
     glowBlur: 16,
   },
   epic: {
-    color: '#A855F7',
+    color: PALETTE.rEpic,
     label: 'EPIC',
     gem: '★',
     glow: 'glow-epic',
@@ -61,7 +65,7 @@ export const RARITY: Record<RarityKey, RarityDef> = {
     glowBlur: 19,
   },
   legendary: {
-    color: '#F59E0B',
+    color: PALETTE.rLegendary,
     label: 'LEGENDARY',
     gem: '✦',
     glow: 'glow-legendary',

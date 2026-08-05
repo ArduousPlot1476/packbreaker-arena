@@ -5,19 +5,23 @@
 // wins overlaps. Static — no marching/pulse; motion stays reserved for the
 // recipe glow (gdd.md § UI feedback / § onboarding).
 //
-// The teal is a graybox placeholder (Tailwind teal-300 = #5eead4 @ 0.55);
-// palette consolidation into the .glow-* rgba derivatives rides CF 20.
+// The teal is now the named `adjacencyTeal` token in @packbreaker/ui-kit's
+// palette rather than an inline literal (CF 20 consolidation). The hue is
+// unchanged; what changed is that it has one home. It is deliberately not a
+// rarity hue — rarity owns hue, adjacency owns shape and position — so this
+// cue can never be mistaken for a rarity signal.
 //
 // strokeWidth / strokeDasharray / fill live in `.adjacency-glow rect`
 // (index.css), mirroring how `.recipe-glow rect` is defined; only the stroke
 // colour is set inline (as RecipeGlow sets its rarity stroke inline).
 
+import { rgba } from '@packbreaker/ui-kit'
 import type { BagItem } from '../run/types'
 import type { AdjacencySynergy } from '../run/adjacency'
 import { useCellSize } from './CellSize'
 import { BAG_COLS, BAG_ROWS, cellsOf } from './layout'
 
-const ADJACENCY_GLOW_COLOR = 'rgba(94, 234, 212, 0.55)'
+const ADJACENCY_GLOW_COLOR = rgba('adjacencyTeal', 0.55)
 
 interface AdjacencyGlowProps {
   bag: BagItem[]
