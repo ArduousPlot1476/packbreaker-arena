@@ -35,11 +35,11 @@ const NEUTRAL: Contract = {
  *  changes into the boss delta:
  *
  *              50 / +2 / +15%     45 / +1 / +15%
- *    sell-to-fit      15.5%             ~32%
+ *    sell-to-fit      15.5%             ~34%
  *    resolver-first    8.9%             18.5%
  *
  *  The competent-model figure is a BAND, not a point, and deliberately written
- *  as one. It moved 33.6 -> 31.2 -> 31.9 -> 32.6 across three successive fixes
+ *  as one. It moved 33.6 -> 31.2 -> 31.9 -> 32.6 -> 34.5 across FIVE successive fixes
  *  to `sell-to-fit` during review, because a boss win rate is a property of the
  *  player model as much as of the boss. The band is what is stable and what
  *  § 15 should be read against; a policy that plays better moves it up, so treat

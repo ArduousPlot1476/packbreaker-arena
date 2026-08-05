@@ -27,9 +27,9 @@ Format: `- **YYYY-MM-DD** — <what shipped>. <why, in a sentence>. <watch-out, 
 - **2026-08-05** — Boss retuned 50/+2/+15% → **45/+1/+15%**. `balance-bible.md` §15 has
   asked for a ~30% first-attempt win rate since M0 and it had never been measured; measured,
   the shipped numbers gave **15.5%** against a competent player model and **8.9%** against a
-  weaker one. Now **≈32%** and 18.5%, and runs that end in victory roughly double. *Watch:*
-  the competent-model figure is a band, not a point — it moved 33.6 → 31.2 → 31.9 → 32.6
-  across three player-model fixes during review, because a boss win rate is a property of the
+  weaker one. Now **≈34%** and 18.5%, and runs that end in victory roughly double. *Watch:*
+  the competent-model figure is a band, not a point — it moved 33.6 → 31.2 → 31.9 → 32.6 → 34.5
+  across five player-model fixes during review, because a boss win rate is a property of the
   model as much as of the boss. Treat it as a floor and re-measure. **Zero
   fixture re-baseline, proved not assumed** — all 224 `.jsonl` run `contractId: "neutral"`,
   so the boss mutators are never exercised; determinism passed unchanged at 231/231 with no

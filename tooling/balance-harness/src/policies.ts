@@ -274,6 +274,15 @@ function sellToFitPolicy(seed: SimSeed): Policy {
         // Buying it here rather than widening greedy's gate keeps
         // strategies.ts untouched — it is a fixture input.
         //
+        // ORDER MATTERS, and getting it wrong sabotaged the clear loop. This
+        // clause sits before the clear logic, so while a clear is in progress it
+        // would spend the cell a sale had just freed: sell a victim, open two
+        // cells, buy an unrelated rotated-fit Common with them, and the Epic the
+        // clear existed for is no closer to fitting — the clear then prolongs or
+        // abandons, which is the exact late-game recovery this policy is meant
+        // to measure. Deferred entirely while `clearingFor` is set; the clear
+        // finishes or gives up first, and opportunistic buys resume after.
+        //
         // BEST rarity, not first slot. Taking the first slot index measured
         // WORSE than leaving the hole open — round-11 win 33.6% -> 31.2% and
         // runs won 219 -> 194 — because an indiscriminate extra purchase spends
@@ -281,7 +290,7 @@ function sellToFitPolicy(seed: SimSeed): Policy {
         // the 50% sell recovery. Selecting by rarity matches how this policy
         // already picks a clear-target, and keeps "competent" from meaning
         // merely "busier".
-        {
+        if (clearingFor === null) {
           let best: { slot: number; rank: number } | null = null;
           for (let i = 0; i < state.shop.slots.length; i++) {
             if (state.shop.purchased.includes(i)) continue;

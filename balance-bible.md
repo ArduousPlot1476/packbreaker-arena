@@ -358,10 +358,10 @@ Note the aura is the *smallest* of the three damage terms. The boss's total `bon
 
 | | 50 / +2 / +15% | **45 / +1 / +15%** |
 |---|---|---|
-| `sell-to-fit` (competent: buys a weapon, rotates, sells to make room) | 15.5% | **≈32%** |
+| `sell-to-fit` (competent: buys a weapon, rotates, sells to make room) | 15.5% | **≈34%** |
 | `resolver-first` (never sells, arrives with a stale bag) | 8.9% | **18.5%** |
 
-**Read the competent-model figure as a band, not a point.** It moved 33.6 → 31.2 → 31.9 → 32.6 across three successive fixes to the player model during review — a boss win rate is a property of the model as much as of the boss. The band is the stable claim, and it is a **floor**: a policy that plays better moves it up. Re-measure rather than trusting a pinned decimal.
+**Read the competent-model figure as a band, not a point.** It moved 33.6 → 31.2 → 31.9 → 32.6 → 34.5 across five successive fixes to the player model during review — a boss win rate is a property of the model as much as of the boss. The band is the stable claim, and it is a **floor**: a policy that plays better moves it up. Re-measure rather than trusting a pinned decimal.
 
 Three configurations reached ~30% in the sweep: damage 0 at 50 HP (32.9%), damage 2 at 50 HP with lifesteal 0 (32.6%), and 45/+1/+15 (31.1% at that seed count). The first guts the named aura on its own damage axis; the second was the worst on the draw canary, pushing round-11 draws 7.8% → 10.5% by making more fights close enough to end in a mutual sudden-death. The chosen split keeps all three aura components alive and costs +0.1pt of overall draw rate.
 
