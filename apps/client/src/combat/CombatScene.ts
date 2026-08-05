@@ -29,36 +29,45 @@
 
 import Phaser from 'phaser';
 import type { CombatEvent, EntityRef } from '@packbreaker/content';
+import { PALETTE as PALETTE_HEXES, PALETTE_INT } from '@packbreaker/ui-kit';
 import type { BagLayout } from '../bag/layout';
 import { resolveEventAnchors } from './eventAnchorResolver';
 import { advanceCombatTickClock, findNextEventTick } from './tickAdvancer';
 import { koFlashTargets } from './koFlash';
 
 // ─────────────────────────────────────────────────────────────────────
-// Palette — locked per visual-direction.md § 3 + semantic extensions.
-// Phaser takes RGB ints, not CSS strings; convert once here.
+// Palette — DERIVED from the locked palette in @packbreaker/ui-kit, which
+// is the single source of truth (visual-direction.md § 3 + its semantic
+// extensions). Phaser takes RGB ints, not CSS strings, and this scene runs
+// on a canvas where CSS custom properties don't resolve — so both forms are
+// projected here from that module rather than re-typed. Editing a hue here
+// is a bug: change palette.ts and both forms follow.
+//
+// Local aliases exist only where this scene's usage names the SEMANTIC role
+// rather than the token (a burn floater is "legendary amber" only by
+// coincidence of hue).
 // ─────────────────────────────────────────────────────────────────────
 const PALETTE = {
-  bgMid: 0x131826,
-  surface: 0x1c2333,
-  surfaceElev: 0x232c40,
-  borderDefault: 0x2d3854,
-  textPrimary: 0xf0f4fa,
-  textSecondary: 0x94a3b8,
-  accent: 0x3b82f6,
-  rarityUncommon: 0x22c55e,
-  rarityLegendary: 0xf59e0b, // burn / status_tick floater color
-  lifeRed: 0xef4444, // damage floater + HP bar fill
-  lifeStroke: 0xf87171,
-  adjacencyTeal: 0x5eead4, // CF 60 adjacency-reaction burst (teal-300 graybox; CF 20 palette consolidation)
+  bgMid: PALETTE_INT.bgMid,
+  surface: PALETTE_INT.surface,
+  surfaceElev: PALETTE_INT.surfaceElev,
+  borderDefault: PALETTE_INT.borderDefault,
+  textPrimary: PALETTE_INT.textPrimary,
+  textSecondary: PALETTE_INT.textSecondary,
+  accent: PALETTE_INT.accent,
+  rarityUncommon: PALETTE_INT.rUncommon,
+  rarityLegendary: PALETTE_INT.rLegendary, // burn / status_tick floater color
+  lifeRed: PALETTE_INT.lifeRed, // damage floater + HP bar fill
+  lifeStroke: PALETTE_INT.lifeStroke,
+  adjacencyTeal: PALETTE_INT.adjacencyTeal, // CF 60 adjacency-reaction burst
 } as const;
 
 const PALETTE_HEX = {
-  textPrimary: '#F0F4FA',
-  textSecondary: '#94A3B8',
-  rarityUncommon: '#22C55E',
-  rarityLegendary: '#F59E0B',
-  lifeRed: '#EF4444',
+  textPrimary: PALETTE_HEXES.textPrimary,
+  textSecondary: PALETTE_HEXES.textSecondary,
+  rarityUncommon: PALETTE_HEXES.rUncommon,
+  rarityLegendary: PALETTE_HEXES.rLegendary,
+  lifeRed: PALETTE_HEXES.lifeRed,
 } as const;
 
 // ─────────────────────────────────────────────────────────────────────

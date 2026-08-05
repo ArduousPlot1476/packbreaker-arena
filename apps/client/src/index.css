@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Locked palette — visual-direction.md § 3 + its approved semantic extensions.
+   THE SOURCE OF TRUTH IS packages/ui-kit/src/palette.ts, not this block.
+   src/palette.test.ts parses these declarations and fails if any hex here
+   disagrees with that module, so the two cannot drift. Add a token there
+   first, then mirror it here. */
 :root {
   --bg-deep: #0B0F1A;
   --bg-mid: #131826;
@@ -21,6 +26,7 @@
   --life-stroke: #F87171;
   --coin-fill: #F59E0B;
   --coin-stroke: #FCD34D;
+  --adjacency-teal: #5EEAD4;
 }
 
 html,
@@ -87,7 +93,7 @@ body {
 
 /* CF 60: adjacency-synergy outline — static (no marching/pulse), thinner than
    the recipe glow, so it reads as a quiet secondary cue. Stroke colour is set
-   inline (teal-300 placeholder) in AdjacencyGlow.tsx. */
+   inline in AdjacencyGlow.tsx from the `adjacencyTeal` palette token. */
 .adjacency-glow rect {
   stroke-width: 1.5;
   stroke-dasharray: 6 4;

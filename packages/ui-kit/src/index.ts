@@ -10,3 +10,12 @@ export { AdjacencyMark } from './AdjacencyMark';
 export { ItemIcon } from './ItemIcon';
 export { Popover, type PopoverProps } from './Popover';
 export { RARITY, type RarityKey, type RarityDef } from './rarity';
+export {
+  PALETTE,
+  PALETTE_INT,
+  CSS_VAR,
+  cssVar,
+  hexToInt,
+  rgba,
+  type PaletteKey,
+} from './palette';
