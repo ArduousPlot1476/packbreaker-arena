@@ -190,8 +190,11 @@ describe('contracts', () => {
     const mutator = m[0]!;
     expect(mutator.type).toBe('boss_only');
     if (mutator.type === 'boss_only') {
-      expect(mutator.hpOverride).toBe(50);
-      expect(mutator.damageBonus).toBe(2);
+      // Retuned 2026-08-05 from 50 / +2 / +15 against balance-bible.md § 15's
+      // ~30% target: the shipped numbers measured 18.9% under the harness's
+      // competent player model. See the derivation on FORGE_TYRANT_RULESET.
+      expect(mutator.hpOverride).toBe(45);
+      expect(mutator.damageBonus).toBe(1);
       expect(mutator.lifestealPctBonus).toBe(15);
     }
   });

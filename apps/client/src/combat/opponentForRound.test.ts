@@ -91,12 +91,13 @@ function ghostHealTotal(r: CombatResult): number {
 
 // ── Test 1 — round 11 IS the § 15 Forge Tyrant ─────────────────────
 describe('opponentForRound — round 11 boss configuration', () => {
-  it('carries FORGE_TYRANT bag, startingHp 50, conquerors-crown relic, and the Tyrant mutators', () => {
+  it('carries FORGE_TYRANT bag, the override startingHp, conquerors-crown relic, and the Tyrant mutators', () => {
     const boss = opponentForRound(SEED, 11, DIMS);
 
     expect(boss.combatant.bag.placements).toEqual(FORGE_TYRANT.bag.placements);
     expect(boss.combatant.bag.dimensions).toEqual(FORGE_TYRANT.bag.dimensions);
-    expect(boss.combatant.startingHp).toBe(50);
+    // Retuned 50 -> 45 on 2026-08-05; derivation on FORGE_TYRANT_RULESET.
+    expect(boss.combatant.startingHp).toBe(45);
     expect(boss.combatant.relics.boss).toBe('conquerors-crown');
     expect(boss.combatant.classId).toBe('marauder');
     expect(boss.displayLabel).toBe('Forge Tyrant');
@@ -108,8 +109,8 @@ describe('opponentForRound — round 11 boss configuration', () => {
     );
     expect(boss.mutators).toContainEqual({
       type: 'boss_only',
-      hpOverride: 50,
-      damageBonus: 2,
+      hpOverride: 45,
+      damageBonus: 1,
       lifestealPctBonus: 15,
     });
   });
@@ -148,8 +149,8 @@ describe('opponentForRound — rounds 1–10 are the procedural ghost, unchanged
   it('round 11 procedural HP pin is NOT what the chokepoint returns (proves the branch is outside makeGhostForRound)', () => {
     // ghost.test.ts pins makeGhostForRound(11).startingHp === BASE + 10 = 40.
     expect(makeGhostForRound(SEED, 11, DIMS).combatant.startingHp).toBe(BASE_COMBATANT_HP + 10);
-    // The chokepoint overrides that to the boss's 50 without touching the generator.
-    expect(opponentForRound(SEED, 11, DIMS).combatant.startingHp).toBe(50);
+    // The chokepoint overrides that to the boss's 45 without touching the generator.
+    expect(opponentForRound(SEED, 11, DIMS).combatant.startingHp).toBe(45);
   });
 });
 
@@ -185,11 +186,12 @@ describe('ghostIntentForRound / buildCombatInput parity at round 11', () => {
 
 // ── Test 6 — damageBonus and lifestealPctBonus reach the sim ────────
 describe('boss_only mutators reach the sim', () => {
-  it('damageBonus (+2) raises the boss first-hit amount by exactly 2', () => {
+  it('damageBonus raises the boss first-hit amount by exactly the mutator value', () => {
     const boss = opponentForRound(SEED, 11, DIMS);
     const withMutators = firstBossHit(boss.combatant, boss.mutators);
     const withoutMutators = firstBossHit(boss.combatant, []);
-    expect(withMutators - withoutMutators).toBe(2);
+    // Retuned +2 -> +1 on 2026-08-05; derivation on FORGE_TYRANT_RULESET.
+    expect(withMutators - withoutMutators).toBe(1);
   });
 
   it('lifestealPctBonus (+15%) heals the boss more when the boss is dented', () => {

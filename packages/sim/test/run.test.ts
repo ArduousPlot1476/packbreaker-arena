@@ -1162,9 +1162,10 @@ describe('startCombatFromGhostBuild + boss_only mutator', () => {
     expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(0);
   });
 
-  it('forge-tyrant-boss contract: hpOverride: 50 REPLACES ghost startingHp', () => {
+  it('forge-tyrant-boss contract: hpOverride REPLACES ghost startingHp', () => {
     // Ghost bag has Buckler (passiveStats: 5) — would normally yield startingHp=35.
-    // hpOverride: 50 replaces it. 35-dmg knife leaves ghost at 50 - 35 = 15.
+    // hpOverride: 45 replaces it. 35-dmg knife leaves ghost at 45 - 35 = 10.
+    // (hpOverride retuned 50 -> 45 on 2026-08-05; see FORGE_TYRANT_RULESET.)
     const knife = defineTestItem(
       'test-knife',
       [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 35, target: 'opponent' }] }],
@@ -1192,13 +1193,14 @@ describe('startCombatFromGhostBuild + boss_only mutator', () => {
     const result = ctrl.startCombatFromGhostBuild(ghost);
     const dmg = result.events.find((e) => e.type === 'damage' && e.target === 'ghost');
     expect(dmg?.type === 'damage' && dmg.amount).toBe(35);
-    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(15); // 50 - 35 = 15
+    expect(dmg?.type === 'damage' && dmg.remainingHp).toBe(10); // 45 - 35 = 10
   });
 
-  it('forge-tyrant-boss contract: damageBonus: 2 adds to ghost damage events', () => {
+  it('forge-tyrant-boss contract: damageBonus adds to ghost damage events', () => {
     // Ghost has a 5-dmg knife; player has nothing. Ghost-side damage event amount
-    // = 5 + 2 (damageBonus) = 7. (Ghost's classId TINKER has bonusBaseDamage 0,
-    // no relics, so the +2 comes purely from the boss_only mutator.)
+    // = 5 + 1 (damageBonus) = 6. (Ghost's classId TINKER has bonusBaseDamage 0,
+    // no relics, so the +1 comes purely from the boss_only mutator.)
+    // (damageBonus retuned +2 -> +1 on 2026-08-05; see FORGE_TYRANT_RULESET.)
     const ghostKnife = defineTestItem(
       'test-ghost-knife',
       [{ type: 'on_round_start', effects: [{ type: 'damage', amount: 5, target: 'opponent' }] }],
@@ -1218,7 +1220,7 @@ describe('startCombatFromGhostBuild + boss_only mutator', () => {
     });
     const result = ctrl.startCombatFromGhostBuild(ghost);
     const playerDmg = result.events.find((e) => e.type === 'damage' && e.target === 'player');
-    expect(playerDmg?.type === 'damage' && playerDmg.amount).toBe(7);
+    expect(playerDmg?.type === 'damage' && playerDmg.amount).toBe(6);
   });
 
   it('forge-tyrant-boss contract: lifestealPctBonus: 15 produces ghost-side heal events on damage', () => {
@@ -1260,10 +1262,12 @@ describe('startCombatFromGhostBuild + boss_only mutator', () => {
     expect(lifestealHeal).toBeDefined();
   });
 
-  it('FORGE_TYRANT integration: ghostHp = 50 via boss_only.hpOverride (neutral comparison: 67)', () => {
+  it('FORGE_TYRANT integration: ghostHp via boss_only.hpOverride (neutral comparison: 67)', () => {
     // Two runs against FORGE_TYRANT to isolate the mutator path:
     //   neutral contract  → ghostHp = 30 + chainmail(12) + bloodmoon-plate(25) = 67.
-    //   forge-tyrant-boss → ghostHp = 50 (mutator REPLACES the computed 67).
+    //   forge-tyrant-boss → ghostHp = 45 (mutator REPLACES the computed 67).
+    // The 67 is the BAG-DERIVED value and does not move with the retune; only
+    // the override does (50 -> 45, 2026-08-05; see FORGE_TYRANT_RULESET).
     const ctrlNeutral = createRun(baseInput());
     const neutralResult = ctrlNeutral.startCombatFromGhostBuild(FORGE_TYRANT);
     const neutralStart = neutralResult.events.find((e) => e.type === 'combat_start');
@@ -1272,7 +1276,7 @@ describe('startCombatFromGhostBuild + boss_only mutator', () => {
     const ctrlBoss = createRun(baseInput({ contractId: ContractId('forge-tyrant-boss') }));
     const bossResult = ctrlBoss.startCombatFromGhostBuild(FORGE_TYRANT);
     const bossStart = bossResult.events.find((e) => e.type === 'combat_start');
-    expect(bossStart?.type === 'combat_start' && bossStart.ghostHp).toBe(50);
+    expect(bossStart?.type === 'combat_start' && bossStart.ghostHp).toBe(45);
   });
 });
 

@@ -40,7 +40,7 @@ At each tick, in order: (1) `on_round_start` triggers fire (tick 0 only), (2) `o
 |---|---|---|
 | Base player HP | 30 | Modified by armor `passiveStats.maxHpBonus` |
 | Base ghost HP | 30 | Same scaling |
-| Boss HP | 50 | Special case, see § 15 |
+| Boss HP | 45 | Special case, see § 15. Was 50 until the 2026-08-05 retune. |
 | Tick rate | 10 / sec | From `content-schemas.ts` `TICKS_PER_SECOND` |
 | Combat hard cap | 600 ticks (60s) | From `MAX_COMBAT_TICKS`. Drawn combats credit no winner. |
 | Cooldown range | 20–80 ticks | Faster than 20 reads as spam; slower than 80 wastes the window |
@@ -331,7 +331,7 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost. Under route (D
 - `classId: 'marauder'`
 - Display name: "Forge Tyrant"
 - Bag: see below
-- HP override: 50 (vs. 30 standard)
+- HP override: 45 (vs. 30 standard). **RETUNED 2026-08-05** from 50 — see § Difficulty target.
 
 ### Bag (6×4 grid)
 
@@ -348,9 +348,18 @@ A fixed scripted ghost. Same `Combatant` shape as a normal ghost. Under route (D
 | Rest | empty | |
 
 ### Aura (boss-only modifier, applied at combat start)
-"Tyrant's Wrath" — +2 base damage to all of the boss's damage effects, +15% lifesteal globally on its bag. This is on top of the boss's relic and class passive.
+"Tyrant's Wrath" — **+1** base damage to all of the boss's damage effects, +15% lifesteal globally on its bag. This is on top of the boss's relic and class passive. **RETUNED 2026-08-05** from +2 — see § Difficulty target.
+
+Note the aura is the *smallest* of the three damage terms. The boss's total `bonusBaseDamage` is **+6**: Marauder class passive +1, `conquerors-crown` +4 (§ 13), aura +1. The Crown does two-thirds of it.
 
 ### Difficulty target
+
+**MEASURED AND RETUNED 2026-08-05.** The ~30% target was measurable but had never been measured. Under the offline balance harness driving the real-play path, the shipped 50 HP / +2 damage / +15% lifesteal produced **18.9%** against a competent player model (`sell-to-fit`, 652 round-11 combats) and **8.9%** against a weaker one that never sells. Retuned to **45 / +1 / +15%**, the same populations measure **33.6%** and **18.5%**.
+
+Three configurations reached ~30% in the sweep: damage 0 at 50 HP (32.9%), damage 2 at 50 HP with lifesteal 0 (32.6%), and 45/+1/+15 (31.1% at that seed count). The first guts the named aura on its own damage axis; the second was the worst on the draw canary, pushing round-11 draws 7.8% → 10.5% by making more fights close enough to end in a mutual sudden-death. The chosen split keeps all three aura components alive and costs +0.1pt of overall draw rate.
+
+**Known and NOT fixed by this retune:** the round-11 combat ends at a median tick ~60 against 100–210 for every other round — roughly two seconds of playback for the climax of a run. Boss HP does not touch it (swept 40/45/50/70/85/100, `medianTicks` never left 60–61) because the median round-11 combat is the *player* dying, and that is set by the boss's damage — of which the aura owns only 1 of 6. Shortening the execution means `conquerors-crown`, which is also a player reward and therefore cuts both ways. Open lever, see § 18.
+
 - A player arriving at Round 11 with an "average" build (1 Epic, 1–2 Rares, mostly Uncommons, ~22 effective HP at start after armor) should win ~30% of boss combats on first attempt. Higher with synergy-heavy builds. **MEASURABILITY (2026-07-24):** this ~30% target was SUSPENDED as unmeasurable at decision-log.md 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED (Phase 2 gate) …" item 10 while the boss was never instantiated; it is UNSUSPENDED now that route (D) shipped (decision-log.md 2026-07-24 § "CF-87 PHASE 2 MERGED (`ab3e4be`) …") — real round-11 boss-win rate is measurable, windowed by `clientVersion`. Target value unchanged.
 - A player who has ignored both armor and damage (incoherent build) should win <10%.
 - A "perfect" player with a recipe-capstoned Epic and class-stacked relics should win 70%+.
