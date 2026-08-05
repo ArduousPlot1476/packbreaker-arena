@@ -14,7 +14,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "check-schemas-sync": "node tooling/scripts/check-schemas-sync.cjs",
-    "clean": "rimraf --glob \"node_modules/.vite\" \"apps/*/.vite\" \"apps/*/dist\" \"packages/*/dist\" \"*.tsbuildinfo\" \"apps/*/*.tsbuildinfo\" \"packages/*/*.tsbuildinfo\" \".turbo\" \"apps/*/.turbo\" \"packages/*/.turbo\""
+    "clean": "rimraf --glob \"node_modules/.vite\" \"apps/*/.vite\" \"apps/*/dist\" \"packages/*/dist\" \"*.tsbuildinfo\" \"apps/*/*.tsbuildinfo\" \"packages/*/*.tsbuildinfo\" \".turbo\" \"apps/*/.turbo\" \"packages/*/.turbo\"",
+    "balance": "pnpm --filter @packbreaker/balance-harness run sim"
   },
   "devDependencies": {
     "@packbreaker/eslint-config": "workspace:*",

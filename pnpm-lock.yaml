@@ -269,6 +269,34 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@20.19.39)(happy-dom@20.9.0)(jsdom@29.1.1)
 
+  tooling/balance-harness:
+    dependencies:
+      '@packbreaker/client':
+        specifier: workspace:*
+        version: link:../../apps/client
+      '@packbreaker/content':
+        specifier: workspace:*
+        version: link:../../packages/content
+      '@packbreaker/sim':
+        specifier: workspace:*
+        version: link:../../packages/sim
+    devDependencies:
+      '@packbreaker/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@packbreaker/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^20.17.0
+        version: 20.19.39
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.3
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   tooling/eslint-config:
     dependencies:
       '@typescript-eslint/eslint-plugin':

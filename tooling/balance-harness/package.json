@@ -1,0 +1,24 @@
+{
+  "name": "@packbreaker/balance-harness",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline balance measurement. Drives the REAL-PLAY path headlessly so tuning is a minutes-long loop instead of a telemetry round-trip.",
+  "scripts": {
+    "sim": "tsx src/cli.ts",
+    "lint": "eslint src --max-warnings 0",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@packbreaker/client": "workspace:*",
+    "@packbreaker/content": "workspace:*",
+    "@packbreaker/sim": "workspace:*"
+  },
+  "devDependencies": {
+    "@packbreaker/eslint-config": "workspace:*",
+    "@packbreaker/tsconfig": "workspace:*",
+    "@types/node": "^20.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
