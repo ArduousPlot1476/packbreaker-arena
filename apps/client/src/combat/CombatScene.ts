@@ -148,10 +148,19 @@ export interface CombatSceneInitData {
   ticksPerSecond: number;
   ghostClassLabel: string;
   playerClassLabel: string;
-  /** Item + portrait anchors in screen-space, computed by the
-   *  orchestrator at combat-phase entry. Stored on the scene at M1.4a;
-   *  consumed by M1.4b's item-anchored VFX via combat/anchorResolution.ts. */
+  /** Item + portrait anchors, computed by the orchestrator at combat-phase
+   *  entry. Stored on the scene at M1.4a; consumed by M1.4b's item-anchored
+   *  VFX via combat/anchorResolution.ts.
+   *
+   *  Frame: DESIGN space (the unscaled 1280×720 layout coordinate space), NOT
+   *  raw screen space. CombatOverlay divides its getBoundingClientRect reads by
+   *  `designScale` before composing them with cellSize. */
   bagLayout: BagLayout;
+  /** Design → screen scale of the desktop frame (screens/DesignScale.tsx).
+   *  Phaser reports canvasBounds in SCREEN space; dividing by this puts it in
+   *  the same frame as bagLayout before subtraction. Defaults to 1 — mobile is
+   *  unscaled, and so is every test (happy-dom has no layout engine). */
+  designScale?: number;
   /** CF-85 Surface 1: index-aligned item-attribution labels for `events`
    *  (combat/attribution.ts — pure, tested there). labels[i] names the
    *  item that caused events[i]; null = unattributed (ramp_tick stays
@@ -230,6 +239,18 @@ export class CombatScene extends Phaser.Scene {
   // Stored read-only from init(); consumed by M1.4b's item-anchored
   // VFX via combat/anchorResolution.ts. M1.4a writes but does not read.
   private bagLayout!: BagLayout;
+  private designScale = 1;
+
+  /** Canvas origin in DESIGN space — the frame `bagLayout` is expressed in.
+   *  `this.scale.canvasBounds` is Phaser's live screen-space rect; under the
+   *  desktop CSS transform that is `designScale ×` the layout position, so it
+   *  has to be divided back before it can be subtracted from a design-space
+   *  anchor. At scale 1 this is the identity, which is why the pre-scaling code
+   *  could subtract canvasBounds directly and be correct. */
+  private get anchorBounds(): { readonly left: number; readonly top: number } {
+    const b = this.scale.canvasBounds;
+    return { left: b.left / this.designScale, top: b.top / this.designScale };
+  }
   private onCombatEnd: () => void = () => {};
 
   private currentTick = 0;
@@ -271,6 +292,10 @@ export class CombatScene extends Phaser.Scene {
     this.playerClassLabel = data.playerClassLabel;
     this.bagLayout = data.bagLayout;
     void this.bagLayout; // M1.4a stores; M1.4b reads via combat/anchorResolution.ts
+    // Guard against 0 / NaN reaching a divisor. A bad scale must degrade to the
+    // unscaled behaviour, never to Infinity anchors.
+    this.designScale =
+      typeof data.designScale === 'number' && data.designScale > 0 ? data.designScale : 1;
     this.onCombatEnd = data.onCombatEnd;
 
     this.currentTick = 0;
@@ -563,7 +588,7 @@ export class CombatScene extends Phaser.Scene {
       // (damage = "impact felt", heal = "passive reception"). flashPortrait
       // takes a color so future event types or Q3 (ii) reopen can extend
       // without primitive rewrites.
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
         // CF-85 Surface 1: the damage floater names its causing item.
@@ -587,7 +612,7 @@ export class CombatScene extends Phaser.Scene {
       // CF-85 Surface 1: the heal floater names its causing item.
       this.spawnFloater(refs, '+' + String(ev.amount) + (label ? ' · ' + label : ''), PALETTE_HEX.rarityUncommon);
       this.spawnParticleBurst(refs, TEX.plusHeal, 5);
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.source) {
         this.spawnParticleBurstAt(anchors.source.x, anchors.source.y, TEX.plusHeal, 5);
       }
@@ -601,7 +626,7 @@ export class CombatScene extends Phaser.Scene {
       // via PORTRAIT_*_RATIO single-source (Pattern #4, M1.4a).
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
       const label = ev.status.toUpperCase() + ' ×' + String(ev.stacks);
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.rarityLegendary, true);
       }
@@ -610,7 +635,7 @@ export class CombatScene extends Phaser.Scene {
     } else if (ev.type === 'status_tick') {
       // M1.4b1 + M1.4b2.1: consume resolveEventAnchors.
       // ANCHOR_RULE.status_tick='target' guarantees a target anchor.
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         // CF-85 Surface 1: the DoT tick names the status-APPLYING item
         // (status_tick is source-less on the wire; attribution.ts
@@ -625,7 +650,7 @@ export class CombatScene extends Phaser.Scene {
       // 2026-07-19 § "CF-83 RAMP + CF-84 DRAW SEMANTICS RATIFIED"). Renders like
       // status_tick — a red floater + burst at the affected side's portrait — so
       // the ramp's "sudden death" drain reads on-screen (item 6).
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         // CF-93 LEG 1 (B2): a bare '−3' at the portrait reads as damage from
         // nowhere — every OTHER numeric floater in this scene names its cause
@@ -647,7 +672,7 @@ export class CombatScene extends Phaser.Scene {
       // co-tick damage/heal source flashes at the same anchor is
       // intentional — reads as a synergy chain rather than collision
       // (Q2 ratification). CF 4a closure.
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.source) {
         // CF 60: an on_adjacent_trigger reaction fires a denser TEAL burst so
         // "the neighbor answered" reads distinctly from a generic activation.
@@ -675,7 +700,7 @@ export class CombatScene extends Phaser.Scene {
       // (positive feel) at count=3 (smaller than heal=5 for hierarchy).
       // statAbbr handles M1 'damage' → 'DMG'; defensive uppercase fallback
       // for M2 stat expansion (CF 25 closure).
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         const label = formatSignedAmount(ev.amount) + ' ' + statAbbr(ev.stat);
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.rarityUncommon, true);
@@ -689,7 +714,7 @@ export class CombatScene extends Phaser.Scene {
       // mirroring gain/loss semantics (apply has the burst; remove
       // doesn't). target is ItemRef, same resolution path as buff_apply.
       // CF 25 closure.
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         const label = formatSignedAmount(-ev.amount) + ' ' + statAbbr(ev.stat);
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, label, PALETTE_HEX.textSecondary, true);
@@ -702,7 +727,7 @@ export class CombatScene extends Phaser.Scene {
       // target portrait. No particle burst (would read as damage). CF 25
       // closure.
       const refs = ev.target === 'player' ? this.playerRefs : this.ghostRefs;
-      const anchors = resolveEventAnchors(ev, this.bagLayout, this.scale.canvasBounds);
+      const anchors = resolveEventAnchors(ev, this.bagLayout, this.anchorBounds);
       if (anchors.target) {
         this.spawnFloaterAt(anchors.target.x, anchors.target.y, 'STUN', PALETTE_HEX.textSecondary, true);
       }
@@ -992,7 +1017,20 @@ export function createCombatGame(
     transparent: true,
     backgroundColor: 'rgba(0,0,0,0)',
     scale: {
-      mode: Phaser.Scale.RESIZE,
+      // NONE, not RESIZE — and this is load-bearing under the desktop
+      // scale-to-fit frame (screens/DesignScale.tsx).
+      //
+      // RESIZE makes Phaser measure its parent itself, via getBoundingClientRect,
+      // which reports the CSS-TRANSFORMED size. Inside a frame scaled by 2 that
+      // returns 2× the layout size, so Phaser built a 2×-sized world which the
+      // transform then scaled AGAIN — a canvas 4× too large, with the ghost
+      // portrait off-screen and every anchor displaced. Observed directly:
+      // layout 2560×1280 / visual 5120×2560 for a design space of 1280×624.
+      //
+      // NONE keeps the game size exactly what we pass, and clientWidth/
+      // clientHeight are LAYOUT geometry, which a transform does not touch. So
+      // Phaser's world stays design space — the same frame bagLayout is in.
+      mode: Phaser.Scale.NONE,
       autoCenter: Phaser.Scale.NO_CENTER,
     },
     fps: { target: 60, smoothStep: true },
@@ -1001,6 +1039,21 @@ export function createCombatGame(
     // (not informational for our app, takes runtime cycles).
     banner: false,
   });
+
+  // NONE means Phaser no longer tracks the parent, so track it here. Combat is
+  // seconds long and a mid-combat resize is an edge case, but a letterbox change
+  // (window drag between monitors) would otherwise leave the canvas stale for the
+  // rest of the fight.
+  const syncSize = () => {
+    const w = parent.clientWidth;
+    const h = parent.clientHeight;
+    if (w > 0 && h > 0) game.scale.resize(w, h);
+  };
+  const observer =
+    typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncSize);
+  observer?.observe(parent);
+  game.events.once('destroy', () => observer?.disconnect());
+
   game.scene.start(CombatScene.KEY, data);
   return game;
 }

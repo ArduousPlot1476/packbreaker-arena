@@ -51,6 +51,7 @@ import {
 import { computeBagLayout } from '../bag/layout';
 import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
+import { useDesignScale } from '../screens/DesignScale';
 import { computeRampDrain, deriveResolutionCause } from './resolutionCause';
 import { opponentForRound } from './opponentForRound';
 
@@ -162,6 +163,8 @@ export function buildCombatInput(
 export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlayProps) {
   const ctx = useRunContext();
   const cellSize = useCellSize();
+  // Design→screen scale of the desktop frame (1 on mobile, which is unscaled).
+  const designScale = useDesignScale();
 
   // Compute the combat result + initial HPs once at mount. Memoize
   // against (active, round, seed, bag) so the result is stable across
@@ -292,18 +295,38 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       // Static for the duration of combat per tech-architecture.md § 2.
       const bagRect = bagContainerRef.current?.getBoundingClientRect();
       const canvasRect = container.getBoundingClientRect();
+
+      // ─── Design space vs screen space ────────────────────────────────
+      // The desktop frame is CSS-transform-scaled to fit the viewport
+      // (screens/DesignScale.tsx). A transform does not change layout
+      // geometry, so `cellSize` and Phaser's own world are in DESIGN px
+      // while getBoundingClientRect reports SCREEN px. Composing
+      // `bagRect.left` (screen) with `col * cellSize` (design) mixes the
+      // two — it happened to be correct only because the scale used to be
+      // pinned at 1.
+      //
+      // Divide every rect read by the scale so the whole BagLayout is in
+      // design space, matching cellSize. CombatScene divides Phaser's
+      // canvasBounds by the same factor before subtracting, so the
+      // screen-space → canvas-local translation stays consistent end to
+      // end. Both divisions are load-bearing; neither is incidental.
+      const toDesign = (px: number) => px / designScale;
+
       const bagLayout = computeBagLayout({
         playerBagItems: bagSnapshot,
         cellSize,
-        playerBagOriginPx: { x: bagRect?.left ?? 0, y: bagRect?.top ?? 0 },
+        playerBagOriginPx: {
+          x: toDesign(bagRect?.left ?? 0),
+          y: toDesign(bagRect?.top ?? 0),
+        },
         dimensions: bagDimensions,
         playerPortraitAnchor: {
-          x: canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_PLAYER,
-          y: canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO,
+          x: toDesign(canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_PLAYER),
+          y: toDesign(canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO),
         },
         ghostPortraitAnchor: {
-          x: canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_GHOST,
-          y: canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO,
+          x: toDesign(canvasRect.left + canvasRect.width * PORTRAIT_X_RATIO_GHOST),
+          y: toDesign(canvasRect.top + canvasRect.height * PORTRAIT_Y_RATIO),
         },
       });
 
@@ -316,6 +339,10 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         ghostClassLabel,
         playerClassLabel: ctx.state.state.className,
         bagLayout,
+        // bagLayout above is in DESIGN space (see toDesign). The scene divides
+        // Phaser's canvasBounds by this before subtracting, so both sides of the
+        // screen → canvas-local translation end up in the same frame.
+        designScale,
         // CF-85 Surface 1: index-aligned attribution labels (pure module
         // output; the scene renders them verbatim, no lookup of its own).
         eventLabels,
@@ -333,7 +360,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       else if (gameRef.current) gameRef.current.destroy(true);
       gameRef.current = null;
     };
-  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, bagContainerRef, eventLabels]);
+  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, designScale, bagContainerRef, eventLabels]);
 
   const isWin = result?.outcome === 'player_win';
   // CF-84: honest 3-way DISPLAY outcome (player_win → win, ghost_win → loss, draw
