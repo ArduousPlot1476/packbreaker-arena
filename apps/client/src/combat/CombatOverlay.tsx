@@ -52,6 +52,7 @@ import { computeBagLayout } from '../bag/layout';
 import { useCellSize } from '../bag/CellSize';
 import { RoundResolution } from '../screens/RoundResolution';
 import { useDesignScale } from '../screens/DesignScale';
+import { useSettings } from '../settings/SettingsContext';
 import { computeRampDrain, deriveResolutionCause } from './resolutionCause';
 import { opponentForRound } from './opponentForRound';
 
@@ -165,6 +166,8 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
   const cellSize = useCellSize();
   // Design→screen scale of the desktop frame (1 on mobile, which is unscaled).
   const designScale = useDesignScale();
+  const { settings } = useSettings();
+  const combatSpeed = settings.combatSpeed;
 
   // Compute the combat result + initial HPs once at mount. Memoize
   // against (active, round, seed, bag) so the result is stable across
@@ -335,7 +338,11 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
         endedAtTick: result.endedAtTick,
         initialPlayerHp,
         initialGhostHp,
-        ticksPerSecond: TICKS_PER_SECOND,
+        // Playback speed only (CF 10). The SIM already ran at this point — the
+        // result, the event stream and every HP value are fixed. This scales how
+        // fast the recorded stream is replayed, so it cannot affect outcomes,
+        // determinism, or the fixture corpus.
+        ticksPerSecond: TICKS_PER_SECOND * combatSpeed,
         ghostClassLabel,
         playerClassLabel: ctx.state.state.className,
         bagLayout,
@@ -360,7 +367,7 @@ export function CombatOverlay({ active, onDone, bagContainerRef }: CombatOverlay
       else if (gameRef.current) gameRef.current.destroy(true);
       gameRef.current = null;
     };
-  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, designScale, bagContainerRef, eventLabels]);
+  }, [active, result, initialPlayerHp, initialGhostHp, ghostClassLabel, ctx.state.state.className, phase, bagSnapshot, bagDimensions, cellSize, designScale, combatSpeed, bagContainerRef, eventLabels]);
 
   const isWin = result?.outcome === 'player_win';
   // CF-84: honest 3-way DISPLAY outcome (player_win → win, ghost_win → loss, draw

@@ -10,8 +10,11 @@
 // Class label derives from round parity (mirrors combat/ghost.ts and
 // the mobile LogTab); re-source from server-side ghost record in M2.
 //
-// EXPAND affordance + last-round damage chart are deferred (closing
-// decision-log entry: "revisit when telemetry surfaces a need").
+// The EXPAND affordance and last-round damage chart remain deferred. The
+// non-functional "EXPAND ↑" label was REMOVED (2026-08-04): it carried
+// `cursor: pointer` and no onClick, so it invited a click that did nothing —
+// a lie in permanent chrome, and the kind of thing a first-time player reads
+// as "this game is broken". Deferred work should be absent, not fake.
 
 import type { RunState } from '../run/types';
 
@@ -51,12 +54,6 @@ export function BottomPanel({ state }: BottomPanelProps) {
           </span>
         )}
       </div>
-      <span
-        className="label-cap"
-        style={{ fontSize: 9, color: 'var(--text-muted)', cursor: 'pointer' }}
-      >
-        EXPAND ↑
-      </span>
     </div>
   );
 }

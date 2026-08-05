@@ -243,3 +243,33 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* Reduced motion.
+   Two triggers, deliberately: the OS preference, and an explicit in-game toggle
+   (settings/settings.ts) that writes data-reduced-motion on <html>. The toggle
+   must work in BOTH directions — someone can want the game calm without setting
+   it system-wide, and someone can have it set system-wide for unrelated reasons
+   and still want the game's motion. So the OS query does not hard-override the
+   attribute; SettingsProvider seeds its default from the query and the attribute
+   is the single thing this CSS reads after that.
+
+   Scoped to decorative motion. Combat playback is the game's core readout, not
+   an animation — suppressing it would hide information rather than calm the
+   page, so it stays and gets a speed control in Settings instead. */
+:root[data-reduced-motion='true'] .recipe-glow rect {
+  animation: none;
+}
+:root[data-reduced-motion='true'] .combine-pop,
+:root[data-reduced-motion='true'] .hit-flash,
+:root[data-reduced-motion='true'] .dmg-rise,
+:root[data-reduced-motion='true'] .status-pop {
+  animation: none;
+}
+:root[data-reduced-motion='true'] .drop-bad {
+  animation: none;
+}
+:root[data-reduced-motion='true'] .hover-lift,
+:root[data-reduced-motion='true'] .ease-snap,
+:root[data-reduced-motion='true'] .bag-dimmed {
+  transition-duration: 1ms;
+}
