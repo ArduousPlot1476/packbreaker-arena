@@ -271,7 +271,12 @@ export function RunEndScreen({ onPlayAgain, onRestart }: RunEndScreenProps) {
         alignItems: 'center',
         padding: isMobile ? '40px 20px 28px' : '56px 64px 40px',
         boxSizing: 'border-box',
-        maxWidth: isMobile ? 480 : undefined,
+        // Desktop cap: this screen is mounted ABOVE the scaled run frame, so it
+        // gets the raw viewport. Uncapped, the relic cards stretched to ~1800px
+        // on a 1080p monitor and the whole summary read as sparse furniture
+        // rather than as a composed card. 880 keeps the three relic slots at
+        // roughly the proportions they have at the 1280 design width.
+        maxWidth: isMobile ? 480 : 880,
         margin: '0 auto',
       }}
     >
