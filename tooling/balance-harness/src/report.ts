@@ -78,10 +78,12 @@ export interface RoundAgg {
    *  raising income does nothing if the policy never spends it. */
   readonly meanPurchases: number;
   readonly meanGoldHeld: number;
-  /** Gold actually SPENT this round (round-start gold + income already credited,
-   *  minus what survived to combat, floored at 0). `meanGoldHeld` alone cannot
-   *  distinguish "earned nothing" from "spent it all". */
+  /** GROSS gold spent this round, summed at each buy and reroll. `meanGoldHeld`
+   *  alone cannot distinguish "earned nothing" from "spent it all". */
   readonly meanGoldSpent: number;
+  /** Sale proceeds respent within the round — the recycled half of late-game
+   *  churn, and 0 for any policy that never sells. */
+  readonly meanGoldRecovered: number;
   readonly meanBagCells: number;
   /** Purchases split by rarity — computed per round all along and thrown away by
    *  the aggregator until now. This is how a late-game lever proves it moved the
@@ -171,10 +173,14 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
         2,
       ),
       meanGoldHeld: mean(rs.map((r) => r.goldHeldAtCombat)),
-      // Floored at 0: sell_item credits gold mid-round, so a round that sold more
-      // than it spent would otherwise report negative spend and read as income.
-      meanGoldSpent: mean(
-        rs.map((r) => Math.max(0, r.goldAtRoundStart - r.goldHeldAtCombat)),
+      // GROSS, summed at each spend, not the net wallet delta — sale proceeds get
+      // respent, and under sell-to-fit a net-delta figure understates late-game
+      // churn by exactly the amount that policy recycles. See RoundRecord.goldSpent.
+      meanGoldSpent: mean(rs.map((r) => r.goldSpent)),
+      // What selling put back in the wallet. Gross spend minus net drop, which is
+      // the recycled half of the churn — zero for any policy that never sells.
+      meanGoldRecovered: mean(
+        rs.map((r) => Math.max(0, r.goldSpent - (r.goldAtRoundStart - r.goldHeldAtCombat))),
       ),
       meanBagCells: mean(rs.map((r) => r.bagCellsUsed)),
       purchasesByRarity: sumRarities(rs.map((r) => r.purchasesByRarity)),
@@ -279,16 +285,17 @@ export function formatReport(r: Report): string {
   L.push('  blocked% = something affordable was on offer and NOTHING fit the bag');
   L.push('');
   L.push('[EXACT] purchases by rarity, per round');
-  L.push('  rd   common  uncommon  rare  epic  legendary   residual-offers');
+  L.push('  rd   common  uncommon  rare  epic  legendary   residual-offers   resold-g');
   for (const a of r.perRound) {
     const g = (k: string) => String(a.purchasesByRarity[k] ?? 0);
     L.push(
       `  ${String(a.round).padStart(2)}  ${g('common').padStart(6)}  ${g('uncommon').padStart(8)}  ` +
         `${g('rare').padStart(4)}  ${g('epic').padStart(4)}  ${g('legendary').padStart(9)}   ` +
-        `${a.meanResidualOffers.toFixed(1).padStart(15)}`,
+        `${a.meanResidualOffers.toFixed(1).padStart(15)}   ${a.meanGoldRecovered.toFixed(1).padStart(8)}`,
     );
   }
   L.push('  residual-offers = still affordable AND placeable at Continue (unspent capacity)');
+  L.push('  resold-g = sale proceeds respent within the round (0 for non-selling policies)');
   L.push('');
   L.push('[EXACT] overall');
   L.push(`  combats                 ${r.overall.combats}`);

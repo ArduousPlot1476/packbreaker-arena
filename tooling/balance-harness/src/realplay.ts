@@ -136,6 +136,21 @@ export interface RoundRecord {
   readonly heartsAtStart: number;
   readonly goldAtRoundStart: number;
   readonly goldHeldAtCombat: number;
+  /** GROSS gold spent this round — every decrease summed as it happens, not the
+   *  net wallet delta.
+   *
+   *  The two are the same number only for a policy that never sells. They are
+   *  NOT the same for `sell-to-fit`: a round that opens at 10g, sells for 4g and
+   *  spends 14g arrives at combat with 0g, and the net delta calls that 10g of
+   *  spend. That understates precisely the late-game churn this metric exists to
+   *  measure, and it understates it only under the selling policy — which would
+   *  have made the two policies' spend columns quietly incomparable.
+   *
+   *  Summed from the controller's own gold between actions rather than from a
+   *  re-derived price, so it cannot drift from `effectiveItemCost` or
+   *  `computeRerollCost`. Buy and reroll are the sim's only two gold sinks
+   *  (state.ts:612 and :747); sells raise gold and contribute nothing here. */
+  readonly goldSpent: number;
   readonly purchasesByRarity: Readonly<Record<string, number>>;
   readonly rerolls: number;
   readonly combines: number;
@@ -312,6 +327,7 @@ export function runOne(spec: RunSpec): RunRecord {
   let roundPurchases: Record<string, number> = {};
   let roundRerolls = 0;
   let roundCombines = 0;
+  let roundGoldSpent = 0;
   let goldAtRoundStart = ctrl.getState().gold;
   let seenOfferedThisRound = new Set<string>();
   // The round's OPENING deliberation surface, sampled before the policy acts.
@@ -344,6 +360,7 @@ export function runOne(spec: RunSpec): RunRecord {
         roundPurchases = {};
         roundRerolls = 0;
         roundCombines = 0;
+        roundGoldSpent = 0;
         goldAtRoundStart = ctrl.getState().gold;
         seenOfferedThisRound = new Set();
         overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}`);
@@ -407,6 +424,7 @@ export function runOne(spec: RunSpec): RunRecord {
         heartsAtStart,
         goldAtRoundStart,
         goldHeldAtCombat,
+        goldSpent: roundGoldSpent,
         purchasesByRarity: { ...roundPurchases },
         rerolls: roundRerolls,
         combines: roundCombines,
@@ -440,8 +458,17 @@ export function runOne(spec: RunSpec): RunRecord {
       if (i >= 0) pending.splice(i, 1);
     }
 
+    // Gold before every state-changing call, so a decrease can be banked as
+    // gross spend. See RoundRecord.goldSpent for why net delta is not enough.
+    const goldBeforeAction = ctrl.getState().gold;
+    const bankSpend = () => {
+      const after = ctrl.getState().gold;
+      if (after < goldBeforeAction) roundGoldSpent += goldBeforeAction - after;
+    };
+
     if (action.type === 'reroll_shop') {
       ctrl.rerollShop();
+      bankSpend();
       roundRerolls++;
       // Override AFTER the sim call so rerollsThisRound is post-increment.
       overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}r${roundRerolls}`);
@@ -451,6 +478,7 @@ export function runOne(spec: RunSpec): RunRecord {
 
     try {
       applyAction(ctrl, action);
+      bankSpend();
     } catch {
       // A policy that emits an illegal action ends its own run rather than
       // aborting the sweep. Recorded as a short run; visible in roundsReached.
