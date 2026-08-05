@@ -191,6 +191,21 @@ function sellToFitPolicy(seed: SimSeed): Policy {
    *  unreachable. */
   let clearingFor: ItemId | null = null;
   let sellsThisClear = 0;
+  /** Placement count when the current clear STARTED.
+   *
+   *  The backstop below used to compare against the LIVE placement count, which
+   *  shrinks with every victim sold — so it bound at about half the bag. From 6
+   *  placements: sell, sell, sell, then `3 < 3` fails and the clear is abandoned
+   *  with lower-rarity victims still available and the target possibly one sale
+   *  from fitting. That aborts reachable clears and under-reports exactly the
+   *  late-game recovery this policy exists to measure.
+   *
+   *  Termination never depended on it: victims must be STRICTLY lower rarity
+   *  than the target and each sale removes one, so the candidate set shrinks
+   *  monotonically and the clear ends on its own when `victim === null`. This is
+   *  a runaway guard, so it has to be a fixed bound rather than one the loop
+   *  moves under itself. */
+  let clearBudget = 0;
   /** Targets abandoned, so a target that cannot be cleared for cannot re-trigger
    *  the clear loop on every tick.
    *
@@ -343,6 +358,7 @@ function sellToFitPolicy(seed: SimSeed): Policy {
           if (best !== null) {
             clearingFor = best.id;
             sellsThisClear = 0;
+            clearBudget = state.bag.placements.length;
           }
         }
 
@@ -365,7 +381,7 @@ function sellToFitPolicy(seed: SimSeed): Policy {
             }
           }
 
-          if (victim !== null && sellsThisClear < state.bag.placements.length) {
+          if (victim !== null && sellsThisClear < clearBudget) {
             sellsThisClear++;
             return { kind: 'action', action: { type: 'sell_item', placementId: victim.id } };
           }
