@@ -62,7 +62,13 @@ export {
 } from './triggers';
 
 export type { SimulateCombatOptions } from './combat';
-export { simulateCombat } from './combat';
+// RAMP_START_TICK / RAMP_RATE were reachable only by deep import ('../src/combat')
+// until now, which the sim tests used but nothing outside the package could.
+// Promoted to the barrel because the client needs the ramp threshold to answer
+// "can this item end a fight before sudden death" (run/resolvers.ts) — and that
+// question must be asked against the REAL constant, not a copy that silently
+// drifts the day the ramp is retuned.
+export { simulateCombat, RAMP_RATE, RAMP_START_TICK } from './combat';
 
 export type {
   ApplyCombatOutcomeInput,

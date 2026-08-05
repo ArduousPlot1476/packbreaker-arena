@@ -11,6 +11,20 @@ Format: `- **YYYY-MM-DD** — <what shipped>. <why, in a sentence>. <watch-out, 
 
 ---
 
+- **2026-08-05** — Early game fixed: it was *unresolvable*, not merely unbalanced. Rounds
+  1–2 drew 50–60% of the time and **91% of all draws were combats where neither side dealt
+  any damage** — only 4 of 20 Commons can win round 1. The shop and the early ghost now
+  guarantee a resolver, the ghost curve tracks the player's bag fill, and ghost HP opens at
+  20 instead of 30. Inert combats 27.2% → 0.2%; draws 22.3% → 2.4%; median run 3/11 → 10/11
+  under the player-model policy. All client-side: **zero diff** under `packages/content` and
+  the 224-fixture corpus. *Watch:* draws are 2–3% against a <1% guardrail, the boss sits at
+  ~4% against a ~30% target, and the class gap widened 7.6 → 10.6 pts (weapon-dense combat
+  amplifies Marauder's flat +1 while Tinker's recipe passive is near-dead at 0.5/run).
+- **2026-08-05** — Balance harness gains the diagnostics that made the above findable:
+  per-side damage + a `bothSidesInert` flag, purchases/gold/cells per round, a
+  `--hearts`/`--gold`/`--shop` sweep via an additive `rulesetOverride` on `CreateRunInput`,
+  and a `resolver-first` policy. *Watch:* the five corpus strategies buy by slot index and
+  will walk past a weapon — they measure a bot declining to play. Report both.
 - **2026-08-04** — Deploy config: `vercel.json` (client), `apps/server/Dockerfile` +
   `fly.toml` (server), and `DEPLOY.md`. The game has never been hosted. The client
   works without the server — Clerk is optional and telemetry failures are swallowed —

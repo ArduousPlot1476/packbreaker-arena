@@ -69,9 +69,22 @@ read against this section. What the bot is authoritative on is **reachability**
 (an item never offered, or never affordable when offered) and the **delta** under
 a fixed policy across two revisions.
 
-The strategies' own header says they "are heuristic and aim for path coverage,
-not realism". They are a baseline, not a player model — absolute bot win rates
-run lower than a competent human's.
+## Which policy is the player model
+
+Five of the six come from the fixture corpus and their own header says they "are
+heuristic and aim for path coverage, not realism". They buy by slot index or by
+rarity — never by what an item *does*. Measured, they buy 0.6 items in round 1
+and will walk past a weapon.
+
+`resolver-first` is the harness's own, and it is the closest thing to a player:
+it buys a damage source when one is affordable and it doesn't own one, then plays
+greedily. Use it for "what does a person experience"; use the other five for
+coverage and for deltas.
+
+**Report both.** They diverge sharply — after the 2026-08-05 early-game work the
+median run reached 4/11 under the full policy set and 10/11 under
+`resolver-first`, because most of the corpus bots decline to buy anything. Citing
+only one is how a balance claim becomes wrong.
 
 ## Validation
 

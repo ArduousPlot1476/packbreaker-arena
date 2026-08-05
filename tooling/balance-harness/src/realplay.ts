@@ -43,6 +43,7 @@ import {
   type CombatInput,
   type CombatResult,
   type RelicId,
+  type Ruleset,
   type SimSeed,
 } from '@packbreaker/content';
 
@@ -116,6 +117,19 @@ export interface RoundRecord {
   readonly endReason: string;
   readonly endedAtTick: number;
   readonly playbackMs: number;
+  /** Item damage the player dealt / took. Ramp drain is EXCLUDED by
+   *  computeDamageStats (CF-83), which is exactly what makes the pair a clean
+   *  inertness test: ramp damage would otherwise make every stalled combat look
+   *  like it had damage in it. */
+  readonly damageDealt: number;
+  readonly damageTaken: number;
+  /** Neither side landed a single point of item damage in the entire combat.
+   *
+   *  This is the diagnosis the first sweep was missing. A 22% draw rate says
+   *  combats aren't resolving; this says WHY — 14 of 20 Commons deal no damage
+   *  at all, so a 1-item bag on both sides means 30 HP vs 30 HP with nothing
+   *  able to move either number, until the ramp kills both on the same tick. */
+  readonly bothSidesInert: boolean;
   readonly heartsAtStart: number;
   readonly goldAtRoundStart: number;
   readonly goldHeldAtCombat: number;
@@ -148,6 +162,10 @@ export interface RunSpec {
   readonly classId: ClassId;
   readonly startingRelicId: RelicId;
   readonly policy: Policy;
+  /** Sweep knob. Replaces the neutral contract's ruleset so a grid can vary
+   *  hearts / gold / shop size without editing packages/content between runs.
+   *  Undefined = shipped values. */
+  readonly rulesetOverride?: Ruleset;
 }
 
 const NEUTRAL = ContractId('neutral');
@@ -192,6 +210,7 @@ export function runOne(spec: RunSpec): RunRecord {
     startingRelicId: spec.startingRelicId,
     // Client parity: the run screen plays the ICONNED subsets, not the raw
     // registries (CF 37 / CF 66).
+    rulesetOverride: spec.rulesetOverride,
     itemsRegistry: SHOP_POOL_ITEMS as never,
     recipesRegistry: ICONNED_RECIPES as never,
   });
@@ -281,6 +300,9 @@ export function runOne(spec: RunSpec): RunRecord {
         endReason: String(result.endReason),
         endedAtTick: result.endedAtTick,
         playbackMs: playbackMs(result.events, result.endedAtTick),
+        damageDealt,
+        damageTaken,
+        bothSidesInert: damageDealt === 0 && damageTaken === 0,
         heartsAtStart,
         goldAtRoundStart,
         goldHeldAtCombat,
