@@ -8,12 +8,21 @@
 //
 //   surface          corpus                        real play
 //   ---------------  ----------------------------  ------------------------------
-//   ghost items      [2,2,3,3,4,4,5,5,6,6]         [1,1,2,3,4,5,5,6,7,8,5]
-//   ghost HP         bag-derived (maxHpBonus sum)  30 + floor((round-1)/2)*2
+//   ghost items      [2,2,3,3,4,4,5,5,6,6]         [1,1,2,4,6,8,10,12,13,14,5]
+//   ghost HP         bag-derived (maxHpBonus sum)  20 + (round-1)*2
 //   ghost/shop pool  all 45 ITEMS                  44 SHOP_OFFER_ITEMS (CF 66)
-//   round-11 boss    neutral, NO mutators, ~67 HP  Forge Tyrant, 50 HP, +2, +15%
+//   round-11 boss    neutral, NO mutators, ~67 HP  Forge Tyrant, 45 HP, +1, +15%
 //   combat seed      fresh rng per round           the RUN seed, every round
 //   mid relic        never granted                 always offered at round 6
+//
+// THE REAL-PLAY COLUMN IS DERIVED, NOT DECLARED. Every value in it comes from a
+// module this file imports, so it moves when the game moves — but the table is
+// prose and does NOT. Three of these six rows were stale when audited on
+// 2026-08-05: two ghost rows had described the pre-2026-08-05 curve since that
+// tuning landed, and the boss row the pre-retune numbers. A table whose whole
+// job is to argue "the corpus and real play are two different games" was
+// describing a third game that exists nowhere. Re-read it against ghost.ts and
+// contracts.ts whenever either changes.
 //
 // Canon already names this (decision-log 2026-07-25): "fixture drift is a poor
 // proxy for real-play impact". A harness on the corpus path would measure a game
@@ -34,6 +43,7 @@ import {
   applyAction,
   computeDamageStats,
   createRun,
+  effectiveItemCost,
   type RunController,
   type RunControllerAction,
 } from '@packbreaker/sim';
@@ -42,6 +52,7 @@ import {
   type ClassId,
   type CombatInput,
   type CombatResult,
+  type ItemId,
   type RelicId,
   type Ruleset,
   type SimSeed,
@@ -53,6 +64,7 @@ import { generateShop } from '../../../apps/client/src/run/sim-bridge.ts';
 import { ICONNED_RECIPES, SHOP_POOL_ITEMS } from '../../../apps/client/src/run/content.ts';
 import { advanceCombatTickClock } from '../../../apps/client/src/combat/tickAdvancer.ts';
 
+import { fitsAnywhere } from './bagfit.ts';
 import type { Policy } from './policies.ts';
 
 /** Playback constants, mirrored from CombatScene/CombatOverlay. Duplicated here
@@ -133,15 +145,76 @@ export interface RoundRecord {
   readonly heartsAtStart: number;
   readonly goldAtRoundStart: number;
   readonly goldHeldAtCombat: number;
+  /** GROSS gold spent this round — every decrease summed as it happens, not the
+   *  net wallet delta.
+   *
+   *  The two are the same number only for a policy that never sells. They are
+   *  NOT the same for `sell-to-fit`: a round that opens at 10g, sells for 4g and
+   *  spends 14g arrives at combat with 0g, and the net delta calls that 10g of
+   *  spend. That understates precisely the late-game churn this metric exists to
+   *  measure, and it understates it only under the selling policy — which would
+   *  have made the two policies' spend columns quietly incomparable.
+   *
+   *  Summed from the controller's own gold between actions rather than from a
+   *  re-derived price, so it cannot drift from `effectiveItemCost` or
+   *  `computeRerollCost`. Buy and reroll are the sim's only two gold sinks
+   *  (state.ts:612 and :747); sells raise gold and contribute nothing here. */
+  readonly goldSpent: number;
+  /** GROSS gold taken in from sales this round, summed at each sale.
+   *
+   *  Deliberately NOT "sale proceeds respent". That quantity was reported once
+   *  and is not measurable: gold is fungible, so there is no fact of the matter
+   *  about which coin funded which purchase. The derived version
+   *  `goldSpent - (goldAtRoundStart - goldHeldAtCombat)` is algebraically
+   *  identical to gross proceeds — substituting the round's conservation
+   *  identity `G1 = G0 - S + R` collapses it to R — so it reported the whole
+   *  refund as respent even when the sale happened AFTER the last purchase.
+   *
+   *  Measured at the sale rather than derived from the wallet, so it stays true
+   *  if a future within-round gold source breaks that identity. Paired with
+   *  goldSpent, the two say "churn cost this much and returned this much"
+   *  without either standing in for the other. */
+  readonly goldRecovered: number;
   readonly purchasesByRarity: Readonly<Record<string, number>>;
   readonly rerolls: number;
   readonly combines: number;
   readonly bagCellsUsed: number;
-  /** Offers this round that were BOTH affordable and placeable — the choice
-   *  space the round actually presented, independent of what the bot took. */
+  /** Offers that were BOTH affordable and placeable AT SHOP ENTRY — the choice
+   *  space the round presented before the bot spent a coin.
+   *
+   *  THE SAMPLE POINT IS THE WHOLE POINT, and it used to be wrong. This was
+   *  measured at Continue, i.e. AFTER purchases, which inverts it: a round where
+   *  the player deliberated over five offers and bought three scored as EMPTY
+   *  (they were down to 1 gold by then), while a round where the player bought
+   *  nothing and sat on 39 gold scored as FULL of choice. Measured on f381637,
+   *  rounds 1-5 read 100% empty while the bot was buying 1.0-2.5 items a round,
+   *  and round 11 read 4% empty holding 39 gold with a full bag.
+   *
+   *  Sampled at the round's OPENING shop only — not after a reroll. A reroll is
+   *  a decision made in RESPONSE to the opening surface, so folding it in would
+   *  make this measure the bot's reaction instead of the round's offer. Rerolls
+   *  are reported separately. */
   readonly liveOffers: number;
+  /** Offers affordable at shop entry IGNORING placeability. The discriminator:
+   *  `affordableOffers > 0 && liveOffers === 0` is the bag saying no while the
+   *  wallet says yes — the late-game wall, distinguished from simply being
+   *  broke. Without this pair the two failure modes are one number. */
+  readonly affordableOffers: number;
+  /** The live count at Continue, AFTER the bot has spent. Not the pacing signal
+   *  — this is unspent capacity: how much the round still had on the table when
+   *  the player walked away from it. High late-round values with low purchases
+   *  are the late-game saturation signature. */
+  readonly residualOffers: number;
   /** Ready recipe matches at combat time. */
   readonly readyRecipes: number;
+  /** Did this round offer a recipe decision AT ANY POINT?
+   *
+   *  Third instance of the sample-point defect: `readyRecipes` is counted at
+   *  Continue, so a recipe that was ready and got COMBINED reads 0 there — the
+   *  round scored as having no recipe decision precisely because the player took
+   *  it. This ORs the three moments: ready when the shop opened, combined during
+   *  the round, or still ready at Continue. */
+  readonly hadRecipeDecision: boolean;
 }
 
 export interface RunRecord {
@@ -166,6 +239,22 @@ export interface RunSpec {
    *  hearts / gold / shop size without editing packages/content between runs.
    *  Undefined = shipped values. */
   readonly rulesetOverride?: Ruleset;
+  /** Sweep knob for the round-11 boss. Undefined = shipped values.
+   *
+   *  Unlike `rulesetOverride` there is no injection point in the shipped code to
+   *  reuse: `opponentForRound` reads CONTRACTS['forge-tyrant-boss'] directly and
+   *  takes no parameter. So the harness rewrites the assembled RoundOpponent at
+   *  its own boundary — applying each field by exactly the route the shipped code
+   *  applies it (hpOverride straight onto `startingHp`, damage and lifesteal
+   *  through `mutators` for the sim to fold ghost-side), so a swept number and a
+   *  landed number mean the same thing. */
+  readonly bossOverride?: BossOverride;
+}
+
+export interface BossOverride {
+  readonly hpOverride?: number;
+  readonly damageBonus?: number;
+  readonly lifestealPctBonus?: number;
 }
 
 const NEUTRAL = ContractId('neutral');
@@ -202,6 +291,43 @@ function overrideFromClientShop(ctrl: RunController, uidPrefix: string): void {
   ctrl.overrideShopSlots(itemIds);
 }
 
+/** Rewrites the round-11 boss's numbers for a sweep. Identity when no override
+ *  is given, and identity on rounds 1-10 regardless (those carry no mutators).
+ *
+ *  Mirrors the shipped two-site split exactly (opponentForRound.ts:89-96):
+ *  `hpOverride` lands on `combatant.startingHp` because simulateCombat never
+ *  reads it, while `damageBonus` / `lifestealPctBonus` stay in `mutators` for
+ *  applyBossMutatorsToGhost to fold. Getting this wrong would make the sweep
+ *  measure a boss the content could not express. */
+function applyBossOverride(
+  opponent: ReturnType<typeof opponentForRound>,
+  override: BossOverride | undefined,
+): ReturnType<typeof opponentForRound> {
+  if (override === undefined) return opponent;
+  const bossMutators = opponent.mutators.filter((m) => m.type === 'boss_only');
+  if (bossMutators.length === 0) return opponent; // not the boss round
+
+  const mutators = opponent.mutators.map((m) =>
+    m.type === 'boss_only'
+      ? {
+          ...m,
+          hpOverride: override.hpOverride ?? m.hpOverride,
+          damageBonus: override.damageBonus ?? m.damageBonus,
+          lifestealPctBonus: override.lifestealPctBonus ?? m.lifestealPctBonus,
+        }
+      : m,
+  );
+
+  return {
+    ...opponent,
+    mutators,
+    combatant: {
+      ...opponent.combatant,
+      startingHp: override.hpOverride ?? opponent.combatant.startingHp,
+    },
+  };
+}
+
 export function runOne(spec: RunSpec): RunRecord {
   const ctrl = createRun({
     seed: spec.seed,
@@ -225,8 +351,17 @@ export function runOne(spec: RunSpec): RunRecord {
   let roundPurchases: Record<string, number> = {};
   let roundRerolls = 0;
   let roundCombines = 0;
+  let roundGoldSpent = 0;
+  let roundGoldRecovered = 0;
   let goldAtRoundStart = ctrl.getState().gold;
   let seenOfferedThisRound = new Set<string>();
+  // The round's OPENING deliberation surface, sampled before the policy acts.
+  // See RoundRecord.liveOffers for why the sample point matters.
+  let offersAtShopEntry = { affordable: 0, live: 0 };
+  let readyRecipesAtShopEntry = 0;
+
+  const countReadyRecipes = () =>
+    ctrl.detectRecipes().filter((m) => ctrl.findCombineRotation(m) !== null).length;
 
   const noteOffers = () => {
     for (const id of ctrl.getState().shop.slots) {
@@ -237,6 +372,8 @@ export function runOne(spec: RunSpec): RunRecord {
     }
   };
   noteOffers();
+  offersAtShopEntry = countOffers(ctrl);
+  readyRecipesAtShopEntry = countReadyRecipes();
 
   for (let guard = 0; guard < MAX_ACTIONS && ctrl.getPhase() !== 'ended'; guard++) {
     const phase = ctrl.getPhase();
@@ -248,10 +385,15 @@ export function runOne(spec: RunSpec): RunRecord {
         roundPurchases = {};
         roundRerolls = 0;
         roundCombines = 0;
+        roundGoldSpent = 0;
+        roundGoldRecovered = 0;
         goldAtRoundStart = ctrl.getState().gold;
         seenOfferedThisRound = new Set();
         overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}`);
         noteOffers();
+        // Sample AFTER the shop refreshes and BEFORE the policy gets a turn.
+        offersAtShopEntry = countOffers(ctrl);
+        readyRecipesAtShopEntry = countReadyRecipes();
       }
       continue;
     }
@@ -260,12 +402,14 @@ export function runOne(spec: RunSpec): RunRecord {
 
     if (decision.kind === 'fight') {
       const s = ctrl.getState();
-      const opponent = opponentForRound(s.seed, s.currentRound, s.ruleset.bagDimensions);
+      const opponent = applyBossOverride(
+        opponentForRound(s.seed, s.currentRound, s.ruleset.bagDimensions),
+        spec.bossOverride,
+      );
       const heartsAtStart = s.hearts;
       const goldHeldAtCombat = s.gold;
-      const liveOffers = countLiveOffers(ctrl);
-      const readyRecipes = ctrl.detectRecipes().filter((m) => ctrl.findCombineRotation(m) !== null)
-        .length;
+      const residualOffers = countOffers(ctrl).live;
+      const readyRecipes = countReadyRecipes();
       const bagCellsUsed = countBagCells(ctrl);
 
       ctrl.enterCombatPhase();
@@ -306,12 +450,18 @@ export function runOne(spec: RunSpec): RunRecord {
         heartsAtStart,
         goldAtRoundStart,
         goldHeldAtCombat,
+        goldSpent: roundGoldSpent,
+        goldRecovered: roundGoldRecovered,
         purchasesByRarity: { ...roundPurchases },
         rerolls: roundRerolls,
         combines: roundCombines,
         bagCellsUsed,
-        liveOffers,
+        liveOffers: offersAtShopEntry.live,
+        affordableOffers: offersAtShopEntry.affordable,
+        residualOffers,
         readyRecipes,
+        hadRecipeDecision:
+          readyRecipesAtShopEntry > 0 || roundCombines > 0 || readyRecipes > 0,
       });
       continue;
     }
@@ -335,8 +485,21 @@ export function runOne(spec: RunSpec): RunRecord {
       if (i >= 0) pending.splice(i, 1);
     }
 
+    // Gold before every state-changing call. BOTH directions are banked at the
+    // moment they happen — down is spend (buy, reroll), up is a sale. Measuring
+    // each independently is the point: any one of them derived from the other
+    // two via the wallet identity collapses into a quantity that is not what its
+    // label says. See RoundRecord.goldSpent / goldRecovered.
+    const goldBeforeAction = ctrl.getState().gold;
+    const bankGold = () => {
+      const after = ctrl.getState().gold;
+      if (after < goldBeforeAction) roundGoldSpent += goldBeforeAction - after;
+      else if (after > goldBeforeAction) roundGoldRecovered += after - goldBeforeAction;
+    };
+
     if (action.type === 'reroll_shop') {
       ctrl.rerollShop();
+      bankGold();
       roundRerolls++;
       // Override AFTER the sim call so rerollsThisRound is post-increment.
       overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}r${roundRerolls}`);
@@ -346,6 +509,7 @@ export function runOne(spec: RunSpec): RunRecord {
 
     try {
       applyAction(ctrl, action);
+      bankGold();
     } catch {
       // A policy that emits an illegal action ends its own run rather than
       // aborting the sweep. Recorded as a short run; visible in roundsReached.
@@ -372,22 +536,37 @@ export function runOne(spec: RunSpec): RunRecord {
   };
 }
 
-/** Offers that are BOTH affordable and physically placeable right now. This is
- *  the deliberation surface — the choice space the round presented, which is
- *  policy-independent, unlike "what did the bot buy". */
-function countLiveOffers(ctrl: RunController): number {
+/** Offers that are BOTH affordable and physically placeable right now.
+ *
+ *  Two corrections against the pre-2026-08-05 version, which checked neither
+ *  thing properly despite its docstring claiming both:
+ *
+ *  1. PLACEABILITY was never tested at all — the body was `item.cost > s.gold`
+ *     and nothing else. So the late-game problem this metric exists to find (the
+ *     bag fills to 24/24 by round 9 and purchasing power has nowhere to go) was
+ *     invisible to it by construction. It now tests all four rotations, because
+ *     a 2x1 that will not fit horizontally may fit vertically.
+ *  2. AFFORDABILITY used the raw `item.cost`, ignoring relic itemCostDelta and
+ *     ruleset itemCostMultiplierBp. Every other affordability check in the
+ *     codebase goes through `effectiveItemCost`; this one silently didn't, so a
+ *     Merchant's Mark run reported the wrong choice space. */
+function countOffers(ctrl: RunController): { affordable: number; live: number } {
   const s = ctrl.getState();
-  let n = 0;
+  let affordable = 0;
+  let live = 0;
   for (let i = 0; i < s.shop.slots.length; i++) {
     if (s.shop.purchased.includes(i)) continue;
     const id = s.shop.slots[i];
     if (id === undefined) continue;
     const item = SHOP_POOL_ITEMS[String(id)];
     if (item === undefined) continue;
-    if (item.cost > s.gold) continue;
-    n++;
+    const cost = effectiveItemCost(item, s.derived.itemCostDelta, s.ruleset.itemCostMultiplierBp);
+    if (cost > s.gold) continue;
+    affordable++;
+    if (!fitsAnywhere(s.bag, id as ItemId, SHOP_POOL_ITEMS as never)) continue;
+    live++;
   }
-  return n;
+  return { affordable, live };
 }
 
 function countBagCells(ctrl: RunController): number {
