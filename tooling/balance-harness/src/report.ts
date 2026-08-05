@@ -81,8 +81,10 @@ export interface RoundAgg {
   /** GROSS gold spent this round, summed at each buy and reroll. `meanGoldHeld`
    *  alone cannot distinguish "earned nothing" from "spent it all". */
   readonly meanGoldSpent: number;
-  /** Sale proceeds respent within the round — the recycled half of late-game
-   *  churn, and 0 for any policy that never sells. */
+  /** GROSS sale proceeds this round. Paired with `meanGoldSpent` these say what
+   *  churn cost and what it returned; neither stands in for the other, and
+   *  neither is the "respent" portion, which is not measurable. 0 for any policy
+   *  that never sells. */
   readonly meanGoldRecovered: number;
   readonly meanBagCells: number;
   /** Purchases split by rarity — computed per round all along and thrown away by
@@ -177,11 +179,10 @@ export function aggregate(runs: RunRecord[], meta: Omit<Report['meta'], 'runs'>)
       // respent, and under sell-to-fit a net-delta figure understates late-game
       // churn by exactly the amount that policy recycles. See RoundRecord.goldSpent.
       meanGoldSpent: mean(rs.map((r) => r.goldSpent)),
-      // What selling put back in the wallet. Gross spend minus net drop, which is
-      // the recycled half of the churn — zero for any policy that never sells.
-      meanGoldRecovered: mean(
-        rs.map((r) => Math.max(0, r.goldSpent - (r.goldAtRoundStart - r.goldHeldAtCombat))),
-      ),
+      // GROSS sale proceeds, measured at each sale. Not "the respent portion" —
+      // see RoundRecord.goldRecovered for why that is not a measurable quantity
+      // and why deriving it from the wallet silently returns this number instead.
+      meanGoldRecovered: mean(rs.map((r) => r.goldRecovered)),
       meanBagCells: mean(rs.map((r) => r.bagCellsUsed)),
       purchasesByRarity: sumRarities(rs.map((r) => r.purchasesByRarity)),
       bagBlockedPct: pct(rs.filter(isBagBlocked).length, rs.length),
@@ -285,7 +286,7 @@ export function formatReport(r: Report): string {
   L.push('  blocked% = something affordable was on offer and NOTHING fit the bag');
   L.push('');
   L.push('[EXACT] purchases by rarity, per round');
-  L.push('  rd   common  uncommon  rare  epic  legendary   residual-offers   resold-g');
+  L.push('  rd   common  uncommon  rare  epic  legendary   residual-offers   sold-g');
   for (const a of r.perRound) {
     const g = (k: string) => String(a.purchasesByRarity[k] ?? 0);
     L.push(
@@ -295,7 +296,8 @@ export function formatReport(r: Report): string {
     );
   }
   L.push('  residual-offers = still affordable AND placeable at Continue (unspent capacity)');
-  L.push('  resold-g = sale proceeds respent within the round (0 for non-selling policies)');
+  L.push('  sold-g = GROSS sale proceeds this round (0 for non-selling policies).');
+  L.push('           Not "the respent portion" — gold is fungible, so that is not measurable.');
   L.push('');
   L.push('[EXACT] overall');
   L.push(`  combats                 ${r.overall.combats}`);

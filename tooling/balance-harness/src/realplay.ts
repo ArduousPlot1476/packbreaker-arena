@@ -151,6 +151,21 @@ export interface RoundRecord {
    *  `computeRerollCost`. Buy and reroll are the sim's only two gold sinks
    *  (state.ts:612 and :747); sells raise gold and contribute nothing here. */
   readonly goldSpent: number;
+  /** GROSS gold taken in from sales this round, summed at each sale.
+   *
+   *  Deliberately NOT "sale proceeds respent". That quantity was reported once
+   *  and is not measurable: gold is fungible, so there is no fact of the matter
+   *  about which coin funded which purchase. The derived version
+   *  `goldSpent - (goldAtRoundStart - goldHeldAtCombat)` is algebraically
+   *  identical to gross proceeds — substituting the round's conservation
+   *  identity `G1 = G0 - S + R` collapses it to R — so it reported the whole
+   *  refund as respent even when the sale happened AFTER the last purchase.
+   *
+   *  Measured at the sale rather than derived from the wallet, so it stays true
+   *  if a future within-round gold source breaks that identity. Paired with
+   *  goldSpent, the two say "churn cost this much and returned this much"
+   *  without either standing in for the other. */
+  readonly goldRecovered: number;
   readonly purchasesByRarity: Readonly<Record<string, number>>;
   readonly rerolls: number;
   readonly combines: number;
@@ -328,6 +343,7 @@ export function runOne(spec: RunSpec): RunRecord {
   let roundRerolls = 0;
   let roundCombines = 0;
   let roundGoldSpent = 0;
+  let roundGoldRecovered = 0;
   let goldAtRoundStart = ctrl.getState().gold;
   let seenOfferedThisRound = new Set<string>();
   // The round's OPENING deliberation surface, sampled before the policy acts.
@@ -361,6 +377,7 @@ export function runOne(spec: RunSpec): RunRecord {
         roundRerolls = 0;
         roundCombines = 0;
         roundGoldSpent = 0;
+        roundGoldRecovered = 0;
         goldAtRoundStart = ctrl.getState().gold;
         seenOfferedThisRound = new Set();
         overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}`);
@@ -425,6 +442,7 @@ export function runOne(spec: RunSpec): RunRecord {
         goldAtRoundStart,
         goldHeldAtCombat,
         goldSpent: roundGoldSpent,
+        goldRecovered: roundGoldRecovered,
         purchasesByRarity: { ...roundPurchases },
         rerolls: roundRerolls,
         combines: roundCombines,
@@ -458,17 +476,21 @@ export function runOne(spec: RunSpec): RunRecord {
       if (i >= 0) pending.splice(i, 1);
     }
 
-    // Gold before every state-changing call, so a decrease can be banked as
-    // gross spend. See RoundRecord.goldSpent for why net delta is not enough.
+    // Gold before every state-changing call. BOTH directions are banked at the
+    // moment they happen — down is spend (buy, reroll), up is a sale. Measuring
+    // each independently is the point: any one of them derived from the other
+    // two via the wallet identity collapses into a quantity that is not what its
+    // label says. See RoundRecord.goldSpent / goldRecovered.
     const goldBeforeAction = ctrl.getState().gold;
-    const bankSpend = () => {
+    const bankGold = () => {
       const after = ctrl.getState().gold;
       if (after < goldBeforeAction) roundGoldSpent += goldBeforeAction - after;
+      else if (after > goldBeforeAction) roundGoldRecovered += after - goldBeforeAction;
     };
 
     if (action.type === 'reroll_shop') {
       ctrl.rerollShop();
-      bankSpend();
+      bankGold();
       roundRerolls++;
       // Override AFTER the sim call so rerollsThisRound is post-increment.
       overrideFromClientShop(ctrl, `h${ctrl.getState().currentRound}r${roundRerolls}`);
@@ -478,7 +500,7 @@ export function runOne(spec: RunSpec): RunRecord {
 
     try {
       applyAction(ctrl, action);
-      bankSpend();
+      bankGold();
     } catch {
       // A policy that emits an illegal action ends its own run rather than
       // aborting the sweep. Recorded as a short run; visible in roundsReached.
